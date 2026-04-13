@@ -1,0 +1,102 @@
+# Pre-commit 配置（参考 Onyx 扩展）
+# 安装: pip install pre-commit && pre-commit install
+# 手动运行: pre-commit run --all-files
+
+repos:
+  # 基础检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args: ['--allow-missing-credentials']
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Mypy 类型检查（Onyx 风格）
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        args: [
+          --disallow-untyped-defs,
+          --disallow-incomplete-defs,
+          --check-untyped-defs,
+          --strict-optional,
+          --warn-return-any,
+          --warn-unused-ignores,
+        ]
+        additional_dependencies: [
+          types-requests,
+          types-PyYAML,
+          types-redis,
+          pydantic,
+        ]
+        files: ^src/
+
+  # isort 排序导入（Onyx 风格）
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile=black', '--line-length=100']
+
+  # 自定义密钥检测 hook
+  - repo: local
+    hooks:
+      - id: detect-api-keys
+        name: detect-api-keys
+        description: '检测常见的 API 密钥模式（OpenAI, Anthropic, Google 等）'
+        entry: python -c "
+import re
+import sys
+
+# 常见 API 密钥模式
+PATTERNS = [
+    (r'sk-or-v1-[A-Za-z0-9]{32,}', 'OpenRouter API Key'),
+    (r'sk-[A-Za-z0-9]{32,}', 'OpenAI API Key'),
+    (r'sk-ant-[A-Za-z0-9]{32,}', 'Anthropic API Key'),
+    (r'AIza[A-Za-z0-9_-]{32,}', 'Google API Key'),
+    (r'gsk_[A-Za-z0-9]{32,}', 'Groq API Key'),
+    (r'ghp_[A-Za-z0-9]{36,}', 'GitHub Personal Access Token'),
+    (r'AKIA[A-Za-z0-9]{16}', 'AWS Access Key'),
+]
+
+found = False
+for filename in sys.argv[1:]:
+    # 跳过 .env.example 和测试文件
+    if filename.endswith('.example') or 'test_' in filename:
+        continue
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            content = f.read()
+            for pattern, name in PATTERNS:
+                if re.search(pattern, content):
+                    print(f'⚠️  检测到可能的 {name} 在文件: {filename}')
+                    found = True
+    except Exception:
+        pass
+
+if found:
+    print('\\n❌ 检测到硬编码的 API 密钥！请使用环境变量或 .env 文件。')
+    sys.exit(1)
+"
+        language: system
+        types: [python]
+        exclude: '^(tests/|\.env\.example)'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format

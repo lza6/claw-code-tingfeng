@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Assurance Plan Schema",
+  "description": "Schema for verification strategy",
+  "type": "object",
+  "required": ["scenarios", "updated_at"],
+  "properties": {
+    "scenarios": {
+      "type": "object",
+      "description": "Map of scenario ID to scenario data",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "unit_test",
+              "integration_test",
+              "e2e_test",
+              "manual_check",
+              "code_review",
+              "static_analysis",
+              "runtime_check",
+              "documentation"
+            ]
+          },
+          "obligation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "covers_obligations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "harness": {
+            "type": "object",
+            "properties": {
+              "kind": { "type": "string" },
+              "command": { "type": "string" }
+            }
+          },
+          "oracle": {
+            "type": "object",
+            "properties": {
+              "kind": { "type": "string" },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": { "type": "string" },
+                    "equals": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "evidence_reqs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string" }
+              }
+            }
+          },
+          "touchpoints": {
+            "type": "object",
+            "properties": {
+              "files": { "type": "array", "items": { "type": "string" } },
+              "symbols": { "type": "array", "items": { "type": "string" } },
+              "processes": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "gate_policy": {
+            "type": "object",
+            "properties": {
+              "verify_lane": { "type": "string" },
+              "required_cognition_tier": { "type": "string" },
+              "closeout": { "type": "string" },
+              "merge": { "type": "string" }
+            }
+          },
+          "test_command": {
+            "type": ["string", "null"]
+          },
+          "expected_outcome": {
+            "type": "string"
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "executed": {
+            "type": "boolean"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "execution_log": {
+            "type": "string"
+          },
+          "executed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "strategy_notes": {
+      "type": "string"
+    },
+    "required_coverage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    }
+  }
+}

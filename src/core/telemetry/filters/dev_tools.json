@@ -1,0 +1,51 @@
+{
+    "name": "dev-tools",
+    "description": "开发工具过滤规则 (GH, Docker, PNPM, Pre-commit)",
+    "rules": [
+        {
+            "name": "gh_list",
+            "command_pattern": "^gh\\s+(?:pr|issue|run)\\s+list",
+            "description": "GitHub CLI: 列表精简输出",
+            "strip_ansi": true,
+            "max_lines": 20
+        },
+        {
+            "name": "docker_ps",
+            "command_pattern": "^docker\\s+(?:ps|container\\s+ls)",
+            "description": "Docker: 容器列表精简",
+            "strip_ansi": true,
+            "max_lines": 20
+        },
+        {
+            "name": "docker_images",
+            "command_pattern": "^docker\\s+images",
+            "description": "Docker: 镜像列表精简",
+            "strip_ansi": true,
+            "max_lines": 20
+        },
+        {
+            "name": "pnpm_noise",
+            "command_pattern": "^pnpm\\b",
+            "description": "PNPM: 过滤安装噪音",
+            "strip_ansi": true,
+            "strip_lines_matching": [
+                "^Packages: ",
+                "^Progress: ",
+                "^Fetching ",
+                "^Resolving "
+            ]
+        },
+        {
+            "name": "pre_commit_compact",
+            "command_pattern": "^pre-commit\\b",
+            "description": "Pre-commit: 压缩输出，仅显示 Hook 结果",
+            "strip_ansi": true,
+            "strip_lines_matching": [
+                "^\\[INFO\\] Installing environment",
+                "^\\[INFO\\] Once installed this environment will be reused",
+                "^\\[INFO\\] This may take a few minutes"
+            ],
+            "max_lines": 40
+        }
+    ]
+}

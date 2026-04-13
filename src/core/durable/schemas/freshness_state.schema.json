@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Freshness State Schema",
+  "description": "Schema for tracking resource recency and validity state",
+  "type": "object",
+  "required": ["run_id"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "resources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["resource_type", "last_updated", "valid"],
+        "properties": {
+          "resource_type": { "type": "string" },
+          "last_updated": { "type": "string" },
+          "valid": { "type": "boolean" },
+          "age_seconds": { "type": "number" },
+          "stale_reason": { "type": ["string", "null"] },
+          "refresh_count": { "type": "integer" },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "overall_freshness_score": { "type": "number" },
+    "stale_resources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

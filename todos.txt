@@ -1,0 +1,35 @@
+# Clawd Code - 综合改进与优化 TODO 列表 (2026-04-12)
+
+## Phase 1: 架构稳定性与大型文件拆分 (Architecture & Refactoring)
+- [x] Task 01: 审计 `src/core/exceptions.py` 与 `src/llm/exception_handler.py` 的重试逻辑映射。
+- [x] Task 02: 在 `src/llm/message_sanitizer.py` 中增加动态敏感数据过滤。
+- [ ] Task 09: 拆分 `src/agent/engine.py` (803行) -> `engine_core.py`, `engine_session.py`。
+- [ ] Task 20: 拆分 `src/server/websocket_server.py` (686行) -> `ws_manager.py`, `ws_router.py`。
+- [ ] Task 21: 拆分 `src/llm/structured_output.py` (643行) -> `parsers/`, `schemas/`。
+- [ ] Task 22: 拆分 `src/utils/features.py` (630行) -> `core/config/feature_flags.py`。
+- [ ] Task 23: 合并 `src/utils/diff_utils.py` 与 `src/tools_runtime/diff_utils.py` -> `src/core/patch/diff_engine.py`。
+
+## Phase 2: RAG 增强与上下文优化 (RAG & Context)
+- [x] Task 03: 实现 `src/rag/repo_map.py` 中 Tree-sitter 语法树的 LRU 缓存。
+- [x] Task 04: 在 `src/agent/history_compressor.py` 中增加“系统提示词保护”机制。
+- [ ] Task 24: 实现 `src/rag/trigram_index.py` 的增量更新逻辑 (基于文件 mtime)。
+- [ ] Task 25: 强化 `src/rag/tree_sitter_syntax.py` 以支持多语言语义代码块提取。
+- [ ] Task 10: 同步 Aider v0.50.0 的 `file_patterns.py` 忽略规则。
+
+## Phase 3: 工具链安全与自愈闭环 (Tools & Self-Healing)
+- [ ] Task 11: 为 `src/tools_runtime/bash_executor.py` 增加超时监控与资源限制。
+- [ ] Task 26: 构建 `src/core/patch/atomic_patcher.py` 统一所有编辑格式的执行。
+- [ ] Task 27: 在 `src/self_healing/engine.py` 中引入 `verifier.py` 的主动反馈循环。
+- [ ] Task 32: 强化 `ReflectedMessage` 逻辑，支持多文件关联错误的上下文注入。
+- [ ] Task 12: 优化 `src/workflow/task_planner.py`，增加任务循环依赖检测。
+
+## Phase 4: UI/UX 与 向量检索 (UI & Vector Search)
+- [ ] Task 15: 优化 `src/screens/omni_glow_tree.py` 渲染效率 (虚拟列表模式)。
+- [ ] Task 28: 实现 `src/memory/enterprise_ltm.py` 中的向量检索接口 (集成 FAISS/Chroma)。
+- [ ] Task 29: 优化 TUI 启动速度，延迟加载非核心 Widget。
+
+## Phase 5: 验证与清理 (Verification & Cleanup)
+- [ ] Task 16: 生成覆盖率基线报告并验证关键模块测试。
+- [ ] Task 30: 移除 `src/utils/deprecated_args.py` 及相关旧版引用。
+- [ ] Task 31: 清理 `src/__pycache__` 及所有旧版 `*.bak`, `*.old` 残留。
+- [ ] Task 19: 生成最终交付报告 (Completion Report)。

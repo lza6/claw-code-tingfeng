@@ -1,0 +1,20 @@
+{
+  "name": "package-mgmt-filters",
+  "description": "包管理器输出过滤规则 (借鉴 RTK 的 npm/pip/cargo filters)",
+  "rules": [
+    {
+      "name": "pip_list",
+      "command_pattern": "(?i)(?:pip|pip3|uv\\s+pip)\\s+(?:list|freeze)",
+      "strategy": "deduplication",
+      "description": "Pip list/freeze: 去重、截断到 100 行",
+      "params": {"max_lines": 100}
+    },
+    {
+      "name": "npm_list",
+      "command_pattern": "(?i)(?:npm|pnpm|yarn|bun)\\s+list",
+      "strategy": "tree_compression",
+      "description": "NPM/PNPM list: 压缩依赖树到 3 层",
+      "params": {"max_depth": 3}
+    }
+  ]
+}

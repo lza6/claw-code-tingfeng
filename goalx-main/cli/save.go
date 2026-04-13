@@ -1,0 +1,389 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	goalx "github.com/vonbai/goalx"
+)
+
+// Save copies run artifacts to user-scoped durable storage.
+func Save(projectRoot string, args []string) error {
+	if printUsageIfHelp(args, "usage: goalx save [NAME]") {
+		return nil
+	}
+	runName, rest, err := extractRunFlag(args)
+	if err != nil {
+		return err
+	}
+	if runName == "" && len(rest) == 1 {
+		runName = rest[0]
+		rest = nil
+	}
+	if len(rest) > 0 {
+		return fmt.Errorf("usage: goalx save [NAME]")
+	}
+
+	rc, err := ResolveRun(projectRoot, runName)
+	if err != nil {
+		return err
+	}
+	meta, err := LoadRunMetadata(RunMetadataPath(rc.RunDir))
+	if err != nil {
+		return fmt.Errorf("load run metadata: %w", err)
+	}
+	if meta == nil {
+		return fmt.Errorf("run metadata missing at %s", RunMetadataPath(rc.RunDir))
+	}
+	charter, err := RequireRunCharter(rc.RunDir)
+	if err != nil {
+		return fmt.Errorf("load run charter: %w", err)
+	}
+	if err := ValidateRunCharterLinkage(meta, charter); err != nil {
+		return fmt.Errorf("validate run charter linkage: %w", err)
+	}
+	if !fileExists(ObligationModelPath(rc.RunDir)) {
+		objectiveContract, err := LoadObjectiveContract(ObjectiveContractPath(rc.RunDir))
+		if err != nil {
+			return fmt.Errorf("load objective contract: %w", err)
+		}
+		objectiveHash := ""
+		if objectiveContract != nil {
+			objectiveHash = objectiveContract.ObjectiveHash
+		}
+		if objectiveHash == "" {
+			objectiveHash = "save-objective"
+		}
+		if _, err := EnsureObligationModel(rc.RunDir, nil, objectiveContract, objectiveHash, meta.Objective); err != nil {
+			return fmt.Errorf("ensure obligation model before save: %w", err)
+		}
+	}
+	if !fileExists(AssurancePlanPath(rc.RunDir)) {
+		if _, err := EnsureAssurancePlan(rc.RunDir, NewAcceptanceState(rc.Config, 0)); err != nil {
+			return fmt.Errorf("ensure assurance plan before save: %w", err)
+		}
+	}
+
+	saveDir := goalx.ResolveSavedRunDir(rc.ProjectRoot, rc.Name, rc.Config)
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return fmt.Errorf("create save dir: %w", err)
+	}
+	manifest, manifestFromFile, err := ResolveRunArtifacts(rc.RunDir, rc.Config)
+	if err != nil {
+		return fmt.Errorf("resolve run artifacts: %w", err)
+	}
+
+	// Copy canonical run result surface and supporting reports.
+	summaryPath := SummaryPath(rc.RunDir)
+	if err := copyFileIfExists(summaryPath, SummaryPath(saveDir)); err != nil {
+		return fmt.Errorf("copy summary: %w", err)
+	}
+	if err := copyReportsDirIfExists(rc.RunDir, saveDir); err != nil {
+		return fmt.Errorf("copy reports dir: %w", err)
+	}
+
+	// Copy immutable run spec + runtime state.
+	if err := copyFileIfExists(RunSpecPath(rc.RunDir), filepath.Join(saveDir, "run-spec.yaml")); err != nil {
+		return fmt.Errorf("copy run spec: %w", err)
+	}
+	if err := copyFileIfExists(SelectionSnapshotPath(rc.RunDir), SelectionSnapshotPath(saveDir)); err != nil {
+		return fmt.Errorf("copy selection snapshot: %w", err)
+	}
+	if err := copyFileIfExists(RunRuntimeStatePath(rc.RunDir), filepath.Join(saveDir, "run.json")); err != nil {
+		return fmt.Errorf("copy run state: %w", err)
+	}
+	if err := copyFileIfExists(SessionsRuntimeStatePath(rc.RunDir), filepath.Join(saveDir, "sessions.json")); err != nil {
+		return fmt.Errorf("copy session state: %w", err)
+	}
+	if err := copyFileIfExists(RunStatusPath(rc.RunDir), filepath.Join(saveDir, "status.json")); err != nil {
+		return fmt.Errorf("copy run status: %w", err)
+	}
+	if err := copyFileIfExists(IntakePath(rc.RunDir), filepath.Join(saveDir, "intake.json")); err != nil {
+		return fmt.Errorf("copy intake: %w", err)
+	}
+
+	if err := copyFileIfExists(ObjectiveContractPath(rc.RunDir), filepath.Join(saveDir, "objective-contract.json")); err != nil {
+		return fmt.Errorf("copy objective contract: %w", err)
+	}
+	if err := copyFileIfExists(ObligationModelPath(rc.RunDir), filepath.Join(saveDir, "obligation-model.json")); err != nil {
+		return fmt.Errorf("copy obligation model: %w", err)
+	}
+	if err := copyFileIfExists(ObligationLogPath(rc.RunDir), filepath.Join(saveDir, "obligation-log.jsonl")); err != nil {
+		return fmt.Errorf("copy obligation log: %w", err)
+	}
+	if err := copyFileIfExists(EvidenceLogPath(rc.RunDir), filepath.Join(saveDir, "evidence-log.jsonl")); err != nil {
+		return fmt.Errorf("copy evidence log: %w", err)
+	}
+	if err := copyFileIfExists(AssurancePlanPath(rc.RunDir), filepath.Join(saveDir, "assurance-plan.json")); err != nil {
+		return fmt.Errorf("copy assurance plan: %w", err)
+	}
+	if err := copyFileIfExists(CognitionStatePath(rc.RunDir), filepath.Join(saveDir, "cognition-state.json")); err != nil {
+		return fmt.Errorf("copy cognition state: %w", err)
+	}
+	if err := copyFileIfExists(ImpactStatePath(rc.RunDir), filepath.Join(saveDir, "impact-state.json")); err != nil {
+		return fmt.Errorf("copy impact state: %w", err)
+	}
+	if err := copyFileIfExists(FreshnessStatePath(rc.RunDir), filepath.Join(saveDir, "freshness-state.json")); err != nil {
+		return fmt.Errorf("copy freshness state: %w", err)
+	}
+	if err := copyFileIfExists(ExperimentsLogPath(rc.RunDir), filepath.Join(saveDir, "experiments.jsonl")); err != nil {
+		return fmt.Errorf("copy experiments log: %w", err)
+	}
+	if err := copyFileIfExists(IntegrationStatePath(rc.RunDir), filepath.Join(saveDir, "integration.json")); err != nil {
+		return fmt.Errorf("copy integration state: %w", err)
+	}
+	if err := copyFileIfExists(CoordinationPath(rc.RunDir), filepath.Join(saveDir, "coordination.json")); err != nil {
+		return fmt.Errorf("copy coordination state: %w", err)
+	}
+	runMetadataPath := RunMetadataPath(rc.RunDir)
+	if err := copyFileIfExists(runMetadataPath, filepath.Join(saveDir, "run-metadata.json")); err != nil {
+		return fmt.Errorf("copy run metadata: %w", err)
+	}
+	if err := copyFileIfExists(RunCharterPath(rc.RunDir), filepath.Join(saveDir, "run-charter.json")); err != nil {
+		return fmt.Errorf("copy run charter: %w", err)
+	}
+	completionStatePath := CompletionStatePath(rc.RunDir)
+	if err := copyFileIfExists(completionStatePath, filepath.Join(saveDir, "proof", "completion.json")); err != nil {
+		return fmt.Errorf("copy completion state: %w", err)
+	}
+	if events, err := LoadEvidenceLog(EvidenceLogPath(rc.RunDir)); err != nil {
+		return fmt.Errorf("load evidence log: %w", err)
+	} else {
+		for _, event := range events {
+			body, err := parseEvidenceEventBody(event.Body)
+			if err != nil {
+				return fmt.Errorf("parse evidence log body: %w", err)
+			}
+			for _, source := range body.ArtifactRefs {
+				source = strings.TrimSpace(source)
+				if source == "" {
+					continue
+				}
+				destName := filepath.Base(source)
+				if err := copyFileIfExists(source, filepath.Join(saveDir, destName)); err != nil {
+					return fmt.Errorf("copy evidence artifact %s: %w", source, err)
+				}
+			}
+		}
+	}
+
+	savedManifest := &ArtifactsManifest{
+		Run:     rc.Name,
+		Version: 1,
+	}
+
+	// Copy session artifacts + journals
+	sessionState, err := EnsureSessionsRuntimeState(rc.RunDir)
+	if err != nil {
+		return fmt.Errorf("load session runtime state: %w", err)
+	}
+	sessionList := sortedSessionStates(sessionState)
+	if len(sessionList) == 0 {
+		indexes, err := existingSessionIndexes(rc.RunDir)
+		if err != nil {
+			return err
+		}
+		for _, num := range indexes {
+			sName := SessionName(num)
+			identity, err := RequireSessionIdentity(rc.RunDir, sName)
+			if err != nil {
+				return fmt.Errorf("load %s identity: %w", sName, err)
+			}
+			sessionList = append(sessionList, SessionRuntimeState{
+				Name:         sName,
+				Mode:         identity.Mode,
+				WorktreePath: resolvedSessionWorktreePath(rc.RunDir, rc.Config.Name, sName, sessionState),
+			})
+		}
+	}
+	for _, sess := range sessionList {
+		sName := sess.Name
+		identity, err := RequireSessionIdentity(rc.RunDir, sName)
+		if err != nil {
+			return fmt.Errorf("load %s identity: %w", sName, err)
+		}
+		if err := copyFileIfExists(SessionIdentityPath(rc.RunDir, sName), filepath.Join(saveDir, "sessions", sName, "identity.json")); err != nil {
+			return fmt.Errorf("copy %s identity: %w", sName, err)
+		}
+		sessionMode := identity.Mode
+		if sessionMode == "" {
+			sessionMode = sess.Mode
+		}
+		targetFiles := append([]string(nil), identity.Target.Files...)
+		reportSource := ""
+		declaredSession := FindSessionArtifacts(manifest, sName)
+		artifact := FindSessionArtifact(manifest, sName, "report")
+		if artifact != nil && artifact.Path != "" {
+			reportSource = artifact.Path
+		} else if runReport := findRunScopedReport(rc.RunDir, sName); runReport != "" {
+			reportSource = runReport
+		} else if !manifestFromFile || declaredSession == nil {
+			reportRoot := sess.WorktreePath
+			if reportRoot == "" {
+				reportRoot = RunWorktreePath(rc.RunDir)
+			}
+			if reportRoot != "" {
+				reportSource = findSessionReport(reportRoot, targetFiles)
+			}
+		}
+		if reportSource != "" {
+			destName := ""
+			if artifact != nil {
+				destName = artifact.DurableName
+			}
+			if destName == "" {
+				destName = fmt.Sprintf("%s-report.md", sName)
+			}
+			destPath := filepath.Join(saveDir, destName)
+			if err := copyReportWithEvidence(reportSource, destPath); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not copy %s report: %v\n", sName, err)
+			} else {
+				savedSession := ensureSessionArtifactsEntry(savedManifest, sName, sessionMode)
+				upsertArtifact(savedSession, ArtifactMeta{
+					Kind:        "report",
+					Path:        destPath,
+					RelPath:     destName,
+					DurableName: destName,
+				})
+			}
+		}
+
+		jPath := JournalPath(rc.RunDir, sName)
+		jDest := fmt.Sprintf("%s.jsonl", sName)
+		if err := copyFileIfExists(jPath, filepath.Join(saveDir, jDest)); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not copy %s journal: %v\n", sName, err)
+		}
+	}
+	if err := SaveArtifacts(filepath.Join(saveDir, "artifacts.json"), savedManifest); err != nil {
+		return fmt.Errorf("copy artifacts manifest: %w", err)
+	}
+
+	// Copy master journal
+	masterJPath := filepath.Join(rc.RunDir, "master.jsonl")
+	copyFileIfExists(masterJPath, filepath.Join(saveDir, "master.jsonl"))
+	if err := RegisterSavedRun(rc.ProjectRoot, rc.Config); err != nil {
+		return fmt.Errorf("register saved run: %w", err)
+	}
+	if err := RefreshRunMemorySeeds(rc.RunDir); err != nil {
+		return fmt.Errorf("refresh run memory seeds: %w", err)
+	}
+	if err := AppendExtractedMemoryProposals(rc.RunDir, time.Now().UTC()); err != nil {
+		return fmt.Errorf("extract memory proposals: %w", err)
+	}
+	if err := PromoteMemoryProposals(); err != nil {
+		return fmt.Errorf("promote memory proposals: %w", err)
+	}
+
+	fmt.Printf("Saved run '%s' to %s\n", rc.Name, saveDir)
+	return nil
+}
+
+func parseSessionNumber(name string) (int, error) {
+	var num int
+	if _, err := fmt.Sscanf(name, "session-%d", &num); err != nil {
+		return 0, fmt.Errorf("parse session number from %q: %w", name, err)
+	}
+	return num, nil
+}
+
+// findSessionReport locates the report file in a worktree.
+// Priority: target.files[0] (if regular file) → report.md → git-added *.md files.
+func findSessionReport(wtPath string, targetFiles []string) string {
+	// Try target.files[0] if it looks like a file (not "." or a directory)
+	if len(targetFiles) > 0 && targetFiles[0] != "" && targetFiles[0] != "." {
+		candidate := filepath.Join(wtPath, targetFiles[0])
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Size() > 0 {
+			return candidate
+		}
+	}
+
+	// Try report.md
+	candidate := filepath.Join(wtPath, "report.md")
+	if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Size() > 0 {
+		return candidate
+	}
+
+	// Fallback: find .md files added in git (not tracked upstream)
+	out, err := exec.Command("git", "-C", wtPath, "diff", "--name-only", "--diff-filter=A", "HEAD~10", "--", "*.md").Output()
+	if err != nil {
+		// If git fails (e.g. shallow history), try untracked .md files
+		out, _ = exec.Command("git", "-C", wtPath, "ls-files", "--others", "--exclude-standard", "*.md").Output()
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		p := filepath.Join(wtPath, line)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Size() > 0 {
+			return p
+		}
+	}
+	return ""
+}
+
+func copyFileIfExists(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.IsDir() {
+		return nil // silently skip directories
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func copyReportsDirIfExists(srcRunDir, dstRunDir string) error {
+	entries, err := os.ReadDir(ReportsDir(srcRunDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".evidence.json") {
+			continue
+		}
+		src := filepath.Join(ReportsDir(srcRunDir), entry.Name())
+		dst := filepath.Join(ReportsDir(dstRunDir), entry.Name())
+		if strings.HasSuffix(entry.Name(), ".md") {
+			if err := copyReportWithEvidence(src, dst); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := copyFileIfExists(src, dst); err != nil {
+			return err
+		}
+	}
+	return nil
+}

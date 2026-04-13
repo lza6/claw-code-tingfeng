@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Status Summary Schema",
+  "description": "Schema for high-level run status summary",
+  "type": "object",
+  "required": ["run_id", "phase", "updated_at"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "phase": {
+      "type": "string",
+      "enum": ["initializing", "intake", "planning", "explore", "executing", "verifying", "reviewing", "finalizing", "closeout", "completed", "failed", "paused"]
+    },
+    "updated_at": { "type": "string" },
+    "progress_percentage": { "type": "number" },
+    "obligations_satisfied": { "type": "integer" },
+    "obligations_total": { "type": "integer" },
+    "scenarios_passed": { "type": "integer" },
+    "scenarios_total": { "type": "integer" },
+    "current_activity": { "type": "string" },
+    "active_sessions": { "type": "integer" },
+    "blocked_sessions": { "type": "integer" },
+    "continuity_state": { "type": "string" },
+    "goal_state": { "type": "string" },
+    "provider_alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["model_id", "alert_type", "message", "timestamp"],
+        "properties": {
+          "model_id": { "type": "string" },
+          "alert_type": { "type": "string" },
+          "message": { "type": "string" },
+          "timestamp": { "type": "string" }
+        }
+      }
+    },
+    "started_at": { "type": ["string", "null"] },
+    "estimated_completion": { "type": ["string", "null"] },
+    "elapsed_time_seconds": { "type": "number" },
+    "health_status": { "type": "string" },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": { "type": "string" }
+  }
+}

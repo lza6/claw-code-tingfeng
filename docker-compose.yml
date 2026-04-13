@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  clawd-code:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawd-code
+    restart: unless-stopped
+    ports:
+      - "8765:8765"  # WebSocket 远程访问
+    volumes:
+      # 挂载工作目录（可选，用于访问宿主机文件）
+      - ./workspace:/workspace:rw
+      # 持久化 Clawd 数据
+      - clawd-data:/app/.clawd
+      # 日志
+      - ./logs:/app/logs
+    environment:
+      # OpenAI API 配置
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      
+      # Anthropic API 配置
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-opus-20240229}
+      
+      # 日志配置
+      - CLAWD_LOG_LEVEL=${CLAWD_LOG_LEVEL:-info}
+      - CLAWD_ENV=${CLAWD_ENV:-production}
+      
+      # 工作目录
+      - CLAWD_WORKDIR=/workspace
+    stdin_open: true
+    tty: true
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  clawd-data:
+    driver: local

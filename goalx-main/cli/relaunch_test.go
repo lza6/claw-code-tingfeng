@@ -1,0 +1,242 @@
+package cli
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	goalx "github.com/vonbai/goalx"
+)
+
+func TestRelaunchMasterIgnoresLegacyHandoffFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "base.txt", "base", "base commit")
+
+	logPath := installFakeTmux(t, "master")
+	runName, runDir := writeLifecycleRunFixture(t, repo)
+	cfg, err := LoadRunSpec(runDir)
+	if err != nil {
+		t.Fatalf("LoadRunSpec: %v", err)
+	}
+	legacyPath := filepath.Join(ControlDir(runDir), "handoffs", "master.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy handoff dir: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("{"), 0o644); err != nil {
+		t.Fatalf("write malformed legacy handoff: %v", err)
+	}
+
+	err = relaunchMaster(repo, runDir, goalx.TmuxSessionName(repo, runName), cfg)
+	if err != nil {
+		t.Fatalf("relaunchMaster: %v", err)
+	}
+
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read tmux log: %v", err)
+	}
+	logText := string(logData)
+	for _, want := range []string{
+		"kill-window -t " + goalx.TmuxSessionName(repo, runName) + ":master",
+		"new-window -t " + goalx.TmuxSessionName(repo, runName) + " -n master -c " + RunWorktreePath(runDir),
+		filepath.Join(runDir, "master.md"),
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("tmux log missing %q:\n%s", want, logText)
+		}
+	}
+}
+
+func TestRelaunchMasterRerendersProtocolWithFreshFacts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "base.txt", "base", "base commit")
+
+	installFakeTmux(t, "master")
+	runName, runDir := writeLifecycleRunFixture(t, repo)
+	cfg, err := LoadRunSpec(runDir)
+	if err != nil {
+		t.Fatalf("LoadRunSpec: %v", err)
+	}
+	meta, err := LoadRunMetadata(RunMetadataPath(runDir))
+	if err != nil {
+		t.Fatalf("LoadRunMetadata: %v", err)
+	}
+	meta.Intent = runIntentEvolve
+	if err := SaveRunMetadata(RunMetadataPath(runDir), meta); err != nil {
+		t.Fatalf("SaveRunMetadata: %v", err)
+	}
+	if err := os.WriteFile(JournalPath(runDir, "session-2"), nil, 0o644); err != nil {
+		t.Fatalf("seed session-2 journal: %v", err)
+	}
+	identity, err := NewSessionIdentity(runDir, "session-2", "master-derived-develop", goalx.ModeWorker, "codex", "gpt-5.4", "", "", "", cfg.Target)
+	if err != nil {
+		t.Fatalf("NewSessionIdentity: %v", err)
+	}
+	identity.LocalValidationCommand = goalx.ResolveLocalValidationCommand(cfg)
+	if err := SaveSessionIdentity(SessionIdentityPath(runDir, "session-2"), identity); err != nil {
+		t.Fatalf("SaveSessionIdentity: %v", err)
+	}
+	if err := UpsertSessionRuntimeState(runDir, SessionRuntimeState{
+		Name:  "session-2",
+		State: "active",
+		Mode:  string(goalx.ModeWorker),
+	}); err != nil {
+		t.Fatalf("UpsertSessionRuntimeState: %v", err)
+	}
+
+	if err := relaunchMaster(repo, runDir, goalx.TmuxSessionName(repo, runName), cfg); err != nil {
+		t.Fatalf("relaunchMaster: %v", err)
+	}
+
+	out, err := os.ReadFile(filepath.Join(runDir, "master.md"))
+	if err != nil {
+		t.Fatalf("read master.md: %v", err)
+	}
+	text := string(out)
+	for _, want := range []string{
+		"Current time (UTC):",
+		"Run started at (UTC):",
+		"Intent: evolve",
+		"This run was launched with explicit `evolve` intent.",
+		"experiments.jsonl",
+		"`goalx afford --run lifecycle-run master`",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("master.md missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestRelaunchMasterUsesSelectionSnapshotWhenPresent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "base.txt", "base", "base commit")
+
+	logPath := installFakeTmux(t, "master")
+	runName, runDir := writeLifecycleRunFixture(t, repo)
+	cfg, err := LoadRunSpec(runDir)
+	if err != nil {
+		t.Fatalf("LoadRunSpec: %v", err)
+	}
+	writeSelectionSnapshotFixture(t, runDir, testSelectionSnapshot{
+		Version: 1,
+		Policy: goalx.EffectiveSelectionPolicy{
+			MasterCandidates: []string{"claude-code/opus", "codex/gpt-5.4"},
+		},
+		Master: goalx.MasterConfig{Engine: "claude-code", Model: "opus", Effort: goalx.EffortHigh},
+		Worker: goalx.SessionConfig{Engine: "claude-code", Model: "opus", Effort: goalx.EffortHigh},
+	})
+
+	if err := relaunchMaster(repo, runDir, goalx.TmuxSessionName(repo, runName), cfg); err != nil {
+		t.Fatalf("relaunchMaster: %v", err)
+	}
+
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read tmux log: %v", err)
+	}
+	logText := string(logData)
+	if !strings.Contains(logText, "claude --model claude-opus-4-6 --permission-mode auto") {
+		t.Fatalf("tmux log missing snapshot-selected claude launch:\n%s", logText)
+	}
+}
+
+func TestRelaunchMasterRestoresMissingSuccessCompilationArtifacts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "base.txt", "base", "base commit")
+
+	installFakeTmux(t, "master")
+	runName, runDir := writeLifecycleRunFixture(t, repo)
+	cfg, err := LoadRunSpec(runDir)
+	if err != nil {
+		t.Fatalf("LoadRunSpec: %v", err)
+	}
+	for _, path := range []string{
+		SuccessModelPath(runDir),
+		ProofPlanPath(runDir),
+		WorkflowPlanPath(runDir),
+		DomainPackPath(runDir),
+		CompilerInputPath(runDir),
+	} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("remove %s: %v", path, err)
+		}
+	}
+
+	if err := relaunchMaster(repo, runDir, goalx.TmuxSessionName(repo, runName), cfg); err != nil {
+		t.Fatalf("relaunchMaster: %v", err)
+	}
+
+	for _, path := range []string{
+		SuccessModelPath(runDir),
+		ProofPlanPath(runDir),
+		WorkflowPlanPath(runDir),
+		DomainPackPath(runDir),
+		CompilerInputPath(runDir),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected %s to exist after relaunch: %v", path, err)
+		}
+	}
+	compilerInput, err := LoadCompilerInput(CompilerInputPath(runDir))
+	if err != nil {
+		t.Fatalf("LoadCompilerInput: %v", err)
+	}
+	if compilerInput == nil || compilerInput.ObjectiveContractRef != "objective-contract.json" {
+		t.Fatalf("compiler input = %+v, want objective-contract reference", compilerInput)
+	}
+}
+
+func TestRelaunchMasterRestoresMissingCognitionState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	prev := lookPathFunc
+	defer func() { lookPathFunc = prev }()
+	lookPathFunc = func(name string) (string, error) {
+		switch name {
+		case "git", "npx":
+			return "/usr/bin/" + name, nil
+		default:
+			return "", exec.ErrNotFound
+		}
+	}
+
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "base.txt", "base", "base commit")
+
+	installFakeTmux(t, "master")
+	runName, runDir := writeLifecycleRunFixture(t, repo)
+	cfg, err := LoadRunSpec(runDir)
+	if err != nil {
+		t.Fatalf("LoadRunSpec: %v", err)
+	}
+	if err := os.Remove(CognitionStatePath(runDir)); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("remove cognition-state: %v", err)
+	}
+
+	if err := relaunchMaster(repo, runDir, goalx.TmuxSessionName(repo, runName), cfg); err != nil {
+		t.Fatalf("relaunchMaster: %v", err)
+	}
+
+	state, err := LoadCognitionState(CognitionStatePath(runDir))
+	if err != nil {
+		t.Fatalf("LoadCognitionState: %v", err)
+	}
+	if state == nil || len(state.Scopes) == 0 || state.Scopes[0].Scope != "run-root" {
+		t.Fatalf("cognition state = %#v, want restored run-root scope", state)
+	}
+}

@@ -1,0 +1,475 @@
+/* ClawGod Green Theme - 绿色品牌标识主题
+ *
+ * 灵感来源: ClawGod 项目 (clawgod.0chen.cc)
+ * 橙色 rgb(215,119,87) -> 绿色 rgb(34,197,94) 品牌替换
+ *
+ * 用法: features.json 中设置 "green_theme": true
+ * 视觉效果: 所有品牌色替换为 ClawGod 标志性绿色
+ */
+
+/* ============================================================================
+ * 全局变量定义 - 绿色主题
+ * ============================================================================ */
+
+$background-base: hsl(145, 20%, 12%);
+$background-alt: hsl(145, 25%, 8%);
+$text-primary: hsl(142, 20%, 95%);
+$text-secondary: hsl(142, 10%, 70%);
+$text-muted: hsl(142, 5%, 50%);
+
+/* 状态色彩 - 绿色系 */
+$state-idle: hsl(145, 20%, 20%);
+$state-thinking: hsl(145, 80%, 22%);
+$state-alert: hsl(0, 70%, 18%);
+$state-success: hsl(142, 70%, 22%);
+$state-warning: hsl(45, 80%, 22%);
+
+/* 边框色彩 - 绿色系 */
+$border-primary: hsl(142, 70%, 46%);
+$border-glow: hsl(142, 80%, 55%);
+$border-success: hsl(142, 60%, 50%);
+$border-alert: hsl(0, 70%, 50%);
+
+/* ============================================================================
+ * 全局 Screen 样式
+ * ============================================================================ */
+
+Screen {
+    background: $background-base;
+    color: $text-primary;
+    layout: vertical;
+}
+
+/* ============================================================================
+ * Header & Footer
+ * ============================================================================ */
+
+Header {
+    background: $background-alt;
+    color: $text-primary;
+    dock: top;
+    height: 3;
+    padding: 0 2;
+    border-bottom: solid $border-primary;
+}
+
+Footer {
+    background: $background-alt;
+    color: $border-primary;
+    dock: bottom;
+    height: 3;
+    padding: 0 2;
+    border-top: solid $border-primary;
+}
+
+/* ============================================================================
+ * 玻璃拟态面板 (Glassmorphism Panel) - 绿色版
+ * ============================================================================ */
+
+.GlassPanel {
+    background: linear-gradient(
+        135deg,
+        rgba(20, 40, 30, 0.85) 0%,
+        rgba(15, 35, 25, 0.75) 100%
+    );
+    border: solid $border-primary;
+    border-radius: 1;
+    padding: 1 2;
+    margin: 1;
+}
+
+.GlassPanel.idle {
+    border-color: hsl(142, 40%, 38%);
+    box-shadow: 0 0 10 rgba(34, 197, 94, 0.3);
+}
+
+.GlassPanel.thinking {
+    border-color: $border-glow;
+    animation: thinking-pulse 1s infinite alternate;
+}
+
+.GlassPanel.alert {
+    border-color: $border-alert;
+    box-shadow: 0 0 15 rgba(255, 80, 80, 0.5);
+}
+
+.GlassPanel.success {
+    border-color: $border-success;
+    box-shadow: 0 0 10 rgba(34, 197, 94, 0.4);
+}
+
+/* ============================================================================
+ * 动画定义 - 绿色呼吸
+ * ============================================================================ */
+
+@keyframes thinking-pulse {
+    0% {
+        background: linear-gradient(135deg, hsl(142, 60%, 12%) 0%, hsl(142, 70%, 10%) 100%);
+        border-color: hsl(142, 60%, 38%);
+    }
+    100% {
+        background: linear-gradient(135deg, hsl(142, 80%, 18%) 0%, hsl(142, 90%, 15%) 100%);
+        border-color: hsl(142, 80%, 48%);
+    }
+}
+
+@keyframes idle-breathe {
+    0% {
+        box-shadow: 0 0 5 rgba(34, 197, 94, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 15 rgba(34, 197, 94, 0.4);
+    }
+    100% {
+        box-shadow: 0 0 5 rgba(34, 197, 94, 0.2);
+    }
+}
+
+@keyframes alert-overflow {
+    0% {
+        box-shadow: 0 0 10 rgba(255, 80, 80, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 25 rgba(255, 80, 80, 0.7);
+    }
+    100% {
+        box-shadow: 0 0 10 rgba(255, 80, 80, 0.4);
+    }
+}
+
+@keyframes success-flash {
+    0% {
+        box-shadow: 0 0 5 rgba(34, 197, 94, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 30 rgba(74, 222, 128, 0.6);
+    }
+    100% {
+        box-shadow: 0 0 5 rgba(34, 197, 94, 0.2);
+    }
+}
+
+/* ============================================================================
+ * 主布局容器
+ * ============================================================================ */
+
+#main-container {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#left-pane {
+    width: 60%;
+    layout: vertical;
+}
+
+#right-pane {
+    width: 40%;
+    layout: vertical;
+}
+
+/* ============================================================================
+ * MirrorPane (Shadow Preview)
+ * ============================================================================ */
+
+MirrorPane {
+    dock: right;
+    width: 40%;
+    background: linear-gradient(
+        180deg,
+        rgba(15, 35, 25, 0.9) 0%,
+        rgba(10, 30, 20, 0.85) 100%
+    );
+    border-left: double $border-glow;
+    padding: 1;
+}
+
+MirrorPane .code-preview {
+    padding: 0 1;
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+MirrorPane .risk-highlight {
+    color: $border-alert;
+    text-style: bold;
+    background: rgba(255, 80, 80, 0.15);
+}
+
+/* ============================================================================
+ * Thinking Tree
+ * ============================================================================ */
+
+ThinkingTree {
+    width: 1fr;
+    padding: 0 1;
+}
+
+ThinkingTree .tree-node {
+    padding: 0 1;
+    margin: 0;
+    font-family: monospace;
+}
+
+ThinkingTree .node-pending {
+    color: $text-muted;
+}
+
+ThinkingTree .node-running {
+    color: $border-glow;
+    animation: thinking-pulse 0.5s infinite alternate;
+}
+
+ThinkingTree .node-success {
+    color: $border-success;
+}
+
+ThinkingTree .node-error {
+    color: $border-alert;
+}
+
+ThinkingTree .confidence-badge {
+    padding: 0 1;
+    margin-left: 1;
+    border: solid $text-muted;
+}
+
+.confidence-high {
+    color: $border-success;
+}
+
+.confidence-medium {
+    color: hsl(45, 80%, 60%);
+}
+
+.confidence-low {
+    color: $border-alert;
+}
+
+/* ============================================================================
+ * 代码流式预览
+ * ============================================================================ */
+
+CodeStreamView {
+    width: 1fr;
+    height: 1fr;
+    padding: 0 1;
+    background: rgba(10, 25, 18, 0.6);
+    border: solid rgba(34, 197, 94, 0.3);
+}
+
+CodeStreamView .code-line {
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+CodeStreamView .typing-cursor {
+    color: $border-primary;
+    animation: cursor-blink 0.8s infinite;
+}
+
+@keyframes cursor-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* ============================================================================
+ * SIP 风险指示器
+ * ============================================================================ */
+
+RiskIndicator {
+    height: auto;
+    padding: 0 1;
+    margin: 1;
+    border: solid $border-alert;
+    background: rgba(255, 80, 80, 0.1);
+}
+
+RiskIndicator .risk-title {
+    color: $border-alert;
+    text-style: bold;
+}
+
+RiskIndicator .risk-files {
+    color: $text-secondary;
+    padding: 0 1;
+}
+
+/* ============================================================================
+ * 状态指示器
+ * ============================================================================ */
+
+StatusIndicator {
+    height: 3;
+    padding: 0 2;
+    dock: bottom;
+}
+
+StatusIndicator .status-text {
+    color: $text-secondary;
+}
+
+StatusIndicator.idle .status-text {
+    color: hsl(142, 40%, 60%);
+}
+
+StatusIndicator.thinking .status-text {
+    color: hsl(142, 80%, 65%);
+    animation: thinking-pulse 0.5s infinite alternate;
+}
+
+StatusIndicator.alert .status-text {
+    color: $border-alert;
+}
+
+StatusIndicator.success .status-text {
+    color: $border-success;
+}
+
+/* ============================================================================
+ * 按钮样式
+ * ============================================================================ */
+
+Button {
+    background: rgba(30, 70, 50, 0.6);
+    border: solid $border-primary;
+    color: $text-primary;
+    padding: 0 2;
+}
+
+Button:hover {
+    background: rgba(40, 90, 60, 0.8);
+    border-color: $border-glow;
+}
+
+Button.primary {
+    background: linear-gradient(135deg, hsl(142, 60%, 28%) 0%, hsl(142, 70%, 22%) 100%);
+    border-color: $border-primary;
+}
+
+Button.danger {
+    background: linear-gradient(135deg, hsl(0, 60%, 28%) 0%, hsl(0, 70%, 22%) 100%);
+    border-color: $border-alert;
+}
+
+/* ============================================================================
+ * 输入框样式
+ * ============================================================================ */
+
+Input {
+    background: rgba(15, 30, 22, 0.8);
+    border: solid $border-primary;
+    color: $text-primary;
+    padding: 0 1;
+}
+
+Input:focus {
+    border-color: $border-glow;
+    box-shadow: 0 0 10 rgba(34, 197, 94, 0.3);
+}
+
+/* ============================================================================
+ * 标签页样式
+ * ============================================================================ */
+
+TabbedContent {
+    width: 1fr;
+    height: 1fr;
+}
+
+TabBar {
+    background: $background-alt;
+    border-bottom: solid $border-primary;
+}
+
+TabPane {
+    padding: 1;
+}
+
+/* ============================================================================
+ * 滚动条样式
+ * ============================================================================ */
+
+Scrollbar {
+    background: rgba(20, 40, 30, 0.5);
+    border-left: solid rgba(34, 197, 94, 0.2);
+}
+
+Scrollbar > .bar {
+    background: rgba(34, 197, 94, 0.4);
+}
+
+Scrollbar > .bar:hover {
+    background: rgba(34, 197, 94, 0.6);
+}
+
+Scrollbar > .grab-button {
+    background: rgba(74, 222, 128, 0.5);
+}
+
+/* ============================================================================
+ * 数据表格
+ * ============================================================================ */
+
+DataTable {
+    width: 1fr;
+    height: 1fr;
+}
+
+DataTable > .header {
+    background: $background-alt;
+    color: $text-primary;
+    text-style: bold;
+}
+
+DataTable > .row {
+    color: $text-primary;
+}
+
+DataTable > .row:hover {
+    background: rgba(30, 70, 50, 0.4);
+}
+
+DataTable > .cursor {
+    background: rgba(34, 197, 94, 0.3);
+}
+
+/* ============================================================================
+ * 进度条
+ * ============================================================================ */
+
+ProgressBar {
+    height: 3;
+    background: rgba(20, 40, 30, 0.6);
+    border: solid rgba(34, 197, 94, 0.3);
+}
+
+ProgressBar > .bar {
+    background: linear-gradient(90deg, hsl(142, 70%, 35%) 0%, hsl(142, 80%, 45%) 100%);
+}
+
+ProgressBar.complete > .bar {
+    background: linear-gradient(90deg, hsl(142, 60%, 40%) 0%, hsl(160, 70%, 50%) 100%);
+}
+
+/* ============================================================================
+ * 响应式布局
+ * ============================================================================ */
+
+@media (max-width: 80) {
+    #main-container {
+        layout: vertical;
+    }
+
+    #left-pane, #right-pane {
+        width: 100%;
+        height: 50%;
+    }
+
+    MirrorPane {
+        width: 100%;
+        height: 50%;
+        dock: bottom;
+    }
+}

@@ -1,0 +1,541 @@
+{
+  "name": "awesome-copilot",
+  "metadata": {
+    "description": "GitHub Copilot 插件、代理、提示词和技能的社区驱动集合",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "owner": {
+    "name": "GitHub",
+    "email": "copilot@github.com"
+  },
+  "plugins": [
+    {
+      "name": "automate-this",
+      "source": "automate-this",
+      "description": "录屏记录手动操作，将视频放在桌面上，让 Copilot CLI 逐帧分析以构建可工作的自动化脚本。支持带音频转录的旁白录制。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "awesome-copilot",
+      "source": "awesome-copilot",
+      "description": "帮助您发现和生成精选的 GitHub Copilot 代理、指令、提示词和技能的元提示词。",
+      "version": "1.1.0"
+    },
+    {
+      "name": "azure",
+      "description": "Microsoft Azure MCP 服务器和技能，用于云资源管理、部署和 Azure 服务。直接从 Copilot 管理 Azure 基础设施、监控应用程序和部署资源。",
+      "version": "1.0.0",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/microsoft/azure-skills",
+      "keywords": [
+        "azure",
+        "cloud",
+        "infrastructure",
+        "deployment",
+        "microsoft",
+        "devops"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/microsoft/github-copilot-for-azure",
+      "source": {
+        "source": "github",
+        "repo": "microsoft/azure-skills",
+        "path": ".github/plugins/azure-skills"
+      }
+    },
+    {
+      "name": "azure-cloud-development",
+      "source": "azure-cloud-development",
+      "description": "全面的 Azure 云开发工具，包括基础设施即代码、无服务器函数、架构模式和成本优化，用于构建可扩展的云应用程序。",
+      "version": "1.0.1"
+    },
+    {
+      "name": "cast-imaging",
+      "source": "cast-imaging",
+      "description": "使用 CAST Imaging 进行软件分析、影响评估、结构质量建议和架构审查的专业代理综合集合。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "clojure-interactive-programming",
+      "source": "clojure-interactive-programming",
+      "description": "面向 REPL-first Clojure 工作流的工具，包含 Clojure 指令、交互式编程聊天模式和支持指导。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "context-engineering",
+      "source": "context-engineering",
+      "description": "通过更好的上下文管理最大化 GitHub Copilot 效果的工具和技术。包括代码结构指南、用于规划多文件更改的代理和上下文感知开发的提示词。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "copilot-sdk",
+      "source": "copilot-sdk",
+      "description": "使用 GitHub Copilot SDK 跨多种编程语言构建应用程序。包含 C#、Go、Node.js/TypeScript 和 Python 的综合指令，帮助您创建 AI 驱动的应用程序。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "csharp-dotnet-development",
+      "source": "csharp-dotnet-development",
+      "description": "C# 和 .NET 开发的基本提示词、指令和聊天模式，包括测试、文档和最佳实践。",
+      "version": "1.1.0"
+    },
+    {
+      "name": "csharp-mcp-development",
+      "source": "csharp-mcp-development",
+      "description": "使用官方 SDK 在 C# 中构建模型上下文协议（MCP）服务器的完整工具包。包含最佳实践指令、生成服务器的提示词和专家聊天模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "database-data-management",
+      "source": "database-data-management",
+      "description": "数据库管理、SQL 优化和数据管理工具，适用于 PostgreSQL、SQL Server 和通用数据库开发最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "dataverse",
+      "description": "使用自然语言构建和管理 Microsoft Dataverse 解决方案。包括表/列创建、解决方案生命周期、数据操作和 MCP 服务器配置。",
+      "version": "1.0.0",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/microsoft/Dataverse-skills",
+      "keywords": [
+        "dataverse",
+        "power-platform",
+        "microsoft",
+        "mcp",
+        "python",
+        "sdk"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/microsoft/Dataverse-skills",
+      "source": {
+        "source": "github",
+        "repo": "microsoft/Dataverse-skills",
+        "path": ".github/plugins/dataverse"
+      }
+    },
+    {
+      "name": "dataverse-sdk-for-python",
+      "source": "dataverse-sdk-for-python",
+      "description": "构建用于 Microsoft Dataverse 的生产就绪 Python 集成的综合集合。包含官方文档、最佳实践、高级功能、文件操作和代码生成提示词。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "devops-oncall",
+      "source": "devops-oncall",
+      "description": "一组集中的提示词、指令和聊天模式，帮助使用 DevOps 工具和 Azure 资源快速分类事件和响应。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "dotnet",
+      "description": "日常 C#/.NET 编码技能。预计对所有 .NET 开发者有用。",
+      "version": "0.1.0",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/dotnet/skills",
+      "keywords": [
+        "dotnet",
+        "csharp",
+        "coding",
+        "skills",
+        "csharp-script",
+        "single-file",
+        "nuget-publishing",
+        "pinvoke"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/dotnet/skills",
+      "source": {
+        "source": "github",
+        "repo": "dotnet/skills",
+        "path": "plugins/dotnet"
+      }
+    },
+    {
+      "name": "dotnet-diag",
+      "description": ".NET 性能调查、调试和事件分析的技能。",
+      "version": "0.1.0",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/dotnet/skills",
+      "keywords": [
+        "dotnet",
+        "diagnostics",
+        "performance",
+        "debugging",
+        "tracing",
+        "symbolicate",
+        "android-tombstone",
+        "dump-collection",
+        "microbenchmarking",
+        "clr-activation"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/dotnet/skills",
+      "source": {
+        "source": "github",
+        "repo": "dotnet/skills",
+        "path": "plugins/dotnet-diag"
+      }
+    },
+    {
+      "name": "doublecheck",
+      "source": "doublecheck",
+      "description": "AI 输出的三层验证管道。提取声明、查找来源并标记幻觉风险，以便人类在行动前进行验证。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "edge-ai-tasks",
+      "source": "edge-ai-tasks",
+      "description": "面向中级到高级用户和大型代码库的任务研究员和任务规划器——由 microsoft/edge-ai 提供",
+      "version": "1.0.0"
+    },
+    {
+      "name": "fastah-ip-geo-tools",
+      "source": "fastah-ip-geo-tools",
+      "description": "此插件面向希望调整和发布 RFC 8805 格式 IP 地理定位数据的网络运维工程师。它包含一个 AI 技能和一个关联的 MCP 服务器，用于将地理位置名称编码为实际城市以进行准确性验证。",
+      "version": "0.0.9"
+    },
+    {
+      "name": "figma",
+      "description": "包含 Figma MCP 服务器和常见工作流技能的插件。",
+      "version": "1.0.0",
+      "author": {
+        "name": "Figma",
+        "url": "https://www.figma.com"
+      },
+      "homepage": "https://github.com/figma/mcp-server-guide",
+      "keywords": [
+        "figma",
+        "design",
+        "mcp",
+        "ui",
+        "code-connect"
+      ],
+      "repository": "https://github.com/figma/mcp-server-guide",
+      "source": {
+        "source": "github",
+        "repo": "figma/mcp-server-guide"
+      }
+    },
+    {
+      "name": "flowstudio-power-automate",
+      "source": "flowstudio-power-automate",
+      "description": "通过 FlowStudio MCP 服务器管理 Power Automate 云流的完整工具包。包含连接到 MCP 服务器、调试失败的流运行以及从自然语言构建/部署流的技能。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "frontend-web-dev",
+      "source": "frontend-web-dev",
+      "description": "现代前端 Web 开发的基本提示词、指令和聊天模式，包括 React、Angular、Vue、TypeScript 和 CSS 框架。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "gem-team",
+      "source": "gem-team",
+      "description": "模块化、高性能的多代理编排框架，用于复杂项目执行、功能实现和自动验证。",
+      "version": "1.5.0"
+    },
+    {
+      "name": "go-mcp-development",
+      "source": "go-mcp-development",
+      "description": "使用官方 github.com/modelcontextprotocol/go-sdk 在 Go 中构建模型上下文协议（MCP）服务器的完整工具包。包含最佳实践指令、生成服务器的提示词和专家 Chat 模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "java-development",
+      "source": "java-development",
+      "description": "Java 开发的综合提示词和指令集合，包括 Spring Boot、Quarkus、测试、文档和最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "java-mcp-development",
+      "source": "java-mcp-development",
+      "description": "使用官方 MCP Java SDK 结合响应式流和 Spring Boot 集成在 Java 中构建模型上下文协议服务器的完整工具包。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "kotlin-mcp-development",
+      "source": "kotlin-mcp-development",
+      "description": "使用官方 io.modelcontextprotocol:kotlin-sdk 库在 Kotlin 中构建模型上下文协议（MCP）服务器的完整工具包。包含最佳实践指令、生成服务器的提示词和专家 Chat 模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "mcp-m365-copilot",
+      "source": "mcp-m365-copilot",
+      "description": "使用模型上下文协议集成为 Microsoft 365 Copilot 构建声明式代理的综合集合",
+      "version": "1.0.0"
+    },
+    {
+      "name": "microsoft-docs",
+      "description": "访问 Azure、.NET、Windows 等的官方 Microsoft 文档、API 参考和代码示例。",
+      "version": "1.0.0",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://learn.microsoft.com",
+      "keywords": [
+        "microsoft",
+        "azure",
+        "dotnet",
+        "windows",
+        "api",
+        "documentation",
+        "rag",
+        "dynamics",
+        "powerbi",
+        "code-samples"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/MicrosoftDocs/mcp",
+      "source": {
+        "source": "github",
+        "repo": "MicrosoftDocs/mcp"
+      }
+    },
+    {
+      "name": "modernize-dotnet",
+      "description": "AI 驱动的 .NET 现代化和升级助手。帮助将 .NET Framework 和 .NET 应用程序升级到最新版本的 .NET。",
+      "version": "1.0.979-preview1",
+      "author": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/dotnet/modernize-dotnet",
+      "keywords": [
+        "modernization",
+        "upgrade",
+        "migration",
+        "dotnet"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/dotnet/modernize-dotnet",
+      "source": {
+        "source": "github",
+        "repo": "dotnet/modernize-dotnet",
+        "path": "plugins/modernize-dotnet"
+      }
+    },
+    {
+      "name": "napkin",
+      "source": "napkin",
+      "description": "Copilot CLI 的可视化白板协作工具。在浏览器中打开交互式白板，您可以在此绘图、草图和添加便签——然后将所有内容分享回 Copilot。Copilot 可以看到您的绘图并回复分析、建议 and 创意。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "noob-mode",
+      "source": "noob-mode",
+      "description": "为非技术用户提供的纯英语翻译层，翻译 Copilot CLI。将每个确认提示、错误消息和技术输出转换为清晰、无术语的英语，并带有彩色编码风险指示器。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "openapi-to-application-csharp-dotnet",
+      "source": "openapi-to-application-csharp-dotnet",
+      "description": "从 OpenAPI 规范生成生产就绪的 .NET 应用程序。包括 ASP.NET Core 项目脚手架、控制器生成、实体框架集成和 C# 最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "openapi-to-application-go",
+      "source": "openapi-to-application-go",
+      "description": "从 OpenAPI 规范生成生产就绪的 Go 应用程序。包括项目脚手架、处理程序生成、中间件设置和 REST API 的 Go 最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "openapi-to-application-java-spring-boot",
+      "source": "openapi-to-application-java-spring-boot",
+      "description": "从 OpenAPI 规范生成生产就绪的 Spring Boot 应用程序。包括项目脚手架、REST 控制器生成、服务层组织和 Spring Boot 最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "openapi-to-application-nodejs-nestjs",
+      "source": "openapi-to-application-nodejs-nestjs",
+      "description": "从 OpenAPI 规范生成生产就绪的 NestJS 应用程序。包括项目脚手架、控制器和服务生成、TypeScript 最佳实践和企业模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "openapi-to-application-python-fastapi",
+      "source": "openapi-to-application-python-fastapi",
+      "description": "从 OpenAPI 规范生成生产就绪的 FastAPI 应用程序。包括项目脚手架、路由生成、依赖注入和异步 API 的 Python 最佳实践。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "oracle-to-postgres-migration-expert",
+      "source": "oracle-to-postgres-migration-expert",
+      "description": "用于 .NET 解决方案中 Oracle 到 PostgreSQL 应用程序迁移的专家代理。执行代码编辑、运行命令并调用扩展工具，将 .NET/Oracle 数据访问模式迁移到 PostgreSQL。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "ospo-sponsorship",
+      "source": "ospo-sponsorship",
+      "description": "为开源项目办公室（OSPO）提供的工具和资源，用于识别、评估和管理通过 GitHub Sponsors、Open Collective 和其他资助平台对开源依赖的赞助。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "partners",
+      "source": "partners",
+      "description": "由 GitHub 合作伙伴创建的自定义代理",
+      "version": "1.0.0"
+    },
+    {
+      "name": "pcf-development",
+      "source": "pcf-development",
+      "description": "使用 Power Apps 组件框架为模型驱动和画布应用开发自定义代码组件的完整工具包",
+      "version": "1.0.0"
+    },
+    {
+      "name": "php-mcp-development",
+      "source": "php-mcp-development",
+      "description": "使用官方 PHP SDK 基于属性的发现构建模型上下文协议服务器的综合资源，包括最佳实践、项目生成和专家协助",
+      "version": "1.0.0"
+    },
+    {
+      "name": "polyglot-test-agent",
+      "source": "polyglot-test-agent",
+      "description": "用于跨任何编程语言生成综合单元测试的多代理管道。编排研究、规划和实施阶段，使用专业代理生成可编译、通过且遵循项目约定的测试。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "power-apps-code-apps",
+      "source": "power-apps-code-apps",
+      "description": "Power Apps 代码应用开发完整工具包，包括项目脚手架、开发标准和构建代码优先应用程序与 Power Platform 集成的专家指导。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "power-bi-development",
+      "source": "power-bi-development",
+      "description": "综合 Power BI 开发资源，包括数据建模、DAX 优化、性能调优、可视化设计、安全最佳实践和 DevOps/ALM 指导，用于构建企业级 Power BI 解决方案。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "power-platform-mcp-connector-development",
+      "source": "power-platform-mcp-connector-development",
+      "description": "开发 Power Platform 自定义连接器与 Microsoft Copilot Studio 模型上下文协议集成的完整工具包",
+      "version": "1.0.0"
+    },
+    {
+      "name": "project-planning",
+      "source": "project-planning",
+      "description": "软件项目规划、功能分解、史诗管理、实施规划和任务组织的工具和指南，适用于开发团队。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "python-mcp-development",
+      "source": "python-mcp-development",
+      "description": "使用官方 SDK 结合 FastMCP 在 Python 中构建模型上下文协议（MCP）服务器的完整工具包。包含最佳实践指令、生成服务器的提示词和专家 Chat 模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "roundup",
+      "source": "roundup",
+      "description": "自配置状态简报生成器。从示例中学习您的沟通风格，发现您的数据源，并按需为任何受众生成草案更新。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "ruby-mcp-development",
+      "source": "ruby-mcp-development",
+      "description": "使用官方 MCP Ruby SDK gem 和 Rails 集成支持在 Ruby 中构建模型上下文协议服务器的完整工具包。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "rug-agentic-workflow",
+      "source": "rug-agentic-workflow",
+      "description": "三代理工作流，用于协调软件交付，包含一个编排器和实现及 QA 子代理。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "rust-mcp-development",
+      "source": "rust-mcp-development",
+      "description": "使用官方 rmcp SDK 在 Rust 中构建高性能模型上下文协议服务器，支持 async/await、过程宏和类型安全实现。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "security-best-practices",
+      "source": "security-best-practices",
+      "description": "安全框架、无障碍指南、性能优化和代码质量最佳实践，用于构建安全、可维护和高性能的应用程序。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "skills-for-copilot-studio",
+      "description": "用于 AI 编码代理的 Microsoft Copilot Studio 插件",
+      "version": "1.0.3",
+      "author": {
+        "name": "Microsoft Copilot Studio CAT Team",
+        "url": "https://www.microsoft.com"
+      },
+      "homepage": "https://github.com/microsoft/skills-for-copilot-studio",
+      "keywords": [
+        "copilot",
+        "copilot-studio",
+        "studio",
+        "agent",
+        "microsoft",
+        "coding"
+      ],
+      "license": "MIT",
+      "repository": "https://github.com/microsoft/skills-for-copilot-studio",
+      "source": {
+        "source": "github",
+        "repo": "microsoft/skills-for-copilot-studio"
+      }
+    },
+    {
+      "name": "software-engineering-team",
+      "source": "software-engineering-team",
+      "description": "7 个专业代理，涵盖从 UX 设计和架构到安全与 DevOps 的整个软件开发生命周期。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "structured-autonomy",
+      "source": "structured-autonomy",
+      "description": "高级规划，节约的实施",
+      "version": "1.0.0"
+    },
+    {
+      "name": "swift-mcp-development",
+      "source": "swift-mcp-development",
+      "description": "使用官方 MCP Swift SDK 和现代并发功能在 Swift 中构建模型上下文协议服务器的综合集合。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "technical-spike",
+      "source": "technical-spike",
+      "description": "用于创建、管理和研究技术 Spike 的工具，在继续规范和实施解决方案之前减少未知和假设。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "testing-automation",
+      "source": "testing-automation",
+      "description": "编写测试、测试自动化和测试驱动开发的综合集合，包括单元测试、集成测试和端到端测试策略。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "typescript-mcp-development",
+      "source": "typescript-mcp-development",
+      "description": "使用官方 SDK 在 TypeScript/Node.js 中构建模型上下文协议（MCP）服务器的完整工具包。包含最佳实践指令、生成服务器的提示词和专家 Chat 模式。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "typespec-m365-copilot",
+      "source": "typespec-m365-copilot",
+      "description": "使用 TypeSpec 为 Microsoft 365 Copilot 可扩展性构建声明式代理和 API 插件的综合提示词、指令和资源集合。",
+      "version": "1.0.0"
+    },
+    {
+      "name": "winui3-development",
+      "source": "winui3-development",
+      "description": "WinUI 3 和 Windows App SDK 开发代理、指南和迁移指南。防止常见的 UWP API 误用，并引导正确的 WinUI 3 模式用于桌面 Windows 应用程序。",
+      "version": "1.0.0"
+    }
+  ]
+}

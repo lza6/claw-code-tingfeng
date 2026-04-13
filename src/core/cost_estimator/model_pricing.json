@@ -1,0 +1,651 @@
+{
+  "_version": "2026-04-01-v1",
+  "_source": "LLM providers official pricing pages",
+  "_note": "Prices in USD per 1M tokens",
+  "default": {
+    "input_price": 1.0,
+    "output_price": 3.0,
+    "cache_read_price": 0.0,
+    "cache_write_price": 0.0,
+    "reasoning_price": 0.0
+  },
+  "models": {
+    "gpt-4o": {
+      "input_price": 2.5,
+      "output_price": 10.0,
+      "cache_read_price": 1.25,
+      "cache_write_price": 2.5,
+      "reasoning_price": 0.0
+    },
+    "gpt-4o-mini": {
+      "input_price": 0.15,
+      "output_price": 0.6,
+      "cache_read_price": 0.075,
+      "cache_write_price": 0.15,
+      "reasoning_price": 0.0
+    },
+    "gpt-4o-2024-05-13": {
+      "input_price": 5.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gpt-4o-2024-08-06": {
+      "input_price": 2.5,
+      "output_price": 10.0,
+      "cache_read_price": 1.25,
+      "cache_write_price": 2.5,
+      "reasoning_price": 0.0
+    },
+    "gpt-4-turbo": {
+      "input_price": 10.0,
+      "output_price": 30.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gpt-4-turbo-2024-04-09": {
+      "input_price": 10.0,
+      "output_price": 30.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gpt-3.5-turbo": {
+      "input_price": 0.5,
+      "output_price": 1.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gpt-3.5-turbo-0125": {
+      "input_price": 0.5,
+      "output_price": 1.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "o1": {
+      "input_price": 15.0,
+      "output_price": 60.0,
+      "cache_read_price": 7.5,
+      "cache_write_price": 15.0,
+      "reasoning_price": 60.0
+    },
+    "o1-2024-12-17": {
+      "input_price": 15.0,
+      "output_price": 60.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 60.0
+    },
+    "o1-mini": {
+      "input_price": 3.0,
+      "output_price": 12.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 12.0
+    },
+    "o1-mini-2024-09-12": {
+      "input_price": 3.0,
+      "output_price": 12.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 12.0
+    },
+    "o3": {
+      "input_price": 10.0,
+      "output_price": 40.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 40.0
+    },
+    "o3-mini": {
+      "input_price": 1.1,
+      "output_price": 4.4,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 4.4
+    },
+    "o3-mini-2025-01-31": {
+      "input_price": 1.1,
+      "output_price": 4.4,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 4.4
+    },
+    "o4-mini": {
+      "input_price": 1.1,
+      "output_price": 4.4,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 4.4
+    },
+    "gpt-4.1": {
+      "input_price": 2.0,
+      "output_price": 8.0,
+      "cache_read_price": 0.5,
+      "cache_write_price": 2.0,
+      "reasoning_price": 0.0
+    },
+    "gpt-4.1-mini": {
+      "input_price": 0.4,
+      "output_price": 1.6,
+      "cache_read_price": 0.1,
+      "cache_write_price": 0.4,
+      "reasoning_price": 0.0
+    },
+    "gpt-4.1-nano": {
+      "input_price": 0.1,
+      "output_price": 0.4,
+      "cache_read_price": 0.025,
+      "cache_write_price": 0.1,
+      "reasoning_price": 0.0
+    },
+    "gpt-4.1-2025-04-14": {
+      "input_price": 2.0,
+      "output_price": 8.0,
+      "cache_read_price": 0.5,
+      "cache_write_price": 2.0,
+      "reasoning_price": 0.0
+    },
+    "claude-3-5-sonnet-20241022": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.3,
+      "cache_write_price": 3.75,
+      "reasoning_price": 0.0
+    },
+    "claude-3-5-sonnet-latest": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.3,
+      "cache_write_price": 3.75,
+      "reasoning_price": 0.0
+    },
+    "claude-3-7-sonnet-20250219": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.3,
+      "cache_write_price": 3.75,
+      "reasoning_price": 15.0
+    },
+    "claude-3-7-sonnet-latest": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.3,
+      "cache_write_price": 3.75,
+      "reasoning_price": 15.0
+    },
+    "claude-3-opus-20240229": {
+      "input_price": 15.0,
+      "output_price": 75.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "claude-3-opus-latest": {
+      "input_price": 15.0,
+      "output_price": 75.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "claude-3-haiku-20240307": {
+      "input_price": 0.25,
+      "output_price": 1.25,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "claude-3-5-haiku-20241022": {
+      "input_price": 0.8,
+      "output_price": 4.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "claude-3-5-haiku-latest": {
+      "input_price": 0.8,
+      "output_price": 4.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "claude-sonnet-4-20250514": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.3,
+      "cache_write_price": 3.75,
+      "reasoning_price": 0.0
+    },
+    "claude-opus-4-20250514": {
+      "input_price": 15.0,
+      "output_price": 75.0,
+      "cache_read_price": 1.5,
+      "cache_write_price": 18.75,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.0-flash": {
+      "input_price": 0.1,
+      "output_price": 0.4,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.0-flash-exp": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.0-flash-lite": {
+      "input_price": 0.075,
+      "output_price": 0.3,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.5-pro": {
+      "input_price": 1.25,
+      "output_price": 10.0,
+      "cache_read_price": 0.31,
+      "cache_write_price": 1.25,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.5-pro-preview-03-25": {
+      "input_price": 1.25,
+      "output_price": 10.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.5-flash": {
+      "input_price": 0.15,
+      "output_price": 3.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-2.5-flash-preview-04-17": {
+      "input_price": 0.15,
+      "output_price": 3.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-1.5-pro": {
+      "input_price": 1.25,
+      "output_price": 5.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-1.5-pro-001": {
+      "input_price": 2.5,
+      "output_price": 10.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemini-3-pro": {
+      "input_price": 1.25,
+      "output_price": 10.0,
+      "cache_read_price": 0.31,
+      "cache_write_price": 1.25,
+      "reasoning_price": 0.0
+    },
+    "gemini-3-flash": {
+      "input_price": 0.15,
+      "output_price": 0.6,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama-3.3-70b-versatile": {
+      "input_price": 0.59,
+      "output_price": 0.79,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama-3.3-70b-specdec": {
+      "input_price": 0.59,
+      "output_price": 0.99,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mixtral-8x7b-32768": {
+      "input_price": 0.27,
+      "output_price": 0.27,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama-3.1-8b-instant": {
+      "input_price": 0.05,
+      "output_price": 0.08,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama-guard-4-12b": {
+      "input_price": 0.2,
+      "output_price": 0.2,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {
+      "input_price": 0.88,
+      "output_price": 0.88,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "meta-llama/Llama-3.1-405B-Instruct-Turbo": {
+      "input_price": 3.5,
+      "output_price": 3.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistralai/Mixtral-8x7B-Instruct-v0.1": {
+      "input_price": 0.6,
+      "output_price": 0.6,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "deepseek-ai/DeepSeek-V3": {
+      "input_price": 1.25,
+      "output_price": 1.25,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "deepseek-ai/DeepSeek-R1": {
+      "input_price": 7.0,
+      "output_price": 7.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama3": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama3.1": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama3.2": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "llama3.3": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistral": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "deepseek-r1": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen2.5": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen2.5-coder": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "phi3": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "gemma2": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen/qwen3.6-plus-preview:free": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen/qwen3-coder": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen/qwq-32b": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "meta-llama/llama-3.1-8b-instruct:free": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "meta-llama/llama-3.2-3b-instruct:free": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistralai/mistral-7b-instruct:free": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "google/gemini-2.0-flash-exp:free": {
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "deepseek-chat": {
+      "input_price": 0.27,
+      "output_price": 1.1,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "deepseek-reasoner": {
+      "input_price": 0.55,
+      "output_price": 2.19,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 2.19
+    },
+    "deepseek-coder": {
+      "input_price": 0.14,
+      "output_price": 0.28,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistral-large-latest": {
+      "input_price": 2.0,
+      "output_price": 6.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistral-large-2411": {
+      "input_price": 2.0,
+      "output_price": 6.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistral-small-latest": {
+      "input_price": 0.2,
+      "output_price": 0.6,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "mistral-small-2503": {
+      "input_price": 0.2,
+      "output_price": 0.6,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "pixtral-large-latest": {
+      "input_price": 2.0,
+      "output_price": 6.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "codestral-latest": {
+      "input_price": 0.3,
+      "output_price": 0.9,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "grok-3": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "grok-3-mini": {
+      "input_price": 0.3,
+      "output_price": 0.5,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "grok-4": {
+      "input_price": 3.0,
+      "output_price": 15.0,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen-max": {
+      "input_price": 1.6,
+      "output_price": 6.4,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen-plus": {
+      "input_price": 0.4,
+      "output_price": 1.2,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen-turbo": {
+      "input_price": 0.08,
+      "output_price": 0.32,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen-long": {
+      "input_price": 0.08,
+      "output_price": 0.32,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen-coder-plus": {
+      "input_price": 0.4,
+      "output_price": 1.2,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen3-235b-a22b": {
+      "input_price": 0.4,
+      "output_price": 1.2,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen3-30b-a3b": {
+      "input_price": 0.1,
+      "output_price": 0.3,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen3-14b": {
+      "input_price": 0.08,
+      "output_price": 0.24,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen3-8b": {
+      "input_price": 0.05,
+      "output_price": 0.15,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    },
+    "qwen3-coder": {
+      "input_price": 0.4,
+      "output_price": 1.2,
+      "cache_read_price": 0.0,
+      "cache_write_price": 0.0,
+      "reasoning_price": 0.0
+    }
+  }
+}

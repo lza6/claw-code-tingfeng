@@ -1,0 +1,1 @@
+{"timestamp": "2026-04-13T02:59:35.496443", "kind": "budget_exhausted", "source": "guard", "message": "工作流因预算耗尽中止: Token 超限 (2 > 1)", "affected_targets": ["master"], "metadata": {}}

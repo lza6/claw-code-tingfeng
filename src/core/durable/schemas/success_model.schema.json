@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Success Model Schema",
+  "description": "Schema for defining success dimensions and proof requirements",
+  "type": "object",
+  "required": ["objective_contract_hash", "obligation_model_hash", "dimensions", "anti_goals", "proof_requirements"],
+  "properties": {
+    "objective_contract_hash": { "type": "string" },
+    "obligation_model_hash": { "type": "string" },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["quality", "performance", "correctness", "usability"]
+          },
+          "text": { "type": "string" },
+          "required": { "type": "boolean" },
+          "failure_modes": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "anti_goals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "proof_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "covers_dimensions", "kind"],
+        "properties": {
+          "id": { "type": "string" },
+          "covers_dimensions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["test", "review", "metric", "manual"]
+          },
+          "required": { "type": "boolean" },
+          "source_surface": { "type": "string" }
+        }
+      }
+    },
+    "version": { "type": "string" },
+    "compiled_at": { "type": "string" }
+  }
+}

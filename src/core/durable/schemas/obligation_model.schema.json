@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Obligation Model Schema",
+  "description": "Schema for mutable obligation model",
+  "type": "object",
+  "required": ["version", "objective_contract_hash", "required", "updated_at"],
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "objective_contract_hash": {
+      "type": "string"
+    },
+    "required": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/obligation" }
+    },
+    "optional": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/obligation" }
+    },
+    "guardrails": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/obligation" }
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "obligation": {
+      "type": "object",
+      "required": ["id", "text", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "kind": { "type": "string" },
+        "source": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["open", "claimed", "satisfied", "waived", "failed"]
+        },
+        "covers_clauses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "evidence_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "verification_method": { "type": ["string", "null"] },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "assigned_to": { "type": ["string", "null"] },
+        "priority": { "type": "integer" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "note": { "type": "string" },
+        "approval_ref": { "type": ["string", "null"] },
+        "assurance_required": { "type": "boolean" }
+      }
+    }
+  }
+}

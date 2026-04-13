@@ -1,0 +1,27 @@
+{
+  "name": "build-test-filters",
+  "description": "构建/测试命令输出过滤规则",
+  "rules": [
+    {
+      "name": "make_output",
+      "command_pattern": "(?i)\\bmake\\b",
+      "strategy": "error_only",
+      "description": "Make: 仅显示编译错误和警告",
+      "params": {}
+    },
+    {
+      "name": "go_test",
+      "command_pattern": "(?i)^\\bgo\\s+test\\b",
+      "strategy": "failure_focus",
+      "description": "Go test: 仅显示失败用例和摘要",
+      "params": {}
+    },
+    {
+      "name": "cargo_test",
+      "command_pattern": "(?i)\\bcargo\\s+test\\b",
+      "strategy": "failure_focus",
+      "description": "Cargo test: 仅显示失败测试和摘要",
+      "params": {}
+    }
+  ]
+}

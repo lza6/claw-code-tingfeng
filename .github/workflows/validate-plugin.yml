@@ -1,0 +1,95 @@
+name: Validate Plugin Structure
+
+on:
+  push:
+    paths:
+      - '.claude-plugin/**'
+      - '.claude/commands/**'
+      - 'skills/**/SKILL.md'
+  pull_request:
+    paths:
+      - '.claude-plugin/**'
+      - '.claude/commands/**'
+      - 'skills/**/SKILL.md'
+  workflow_dispatch:
+
+jobs:
+  validate-skills:
+    name: Validate skill structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all skills have SKILL.md with valid frontmatter
+        run: |
+          errors=0
+          for dir in skills/*/; do
+            skill_name=$(basename "$dir")
+            if [ ! -f "$dir/SKILL.md" ]; then
+              echo "ERROR: $skill_name missing SKILL.md"
+              errors=$((errors + 1))
+              continue
+            fi
+            # Check YAML frontmatter has name and description
+            if ! head -5 "$dir/SKILL.md" | grep -q "^name:"; then
+              echo "ERROR: $skill_name SKILL.md missing 'name' in frontmatter"
+              errors=$((errors + 1))
+            fi
+            if ! head -5 "$dir/SKILL.md" | grep -q "^description:"; then
+              echo "ERROR: $skill_name SKILL.md missing 'description' in frontmatter"
+              errors=$((errors + 1))
+            fi
+          done
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors error(s) in skill structure"
+            exit 1
+          fi
+          echo "All skills validated successfully"
+
+  validate-commands:
+    name: Validate slash commands
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all commands have valid frontmatter
+        run: |
+          errors=0
+          for file in .claude/commands/*.md; do
+            cmd_name=$(basename "$file" .md)
+            if ! head -5 "$file" | grep -q "^description:"; then
+              echo "ERROR: $cmd_name missing 'description' in frontmatter"
+              errors=$((errors + 1))
+            fi
+          done
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors error(s) in command structure"
+            exit 1
+          fi
+          echo "All commands validated successfully"
+
+  validate-plugin-manifest:
+    name: Validate plugin manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check plugin.json is valid JSON
+        run: |
+          if [ -f .claude-plugin/plugin.json ]; then
+            python -c "import json; json.load(open('.claude-plugin/plugin.json'))" \
+              && echo "plugin.json is valid JSON" \
+              || (echo "ERROR: plugin.json is not valid JSON" && exit 1)
+          else
+            echo "WARNING: .claude-plugin/plugin.json not found"
+          fi
+
+      - name: Check marketplace.json is valid JSON
+        run: |
+          if [ -f .claude-plugin/marketplace.json ]; then
+            python -c "import json; json.load(open('.claude-plugin/marketplace.json'))" \
+              && echo "marketplace.json is valid JSON" \
+              || (echo "ERROR: marketplace.json is not valid JSON" && exit 1)
+          else
+            echo "WARNING: .claude-plugin/marketplace.json not found"
+          fi

@@ -1,0 +1,38 @@
+{
+    "name": "common-tools",
+    "description": "常用命令过滤规则 (LS, Grep, Find, Cat)",
+    "rules": [
+        {
+            "name": "ls_optimized",
+            "command_pattern": "^(?:ls|dir)\\b",
+            "description": "LS/DIR: 截断并优化输出",
+            "strip_ansi": true,
+            "truncate_lines_at": 100,
+            "max_lines": 50
+        },
+        {
+            "name": "grep_optimized",
+            "command_pattern": "^(?:grep|rg)\\b",
+            "description": "Grep/Ripgrep: 结果去重与截断",
+            "strip_ansi": true,
+            "truncate_lines_at": 200,
+            "max_lines": 100
+        },
+        {
+            "name": "cat_optimized",
+            "command_pattern": "^(?:cat|type)\\b",
+            "description": "Cat/Type: 头部和尾部截断",
+            "strip_ansi": true,
+            "head_lines": 20,
+            "tail_lines": 20,
+            "max_lines": 50
+        },
+        {
+            "name": "find_optimized",
+            "command_pattern": "^find\\b",
+            "description": "Find: 截断较长的文件路径列表",
+            "strip_ansi": true,
+            "max_lines": 100
+        }
+    ]
+}

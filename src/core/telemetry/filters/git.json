@@ -1,0 +1,66 @@
+{
+  "name": "git-filters",
+  "description": "Git 命令输出过滤规则 (极致压缩版)",
+  "rules": [
+    {
+      "name": "git_status_compact",
+      "command_pattern": "(?i)^git\\s+status\\b",
+      "description": "Git status: 精简摘要",
+      "strip_ansi": true,
+      "match_output": [
+        {
+          "pattern": "nothing to commit, working tree clean",
+          "message": "ok (clean)",
+          "unless": "branch .* is ahead"
+        }
+      ],
+      "strategy": "stats_extraction",
+      "params": {
+        "format": "git_status_summary"
+      }
+    },
+    {
+      "name": "git_action_hints",
+      "command_pattern": "(?i)^git\\s+(?:add|commit|push|pull|checkout|branch -d)\\b",
+      "description": "Git Add/Commit/Push/Pull: 成功时显示 OK",
+      "strip_ansi": true,
+      "match_output": [
+        {
+          "pattern": "^Everything up-to-date$",
+          "message": "ok (up-to-date)"
+        },
+        {
+          "pattern": "^Already up to date\\.$",
+          "message": "ok (up-to-date)"
+        },
+        {
+          "pattern": "^On branch ",
+          "message": "ok",
+          "unless": "error:|fatal:"
+        }
+      ],
+      "on_empty": "ok"
+    },
+    {
+      "name": "git_log_condensed",
+      "command_pattern": "(?i)^git\\s+log\\b",
+      "description": "Git log: 高度压缩列表",
+      "strategy": "code_filtering",
+      "params": {
+        "format": "git_log_condensed",
+        "max_lines": 20
+      },
+      "max_lines": 25
+    },
+    {
+      "name": "git_diff_summary",
+      "command_pattern": "(?i)^git\\s+diff\\b",
+      "description": "Git diff: 仅显示统计信息",
+      "strategy": "stats_extraction",
+      "params": {
+        "max_lines": 20
+      },
+      "max_lines": 25
+    }
+  ]
+}

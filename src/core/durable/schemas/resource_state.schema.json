@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Resource State Schema",
+  "description": "Schema for Linux resource tracking (PSI, RSS, Host pressure)",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "object",
+      "properties": {
+        "mem_total_bytes": { "type": "integer" },
+        "mem_available_bytes": { "type": "integer" },
+        "swap_total_bytes": { "type": "integer" },
+        "swap_free_bytes": { "type": "integer" }
+      }
+    },
+    "psi": {
+      "type": "object",
+      "properties": {
+        "memory_some_avg10": { "type": "number" },
+        "memory_some_avg60": { "type": "number" },
+        "memory_some_avg300": { "type": "number" },
+        "memory_full_avg10": { "type": "number" },
+        "memory_full_avg60": { "type": "number" },
+        "memory_full_avg300": { "type": "number" }
+      }
+    },
+    "cgroup": {
+      "type": "object",
+      "properties": {
+        "memory_current_bytes": { "type": "integer" },
+        "memory_high_bytes": { "type": "integer" },
+        "memory_max_bytes": { "type": "integer" },
+        "memory_swap_current_bytes": { "type": "integer" },
+        "memory_swap_max_bytes": { "type": "integer" },
+        "events": {
+          "type": "object",
+          "properties": {
+            "low": { "type": "integer" },
+            "high": { "type": "integer" },
+            "max": { "type": "integer" },
+            "oom": { "type": "integer" },
+            "oom_kill": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "goalx_processes": {
+      "type": "object",
+      "properties": {
+        "master_rss_bytes": { "type": "integer" },
+        "runtime_host_rss_bytes": { "type": "integer" },
+        "worker_rss_bytes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "total_goalx_rss_bytes": { "type": "integer" }
+      }
+    },
+    "headroom_bytes": { "type": "integer" },
+    "state": {
+      "type": "string",
+      "enum": ["healthy", "tight", "critical", "unknown"]
+    },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

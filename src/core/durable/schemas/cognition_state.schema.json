@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Cognition State Schema",
+  "description": "Schema for tracking worktree-level cognitive provider state",
+  "type": "object",
+  "required": ["version", "scopes"],
+  "properties": {
+    "version": { "type": "integer" },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scope"],
+        "properties": {
+          "scope": { "type": "string" },
+          "worktree_path": { "type": "string" },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string" },
+                "invocation_kind": {
+                  "type": "string",
+                  "enum": ["builtin", "binary", "npx", "mcp", "none"]
+                },
+                "available": { "type": "boolean" },
+                "index_state": {
+                  "type": "string",
+                  "enum": ["missing", "fresh", "stale", "unknown"]
+                },
+                "capabilities": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "head_revision": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

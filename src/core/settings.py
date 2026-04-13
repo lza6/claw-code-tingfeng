@@ -1,0 +1,36 @@
+"""Backward compatibility wrapper for src.core.settings."""
+from .config.settings import (
+    AgentSettings,
+    ApprovalMode,
+    ConfigSource,
+    ConfigSourceKind,
+    LLMProviderEnum,
+    LogLevelEnum,
+    apply_config_overrides,
+    get_config_priority_report,
+    get_runtime_config,
+    get_settings,
+    load_settings,
+    reload_config,
+    reload_settings,
+    reset_settings,
+    set_runtime_config,
+)
+
+__all__ = [
+    "AgentSettings",
+    "ApprovalMode",
+    "ConfigSource",
+    "ConfigSourceKind",
+    "LLMProviderEnum",
+    "LogLevelEnum",
+    "apply_config_overrides",
+    "get_config_priority_report",
+    "get_runtime_config",
+    "get_settings",
+    "load_settings",
+    "reload_config",
+    "reload_settings",
+    "reset_settings",
+    "set_runtime_config",
+]

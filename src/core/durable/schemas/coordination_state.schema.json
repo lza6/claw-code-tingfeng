@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coordination State Schema",
+  "description": "Schema for session coordination and task coverage",
+  "type": "object",
+  "properties": {
+    "sessions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["session_id", "state", "created_at"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "state": { "type": "string" },
+          "created_at": { "type": "string" },
+          "assigned_obligations": { "type": "array", "items": { "type": "string" } },
+          "coverage_items": { "type": "array", "items": { "type": "string" } },
+          "available_surfaces": { "type": "array", "items": { "type": "string" } },
+          "worktree_path": { "type": ["string", "null"] },
+          "progress_notes": { "type": "string" },
+          "last_activity": { "type": "string" },
+          "decisions": { "type": "array", "items": { "type": "object" } },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "updated_at": { "type": "string" },
+    "coverage_map": {
+      "type": "object",
+      "additionalProperties": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "execution_state": { "type": "string" },
+          "blocked_by": { "type": "string" },
+          "surfaces": {
+            "type": "object",
+            "properties": {
+              "repo": { "type": "string" },
+              "runtime": { "type": "string" },
+              "run_artifacts": { "type": "string" },
+              "web_research": { "type": "string" },
+              "external_system": { "type": "string" }
+            }
+          },
+          "updated_at": { "type": "string" }
+        }
+      }
+    },
+    "decision": {
+      "type": ["object", "null"],
+      "properties": {
+        "root_cause": { "type": "string" },
+        "local_path": { "type": "string" },
+        "compatible_path": { "type": "string" },
+        "architecture_path": { "type": "string" },
+        "chosen_path": { "type": "string" },
+        "chosen_path_reason": { "type": "string" }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "master_state": { "type": "string" },
+    "master_notes": { "type": "string" }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Objective Contract Schema",
+  "description": "Schema for immutable objective contract",
+  "type": "object",
+  "required": ["objective", "created_at", "run_id"],
+  "properties": {
+    "objective": {
+      "type": "string",
+      "description": "The user's goal in natural language"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "ISO timestamp when contract was created"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Unique run identifier"
+    },
+    "initial_context": {
+      "type": "object",
+      "description": "Initial repository state and environment"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Hard constraints that must be respected"
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Criteria for determining success"
+    },
+    "user": {
+      "type": ["string", "null"],
+      "description": "User who created this contract"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "normal", "high", "critical"],
+      "description": "Priority level"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Categorization tags"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Evidence Log Schema",
+  "description": "Schema for immutable evidence log",
+  "type": "object",
+  "required": ["entries", "updated_at"],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "description", "recorded_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["test_result", "code_review", "manual_verification", "static_analysis", "runtime_log", "documentation", "benchmark", "screenshot"]
+          },
+          "description": { "type": "string" },
+          "recorded_at": { "type": "string" },
+          "obligation_id": { "type": ["string", "null"] },
+          "scenario_id": { "type": ["string", "null"] },
+          "data": { "type": "object" },
+          "artifacts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "recorded_by": { "type": ["string", "null"] },
+          "source_command": { "type": ["string", "null"] },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "clawd-code",
+  "owner": {
+    "name": "Clawd Code Contributors"
+  },
+  "metadata": {
+    "description": "AI-powered coding agent framework with production-grade engineering skills — covering the full software development lifecycle from spec to ship."
+  },
+  "plugins": [
+    {
+      "name": "clawd-code",
+      "source": {
+        "source": "github",
+        "repo": "your-org/claw-code-tingfeng"
+      },
+      "description": "AI-powered coding agent framework with production-grade engineering skills covering every phase of software development: spec, plan, build, verify, review, and ship."
+    }
+  ]
+}

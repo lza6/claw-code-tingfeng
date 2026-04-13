@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Control State Schema",
+  "description": "Schema for control state execution and phase management",
+  "type": "object",
+  "required": ["version", "goal_state", "continuity_state", "phase"],
+  "properties": {
+    "version": { "type": "integer" },
+    "goal_state": { "type": "string", "enum": ["open", "completed", "dropped"] },
+    "continuity_state": { "type": "string", "enum": ["running", "paused", "blocked", "terminated"] },
+    "phase": { "type": "string", "enum": ["initialize", "intake", "explore", "plan", "execute", "verify", "review", "closeout"] },
+    "active_session_count": { "type": "integer" },
+    "provider_dialog_alerts": { "type": "object", "additionalProperties": { "type": "string" } },
+    "master_alerts": { "type": "object", "additionalProperties": { "type": "string" } },
+    "leases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["holder", "run_id", "epoch", "renewed_at", "expires_at", "pid", "transport"],
+        "properties": {
+          "holder": { "type": "string" },
+          "run_id": { "type": "string" },
+          "epoch": { "type": "integer" },
+          "renewed_at": { "type": "string" },
+          "expires_at": { "type": "string" },
+          "pid": { "type": "integer" },
+          "transport": { "type": "string" }
+        }
+      }
+    },
+    "updated_at": { "type": "string" }
+  }
+}
