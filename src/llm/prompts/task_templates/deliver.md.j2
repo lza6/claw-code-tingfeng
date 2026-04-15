@@ -1,0 +1,24 @@
+# 任务意图: DELIVER (交付)
+{{ guidance }}
+
+## 目标内容
+{{ goal_description }}
+
+## 完成标准 (Acceptance Criteria)
+{% for criterion in acceptance_criteria %}
+- [ ] {{ criterion }}
+{% endfor %}
+
+## 上下文证据
+{% if evidence %}
+{% for entry in evidence %}
+- {{ entry.timestamp }}: {{ entry.content }}
+{% endfor %}
+{% else %}
+无。
+{% endif %}
+
+## 执行要求
+1. 专注于生成最终产物。
+2. 确保所有更改都经过验证。
+3. 如果遇到阻碍，请立即记录证据。

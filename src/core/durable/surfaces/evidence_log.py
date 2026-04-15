@@ -9,8 +9,8 @@ Inspired by GoalX's evidence-log pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any
 
 
 class EvidenceType(Enum):
@@ -35,19 +35,19 @@ class EvidenceEntry:
     recorded_at: str
 
     # What this proves
-    obligation_id: Optional[str] = None  # Which obligation this satisfies
-    scenario_id: Optional[str] = None  # Which assurance scenario this relates to
+    obligation_id: str | None = None  # Which obligation this satisfies
+    scenario_id: str | None = None  # Which assurance scenario this relates to
 
     # The evidence itself
-    data: Dict[str, Any] = field(default_factory=dict)  # Structured data
-    artifacts: List[str] = field(default_factory=list)  # File paths to artifacts
+    data: dict[str, Any] = field(default_factory=dict)  # Structured data
+    artifacts: list[str] = field(default_factory=list)  # File paths to artifacts
 
     # Source
-    recorded_by: Optional[str] = None  # Session ID that recorded this
-    source_command: Optional[str] = None  # Command that generated this
+    recorded_by: str | None = None  # Session ID that recorded this
+    source_command: str | None = None  # Command that generated this
 
     # Metadata
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     notes: str = ""
 
 
@@ -60,7 +60,7 @@ class EvidenceLog:
     This provides an audit trail of how obligations were verified.
     """
 
-    entries: List[EvidenceEntry] = field(default_factory=list)
+    entries: list[EvidenceEntry] = field(default_factory=list)
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     @classmethod
@@ -69,7 +69,7 @@ class EvidenceLog:
         return cls(entries=[])
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "EvidenceLog":
+    def from_dict(cls, data: dict[str, Any]) -> "EvidenceLog":
         """Load from dictionary."""
         entries = []
         for entry_data in data.get("entries", []):
@@ -93,7 +93,7 @@ class EvidenceLog:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         entries_list = []
         for entry in self.entries:
@@ -126,19 +126,19 @@ class EvidenceLog:
         self.entries.append(entry)
         self.updated_at = datetime.utcnow().isoformat()
 
-    def get_evidence_for_obligation(self, obligation_id: str) -> List[EvidenceEntry]:
+    def get_evidence_for_obligation(self, obligation_id: str) -> list[EvidenceEntry]:
         """Get all evidence for a specific obligation."""
         return [e for e in self.entries if e.obligation_id == obligation_id]
 
-    def get_evidence_for_scenario(self, scenario_id: str) -> List[EvidenceEntry]:
+    def get_evidence_for_scenario(self, scenario_id: str) -> list[EvidenceEntry]:
         """Get all evidence for a specific assurance scenario."""
         return [e for e in self.entries if e.scenario_id == scenario_id]
 
-    def get_evidence_by_type(self, evidence_type: EvidenceType) -> List[EvidenceEntry]:
+    def get_evidence_by_type(self, evidence_type: EvidenceType) -> list[EvidenceEntry]:
         """Get all evidence of a specific type."""
         return [e for e in self.entries if e.type == evidence_type]
 
-    def get_recent_evidence(self, limit: int = 10) -> List[EvidenceEntry]:
+    def get_recent_evidence(self, limit: int = 10) -> list[EvidenceEntry]:
         """Get the most recent evidence entries."""
         return sorted(self.entries, key=lambda e: e.recorded_at, reverse=True)[:limit]
 

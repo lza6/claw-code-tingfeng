@@ -5,24 +5,22 @@ Allows humans to inspect the persistent state of Swarm runs.
 """
 
 import argparse
-import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
-from rich.syntax import Syntax
 
 # Optional import, fail gracefully if not run within the project context
 try:
     from src.core.durable.surface_manager import SurfaceManager
-    from src.core.durable.surfaces.status_summary import StatusSummary
-    from src.core.durable.surfaces.coordination_state import CoordinationState
-    from src.core.durable.surfaces.obligation_model import ObligationModel
     from src.core.durable.surfaces.assurance_plan import AssurancePlan
+    from src.core.durable.surfaces.coordination_state import CoordinationState
     from src.core.durable.surfaces.evidence_log import EvidenceLog
+    from src.core.durable.surfaces.obligation_model import ObligationModel
+    from src.core.durable.surfaces.status_summary import StatusSummary
 except ImportError:
     print("Error: Must be run from the root of the claw-code-tingfeng project.")
     sys.exit(1)

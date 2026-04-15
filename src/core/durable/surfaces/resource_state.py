@@ -10,8 +10,8 @@ Reference: GoalX resource-state schema
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any
 
 
 class ResourceHealthState(Enum):
@@ -30,7 +30,7 @@ class HostInfo:
     swap_total_bytes: int = 0
     swap_free_bytes: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "mem_total_bytes": self.mem_total_bytes,
             "mem_available_bytes": self.mem_available_bytes,
@@ -39,7 +39,7 @@ class HostInfo:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "HostInfo":
+    def from_dict(cls, data: dict[str, Any]) -> "HostInfo":
         return cls(
             mem_total_bytes=data.get("mem_total_bytes", 0),
             mem_available_bytes=data.get("mem_available_bytes", 0),
@@ -55,7 +55,7 @@ class PSIValues:
     avg60: float = 0.0
     avg300: float = 0.0
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return {
             "avg10": self.avg10,
             "avg60": self.avg60,
@@ -63,7 +63,7 @@ class PSIValues:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PSIValues":
+    def from_dict(cls, data: dict[str, Any]) -> "PSIValues":
         return cls(
             avg10=float(data.get("avg10", 0.0)),
             avg60=float(data.get("avg60", 0.0)),
@@ -81,7 +81,7 @@ class PSIData:
     memory_some: PSIValues = field(default_factory=PSIValues)
     memory_full: PSIValues = field(default_factory=PSIValues)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "memory_some_avg10": self.memory_some.avg10,
             "memory_some_avg60": self.memory_some.avg60,
@@ -92,7 +92,7 @@ class PSIData:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PSIData":
+    def from_dict(cls, data: dict[str, Any]) -> "PSIData":
         return cls(
             memory_some=PSIValues(
                 avg10=float(data.get("memory_some_avg10", 0.0)),
@@ -116,7 +116,7 @@ class CgroupEvents:
     oom: int = 0
     oom_kill: int = 0
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict[str, int]:
         return {
             "low": self.low,
             "high": self.high,
@@ -126,7 +126,7 @@ class CgroupEvents:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CgroupEvents":
+    def from_dict(cls, data: dict[str, Any]) -> "CgroupEvents":
         return cls(
             low=data.get("low", 0),
             high=data.get("high", 0),
@@ -150,7 +150,7 @@ class CgroupLimits:
     memory_swap_max_bytes: int = 0
     events: CgroupEvents = field(default_factory=CgroupEvents)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "memory_current_bytes": self.memory_current_bytes,
             "memory_high_bytes": self.memory_high_bytes,
@@ -161,7 +161,7 @@ class CgroupLimits:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CgroupLimits":
+    def from_dict(cls, data: dict[str, Any]) -> "CgroupLimits":
         return cls(
             memory_current_bytes=data.get("memory_current_bytes", 0),
             memory_high_bytes=data.get("memory_high_bytes", 0),
@@ -183,10 +183,10 @@ class GoalXProcesses:
     """RSS tracking for GoalX processes."""
     master_rss_bytes: int = 0
     runtime_host_rss_bytes: int = 0
-    worker_rss_bytes: Dict[str, int] = field(default_factory=dict)
+    worker_rss_bytes: dict[str, int] = field(default_factory=dict)
     total_goalx_rss_bytes: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "master_rss_bytes": self.master_rss_bytes,
             "runtime_host_rss_bytes": self.runtime_host_rss_bytes,
@@ -195,7 +195,7 @@ class GoalXProcesses:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "GoalXProcesses":
+    def from_dict(cls, data: dict[str, Any]) -> "GoalXProcesses":
         return cls(
             master_rss_bytes=data.get("master_rss_bytes", 0),
             runtime_host_rss_bytes=data.get("runtime_host_rss_bytes", 0),
@@ -241,7 +241,7 @@ class ResourceState:
     goalx_processes: GoalXProcesses = field(default_factory=GoalXProcesses)
     headroom_bytes: int = 0
     state: ResourceHealthState = ResourceHealthState.UNKNOWN
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
     thresholds: HealthThresholds = field(default_factory=HealthThresholds)
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
@@ -251,7 +251,7 @@ class ResourceState:
         return cls()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ResourceState":
+    def from_dict(cls, data: dict[str, Any]) -> "ResourceState":
         """Load from dictionary."""
         return cls(
             host=HostInfo.from_dict(data.get("host", {})),
@@ -265,7 +265,7 @@ class ResourceState:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "host": self.host.to_dict(),
@@ -285,7 +285,7 @@ class ResourceState:
         Updates self.state and self.reasons based on thresholds.
         Returns the determined health state.
         """
-        reasons: List[str] = []
+        reasons: list[str] = []
 
         # Check for OOM events (immediate critical)
         if self.cgroup.events.has_oom():

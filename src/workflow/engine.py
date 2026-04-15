@@ -21,7 +21,7 @@ import re
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..agent.swarm.debate import DebateEngine
 from ..agent.swarm.message_bus import MessageBus
@@ -36,6 +36,7 @@ from ..core.liveness import LivenessMonitor
 from ..core.observability import StructuredLogger
 from ..core.persistence.run_state import RunStateManager
 from ..core.resource_monitor import ResourceMonitor
+from ..core.runtime.host import RuntimeHost
 from ..llm.model_manager import ModelManager
 from ..memory.manager import MemoryManager
 from ..memory.models import JournalEntry
@@ -46,15 +47,11 @@ from .code_scanner_engine import CodeScanner
 from .contract import ContractManager
 from .feedback_loop import ExceptionFeedbackLoop
 from .healable_executor import HealableExecutor
-from ..core.runtime.host import RuntimeHost
 from .models import (
     ObjectiveClause,
     ObjectiveClauseKind,
     ObjectiveContract,
     ObjectiveRequiredSurface,
-    ObligationItem,
-    ObligationItemState,
-    ObligationModel,
     WorkflowIntent,
     WorkflowPhase,
     WorkflowPhaseCategory,
@@ -134,6 +131,8 @@ class WorkflowEngine:
         # GoalX 基础设施
         self.contract_manager = ContractManager(ModelManager())
         self.worktree_manager = WorktreeManager(self.workdir)
+        from ..llm.prompts.protocol_manager import ProtocolManager
+        self.protocol_manager = ProtocolManager()
         self.resource_monitor = ResourceMonitor()
         self._use_isolation = (self.workdir / ".git").exists()
         # 延迟初始化依赖 run_id 的组件
@@ -357,6 +356,16 @@ class WorkflowEngine:
                             ]
 
                         t = WorkflowTask(**ct_data_clean)
+
+                        # [Phase 6] Session Persistence: 处理处于 RUNNING 状态的遗留任务
+                        if t.status == WorkflowStatus.RUNNING and t.worktree_id:
+                            # 检查隔离环境是否仍然有效
+                            wt_path = self.workdir / ".clawd" / "worktrees" / t.worktree_id
+                            if not wt_path.exists():
+                                self.logger.warning(f"任务 {t.task_id} 的隔离环境已丢失，将其重置为 PENDING。")
+                                t = replace(t, status=WorkflowStatus.PENDING, worktree_id=None)
+                                self.state_manager.update_task(t.task_id, WorkflowStatus.PENDING, worktree_id=None)
+
                         all_tasks.append(t)
                     except Exception as e:
                         self.logger.warning(
@@ -412,6 +421,21 @@ class WorkflowEngine:
                     )
                 except Exception as e:
                     self.logger.warning(f"从持久化状态恢复合同失败: {e}")
+
+        # [Phase 6] 渲染主协议 (Protocol Template)
+        try:
+            protocol_data = self.protocol_manager.get_default_data(
+                self.workdir, run_id, goal, self.intent.value
+            )
+            # 如果有当前合同，添加合同信息
+            if self.current_contract:
+                protocol_data["objective"] = self.current_contract.objective_hash[:16]
+            self.protocol_manager.render_master(
+                self.state_manager.run_dir, protocol_data
+            )
+            self.logger.info(f"主协议已渲染: {self.state_manager.run_dir / 'master.md'}")
+        except Exception as e:
+            self.logger.debug(f"渲染主协议失败 (非致命): {e}")
 
         # 3. 迭代循环 (Evolution Loop)
         try:
@@ -502,7 +526,11 @@ class WorkflowEngine:
 
                     from src.core.durable.surfaces.obligation_model import (
                         Obligation as DurableObligation,
+                    )
+                    from src.core.durable.surfaces.obligation_model import (
                         ObligationModel as DurableObligationModel,
+                    )
+                    from src.core.durable.surfaces.obligation_model import (
                         ObligationStatus as DurableObligationStatus,
                     )
 
@@ -528,6 +556,26 @@ class WorkflowEngine:
                     if self.state_manager and self.state_manager.surface_manager:
                         self.state_manager.surface_manager.save_surface("obligation_model", obligation_model)
                         self.logger.info(f"Durable Obligation Model 已保存，包含 {len(durable_obligations)} 个义务。")
+
+                    # [Phase 6] 为生成的任务渲染协议文档
+                    for task in tasks:
+                        try:
+                            # 准备渲染上下文
+                            task_context = {
+                                "goal_description": task.description,
+                                "acceptance_criteria": [task.title], # 简化处理，将标题作为第一个标准
+                                "evidence": [],
+                                "budget_hours": (self.intent == WorkflowIntent.EVOLVE and 8.0) or 0.0,
+                                "max_iterations": self.max_iterations,
+                                "task_id": task.task_id
+                            }
+                            self.protocol_manager.render_task_protocol(
+                                self.state_manager.run_dir,
+                                self.intent.value,
+                                task_context
+                            )
+                        except Exception as e:
+                            self.logger.debug(f"渲染任务协议失败 (task_id: {task.task_id}): {e}")
 
                     # 生成质保计划 (Assurance Plan)
                     self.assurance_manager.generate_from_tasks(tasks)
@@ -562,7 +610,7 @@ class WorkflowEngine:
                         and self.budget_guard.check()
                     ):
                         self.logger.info(
-                            f"EVOLVE 模式在执行阶段检测到预算耗尽，提前结束。"
+                            "EVOLVE 模式在执行阶段检测到预算耗尽，提前结束。"
                         )
                         break
                     self.budget_guard.validate()
@@ -643,6 +691,12 @@ class WorkflowEngine:
                     self.worktree_manager.create_snapshot(f"pre-{task.task_id}")
                     # 1. 创建工作树 (Isolation)
                     worktree_path = self.worktree_manager.create(task.task_id)
+                    # [Phase 6] 立即同步工作树 ID 到持久化状态，确保会话可恢复
+                    self.state_manager.update_task(
+                        task.task_id,
+                        WorkflowStatus.RUNNING,
+                        worktree_id=task.task_id
+                    )
                     self.logger.info(
                         f"任务 {task.task_id} 已在隔离工作树中启动: {worktree_path}"
                     )
@@ -815,22 +869,94 @@ class WorkflowEngine:
         points: list[str],
     ):
         """同步当前状态到持久化层"""
-        self.state_manager.sync(
-            {
-                "goal": goal,
-                "intent": self.intent.value,
-                "iteration": iteration,
-                "tasks": [t.to_dict() for t in all_tasks],
-                "optimization_points": points,
-            }
-        )
+        if self.state_manager:
+            # 记录到 Notepad 优先级上下文
+            self._memory_manager.notepad.add_priority(
+                f"Sync State: Iteration {iteration}, Tasks: {len(all_tasks)}",
+                {"goal": goal[:50]}
+            )
 
-        # [Phase 2] 同步到 Durable Surfaces
-        self._update_status_summary(
-            phase="executing" if all_tasks else "planning",
-            progress_percentage=self._calculate_progress(all_tasks),
-            tasks=all_tasks,
-        )
+            self.state_manager.sync(
+                {
+                    "goal": goal,
+                    "intent": self.intent.value,
+                    "iteration": iteration,
+                    "tasks": [t.to_dict() for t in all_tasks],
+                    "optimization_points": points,
+                }
+            )
+
+            # [Phase 2] 同步到 Durable Surfaces
+            self._update_status_summary(
+                phase="executing" if all_tasks else "planning",
+                progress_percentage=self._calculate_progress(all_tasks),
+                tasks=all_tasks,
+            )
+
+            # [Project B] 同步更新 ControlState
+            if self.state_manager.surface_manager:
+                try:
+                    from ..core.durable.surfaces.control_state import ControlState, RunPhase as DurableRunPhase
+                    control = self.state_manager.surface_manager.load_surface("control_state", ControlState)
+                    control.phase = DurableRunPhase.EXECUTE if all_tasks else DurableRunPhase.PLAN
+                    control.active_session_count = len([t for t in all_tasks if t.status == WorkflowStatus.RUNNING])
+                    self.state_manager.surface_manager.save_surface("control_state", control)
+                except Exception as e:
+                    self.logger.debug(f"Update ControlState failed: {e}")
+
+    async def _promote_evidence_to_memory(
+        self, all_tasks: list[WorkflowTask], goal: str
+    ) -> int:
+        """[Phase 5] 将任务证据提升为情景记忆 (EpisodicMemory)
+
+        从已完成的任务中提取证据路径，将其汇总并存储为情景记忆。
+        这实现了 Evidence-Gated Memory 模式。
+
+        Returns:
+            提升的记忆数量
+        """
+        promoted_count = 0
+        from ..memory.models import EpisodicMemory
+
+        # 收集所有有证据的任务
+        for task in all_tasks:
+            if not task.evidence_paths:
+                continue
+
+            # 构建情况描述
+            situation = f"任务: {task.title} | 状态: {task.status.value}"
+            if task.result:
+                # 截取结果的前200字符作为概要
+                result_summary = task.result[:200] if len(task.result) > 200 else task.result
+            else:
+                result_summary = ""
+
+            # 构建解决方案/证据
+            solution = "\n".join(task.evidence_paths) if task.evidence_paths else ""
+
+            # 教训：从任务执行结果中提取
+            lesson = ""
+            if task.status == WorkflowStatus.COMPLETED:
+                lesson = "任务成功完成，证据已记录"
+            elif task.status == WorkflowStatus.FAILED:
+                lesson = f"任务失败: {result_summary[:100]}"
+
+            # 创建情景记忆
+            episodic = EpisodicMemory(
+                skill_used=f"workflow:{self.intent.value}",
+                situation=situation,
+                solution=solution,
+                lesson=lesson,
+            )
+
+            try:
+                await self._memory_manager.add_episodic(episodic)
+                promoted_count += 1
+            except Exception as e:
+                self.logger.debug(f"提升情景记忆失败 (task_id: {task.task_id}): {e}")
+
+        self.logger.info(f"已提升 {promoted_count} 条情景记忆")
+        return promoted_count
 
     def _finalize_run(
         self, goal, phase_summaries, all_tasks, optimization_points, error: str = ""
@@ -844,6 +970,19 @@ class WorkflowEngine:
         )
         if error:
             report = f"{report}\n\n中断原因: {error}"
+
+        # [Phase 5] 提升证据到情景记忆 (同步包装)
+        # 注意: _finalize_run 是同步方法，在工作流完成时同步调用
+        # 为了避免阻塞，我们记录一个待处理的提升任务
+        if all_tasks:
+            self._memory_manager.working_set(
+                "_pending_episodic_promotion",
+                {
+                    "tasks": [t.to_dict() for t in all_tasks],
+                    "goal": goal,
+                    "timestamp": __import__("time").time()
+                }
+            )
 
         self._publish(
             EventType.WORKFLOW_COMPLETED,
@@ -1234,7 +1373,7 @@ class WorkflowEngine:
         self,
         phase: str,
         progress_percentage: float = 0.0,
-        tasks: Optional[list[WorkflowTask]] = None,
+        tasks: list[WorkflowTask] | None = None,
     ) -> None:
         """更新 StatusSummary (Durable Surface)"""
         if not self.state_manager or not hasattr(self.state_manager, "update_status_summary"):

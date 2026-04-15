@@ -17,7 +17,7 @@ from typing import Any
 
 from ..rag.text_indexer import TextIndexer
 from .context_window import ContextWindowManager
-from .evolution import MemoryEvolver, MemoryProposal
+from .evolution import MemoryEvolver
 from .models import (
     EpisodicMemory,
     JournalEntry,
@@ -51,9 +51,9 @@ class MemoryManager:
         results = await mgr.search("keyword")
     """
 
-    def __init__(self, memory_dir: Path | None = None, use_sqlite: bool = True) -> None:
+    def __init__(self, memory_dir: Path | None = None, use_sqlite: bool = True, project_ctx: Any | None = None) -> None:
         if use_sqlite:
-            self.storage = SQLiteMemoryStorage(project_ctx=None) # TODO: Pass actual project_ctx
+            self.storage = SQLiteMemoryStorage(project_ctx=project_ctx)
             if hasattr(self.storage, 'init_db'):
                 self.storage.init_db()
         else:
@@ -65,20 +65,33 @@ class MemoryManager:
         self._last_consolidation: float | None = None
         self._use_sqlite = use_sqlite
 
-
         # 增强功能
-        self.indexer = TextIndexer()  # RAG 索引器
+        from .notepad import Notepad
+        self.notepad = Notepad(storage_path=(memory_dir / "notepad.json") if memory_dir else None)
+        self.indexer = TextIndexer(root_dir=project_ctx.workdir if project_ctx else None)  # RAG 索引器
         self.context_window = ContextWindowManager()  # 对话窗口管理器
         self.evolver = MemoryEvolver(store=self)  # 记忆演进引擎
 
-    async def initialize(self) -> None:
+    async def initialize(self, session_id: str | None = None) -> None:
         """初始化 - 加载已有记忆"""
         try:
             if self._use_sqlite:
                 # SQLite 模式下，按需加载或保持延迟加载
-                # 暂时将 SQLite 中的所有记录加载到内存中以保持与旧代码兼容
                 self._entries = self.storage.list_entries(limit=1000)
-                # TODO: 加载 patterns 和 working
+                # 加载语义模式
+                if hasattr(self.storage, 'list_patterns'):
+                    self._patterns = self.storage.list_patterns()
+                else:
+                    # 回退到基础查询
+                    with self.storage._connect() as conn:
+                        rows = conn.execute("SELECT * FROM semantic_patterns").fetchall()
+                        self._patterns = [SemanticPattern(**dict(r)) for r in rows]
+
+                # 加载当前会话的工作记忆
+                if session_id:
+                    working = self.storage.load_working(session_id)
+                    if working:
+                        self._working = working
             else:
                 self._entries = await self.storage.load_entries()
                 self._patterns = await self.storage.load_patterns()
@@ -88,6 +101,9 @@ class MemoryManager:
 
     async def save(self) -> None:
         """保存所有记忆"""
+        # [Phase 5] 处理待提升的证据到情景记忆
+        await self._process_pending_episodic_promotion()
+
         if self._use_sqlite:
             for entry in self._entries:
                 self.storage.save_entry(entry)
@@ -100,6 +116,72 @@ class MemoryManager:
             await self.storage.save_patterns(self._patterns)
             await self.storage.save_working(self._working)
 
+    async def _process_pending_episodic_promotion(self) -> int:
+        """[Phase 5] 处理待提升的证据到情景记忆
+
+        从工作记忆中检查并处理待提升的证据条目。
+        这实现了 Evidence-Gated Memory 模式。
+
+        Returns:
+            提升的记忆数量
+        """
+        pending = self._working.get("_pending_episodic_promotion")
+        if not pending:
+            return 0
+
+        from .models import EpisodicMemory
+        promoted_count = 0
+        logger = logging.getLogger('memory.manager')
+
+        try:
+            tasks_data = pending.get("tasks", [])
+            goal = pending.get("goal", "")
+            timestamp = pending.get("timestamp", 0)
+            logger.debug(f"正在处理 {len(tasks_data)} 个任务的证据提升 (目标: {goal})")
+
+            for task_data in tasks_data:
+                evidence_paths = task_data.get("evidence_paths", [])
+                if not evidence_paths:
+                    logger.debug(f"任务 {task_data.get('task_id')} 无证据路径，跳过提升")
+                    continue
+
+                # 构建情景记忆
+                situation = f"目标: {goal[:100]} | 任务: {task_data.get('title', '')} | 状态: {task_data.get('status', '')}"
+                result = task_data.get("result", "")
+                result_summary = result[:200] if result and len(result) > 200 else (result or "")
+
+                solution = "\n".join(evidence_paths) if evidence_paths else ""
+                status = task_data.get("status", "")
+
+                lesson = ""
+                if status == "completed":
+                    lesson = "任务成功完成，证据已记录"
+                elif status == "failed":
+                    lesson = f"任务失败: {result_summary[:100]}"
+                else:
+                    lesson = f"任务结束 (状态: {status})"
+
+                episodic = EpisodicMemory(
+                    skill_used="workflow:deliver",
+                    situation=situation,
+                    solution=solution,
+                    lesson=lesson,
+                )
+
+                logger.debug(f"保存情景记忆: {episodic.id} (任务: {task_data.get('task_id')})")
+                await self.add_episodic(episodic)
+                promoted_count += 1
+
+            # 清除待处理记录
+            self._working.set("_pending_episodic_promotion", None)
+            if promoted_count > 0:
+                logger.info(f"已提升 {promoted_count} 条情景记忆 (目标: {goal[:50]}...)")
+
+        except Exception as e:
+            logger.error(f"处理待提升证据失败: {e}", exc_info=True)
+
+        return promoted_count
+
     # 记忆条目操作
 
     async def add_memory(self, entry: MemoryEntry) -> str:
@@ -109,6 +191,12 @@ class MemoryManager:
             记忆 ID
         """
         self._entries.append(entry)
+        # 同步到 Notepad 高优先级上下文
+        if entry.importance >= 0.8:
+            self.notepad.add_priority(entry.content, {"id": entry.id, "type": entry.memory_type})
+        else:
+            self.notepad.add_log(f"New Memory: {entry.content[:50]}...", {"id": entry.id})
+
         # 同步到 RAG 索引以支持语义搜索
         from ..rag.models import Document
         doc = Document(
@@ -126,6 +214,9 @@ class MemoryManager:
         记录 Agent 执行过程中的每一步决策。
         """
         self._journals.append(journal)
+        # 同步记录到 Notepad 工作日志
+        self.notepad.add_log(f"Action: {journal.action} | Result: {journal.status}", {"task_id": journal.task_id})
+
         # 暂时只在 SQLite 存储中记录，不放入 RAG 索引以节省开销
         if self._use_sqlite and hasattr(self.storage, 'save_journal'):
             self.storage.save_journal(journal)
@@ -216,16 +307,25 @@ class MemoryManager:
 
     async def add_episodic(self, memory: EpisodicMemory) -> str:
         """添加情景记忆"""
-        await self.storage.save_episodic(memory)
+        # 支持同步和异步存储后端
+        result = self.storage.save_episodic(memory)
+        if asyncio.iscoroutine(result):
+            await result
         return memory.id
 
     async def get_episodic(self, episodic_id: str) -> EpisodicMemory | None:
         """获取情景记忆"""
-        return await self.storage.load_episodic(episodic_id)
+        result = self.storage.load_episodic(episodic_id)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
 
     async def list_episodic(self) -> list[EpisodicMemory]:
         """列出所有情景记忆"""
-        return await self.storage.list_episodic()
+        result = self.storage.list_episodic()
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
 
     # 工作记忆操作
 

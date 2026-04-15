@@ -1,9 +1,9 @@
-import os
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+import os
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 logger = logging.getLogger("core.intervention")
 
@@ -14,8 +14,8 @@ class InterventionEvent:
     kind: str           # e.g., "budget_extend", "force_stop", "human_guidance"
     source: str         # "user" | "admin" | "guard"
     message: str
-    affected_targets: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    affected_targets: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 class InterventionLogger:
     """
@@ -27,7 +27,7 @@ class InterventionLogger:
         self.log_path = os.path.join(run_dir, "control", "intervention.jsonl")
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
 
-    def record(self, kind: str, source: str, message: str, affected_targets: Optional[List[str]] = None, **metadata):
+    def record(self, kind: str, source: str, message: str, affected_targets: list[str] | None = None, **metadata):
         """记录一个干预事件"""
         event = InterventionEvent(
             timestamp=datetime.now().isoformat(),
@@ -45,14 +45,14 @@ class InterventionLogger:
         except Exception as e:
             logger.error(f"无法记录干预事件: {e}")
 
-    def load_recent(self, count: int = 10) -> List[InterventionEvent]:
+    def load_recent(self, count: int = 10) -> list[InterventionEvent]:
         """加载最近的干预事件"""
         if not os.path.exists(self.log_path):
             return []
 
         events = []
         try:
-            with open(self.log_path, "r", encoding="utf-8") as f:
+            with open(self.log_path, encoding="utf-8") as f:
                 lines = f.readlines()
                 for line in lines[-count:]:
                     data = json.loads(line)

@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 
 from . import __version__
-
 from .core.cost_estimator.cost_estimator import log_pricing_check
 
 _initialized = False

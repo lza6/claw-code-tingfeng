@@ -1,7 +1,7 @@
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Dict
-import json
+
 
 class GoalItemState:
     OPEN = "open"
@@ -24,9 +24,9 @@ class GoalItem:
     text: str
     source: str = GoalItemSource.USER
     role: str = GoalItemRole.OUTCOME
-    covers: List[str] = field(default_factory=list)
+    covers: list[str] = field(default_factory=list)
     state: str = GoalItemState.OPEN
-    evidence_paths: List[str] = field(default_factory=list)
+    evidence_paths: list[str] = field(default_factory=list)
     note: str = ""
     approval_ref: str = ""
 
@@ -47,10 +47,10 @@ class GoalItem:
 class GoalState:
     version: int = 1
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    required: List[GoalItem] = field(default_factory=list)
-    optional: List[GoalItem] = field(default_factory=list)
+    required: list[GoalItem] = field(default_factory=list)
+    optional: list[GoalItem] = field(default_factory=list)
 
-    def summarize(self) -> Dict:
+    def summarize(self) -> dict:
         summary = {
             "version": self.version,
             "required_total": len(self.required),
@@ -58,31 +58,29 @@ class GoalState:
             "required_remaining": 0,
             "optional_open": 0
         }
-        
+
         for item in self.required:
-            if item.state == GoalItemState.CLAIMED:
-                summary["required_satisfied"] += 1
-            elif item.state == GoalItemState.WAIVED and item.approval_ref:
+            if item.state == GoalItemState.CLAIMED or (item.state == GoalItemState.WAIVED and item.approval_ref):
                 summary["required_satisfied"] += 1
             else:
                 summary["required_remaining"] += 1
-                
+
         for item in self.optional:
             if item.state == GoalItemState.OPEN:
                 summary["optional_open"] += 1
-                
+
         return summary
 
     def validate_for_verification(self):
         if not self.required:
             raise ValueError("Goal state has no required outcomes")
-            
+
         for item in self.required:
             if not item.id:
                 raise ValueError("Goal state has required item with empty id")
             if not item.text:
                 raise ValueError(f"Goal item {item.id} is missing text")
-                
+
             if item.state == GoalItemState.CLAIMED:
                 if not item.evidence_paths:
                     raise ValueError(f"Goal item {item.id} is claimed but has no evidence_paths")
@@ -91,7 +89,7 @@ class GoalState:
                     raise ValueError(f"Goal item {item.id} is waived without explicit approval_ref")
             else:
                 raise ValueError(f"Goal item {item.id} remains open")
-        
+
         return self.summarize()
 
     def to_json(self):

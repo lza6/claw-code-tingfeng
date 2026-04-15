@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..agent.engine import AgentEngine
+from src.self_healing.agent.engine import AgentEngine
 from ..agent.factory import create_agent_engine
 from ..llm import LLMConfig
 

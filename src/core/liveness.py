@@ -1,10 +1,9 @@
-import os
-import time
-import logging
 import json
-from dataclasses import dataclass, asdict
+import logging
+import os
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Optional
+
 from .resource_monitor import ResourceMonitor
 
 logger = logging.getLogger("core.liveness")
@@ -17,7 +16,7 @@ class LivenessPulse:
     status: str
     memory_rss_mb: float
     cpu_percent: float
-    last_event_id: Optional[str] = None
+    last_event_id: str | None = None
 
 class LivenessMonitor:
     """
@@ -30,7 +29,7 @@ class LivenessMonitor:
         self.pulse_path = os.path.join(run_dir, "control", "liveness.json")
         os.makedirs(os.path.dirname(self.pulse_path), exist_ok=True)
 
-    def beat(self, component: str, last_event_id: Optional[str] = None):
+    def beat(self, component: str, last_event_id: str | None = None):
         """发送一次心跳脉冲"""
         res_state = self.resource_monitor.check_health()
         pulse = LivenessPulse(
@@ -55,7 +54,7 @@ class LivenessMonitor:
             return False
 
         try:
-            with open(self.pulse_path, 'r') as f:
+            with open(self.pulse_path) as f:
                 data = json.load(f)
                 last_beat = datetime.fromisoformat(data["timestamp"])
                 if (datetime.now() - last_beat).total_seconds() > timeout_seconds:

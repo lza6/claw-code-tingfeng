@@ -8,6 +8,22 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+# 导入 MCP 服务器模块
+from .memory_server import (
+    MemoryEntry,
+    MemoryIndex,
+    MemoryServer,
+    get_memory_server,
+)
+
+from .trace_server import (
+    TraceLevel,
+    TraceEntry,
+    TraceSession,
+    TraceServer,
+    get_trace_server,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -337,4 +353,15 @@ __all__ = [
     "MCPTransport",
     "run_sse_server",
     "run_stdio_server",
+    # Memory Server
+    "MemoryEntry",
+    "MemoryIndex",
+    "MemoryServer",
+    "get_memory_server",
+    # Trace Server
+    "TraceLevel",
+    "TraceEntry",
+    "TraceSession",
+    "TraceServer",
+    "get_trace_server",
 ]

@@ -157,11 +157,16 @@ class AuditorAgent(BaseAgent):
             # 4. 性能检查
             findings.extend(self._check_performance(file_path, content))
 
-        # 5. 测试覆盖
+            # 5. 视觉审计 (v0.60.0 新增: 汲取自 Project B)
+            if self._is_ui_change(file_path):
+                visual_findings = await self._check_visual(file_path, content)
+                findings.extend(visual_findings)
+
+        # 6. 测试覆盖
         if self.require_tests:
             warnings.extend(self._check_test_coverage(code_changes))
 
-        # 6. LLM 辅助审查（可选，用于发现更深层问题）
+        # 7. LLM 辅助审查
         llm_findings = await self._llm_assist(code_changes)
         findings.extend(llm_findings)
 
@@ -177,6 +182,41 @@ class AuditorAgent(BaseAgent):
             warnings=warnings,
             summary=summary,
         )
+
+    def _is_ui_change(self, file_path: str) -> bool:
+        """判断是否涉及 UI 变更"""
+        ext = Path(file_path).suffix.lower()
+        return ext in ('.html', '.css', '.tsx', '.jsx', '.vue', '.less', '.scss')
+
+    async def _check_visual(self, file_path: str, content: str) -> list[AuditFinding]:
+        """执行视觉审计"""
+        findings: list[AuditFinding] = []
+        try:
+            from ...utils.visual_verifier import VisualVerifier
+            verifier = VisualVerifier()
+            # 这里的 URL 需要根据项目实际情况获取，暂时模拟一个 local server
+            # 在实际工作流中，这可能是一个预览环境 URL
+            url = f"file://{self.workdir / file_path}"
+
+            # 只有在确实能访问时才执行
+            if file_path.endswith('.html'):
+                screenshot_path = await verifier.capture_screenshot(url, name=f"audit_{Path(file_path).stem}")
+                verdict = await verifier.get_verdict(screenshot_path)
+
+                if verdict.verdict != 'pass':
+                    for diff in verdict.differences:
+                        findings.append(AuditFinding(
+                            severity='medium',
+                            category='visual',
+                            file=file_path,
+                            line=0,
+                            description=f'视觉审计发现问题: {diff}',
+                            suggestion=verdict.reasoning,
+                        ))
+        except Exception as e:
+            logger.debug(f"视觉审计跳过 (环境不满足): {e}")
+
+        return findings
 
     def _check_syntax(self, file_path: str, content: str) -> list[AuditFinding]:
         """检查语法正确性"""
@@ -210,10 +250,10 @@ class AuditorAgent(BaseAgent):
                 continue
 
             # eval/exec 使用
-            if re.search(r'\beval\s*\(', stripped) or re.search(r'\bexec\s*\(', stripped):
-                # 排除注释和检查代码本身
-                if 're.search' not in stripped and 'description=' not in stripped:
-                    findings.append(AuditFinding(
+            if (re.search(r'\beval\s*\(', stripped) or re.search(r'\bexec\s*\(', stripped)) and (
+                're.search' not in stripped and 'description=' not in stripped
+            ):
+                findings.append(AuditFinding(
                         severity='critical',
                         category='security',
                         file=file_path,
@@ -230,9 +270,10 @@ class AuditorAgent(BaseAgent):
                 r'PRIVATE KEY',
             ]
             for pattern in secret_patterns:
-                if re.search(pattern, stripped, re.IGNORECASE):
-                    if 'example' not in stripped.lower() and 'placeholder' not in stripped.lower():
-                        findings.append(AuditFinding(
+                if re.search(pattern, stripped, re.IGNORECASE) and (
+                    'example' not in stripped.lower() and 'placeholder' not in stripped.lower()
+                ):
+                    findings.append(AuditFinding(
                             severity='high',
                             category='security',
                             file=file_path,
@@ -276,10 +317,8 @@ class AuditorAgent(BaseAgent):
                 ))
 
         # bare except
-        if re.search(r'except\s*:', content):
-            # 排除测试文件和本文件
-            if 'test_audit' not in file_path:
-                findings.append(AuditFinding(
+        if re.search(r'except\s*:', content) and 'test_audit' not in file_path:
+            findings.append(AuditFinding(
                     severity='medium',
                     category='convention',
                     file=file_path,

@@ -6,12 +6,12 @@ Runtime Lease System - 运行时租约/生命周期管理
 """
 
 import json
-import time
-import os
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any
+import os
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class RuntimeLease:
         self.last_beat = time.time()
         self.ttl = 60  # 默认 60 秒失效
 
-    def beat(self, metadata: Optional[Dict[str, Any]] = None) -> None:
+    def beat(self, metadata: dict[str, Any] | None = None) -> None:
         """更新心跳"""
         self.last_beat = time.time()
         data = {
@@ -79,7 +79,7 @@ class LeaseMonitor:
         self.run_dir = run_dir
         self.runtime_dir = run_dir / "runtime"
 
-    def get_active_sessions(self) -> Dict[str, Dict[str, Any]]:
+    def get_active_sessions(self) -> dict[str, dict[str, Any]]:
         """获取所有活跃的会话"""
         active = {}
         if not self.runtime_dir.exists():
@@ -87,7 +87,7 @@ class LeaseMonitor:
 
         for lease_file in self.runtime_dir.glob("lease-*.json"):
             try:
-                with open(lease_file, "r", encoding="utf-8") as f:
+                with open(lease_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 last_beat = data.get("last_beat", 0)

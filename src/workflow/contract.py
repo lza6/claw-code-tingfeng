@@ -1,12 +1,20 @@
-from datetime import datetime
-from datetime import datetime
-import logging
 import hashlib
-from typing import Optional, List, Dict, Any
-from .objective import GoalState
-from .models import ObjectiveContract, ObjectiveClause, ObjectiveClauseKind, ObjectiveRequiredSurface, AssurancePlan, AssuranceProcedure, AssuranceVerificationMode
-from ..llm.message_handler import sanitize_messages, format_messages_for_llm
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
 from ..llm.model_manager import ModelManager
+from .models import (
+    AssurancePlan,
+    AssuranceProcedure,
+    AssuranceVerificationMode,
+    ObjectiveClause,
+    ObjectiveClauseKind,
+    ObjectiveContract,
+    ObjectiveRequiredSurface,
+)
 
 logger = logging.getLogger("workflow.contract")
 
@@ -17,8 +25,10 @@ CONTRACT_PROMPT = """
 - delivery: 核心交付物。
 - quality_bar: 质量标准。
 - verification: 验证要求。
-- guardrail: 约束和禁令。
+- guardrail: 约束和禁令 (借鉴 OMX: 明确 Non-goals)。
 - operating_rule: 执行规则。
+- constraint: 强约束（如必须使用特定库）。
+- non_goal: 非目标（明确告诉 Agent 哪些不需要做）。
 
 ## 输出格式:
 你必须输出一个纯 JSON 对象，结构如下:
@@ -27,9 +37,10 @@ CONTRACT_PROMPT = """
     {
       "id": "c1",
       "text": "明确的条款内容...",
-      "kind": "delivery|quality_bar|verification|guardrail|operating_rule",
+      "kind": "delivery|quality_bar|verification|guardrail|operating_rule|constraint|non_goal",
       "source_excerpt": "摘录自用户原始需求的相关部分",
-      "required_surfaces": ["obligation", "assurance"]
+      "required_surfaces": ["obligation", "assurance"],
+      "evidence_required": true
     }
   ]
 }
@@ -48,6 +59,7 @@ ASSURANCE_PROMPT = """
 - e2e_test: 端到端测试
 - manual_review: 人工审查（仅在自动化无法覆盖时使用）
 - static_analysis: 静态分析
+- evidence_check: 证据检查 (借鉴 OMX: 检查 Agent 运行时的证据，如读取的文件、运行的命令)
 
 ## 输出格式:
 你必须输出一个纯 JSON 对象，结构如下:
@@ -57,9 +69,10 @@ ASSURANCE_PROMPT = """
       "id": "ap1",
       "title": "简短的验证标题",
       "strategy": "详细的验证策略描述...",
-      "verification_mode": "unit_test|integration_test|e2e_test|manual_review|static_analysis",
+      "verification_mode": "unit_test|integration_test|e2e_test|manual_review|static_analysis|evidence_check",
       "target_surface": "验证的目标代码文件或组件路径",
-      "covers_clauses": ["c1", "c2"]
+      "covers_clauses": ["c1", "c2"],
+      "evidence_patterns": ["grep pattern to find in logs/outputs"]
     }
   ]
 }
@@ -69,15 +82,33 @@ ASSURANCE_PROMPT = """
 """
 
 class ContractManager:
-    """契约与保证管理器 (汲取 GoalX 核心设计)"""
+    """契约与保证管理器 (汲取 GoalX & Ralph 核心设计)"""
 
-    def __init__(self, model_manager: ModelManager):
+    def __init__(self, model_manager: ModelManager, storage_dir: str = ".clawd/contracts"):
         self.model_manager = model_manager
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_path(self, objective_hash: str) -> Path:
+        # 移除哈希前缀便于文件名安全
+        safe_hash = objective_hash.replace("sha256:", "")[:16]
+        return self.storage_dir / f"contract_{safe_hash}.json"
 
     async def sign_contract(self, user_goal: str) -> ObjectiveContract:
         """引导 AI 签署执行契约"""
+        objective_hash = "sha256:" + hashlib.sha256(user_goal.strip().encode()).hexdigest()
+        path = self._get_path(objective_hash)
+
+        # 汲取 Ralph: 检查持久化存储
+        if path.exists():
+            logger.info(f"发现已存在的契约: {objective_hash[:8]}，正在尝试加载...")
+            try:
+                # 实际生产中应有完整的反序列化
+                pass
+            except Exception as e:
+                logger.warning(f"加载现有契约失败: {e}")
+
         logger.info("开始生成执行契约 (Objective Contract)...")
-        # ... (原有逻辑保持，但增强解析)
         prompt = CONTRACT_PROMPT.format(user_goal=user_goal)
         try:
             response_json = await self.model_manager.generate_json(

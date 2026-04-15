@@ -4,9 +4,9 @@ from __future__ import annotations
 import argparse
 
 from ..core.models import CommandResult
-from .models import WorkflowIntent
 from .engine import WorkflowEngine
 from .hotfix_manager import HotfixManager
+from .models import WorkflowIntent
 from .tech_debt import TechDebtManager
 from .version_manager import VersionManager
 
@@ -70,9 +70,10 @@ def _handle_run(args: argparse.Namespace) -> CommandResult:
 
 def _handle_observe(args: argparse.Namespace) -> CommandResult:
     """深入观察运行状态 (汲取 GoalX)"""
-    from ..core.persistence.run_state import RunStateManager
-    from pathlib import Path
     import os
+    from pathlib import Path
+
+    from ..core.persistence.run_state import RunStateManager
 
     workdir = Path(os.environ.get('WORK_DIR', '.'))
     state_mgr = RunStateManager(workdir, "latest")

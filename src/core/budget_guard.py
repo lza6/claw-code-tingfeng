@@ -13,21 +13,21 @@ import os
 import platform
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
-from .events import Event, EventType, get_event_bus
-from .exceptions import ClawdError, ErrorCode
-from .intervention import InterventionLogger
 from .durable.surfaces.resource_state import (
-    ResourceState,
+    CgroupEvents,
+    CgroupLimits,
+    GoalXProcesses,
     HostInfo,
     PSIData,
     PSIValues,
-    CgroupLimits,
-    CgroupEvents,
-    GoalXProcesses,
-    ResourceHealthState
+    ResourceHealthState,
+    ResourceState,
 )
+from .events import Event, EventType, get_event_bus
+from .exceptions import ClawdError, ErrorCode
+from .intervention import InterventionLogger
 
 logger = logging.getLogger("core.budget.guard")
 
@@ -116,7 +116,7 @@ class BudgetGuard:
                 psi_path = "/proc/pressure/memory"
                 if os.path.exists(psi_path):
                     try:
-                        with open(psi_path, 'r') as f:
+                        with open(psi_path) as f:
                             psi_data = f.read()
                             state.psi = self._parse_psi_data(psi_data)
                     except Exception as e:
@@ -154,7 +154,8 @@ class BudgetGuard:
         res = PSIData()
         for line in data.strip().split('\n'):
             parts = line.split()
-            if not parts: continue
+            if not parts:
+                continue
             label = parts[0]
             values = {}
             for p in parts[1:]:
@@ -180,9 +181,10 @@ class BudgetGuard:
 
         def read_int(path):
             if os.path.exists(path):
-                with open(path, 'r') as f:
+                with open(path) as f:
                     val = f.read().strip()
-                    if val == "max": return 0
+                    if val == "max":
+                        return 0
                     return int(val)
             return 0
 
@@ -195,16 +197,21 @@ class BudgetGuard:
         events_path = f"{base}/memory.events"
         if os.path.exists(events_path):
             ev = CgroupEvents()
-            with open(events_path, 'r') as f:
+            with open(events_path) as f:
                 for line in f:
                     parts = line.split()
                     if len(parts) == 2:
                         k, v = parts[0], int(parts[1])
-                        if k == "low": ev.low = v
-                        elif k == "high": ev.high = v
-                        elif k == "max": ev.max = v
-                        elif k == "oom": ev.oom = v
-                        elif k == "oom_kill": ev.oom_kill = v
+                        if k == "low":
+                            ev.low = v
+                        elif k == "high":
+                            ev.high = v
+                        elif k == "max":
+                            ev.max = v
+                        elif k == "oom":
+                            ev.oom = v
+                        elif k == "oom_kill":
+                            ev.oom_kill = v
             res.events = ev
 
         return res

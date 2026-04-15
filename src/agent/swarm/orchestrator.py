@@ -149,8 +149,23 @@ class OrchestratorAgent(BaseAgent):
         """
         engine = self._get_engine()
 
+        # [汲取 OMX] 共识规划博弈
+        consensus_context = ""
+        if features.is_enabled('consensus_planning'):
+            self.logger.info("启动共识规划博弈 (Planner-Architect-Critic)...")
+            consensus_prompt = f"""针对目标: {goal}
+请以 Architect 身份提供一个“最强钢人论证 (Steelman Argument)”。
+你需要：
+1. 识别当前最稳健的架构路径。
+2. 提出至少三个关键权衡 (Tradeoffs) 及其张力点。
+3. 识别出潜在的“架构异味”并提出规避方案。
+
+请输出详细的架构建议。"""
+            consensus_response = await engine.run(consensus_prompt)
+            consensus_context = f"\n[架构共识博弈结果]:\n{consensus_response.final_result}\n"
+
         # 注入架构级上下文 (如有)
-        arch_context = ""
+        arch_context = consensus_context
         if self.world_model:
             # 尝试从目标描述中提取可能的文件路径 (简易正则)
             files = re.findall(r'[\w/]+\.py', goal)

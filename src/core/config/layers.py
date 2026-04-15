@@ -9,7 +9,6 @@ Config Layers — 多层级配置加载 (借鉴 Project B/GoalX)
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any

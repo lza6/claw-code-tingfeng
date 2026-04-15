@@ -140,7 +140,6 @@ def try_dotdotdots(whole: str, part: str, replace: str) -> str | None:
     if "..." not in part:
         return None
 
-    import re
 
     # 1. 将 part 分割
     parts = part.split("...")

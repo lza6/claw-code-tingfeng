@@ -47,6 +47,7 @@ class IterativeOptimizer:
         self.interval = interval
         self._running = False
         self._task_queue: asyncio.PriorityQueue[OptimizationTask] = asyncio.PriorityQueue()
+        self._background_tasks: set[asyncio.Task] = set()
 
         # 诊断: 打印经验库路径
         if hasattr(self.experience_bank, '_storage_path'):
@@ -59,8 +60,12 @@ class IterativeOptimizer:
         self._running = True
         logger.info("自主迭代优化引擎已启动")
 
-        asyncio.create_task(self._monitor_loop())
-        asyncio.create_task(self._execution_loop())
+        t1 = asyncio.create_task(self._monitor_loop())
+        t2 = asyncio.create_task(self._execution_loop())
+        self._background_tasks.add(t1)
+        self._background_tasks.add(t2)
+        t1.add_done_callback(self._background_tasks.discard)
+        t2.add_done_callback(self._background_tasks.discard)
 
     async def stop(self) -> None:
         """停止优化循环"""

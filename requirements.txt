@@ -44,3 +44,4 @@ braintrust>=0.50.0  # Braintrust 追踪
 
 # ==================== 可选依赖 ====================
 # google-generativeai>=0.3.0  # Google Gemini 支持
+Jinja2==3.1.6

@@ -4,9 +4,12 @@
 保留此类以保持向后兼容。
 """
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
+
 from .code_graph import CodeGraph
+
 
 class DependencyGraph:
     """KnowledgeGraph 版 DependencyGraph 的兼容层"""

@@ -137,7 +137,7 @@ class SwarmPipeline:
                         if new_changes:
                             code_changes.update(new_changes)
                             if self.config.enable_integrator:
-                                self._progress('integrator', f'文件就绪: {list(new_changes.keys())}')
+                                self._progress('integrator', f'文件就绪: {list(new_changes)}')
                                 # 注意: 已经在事务中，apply_patch 会自动处理原子性
                                 await self.integrator.integrate_batch(new_changes)
 
@@ -146,7 +146,7 @@ class SwarmPipeline:
                                     try:
                                         from ...core.persistence.run_state import RunStateManager
                                         state_mgr = RunStateManager(self.workdir)
-                                        for file_path in new_changes.keys():
+                                        for file_path in new_changes:
                                             state_mgr.add_evidence_entry(
                                                 evidence_id=f"ev-{t_id}-{int(asyncio.get_event_loop().time())}",
                                                 evidence_type="code_integration",
@@ -171,6 +171,15 @@ class SwarmPipeline:
                             logger.warning(f"记录成功经验失败: {rl_err}")
 
                         self._progress('swarm', f'任务 {t_id} 已完成')
+
+                        # [汲取 OMX] 脱水清理阶段 (Deslop Pass)
+                        if self.config.enable_deslop_cleaning:
+                            self._progress('deslop', f'启动脱水清理 (Deslop Pass): {list(new_changes)}')
+                            from ..self_healing.cleaner import SlopCleaner
+                            cleaner = SlopCleaner()
+                            for file_path in new_changes:
+                                if cleaner.clean_file(self.workdir / file_path):
+                                    self._progress('deslop', f'已清理冗余: {file_path}')
 
                     except Exception as e:
                         logger.error(f'子任务 {t_id} 运行时异常: {e}')
@@ -205,7 +214,7 @@ class SwarmPipeline:
                         sender='auditor',
                         recipient='orchestrator-1',
                         message_type=MessageType.AUDIT_FAIL,
-                        content=f"Audit failed for multiple files. Requesting self-healing.",
+                        content="Audit failed for multiple files. Requesting self-healing.",
                         metadata={'report': audit_report.to_markdown(), 'is_fatal': True}
                     ))
 
@@ -246,8 +255,8 @@ class SwarmPipeline:
         import os
         import re
 
-        from .roles import ROLE_SYSTEM_PROMPTS, AgentRole
         from .message_bus import AgentMessage, MessageType
+        from .roles import ROLE_SYSTEM_PROMPTS, AgentRole
 
         self.task_registry.update_status(task.task_id, TaskStatus.IN_PROGRESS)
         self._progress('worker', f'执行任务 {task.task_id}: {task.title}')

@@ -99,7 +99,7 @@ class LeaseManager:
             return None
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
                 return Lease.from_dict(data)
         except Exception as e:

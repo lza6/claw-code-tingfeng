@@ -57,9 +57,11 @@ class ToolRegistry:
         """Register the new advanced tools from Project B integration."""
         from .search_v2_tool import SearchV2Tool
         from .symbol_find_tool import SymbolFindTool
+        from .ast_grep_tool import ASTGrepTool
 
         self.register(SearchV2Tool(t_index, workdir))
         self.register(SymbolFindTool(s_index))
+        self.register(ASTGrepTool(workdir))
 
     def unregister(self, name: str) -> BaseTool | None:
         """注销工具

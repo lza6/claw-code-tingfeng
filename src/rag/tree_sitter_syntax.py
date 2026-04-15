@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 # Tree-sitter 可用性检测
 TREE_SITTER_AVAILABLE = False
 try:
-    from tree_sitter import Parser  # noqa: F401
+    from tree_sitter import Parser
     TREE_SITTER_AVAILABLE = True
 except ImportError:
     Parser = None
@@ -144,13 +144,16 @@ def extract_functions(tree: SyntaxTree) -> list[dict[str, Any]]:
     # 简化实现：使用正则表达式回退
     functions = []
 
-    # 根据语言查找函数定义模式
+    # 根据语言查找函数定义模式 (汲取自 Project B 的高阶模式)
     patterns = {
         "python": r"def\s+(\w+)\s*\(",
-        "javascript": r"function\s+(\w+)\s*\(",
-        "typescript": r"function\s+(\w+)\s*\(|(\w+)\s*\([^)]*\)\s*{",
-        "go": r"func\s+(\w+)\s*\(",
-        "rust": r"fn\s+(\w+)\s*\(",
+        "javascript": r"function\s+(\w+)\s*\(|(\w+)\s*[:=]\s*\(?.*?\)?\s*=>",
+        "typescript": r"function\s+(\w+)\s*\(|(\w+)\s*\([^)]*\)\s*{|interface\s+(\w+)\s*{",
+        "go": r"func\s+(\w+)\s*\(|func\s+\(\w+\s+\*?\w+\)\s+(\w+)\s*\(",
+        "rust": r"fn\s+(\w+)\s*\(|impl\s+\w+\s+{\s*fn\s+(\w+)",
+        "ruby": r"def\s+([\w\.]+\w+)",
+        "java": r"(?:public|private|protected|static|\s) +[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\) *(?:throws [\w\.]+(?:, [\w\.]+)*)? *\{",
+        "swift": r"func\s+(\w+)\s*\(",
     }
 
     pattern = patterns.get(tree.language, r"def\s+(\w+)\s*\(")

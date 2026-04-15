@@ -35,15 +35,14 @@ from .auditor import AuditorAgent, AuditReport
 from .base_agent import BaseAgent
 from .config import SwarmConfig
 from .integrator import AtomicIntegrator
-from .message_bus import MessageBus
+from .message_bus import MessageType
 from .orchestrator import OrchestratorAgent
 from .quality_gate import GateResult, QualityGate
 from .task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 
-# 延迟导入避免循环依赖
-from .experience_retrieval import retrieve_experience
+# 延迟导入避免循环依赖 (放在使用它的函数/模块顶部)
 
 
 @dataclass
@@ -104,6 +103,14 @@ class SwarmEngine:
         )
         self.ltm = EnterpriseLTM()
 
+        # [汲取 OMX] 初始化意图澄清和脱水器
+        from ...workflow.clarify import ClarifyGate
+        from ...llm.model_manager import ModelManager
+        from ..factory import create_model_manager
+        from ...self_healing.cleaner import SlopCleaner
+        self.clarify_gate = ClarifyGate(create_model_manager())
+        self.slop_cleaner = SlopCleaner()
+
         # GoalX 基础设施集成
         from ...core.git.worktree import WorktreeManager
         self.worktree_manager = WorktreeManager(self.workdir)
@@ -119,8 +126,8 @@ class SwarmEngine:
         self.coordination_state: CoordinationState | None = None
 
         if self.config.enable_runtime_host:
-            from ...core.runtime.host import RuntimeHost
             from ...core.resource_monitor import ResourceMonitor
+            from ...core.runtime.host import RuntimeHost
             # 自动生成 session_id (如果是重连模式，可能需要传入)
             session_id = f"swarm-{int(time.time())}"
             self.runtime_host = RuntimeHost(
@@ -209,11 +216,11 @@ class SwarmEngine:
 
         # [NEW Phase 4] 恢复持久化状态
         recovered = False
-        if self.config.enable_coordination_state and self.surface_manager:
-             # 如果已经有加载的状态，检查是否需要恢复
-             if self.coordination_state and self.coordination_state.sessions:
-                 self._progress('swarm', f'检测到现有协作状态，尝试恢复会话...')
-                 recovered = True
+        if self.config.enable_coordination_state and self.surface_manager and (
+            self.coordination_state and self.coordination_state.sessions
+        ):
+            self._progress('swarm', '检测到现有协作状态，尝试恢复会话...')
+            recovered = True
 
         self._init_agents()
 
@@ -226,10 +233,10 @@ class SwarmEngine:
             if specialized_agents:
                 self._progress('self-fission', f'合成 {len(specialized_agents)} 个专项 Agent')
 
-        # Step 0b: 经验检索 (使用新模块)
+        # Step 0b: 经验检索 (内联优化)
         experience_hints: list[str] = []
         if self.config.enable_experience_retrieval and not recovered:
-            experience_hints = await retrieve_experience(goal, self._progress)
+            experience_hints = await self._retrieve_experience_hints(goal)
             if experience_hints:
                 self._progress('rl-exp', f'检索到 {len(experience_hints)} 条历史经验')
 
@@ -264,6 +271,19 @@ class SwarmEngine:
         if not recovered:
             await self.ltm.record_session_start(request_id, goal)
 
+        # [汲取 OMX] 意图澄清阶段
+        if self.config.enable_clarify_gate and not recovered:
+            analysis = await self.clarify_gate.analyze_intent(goal)
+            self._progress('clarify', f"意图清晰度得分: {analysis.get('clarity_score', 0)}")
+            if self.clarify_gate.should_ask_user(analysis):
+                self._progress('clarify', "检测到模糊点，建议进行深层对话...")
+
+            # 注入 Non-goals 和 Constraints 到目标描述中 (临时增强)
+            draft = analysis.get('draft_contract', {})
+            non_goals = draft.get('non_goals', [])
+            if non_goals:
+                goal += "\n[NON-GOALS]:\n" + "\n".join(f"- {ng}" for ng in non_goals)
+
         try:
             # Step 1: Orchestrator 分解任务
             if not recovered or not self.task_registry.get_all_tasks():
@@ -271,7 +291,7 @@ class SwarmEngine:
                 self._progress('orchestrator', f'任务分解为 {len(decomposition.sub_tasks)} 个子任务')
             else:
                 self._progress('orchestrator', '从持久化状态恢复任务分解')
-                from .orchestrator import TaskDecomposition, TaskDAG
+                from .orchestrator import TaskDAG, TaskDecomposition
                 # 从 registry 重建 decomposition
                 tasks_data = []
                 for t in self.task_registry.get_all_tasks():
@@ -291,6 +311,7 @@ class SwarmEngine:
                 return await self._fallback_single_agent(goal, start_time)
 
             # Step 2-3: 使用管道执行
+            from .pipeline import SwarmPipeline
             pipeline = SwarmPipeline(
                 config=self.config,
                 workdir=self.workdir,
@@ -453,6 +474,29 @@ class SwarmEngine:
         if self.on_progress:
             self.on_progress(agent, message)
 
+    async def _retrieve_experience_hints(self, goal: str) -> list[str]:
+        """[内联优化] 检索历史经验并返回提示"""
+        try:
+            from .self_fission.rl_experience import RLExperienceHub
+            hub = RLExperienceHub()
+            best_practices = hub.find_best_practices(goal, top_k=3)
+            failure_warnings = hub.get_failure_warnings(goal)
+
+            hints: list[str] = []
+            if best_practices:
+                for i, exp in enumerate(best_practices, 1):
+                    hints.append(
+                        f"历史方案 {i}: {exp.task_description} -> {exp.solution} "
+                        f"(成功率: {exp.success_rate:.0%}, 尝试: {exp.total_attempts})"
+                    )
+            if failure_warnings:
+                for warn in failure_warnings[:2]:
+                    hints.append(f"⚠️ 失败预警: {warn.pattern} (出现 {warn.frequency} 次)")
+            return hints
+        except Exception as e:
+            logger.debug(f"经验检索异常: {e}")
+            return []
+
     async def _on_audit_fail(self, message: Any) -> None:
         """处理审计失败事件 (汲取 GoalX 自愈模式)"""
         task_id = message.metadata.get('task_id')
@@ -481,8 +525,8 @@ class SwarmEngine:
 
         # [NEW Phase 4] 更新协作状态 (CoordinationState)
         if self.coordination_state and self.surface_manager:
-            from .task_registry import TaskStatus as TStatus
             from ...core.durable.surfaces.coordination_state import SessionInfo, SessionState
+            from .task_registry import TaskStatus as TStatus
 
             # 获取或创建会话信息
             if sender not in self.coordination_state.sessions:

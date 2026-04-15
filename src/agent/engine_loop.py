@@ -12,6 +12,7 @@ Enhancements (v0.27+):
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -62,6 +63,9 @@ class AgentLoopConfig:
     auditor: Any | None = None
     audit_mode: bool = False
     max_audit_retries: int = 2
+
+    # 任务追踪器 (用于 RUF006)
+    _background_tasks: set[asyncio.Task] = field(default_factory=set)
 
     # Reflection 循环 (借鉴 Aider)
     max_reflections: int = 3
@@ -322,9 +326,11 @@ async def _run_agent_loop(
                         # 如果任何一个失败，理论上在工具内部逻辑可能已经写盘，但这里提供顶层事务提交/回滚机会
                         # 实际上单工具失败目前不触发全量回滚，除非明确逻辑要求。
                         # 这里先做 commit，因为 _execute_tools_parallel_safe 内部独立处理结果。
-                        if config.patcher: config.patcher.commit()
+                        if config.patcher:
+                            config.patcher.commit()
                     except Exception as e:
-                        if config.patcher: config.patcher.rollback()
+                        if config.patcher:
+                            config.patcher.rollback()
 
                         # 触发自愈逻辑
                         if config.healing_engine:
@@ -368,7 +374,8 @@ async def _run_agent_loop(
 
                             results.append((tool_name, tool_args, result))
                         except Exception as e:
-                            if is_file_edit and config.patcher: config.patcher.rollback()
+                            if is_file_edit and config.patcher:
+                                config.patcher.rollback()
                             if config.healing_engine:
                                 debug(f"{mode_tag} 单工具执行崩溃，触发自愈: {e}")
                                 await config.healing_engine.heal(e, context={"tool_name": tool_name, "tool_args": tool_args})
@@ -388,7 +395,9 @@ async def _run_agent_loop(
                             debug(f'{mode_tag} 触发 WorldModel 预取: {file_path}')
                             # 异步触发，不阻塞主循环
                             import asyncio
-                            asyncio.create_task(config.world_model.prefetch_context(file_path))
+                            task = asyncio.create_task(config.world_model.prefetch_context(file_path))
+                            config._background_tasks.add(task)
+                            task.add_done_callback(config._background_tasks.discard)
 
                     # 错误 RAG 补丁
                     rag_patch = None

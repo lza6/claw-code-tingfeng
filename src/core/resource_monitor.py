@@ -1,9 +1,9 @@
-import psutil
 import logging
 import os
 import platform
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+
+import psutil
 
 logger = logging.getLogger("core.resource")
 

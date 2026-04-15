@@ -5,21 +5,21 @@ Inspired by GoalX's quality-debt pattern.
 Scans durable surfaces to identify gaps in verification, coordination, and evidence.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-import os
 import json
-from datetime import datetime
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
 
 @dataclass
 class QualityDebt:
     """Represents the technical and verification debt of the current run."""
 
     # Gaps in success dimensions (unowned dimensions)
-    success_dimension_unowned: List[str] = field(default_factory=list)
+    success_dimension_unowned: list[str] = field(default_factory=list)
 
     # Gaps in proof plan (missing evidence for required items)
-    proof_plan_gap: List[str] = field(default_factory=list)
+    proof_plan_gap: list[str] = field(default_factory=list)
 
     # Missing critical review or finishing gates
     critic_gate_missing: bool = False
@@ -32,10 +32,10 @@ class QualityDebt:
     domain_pack_missing: bool = False
 
     # Evidence that is no longer fresh (stale)
-    required_evidence_stale: List[str] = field(default_factory=list)
+    required_evidence_stale: list[str] = field(default_factory=list)
 
     # Cognition requirements not satisfied for scenarios
-    required_cognition_unsatisfied: List[str] = field(default_factory=list)
+    required_cognition_unsatisfied: list[str] = field(default_factory=list)
 
     # Impact of changes is unknown or unresolved
     impact_resolution_unknown: bool = False
@@ -116,13 +116,15 @@ class QualityDebtManager:
         if coordination and status:
             # Check if all required dimensions in coordination have active lanes or status entries
             for dim_id, required in coordination.get("required", {}).items():
-                if not required: continue
+                if not required:
+                    continue
 
                 owned = False
                 # If it's the objective itself
-                if dim_id == "dim-objective":
-                    if status.get("global_tracking_states") or coordination.get("required"):
-                        owned = True
+                if dim_id == "dim-objective" and (
+                    status.get("global_tracking_states") or coordination.get("required")
+                ):
+                    owned = True
 
                 # Check lanes
                 lanes = coordination.get("lanes", [])
@@ -140,9 +142,10 @@ class QualityDebtManager:
 
                 # Check for stale evidence (placeholder logic - would need a FreshnessState surface)
                 # For now, we check if executed but older than a certain threshold or if not executed
-                if gate_policy.get("closeout") == "required":
-                    if not scenario.get("executed") or not scenario.get("passed"):
-                        debt.proof_plan_gap.append(sid)
+                if gate_policy.get("closeout") == "required" and (
+                    not scenario.get("executed") or not scenario.get("passed")
+                ):
+                    debt.proof_plan_gap.append(sid)
 
                 # Cognition check
                 # Placeholder: Assume repo-native is always satisfied, but 'graph' needs gitnexus (cognition provider)
@@ -176,13 +179,13 @@ class QualityDebtManager:
 
         return debt
 
-    def _load_surface(self, name: str) -> Optional[Dict[str, Any]]:
+    def _load_surface(self, name: str) -> dict[str, Any] | None:
         """Helper to load a surface from JSON."""
         path = os.path.join(self.run_dir, f"{name}.json")
         if not os.path.exists(path):
             return None
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             return None

@@ -252,7 +252,7 @@ class HistoryCompressor:
             summary = self.weak_model_callback(summarize_messages)
             if summary:
                 summary_text = SUMMARY_PREFIX + summary
-                return protected_messages + [{"role": "user", "content": summary_text}]
+                return [*protected_messages, {"role": "user", "content": summary_text}]
         except Exception as e:
             logger.error(f"[HistoryCompressor] Summarization failed: {e}")
 

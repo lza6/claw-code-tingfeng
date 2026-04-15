@@ -101,9 +101,11 @@ class BinaryIndexReader:
             # Read Postings File
             with open(postings_path, "rb") as f:
                 magic = f.read(4)
-                if magic != POSTINGS_MAGIC: return None
+                if magic != POSTINGS_MAGIC:
+                    return None
                 version = struct.unpack("<H", f.read(2))[0]
-                if version != FORMAT_VERSION: return None
+                if version != FORMAT_VERSION:
+                    return None
                 file_count = struct.unpack("<I", f.read(4))[0]
                 f.seek(41, os.SEEK_CUR) # Skip head
 
@@ -119,9 +121,11 @@ class BinaryIndexReader:
                 # Read Lookup File
                 with open(lookup_path, "rb") as fl:
                     lmagic = fl.read(4)
-                    if lmagic != LOOKUP_MAGIC: return None
+                    if lmagic != LOOKUP_MAGIC:
+                        return None
                     lversion = struct.unpack("<H", fl.read(2))[0]
-                    if lversion != FORMAT_VERSION: return None
+                    if lversion != FORMAT_VERSION:
+                        return None
                     fl.seek(2, os.SEEK_CUR) # Skip pad
                     entry_count = struct.unpack("<I", fl.read(4))[0]
 

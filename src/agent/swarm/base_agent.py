@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
-
 from datetime import datetime
+from typing import Any
 
 from ...utils.tracing import traced
 from .message_bus import AgentMessage, MessageBus, MessageType

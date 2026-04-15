@@ -7,8 +7,10 @@ and provider alerts. This state drives the workflow engine.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any
+
+from ..surface import Surface
 
 
 class RunPhase(Enum):
@@ -44,24 +46,23 @@ class ControlLease:
 
 
 @dataclass
-class ControlState:
+class ControlState(Surface):
     """
-    Control state manages the workflow phase, active sessions, and 
+    Control state manages the workflow phase, active sessions, and
     system-level alerts.
     """
-    version: int = 1
     goal_state: str = "open"  # open, completed, dropped
     continuity_state: ContinuityState = ContinuityState.RUNNING
     phase: RunPhase = RunPhase.INITIALIZE
     active_session_count: int = 0
-    
+
     # Alerts from AI providers or system
-    provider_dialog_alerts: Dict[str, str] = field(default_factory=dict)
-    master_alerts: Dict[str, str] = field(default_factory=dict)
-    
+    provider_dialog_alerts: dict[str, str] = field(default_factory=dict)
+    master_alerts: dict[str, str] = field(default_factory=dict)
+
     # Active leases for exclusive resources
-    leases: Dict[str, ControlLease] = field(default_factory=dict)
-    
+    leases: dict[str, ControlLease] = field(default_factory=dict)
+
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     @classmethod
@@ -70,7 +71,7 @@ class ControlState:
         return cls()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ControlState":
+    def from_dict(cls, data: dict[str, Any]) -> "ControlState":
         """Load from dictionary."""
         leases = {}
         for holder, lease_data in data.get("leases", {}).items():
@@ -83,7 +84,7 @@ class ControlState:
                 pid=lease_data.get("pid", 0),
                 transport=lease_data.get("transport", "local")
             )
-            
+
         return cls(
             version=data.get("version", 1),
             goal_state=data.get("goal_state", "open"),
@@ -96,8 +97,9 @@ class ControlState:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
+        data = super().to_dict()
         leases_dict = {}
         for holder, lease in self.leases.items():
             leases_dict[holder] = {
@@ -109,41 +111,31 @@ class ControlState:
                 "pid": lease.pid,
                 "transport": lease.transport
             }
-            
-        return {
-            "version": self.version,
-            "goal_state": self.goal_state,
-            "continuity_state": self.continuity_state.value,
-            "phase": self.phase.value,
-            "active_session_count": self.active_session_count,
-            "provider_dialog_alerts": self.provider_dialog_alerts,
-            "master_alerts": self.master_alerts,
-            "leases": leases_dict,
-            "updated_at": self.updated_at
-        }
-        
+        data["leases"] = leases_dict
+        return data
+
     def transition_to(self, phase: RunPhase) -> None:
         """Safely transition to a new phase."""
         self.phase = phase
         self.updated_at = datetime.utcnow().isoformat()
-        
+
     def acquire_lease(self, holder: str, run_id: str, ttl_seconds: int = 30, pid: int = 0) -> bool:
         """Attempt to acquire an exclusive lease."""
         now = datetime.utcnow()
-        
+
         # Check if lease exists and is still valid
         if holder in self.leases:
             lease = self.leases[holder]
             expires = datetime.fromisoformat(lease.expires_at)
-            
+
             # If valid and owned by someone else, fail
             if expires > now and lease.run_id != run_id:
                 return False
-                
+
             # Renew existing lease
             lease.epoch += 1
             lease.renewed_at = now.isoformat()
-            
+
             from datetime import timedelta
             lease.expires_at = (now + timedelta(seconds=ttl_seconds)).isoformat()
             lease.run_id = run_id
@@ -159,10 +151,10 @@ class ControlState:
                 expires_at=(now + timedelta(seconds=ttl_seconds)).isoformat(),
                 pid=pid
             )
-            
+
         self.updated_at = now.isoformat()
         return True
-        
+
     def release_lease(self, holder: str, run_id: str) -> None:
         """Release a lease if owned by this run."""
         if holder in self.leases and self.leases[holder].run_id == run_id:

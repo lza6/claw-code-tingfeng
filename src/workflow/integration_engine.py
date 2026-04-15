@@ -6,7 +6,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.core.git_integration import get_git_manager
 
@@ -23,13 +23,13 @@ class IntegrationEngine:
     def _get_integration_state_path(self) -> Path:
         return self.run_dir / "integration-state.json"
 
-    def load_integration_state(self) -> Dict[str, Any]:
+    def load_integration_state(self) -> dict[str, Any]:
         """加载 integration-state.json"""
         state_path = self._get_integration_state_path()
         if not state_path.exists():
             return {"version": 1, "records": []}
         try:
-            with open(state_path, "r", encoding="utf-8") as f:
+            with open(state_path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"无法读取 integration state: {e}")
@@ -121,7 +121,7 @@ class IntegrationEngine:
         logger.info(f"执行 Keep-to-Source: 直接同步会话 {session_id} 的文件...")
         return self.keep_session(session_id, method="partial_adopt")
 
-    def cherry_pick_session(self, session_id: str, commit_shas: List[str]) -> tuple[bool, str]:
+    def cherry_pick_session(self, session_id: str, commit_shas: list[str]) -> tuple[bool, str]:
         """[汲取 GoalX cherry-pick] 从会话分支中选择特定 commit 进行合并。
         """
         logger.info(f"执行 Cherry-pick: 从会话 {session_id} 选取 {len(commit_shas)} 个提交...")

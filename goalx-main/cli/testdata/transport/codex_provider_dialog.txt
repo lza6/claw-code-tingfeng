@@ -1,2 +1,0 @@
-Authentication required
-Please authenticate in browser to continue

@@ -250,7 +250,7 @@ class SemanticCodeAnalyzer:
                     evidence=[f"History Warning: {w.pattern}" for w in warnings],
                     severity="high"
                 ))
-                logger.info(f"检测到历史雷区，已自动注入协作一致性特征标签")
+                logger.info("检测到历史雷区，已自动注入协作一致性特征标签")
         except Exception as e:
             logger.debug(f"经验感知检测跳过: {e}")
 

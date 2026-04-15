@@ -103,11 +103,9 @@ class AssuranceManager:
         durable_plan = None
         if self.surface_manager:
             try:
-                from ..core.durable.surfaces.assurance_plan import (
-                    AssurancePlan as DurableAssurancePlan,
-                    AssuranceScenario as DurableScenario,
-                    VerificationMethod
-                )
+                from ..core.durable.surfaces.assurance_plan import AssurancePlan as DurableAssurancePlan
+                from ..core.durable.surfaces.assurance_plan import AssuranceScenario as DurableScenario
+                from ..core.durable.surfaces.assurance_plan import VerificationMethod
                 durable_plan = self.surface_manager.load_surface("assurance_plan", DurableAssurancePlan)
             except Exception as e:
                 logger.warning(f"无法加载 Durable AssurancePlan: {e}")
@@ -164,7 +162,8 @@ class AssuranceManager:
                     try:
                         # 确保场景存在于 Durable Plan 中
                         if scenario.id not in durable_plan.scenarios:
-                            from ..core.durable.surfaces.assurance_plan import AssuranceScenario as DurableScenario, VerificationMethod
+                            from ..core.durable.surfaces.assurance_plan import AssuranceScenario as DurableScenario
+                            from ..core.durable.surfaces.assurance_plan import VerificationMethod
                             durable_plan.add_scenario(DurableScenario(
                                 id=scenario.id,
                                 name=f"Scenario {scenario.id}",
@@ -178,7 +177,9 @@ class AssuranceManager:
                         self.surface_manager.save_surface("assurance_plan", durable_plan)
 
                         # 记录到 EvidenceLog
-                        from ..core.durable.surfaces.evidence_log import EvidenceLog as DurableEvidenceLog, EvidenceEntry as DurableEvidenceEntry, EvidenceType
+                        from ..core.durable.surfaces.evidence_log import EvidenceEntry as DurableEvidenceEntry
+                        from ..core.durable.surfaces.evidence_log import EvidenceLog as DurableEvidenceLog
+                        from ..core.durable.surfaces.evidence_log import EvidenceType
                         evidence_log = self.surface_manager.load_surface("evidence_log", DurableEvidenceLog)
                         entry = DurableEvidenceEntry(
                             id=f"ev-{scenario.id}-{int(datetime.utcnow().timestamp())}",

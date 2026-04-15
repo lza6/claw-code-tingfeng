@@ -36,10 +36,14 @@ class QualityReport:
 
     @property
     def grade(self) -> str:
-        if self.score >= 90: return 'A'
-        if self.score >= 80: return 'B'
-        if self.score >= 70: return 'C'
-        if self.score >= 60: return 'D'
+        if self.score >= 90:
+            return 'A'
+        if self.score >= 80:
+            return 'B'
+        if self.score >= 70:
+            return 'C'
+        if self.score >= 60:
+            return 'D'
         return 'F'
 
 

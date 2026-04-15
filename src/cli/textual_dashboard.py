@@ -229,7 +229,7 @@ class DashboardApp(App):
 
     def _handle_healing_event(self, data: dict) -> None:
         """处理自愈事件"""
-        from .dashboard_widgets.models import HealingEvent, DiffLine
+        from .dashboard_widgets.models import DiffLine, HealingEvent
         event = HealingEvent(
             error_type=data.get('error_type', 'unknown'),
             error_message=data.get('error_message', ''),

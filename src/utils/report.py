@@ -23,9 +23,34 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
+import re
 import sys
 import urllib.parse
 import webbrowser
+
+# 敏感词模式，用于脱敏
+SECRET_PATTERNS = [
+    re.compile(r'(api[_-]key|secret|password|token|auth|credential|private[_-]key)["\s:]+["\']?([a-zA-Z0-9_\-\.]{8,})["\']?', re.IGNORECASE),
+    re.compile(r'(?<=[:=])[a-zA-Z0-9_\-\.]{20,}(?=\s|&|$|")'), # 长的可能是 key 的字符串
+]
+
+def mask_secrets(text: str) -> str:
+    """脱敏敏感信息"""
+    if not text:
+        return text
+    masked = text
+    for pattern in SECRET_PATTERNS:
+        # 将捕获的 key 部分替换为 [MASKED]
+        def repl(match):
+            groups = match.groups()
+            if len(groups) >= 2:
+                # 针对 key-value 对，保留 key，脱敏 value
+                prefix = match.group(0).split(groups[1])[0]
+                return f"{prefix}[MASKED]"
+            else:
+                return "[MASKED]"
+        masked = pattern.sub(repl, masked)
+    return masked
 
 
 def get_python_info() -> str:
@@ -79,7 +104,7 @@ def report_github_issue(
         github_issues_url: GitHub Issues URL
     """
     system_info = get_system_info() + "\n"
-    full_text = system_info + issue_text
+    full_text = mask_secrets(system_info + issue_text)
 
     params = {"body": full_text}
     if title is None:

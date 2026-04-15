@@ -1,0 +1,47 @@
+# {{ objective }}
+
+**Run**: {{ run_name }}
+**Intent**: {{ intent }}
+**Time**: {{ current_time }}
+**Project**: {{ project_root }}
+
+---
+
+## 目标合同
+
+见: {{ objective_contract_path }}
+
+## 义务模型
+
+见: {{ obligation_model_path }}
+
+## 保证计划
+
+见: {{ assurance_plan_path }}
+
+## 证据日志
+
+见: {{ evidence_log_path }}
+
+## 执行约束
+
+{% if composition and composition.enabled %}
+{% for rule in composition.philosophy %}
+- {{ rule }}
+{% endfor %}
+{% endif %}
+
+- 所有代码修改必须通过验证
+- 每次任务完成后必须记录证据
+- 失败任务必须包含失败原因
+
+## 工作目录
+
+- **项目根目录**: {{ project_root }}
+- **隔离工作树**: {{ run_worktree_path }}
+
+## 完成标准
+
+- [ ] 所有 Open 义务已完成
+- [ ] 证据日志包含每个任务的成功证明
+- [ ] 保证计划中的所有场景通过

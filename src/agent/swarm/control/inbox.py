@@ -11,12 +11,12 @@ Key features:
 - Urgent escalation: Priority messages
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, List, Any, Dict
-import json
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 
 class MessagePriority(Enum):
@@ -36,7 +36,7 @@ class Message:
     content: str  # Message content
     priority: MessagePriority = MessagePriority.NORMAL
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_jsonl(self) -> str:
         """Convert to JSONL line."""
@@ -105,13 +105,13 @@ class Inbox:
         with open(self.inbox_file, 'a', encoding='utf-8') as f:
             f.write(message.to_jsonl() + '\n')
 
-    def read_all(self) -> List[Message]:
+    def read_all(self) -> list[Message]:
         """Read all messages in the inbox."""
         messages = []
         if not self.inbox_file.exists():
             return messages
 
-        with open(self.inbox_file, 'r', encoding='utf-8') as f:
+        with open(self.inbox_file, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -119,13 +119,13 @@ class Inbox:
 
         return messages
 
-    def read_unread(self) -> List[Message]:
+    def read_unread(self) -> list[Message]:
         """Read only unread messages (after cursor position)."""
         cursor = self._read_cursor()
         all_messages = self.read_all()
         return all_messages[cursor:]
 
-    def mark_read(self, count: Optional[int] = None) -> None:
+    def mark_read(self, count: int | None = None) -> None:
         """
         Mark messages as read by advancing the cursor.
 
@@ -153,7 +153,7 @@ class Inbox:
             for msg in unread
         )
 
-    def get_urgent_messages(self) -> List[Message]:
+    def get_urgent_messages(self) -> list[Message]:
         """Get all urgent/critical unread messages."""
         unread = self.read_unread()
         return [
@@ -173,7 +173,7 @@ class Inbox:
         if not self.cursor_file.exists():
             return 0
 
-        with open(self.cursor_file, 'r', encoding='utf-8') as f:
+        with open(self.cursor_file, encoding='utf-8') as f:
             content = f.read().strip()
             return int(content) if content else 0
 
@@ -203,7 +203,7 @@ class ControlSystem:
         self.inbox_dir.mkdir(parents=True, exist_ok=True)
 
         # Cache of inbox instances
-        self._inboxes: Dict[str, Inbox] = {}
+        self._inboxes: dict[str, Inbox] = {}
 
     def get_inbox(self, recipient_id: str) -> Inbox:
         """Get or create inbox for a recipient."""
@@ -217,7 +217,7 @@ class ControlSystem:
         to_id: str,
         content: str,
         priority: MessagePriority = MessagePriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: dict[str, Any] | None = None
     ) -> Message:
         """
         Send a message.
@@ -249,10 +249,10 @@ class ControlSystem:
     def broadcast(
         self,
         from_id: str,
-        recipient_ids: List[str],
+        recipient_ids: list[str],
         content: str,
         priority: MessagePriority = MessagePriority.NORMAL
-    ) -> List[Message]:
+    ) -> list[Message]:
         """
         Broadcast a message to multiple recipients.
 
@@ -271,13 +271,13 @@ class ControlSystem:
             messages.append(msg)
         return messages
 
-    def list_inboxes(self) -> List[str]:
+    def list_inboxes(self) -> list[str]:
         """List all inbox IDs."""
         return [
             p.stem for p in self.inbox_dir.glob("*.jsonl")
         ]
 
-    def get_all_unread_counts(self) -> Dict[str, int]:
+    def get_all_unread_counts(self) -> dict[str, int]:
         """Get unread counts for all inboxes."""
         counts = {}
         for inbox_id in self.list_inboxes():

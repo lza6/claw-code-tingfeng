@@ -4,17 +4,15 @@
 from __future__ import annotations
 
 import os
-import time
-import hashlib
-from pathlib import Path
-from typing import Any, NamedTuple, Dict, List, Set, Optional
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import NamedTuple
 
+from ..utils import get_logger
+from .repo_map import CodeStructure
+from .symbol_extractor import FileOutline, SymbolExtractor
 from .trigram_index import TrigramIndex
 from .word_index import WordIndex
-from .symbol_extractor import SymbolExtractor, FileOutline
-from .repo_map import CodeStructure
-from ..utils import get_logger, debug
 
 logger = get_logger(__name__)
 
@@ -26,7 +24,7 @@ class ScanResult(NamedTuple):
     outline: FileOutline
     structure: CodeStructure
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 class UnifiedScanner:
     """统一扫描器 - 一次读取，多次分析"""
@@ -34,9 +32,9 @@ class UnifiedScanner:
     def __init__(
         self,
         root_dir: Path,
-        trigram_index: Optional[TrigramIndex] = None,
-        word_index: Optional[WordIndex] = None,
-        symbol_extractor: Optional[SymbolExtractor] = None,
+        trigram_index: TrigramIndex | None = None,
+        word_index: WordIndex | None = None,
+        symbol_extractor: SymbolExtractor | None = None,
         max_workers: int = 8
     ):
         self.root_dir = root_dir
@@ -44,7 +42,7 @@ class UnifiedScanner:
         self.word_index = word_index or WordIndex()
         self.symbol_extractor = symbol_extractor or SymbolExtractor()
         self.max_workers = max_workers
-        self._file_cache: Dict[str, ScanResult] = {}
+        self._file_cache: dict[str, ScanResult] = {}
 
     def scan_file(self, rel_path: str, force: bool = False) -> ScanResult:
         """扫描单个文件 (优化版)"""
@@ -94,7 +92,7 @@ class UnifiedScanner:
             logger.error(f"扫描文件失败 {rel_path}: {e}")
             return ScanResult(rel_path, 0, 0, "", None, None, success=False, error=str(e))
 
-    async def scan_directory(self, pattern: str = "**/*.py") -> List[ScanResult]:
+    async def scan_directory(self, pattern: str = "**/*.py") -> list[ScanResult]:
         """并行扫描目录 (已优化增量扫描性能)"""
         import asyncio
         # 使用快速列表，避免 resolve
@@ -111,7 +109,7 @@ class UnifiedScanner:
 
         return [r for r in results if r.success]
 
-    def get_repo_map_structures(self) -> List[CodeStructure]:
+    def get_repo_map_structures(self) -> list[CodeStructure]:
         """获取所有已扫描文件的结构，用于生成 RepoMap (已优化性能)"""
         # 使用列表生成式一次性提取，避免在循环中进行多次属性访问检查
         return [

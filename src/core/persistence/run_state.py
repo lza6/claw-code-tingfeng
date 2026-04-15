@@ -12,33 +12,43 @@ logger = logging.getLogger("core.persistence.run_state")
 # [Phase 2] 集成 Durable Surfaces
 _DURABLE_SURFACES_AVAILABLE = False
 try:
-    from src.core.durable.surfaces.objective_contract import (
-        ObjectiveContract as DurableObjectiveContract,
-    )
-    from src.core.durable.surfaces.obligation_model import (
-        ObligationModel as DurableObligationModel,
-        Obligation as DurableObligation,
-        ObligationStatus,
-    )
+    from src.core.durable.surface_manager import SurfaceManager
     from src.core.durable.surfaces.assurance_plan import (
         AssurancePlan as DurableAssurancePlan,
-        AssuranceScenario,
     )
-    from src.core.durable.surfaces.evidence_log import (
-        EvidenceLog as DurableEvidenceLog,
-        EvidenceEntry as DurableEvidenceEntry,
-        EvidenceType,
+    from src.core.durable.surfaces.assurance_plan import (
+        AssuranceScenario,
     )
     from src.core.durable.surfaces.coordination_state import (
         CoordinationState,
         SessionInfo,
         SessionState,
     )
-    from src.core.durable.surfaces.status_summary import (
-        StatusSummary,
-        RunPhase,
+    from src.core.durable.surfaces.evidence_log import (
+        EvidenceEntry as DurableEvidenceEntry,
     )
-    from src.core.durable.surface_manager import SurfaceManager
+    from src.core.durable.surfaces.evidence_log import (
+        EvidenceLog as DurableEvidenceLog,
+    )
+    from src.core.durable.surfaces.evidence_log import (
+        EvidenceType,
+    )
+    from src.core.durable.surfaces.objective_contract import (
+        ObjectiveContract as DurableObjectiveContract,
+    )
+    from src.core.durable.surfaces.obligation_model import (
+        Obligation as DurableObligation,
+    )
+    from src.core.durable.surfaces.obligation_model import (
+        ObligationModel as DurableObligationModel,
+    )
+    from src.core.durable.surfaces.obligation_model import (
+        ObligationStatus,
+    )
+    from src.core.durable.surfaces.status_summary import (
+        RunPhase,
+        StatusSummary,
+    )
     _DURABLE_SURFACES_AVAILABLE = True
 except ImportError:
     # Durable surfaces not available, fall back to existing behavior
@@ -46,14 +56,14 @@ except ImportError:
 
 if _DURABLE_SURFACES_AVAILABLE:
     __all__ = [
-        "RunStateManager",
-        "SurfaceManager",
-        "DurableObjectiveContract",
-        "DurableObligationModel",
+        "CoordinationState",
         "DurableAssurancePlan",
         "DurableEvidenceLog",
-        "CoordinationState",
+        "DurableObjectiveContract",
+        "DurableObligationModel",
+        "RunStateManager",
         "StatusSummary",
+        "SurfaceManager",
     ]
 else:
     __all__ = ["RunStateManager"]
@@ -96,7 +106,7 @@ class RunStateManager:
 
         # [Phase 2] 初始化 Durable Surfaces
         if _DURABLE_SURFACES_AVAILABLE:
-            self._surface_manager: Optional[SurfaceManager] = SurfaceManager(self.run_dir)
+            self._surface_manager: SurfaceManager | None = SurfaceManager(self.run_dir)
         else:
             self._surface_manager = None
 
@@ -219,12 +229,20 @@ class RunStateManager:
                 continue
         return None
 
-    def update_task(self, task_id: str, status: WorkflowStatus, result: Any = None, evidence: list[str] | None = None):
-        """增量更新单个任务状态 (借鉴 GoalX CoordinationRequiredItem)"""
+    def update_task(self, task_id: str, status: WorkflowStatus, result: Any = None, evidence: list[str] | None = None, worktree_id: str | None = None, verification_criteria: str | None = None, expected_version: int | None = None):
+        """增量更新单个任务状态 (借鉴 GoalX CoordinationRequiredItem)
+        支持乐观并发控制 (OCC)。
+        """
         current_data = self.load()
         if not current_data:
              # 如果无法加载，尝试初始化一个
-             current_data = {"tasks": []}
+             current_data = {"tasks": [], "version": 0}
+
+        # OCC 检查
+        if expected_version is not None:
+            actual_version = current_data.get("version", 0)
+            if actual_version != expected_version:
+                raise RuntimeError(f"OCC Conflict: expected version {expected_version}, but found {actual_version}")
 
         state = current_data.get("state", current_data)
         tasks_data = state.get("tasks", [])
@@ -237,6 +255,11 @@ class RunStateManager:
                     t_dict["result"] = result
                 if evidence:
                     t_dict["evidence_paths"] = list(set(t_dict.get("evidence_paths", []) + evidence))
+                if worktree_id is not None:
+                    t_dict["worktree_id"] = worktree_id
+                if verification_criteria is not None:
+                    t_dict["verification_criteria"] = verification_criteria
+
                 t_dict["updated_at"] = datetime.utcnow().isoformat()
                 found = True
                 break
@@ -247,10 +270,14 @@ class RunStateManager:
                 "status": status.value if hasattr(status, 'value') else status,
                 "result": result,
                 "evidence_paths": evidence or [],
+                "worktree_id": worktree_id,
+                "verification_criteria": verification_criteria,
                 "updated_at": datetime.utcnow().isoformat()
             })
 
         state["tasks"] = tasks_data
+        # 增加全局版本号
+        state["version"] = current_data.get("version", 0) + 1
         self.sync(state)
 
     def record_evidence(self, task_id: str, file_path: str):
@@ -305,11 +332,11 @@ class RunStateManager:
         evidence_id: str,
         evidence_type: str,
         description: str,
-        obligation_id: Optional[str] = None,
-        scenario_id: Optional[str] = None,
-        data: Optional[dict] = None,
-        artifacts: Optional[list[str]] = None,
-        recorded_by: Optional[str] = None,
+        obligation_id: str | None = None,
+        scenario_id: str | None = None,
+        data: dict | None = None,
+        artifacts: list[str] | None = None,
+        recorded_by: str | None = None,
     ) -> None:
         """添加证据条目到 Durable EvidenceLog"""
         if not self._surface_manager:
@@ -341,8 +368,8 @@ class RunStateManager:
         self,
         session_id: str,
         state: str = "idle",
-        assigned_obligations: Optional[list[str]] = None,
-        worktree_path: Optional[str] = None,
+        assigned_obligations: list[str] | None = None,
+        worktree_path: str | None = None,
         progress_notes: str = "",
     ) -> None:
         """更新协调状态中的会话信息"""

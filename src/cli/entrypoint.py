@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import os
-import sys
-import logging
-import time
 from pathlib import Path
-from typing import Optional, List
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
 from .. import __version__
-from ..main import initialize, _register_shutdown_hooks
 from ..core.exceptions import ClawdError
+from ..main import _register_shutdown_hooks, initialize
 
 # 初始化 Typer
 app = typer.Typer(
@@ -33,7 +29,7 @@ def version_callback(value: bool):
 @app.callback()
 def common(
     ctx: typer.Context,
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None, "--version", "-v", help="显示版本信息", callback=version_callback
     ),
 ):
@@ -77,17 +73,18 @@ def workflow_run(
     goal: str = typer.Argument(..., help="工作流目标描述"),
     iterations: int = typer.Option(3, "--iterations", "-i", help="最大迭代次数"),
     isolation: bool = typer.Option(True, "--isolation/--no-isolation", help="是否启用工作树隔离"),
-    budget: Optional[str] = typer.Option(None, "--budget", "-b", help="运行预算 (如 1h, 10usd)"),
+    budget: str | None = typer.Option(None, "--budget", "-b", help="运行预算 (如 1h, 10usd)"),
     recover: bool = typer.Option(False, "--recover", help="从上次中断的状态恢复"),
     intent: str = typer.Option("implement", "--intent", help="执行意图: implement (实现), debate (辩论/设计), explore (探索)"),
-    dimensions: List[str] = typer.Option([], "--dimension", "-d", help="启用维度引导 (如: creative, adversarial, audit)"),
+    dimensions: list[str] = typer.Option([], "--dimension", "-d", help="启用维度引导 (如: creative, adversarial, audit)"),
 ):
     """
     执行自动化工作流 (识别 -> 规划 -> 执行 -> 审查 -> 发现)
     """
     import asyncio
-    from ..workflow.engine import WorkflowEngine
+
     from ..core.config.injector import set_config
+    from ..workflow.engine import WorkflowEngine
 
     workdir = Path.cwd()
     engine = WorkflowEngine(workdir=workdir, max_iterations=iterations, budget_str=budget)
@@ -108,7 +105,7 @@ def workflow_run(
 
     try:
         result = asyncio.run(engine.run(goal, recover=recover))
-        console.print(f"\n[bold green]工作流执行完成![/bold green]")
+        console.print("\n[bold green]工作流执行完成![/bold green]")
         console.print(result.report)
         if result.status == "failed":
             raise typer.Exit(code=1)

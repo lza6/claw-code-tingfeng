@@ -260,6 +260,50 @@ class SQLiteMemoryStorage:
                 d['related_pattern_id'], d['user_rating'], d['user_comments']
             ))
 
+    def load_episodic(self, episodic_id: str) -> EpisodicMemory | None:
+        """加载情景记忆"""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM episodic_memories WHERE id = ?",
+                (episodic_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return EpisodicMemory(
+                id=row['id'],
+                timestamp=row['timestamp'],
+                skill_used=row['skill_used'] or '',
+                situation=row['situation'] or '',
+                root_cause=row['root_cause'] or '',
+                solution=row['solution'] or '',
+                lesson=row['lesson'] or '',
+                related_pattern_id=row['related_pattern_id'] or '',
+                user_rating=row['user_rating'],
+                user_comments=row['user_comments'] or '',
+            )
+
+    def list_episodic(self) -> list[EpisodicMemory]:
+        """列出所有情景记忆"""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM episodic_memories ORDER BY timestamp DESC"
+            ).fetchall()
+            return [
+                EpisodicMemory(
+                    id=row['id'],
+                    timestamp=row['timestamp'],
+                    skill_used=row['skill_used'] or '',
+                    situation=row['situation'] or '',
+                    root_cause=row['root_cause'] or '',
+                    solution=row['solution'] or '',
+                    lesson=row['lesson'] or '',
+                    related_pattern_id=row['related_pattern_id'] or '',
+                    user_rating=row['user_rating'],
+                    user_comments=row['user_comments'] or '',
+                )
+                for row in rows
+            ]
+
     # -- WorkingMemory API --
 
     def save_working(self, memory: WorkingMemory) -> None:

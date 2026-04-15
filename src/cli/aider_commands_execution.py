@@ -11,9 +11,8 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from typing import TYPE_CHECKING
-
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from ..utils.colors import dim, status_pass, status_warn
 
@@ -131,7 +130,6 @@ def cmd_test(self: AiderCommandHandler, args: str) -> tuple[bool, str]:
 
         # [汲取 GoalX] 自动记录证据 (Evidence)
         try:
-            from ..core.persistence.run_state import RunStateManager
             # 尝试获取当前运行状态管理器
             # 注意: 这里假设 AiderCommandHandler 能够访问到相关的 run_id 或 manager
             # 如果没有直接的 manager，我们尝试从默认路径加载
@@ -151,7 +149,7 @@ def cmd_test(self: AiderCommandHandler, args: str) -> tuple[bool, str]:
                     recorded_by="aider-cli"
                 )
                 print(dim(f"  已自动记录证据: {evidence_id}"))
-        except Exception as ev_err:
+        except Exception:
             # 记录证据失败不应导致命令报错
             pass
 

@@ -17,7 +17,6 @@ from textual.widgets import Label
 # 导入数据模型
 from .models import ConfidenceHistory, DiffLine, HealingEvent, SelfHealingStats
 
-
 # ============================================================================
 # Self-Healing Stats
 # ============================================================================

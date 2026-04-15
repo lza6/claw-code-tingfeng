@@ -22,7 +22,7 @@
     hub.record_task_experience("实现 JWT 认证", "使用 PyJWT", success=True)
     best = hub.find_best_practices("认证")
 """
-from .analyzer import CodeContext, SemanticCodeAnalyzer, SemanticFeature
+from .analyzer import SemanticCodeAnalyzer, SemanticFeature
 from .detectors.base import CodeContext, FeatureDetector
 from .factory import AgentSynthesisFactory
 from .registry import SPECIALIZED_AGENT_TEMPLATES, SpecializedAgentRegistry

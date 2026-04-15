@@ -98,9 +98,9 @@ class QualityGate:
         - [NEW] Ruff 静态检查通过
         """
         import ast
+        import os
         import subprocess
         import tempfile
-        import os
 
         checks: list[str] = []
         failures: list[str] = []

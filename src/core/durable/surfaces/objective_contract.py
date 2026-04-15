@@ -9,7 +9,7 @@ Inspired by GoalX's objective-contract pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -27,12 +27,12 @@ class ObjectiveContract:
     run_id: str  # Unique run identifier
 
     # Context
-    initial_context: Dict[str, Any] = field(default_factory=dict)  # Repo state, env vars, etc.
+    initial_context: dict[str, Any] = field(default_factory=dict)  # Repo state, env vars, etc.
     constraints: list[str] = field(default_factory=list)  # Hard constraints (e.g., "no breaking changes")
     success_criteria: list[str] = field(default_factory=list)  # How to know when done
 
     # Metadata
-    user: Optional[str] = None  # User who created this
+    user: str | None = None  # User who created this
     priority: str = "normal"  # low, normal, high, critical
     tags: list[str] = field(default_factory=list)  # Categorization tags
 
@@ -52,7 +52,7 @@ class ObjectiveContract:
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ObjectiveContract":
+    def from_dict(cls, data: dict[str, Any]) -> "ObjectiveContract":
         """Load from dictionary."""
         return cls(
             objective=data["objective"],
@@ -66,7 +66,7 @@ class ObjectiveContract:
             tags=data.get("tags", [])
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "objective": self.objective,

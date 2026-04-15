@@ -7,9 +7,9 @@ cognitive providers with their availability and index status.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
 
 class InvocationKind(Enum):
@@ -36,7 +36,7 @@ class CognitionProvider:
     invocation_kind: InvocationKind = InvocationKind.NONE
     available: bool = False
     index_state: IndexState = IndexState.UNKNOWN
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     head_revision: str = ""
 
     @classmethod
@@ -45,7 +45,7 @@ class CognitionProvider:
         return cls(name=name)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CognitionProvider":
+    def from_dict(cls, data: dict[str, Any]) -> "CognitionProvider":
         """Load from dictionary."""
         return cls(
             name=data.get("name", "unknown"),
@@ -56,7 +56,7 @@ class CognitionProvider:
             head_revision=data.get("head_revision", "")
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -73,7 +73,7 @@ class CognitionScope:
     """A scope representing a worktree and its cognitive providers."""
     scope: str = "default"
     worktree_path: str = ""
-    providers: List[CognitionProvider] = field(default_factory=list)
+    providers: list[CognitionProvider] = field(default_factory=list)
 
     @classmethod
     def create_default(cls, scope: str = "default", worktree_path: str = "") -> "CognitionScope":
@@ -81,7 +81,7 @@ class CognitionScope:
         return cls(scope=scope, worktree_path=worktree_path)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CognitionScope":
+    def from_dict(cls, data: dict[str, Any]) -> "CognitionScope":
         """Load from dictionary."""
         providers = [
             CognitionProvider.from_dict(p)
@@ -93,7 +93,7 @@ class CognitionScope:
             providers=providers
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "scope": self.scope,
@@ -101,7 +101,7 @@ class CognitionScope:
             "providers": [p.to_dict() for p in self.providers]
         }
 
-    def get_provider(self, name: str) -> Optional[CognitionProvider]:
+    def get_provider(self, name: str) -> CognitionProvider | None:
         """Get a provider by name, or None if not found."""
         for provider in self.providers:
             if provider.name == name:
@@ -140,7 +140,7 @@ class CognitionState:
     providers that supply context to the agent.
     """
     version: int = 1
-    scopes: List[CognitionScope] = field(default_factory=list)
+    scopes: list[CognitionScope] = field(default_factory=list)
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     @classmethod
@@ -149,7 +149,7 @@ class CognitionState:
         return cls(scopes=[CognitionScope.create_default()])
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CognitionState":
+    def from_dict(cls, data: dict[str, Any]) -> "CognitionState":
         """Load from dictionary."""
         scopes = [
             CognitionScope.from_dict(s)
@@ -161,7 +161,7 @@ class CognitionState:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "version": self.version,
@@ -169,7 +169,7 @@ class CognitionState:
             "updated_at": self.updated_at
         }
 
-    def get_scope(self, scope_name: str) -> Optional[CognitionScope]:
+    def get_scope(self, scope_name: str) -> CognitionScope | None:
         """Get a scope by name, or None if not found."""
         for scope in self.scopes:
             if scope.scope == scope_name:

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import json
-import random
 import logging
+import random
 import threading
+from dataclasses import dataclass
 from pathlib import Path
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-
-from .interfaces import LLM, LLMConfig
-from ..core.config.runtime import reload_config
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +37,7 @@ class LLMLoadBalancer:
     def __init__(self):
         if self._initialized:
             return
-        self.providers: List[ProviderInstance] = []
+        self.providers: list[ProviderInstance] = []
         self.strategy = "round-robin"
         self.current_index = 0
         self.config_path = Path.home() / ".clawd" / "providers.json"
@@ -72,7 +68,7 @@ class LLMLoadBalancer:
         except Exception as e:
             logger.error(f"加载 Provider 配置文件失败: {e}")
 
-    def get_next_config(self) -> Optional[ProviderInstance]:
+    def get_next_config(self) -> ProviderInstance | None:
         """根据策略选择下一个可用的 Provider"""
         available = [p for p in self.providers if p.enabled and p.failure_count < 5]
         if not available:

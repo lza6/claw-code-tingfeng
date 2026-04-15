@@ -72,3 +72,17 @@ build/
 .Trashes
 ehthumbs.db
 Icon?
+
+# ── GSD baseline (auto-generated) ──
+.gsd
+.gsd-id
+.bg-shell/
+*~
+*.code-workspace
+.env.*
+.next/
+target/
+vendor/
+coverage/
+.cache/
+tmp/

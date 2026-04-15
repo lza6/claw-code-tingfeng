@@ -562,7 +562,7 @@ class GitManager:
 
     # ---------- 工作树 (Isolation) 支持 (汲取 GoalX) ----------
 
-    def create_isolation(self, session_id: str, branch_name: Optional[str] = None) -> Path:
+    def create_isolation(self, session_id: str, branch_name: str | None = None) -> Path:
         """创建一个隔离的执行环境"""
         return self.worktree_manager.create(session_id, branch_name)
 

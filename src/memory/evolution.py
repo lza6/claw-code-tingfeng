@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Dict, Optional, Any
 import hashlib
 import json
+from dataclasses import dataclass, field
+from datetime import datetime
+
 
 class MemoryKind:
     FACT = "fact"
@@ -28,11 +28,11 @@ class MemoryEvidence:
 class MemoryProposal:
     kind: str
     statement: str
-    selectors: Dict[str, str]
-    evidence: List[MemoryEvidence] = field(default_factory=list)
-    source_runs: List[str] = field(default_factory=list)
+    selectors: dict[str, str]
+    evidence: list[MemoryEvidence] = field(default_factory=list)
+    source_runs: list[str] = field(default_factory=list)
     state: str = "open" # open, rejected, expired, promoted
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     def add_evidence(self, run_id: str, content: str, kind: str = "observation") -> None:
@@ -46,10 +46,10 @@ class MemoryEntry:
     id: str
     kind: str
     statement: str
-    selectors: Dict[str, str]
+    selectors: dict[str, str]
     verification: str = VerificationLevel.PROPOSED
     evidence_count: int = 0
-    source_runs: List[str] = field(default_factory=list)
+    source_runs: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
@@ -57,13 +57,13 @@ class MemoryEvolver:
     def __init__(self, store):
         self.store = store
 
-    def generate_id(self, kind: str, selectors: Dict[str, str], statement: str) -> str:
+    def generate_id(self, kind: str, selectors: dict[str, str], statement: str) -> str:
         sel_str = json.dumps(selectors, sort_keys=True)
         raw = f"{kind}:{sel_str}:{statement.strip()}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    def aggregate_proposals(self, proposals: List[MemoryProposal]) -> List[MemoryEntry]:
-        aggregates: Dict[str, MemoryEntry] = {}
+    def aggregate_proposals(self, proposals: list[MemoryProposal]) -> list[MemoryEntry]:
+        aggregates: dict[str, MemoryEntry] = {}
 
         for p in proposals:
             if p.state in ["rejected", "expired"]:
@@ -105,10 +105,10 @@ class MemoryEvolver:
     def _determine_verification(self, entry: MemoryEntry) -> str:
         if entry.kind in [MemoryKind.FACT, MemoryKind.SECRET_REF]:
             return VerificationLevel.VALIDATED
-            
+
         if len(entry.source_runs) >= 3:
             return VerificationLevel.VALIDATED
         if len(entry.source_runs) >= 2:
             return VerificationLevel.REPEATED
-            
+
         return VerificationLevel.PROPOSED

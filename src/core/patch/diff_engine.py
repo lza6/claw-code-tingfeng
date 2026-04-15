@@ -72,7 +72,8 @@ def generate_partial_update_diff(
     else:
         last_non_deleted = find_last_non_deleted_line(lines_orig, lines_updated)
 
-    if last_non_deleted is None: return ""
+    if last_non_deleted is None:
+        return ""
 
     pct = (last_non_deleted * 100 / num_orig_lines) if num_orig_lines else 100
     bar = create_progress_bar(pct)
@@ -84,7 +85,8 @@ def generate_partial_update_diff(
 
     diff_lines = list(difflib.unified_diff(lines_orig_sub, lines_updated_sub, n=5))[2:]
     diff_content = "".join(diff_lines)
-    if not diff_content.endswith('\n'): diff_content += '\n'
+    if not diff_content.endswith('\n'):
+        diff_content += '\n'
 
     fence = find_best_fence(diff_content)
     header = f"{fence}diff\n"
@@ -105,13 +107,18 @@ def show_diff(lines_orig: list[str], lines_updated: list[str], fname: str = '', 
 def format_diff_summary(stats: dict[str, int]) -> str:
     """格式化差异统计摘要"""
     parts = []
-    if stats.get('additions'): parts.append(f"+{stats['additions']}")
-    if stats.get('deletions'): parts.append(f"-{stats['deletions']}")
-    if stats.get('modifications'): parts.append(f"~{stats['modifications']}")
+    if stats.get('additions'):
+        parts.append(f"+{stats['additions']}")
+    if stats.get('deletions'):
+        parts.append(f"-{stats['deletions']}")
+    if stats.get('modifications'):
+        parts.append(f"~{stats['modifications']}")
     # Aider 兼容键
     if not parts:
-        if stats.get('added'): parts.append(f"+{stats['added']}")
-        if stats.get('removed'): parts.append(f"-{stats['removed']}")
+        if stats.get('added'):
+            parts.append(f"+{stats['added']}")
+        if stats.get('removed'):
+            parts.append(f"-{stats['removed']}")
 
     return ' '.join(parts) if parts else 'no changes'
 
@@ -123,8 +130,10 @@ def simple_diff(old: str, new: str, context: int = 3) -> str:
 
 def format_diff_line(line: str, prefix: str = " ") -> str:
     """格式化单行 Diff 显示"""
-    if line.startswith("+"): return f"+ {line[1:]}"
-    elif line.startswith("-"): return f"- {line[1:]}"
+    if line.startswith("+"):
+        return f"+ {line[1:]}"
+    elif line.startswith("-"):
+        return f"- {line[1:]}"
     return f"  {line}"
 
 def is_diff_hunk_header(line: str) -> bool:

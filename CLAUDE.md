@@ -26,6 +26,32 @@ Clawd Code is a comprehensive AI-powered coding agent framework written in Pytho
 - Version checking (PyPI)
 - 34 new integration tests
 
+**Oh-My-Codex Integration (v2026-04-14):**
+- Intent Router: 关键词检测与技能自动激活 (src/agent/intent_router.py)
+- Keyword Registry: 40+ 技能关键词注册表 (src/agent/keyword_registry.py)
+- Mode State: 独占模式互斥检查、跨会话恢复 (src/workflow/mode_state.py)
+- Pipeline Orchestrator: RALPLAN -> team-exec -> ralph 管道 (src/workflow/pipeline_orchestrator.py)
+- Session History Search: 历史会话检索 (src/workflow/session_history_search.py)
+- Team Persistence: 团队状态持久化 (src/workflow/team_persistence.py)
+- Ralph Ledger: RALPH 进度账本与视觉反馈 (src/workflow/ralph_ledger.py)
+- Keyword Registry: 40+ 技能关键词注册表 (src/agent/keyword_registry.py)
+- Mode State: 独占模式互斥检查、跨会话恢复 (src/workflow/mode_state.py)
+- Pipeline Orchestrator: RALPLAN -> team-exec -> ralph 管道 (src/workflow/pipeline_orchestrator.py)
+- Session History Search: 历史会话检索 (src/workflow/session_history_search.py)
+- Team Persistence: 团队状态持久化 (src/workflow/team_persistence.py)
+- Ralph Ledger: RALPH 进度账本与视觉反馈 (src/workflow/ralph_ledger.py)
+- Task Analyzer: 任务规模检测 (small/medium/large/heavy)
+- Code Simplifier: 自动代码简化钩子 (src/tools_runtime/code_simplifier.py)
+- RALPH Loop: 持久化循环执行技能 (skills/ralph_loop/)
+- Team Execution: 并行代理执行增强
+- Pipeline Orchestrator: RALPLAN -> team-exec -> ralph-verify 管道 (src/workflow/pipeline_*.py)
+- Mode State: 管道/团队/技能模式状态持久化 + 独占模式互斥检查 (src/workflow/mode_state.py)
+- Ralph Progress Ledger: 视觉反馈记录 + 进度账本 (src/workflow/ralph_ledger.py)
+- Agent Prompts: 34 个 Agent Prompt 模板库 (prompts/agents/)
+- Agent Definitions: 40+ Agent 角色定义 (src/agent/definitions.py)
+- Agent Prompts: 34 个 Agent Prompt 模板库 (prompts/agents/)
+- Agent Definitions: 40+ Agent 角色定义 (src/agent/definitions.py)
+
 ## Tech Stack
 
 - **Language:** Python 3.10+
@@ -74,14 +100,6 @@ src/                    → Main source code
     ├── scrape.py        # Web scraping
     ├── watch.py          # File watcher with AI comment detection
     └── onboarding.py     # New user onboarding
-
-skills/                 → 21 engineering skills (SKILL.md per directory)
-agents/                 → Agent personas (code-reviewer, security-auditor, test-engineer)
-hooks/                  → Session lifecycle hooks (simplify-ignore protection)
-references/             → Checklists (accessibility, performance, security, testing)
-.claude/commands/       → Slash commands for Claude Code
-tests/                  → Test suite
-    └── test_aider_integration.py # Integration tests for Aider modules
 
 skills/                 → 21 engineering skills (SKILL.md per directory)
 agents/                 → Agent personas (code-reviewer, security-auditor, test-engineer)

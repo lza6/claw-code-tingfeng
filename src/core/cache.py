@@ -141,14 +141,15 @@ class RedisCache(BaseCache):
 
     def __init__(self, config: CacheConfig):
         super().__init__(config)
+        self._pool = None
         self._client = None
 
     def _ensure_client(self):
-        """确保 Redis 客户端已连接"""
+        """确保 Redis 客户端已连接 (线程安全连接池版)"""
         if self._client is None:
             try:
                 import redis
-                self._client = redis.Redis(
+                self._pool = redis.ConnectionPool(
                     host=self.config.redis_host,
                     port=self.config.redis_port,
                     db=self.config.redis_db,
@@ -156,13 +157,14 @@ class RedisCache(BaseCache):
                     max_connections=self.config.redis_max_connections,
                     decode_responses=True,
                 )
+                self._client = redis.Redis(connection_pool=self._pool)
                 self._client.ping()
-                logger.info("Redis 缓存已连接")
+                logger.info("Redis 缓存池已建立")
             except ImportError:
-                logger.warning("redis-py 未安装，回退到内存缓存")
+                logger.error("redis-py 未安装，缓存将受限")
                 self._client = None
             except Exception as e:
-                logger.warning(f"Redis 连接失败: {e}，回退到内存缓存")
+                logger.error(f"Redis 连接失败: {e}，启用回退模式")
                 self._client = None
 
     def get(self, key: str) -> Any | None:
@@ -233,6 +235,102 @@ class RedisCache(BaseCache):
             logger.warning(f"Redis clear 失败: {e}")
 
 
+class PostgresCache(BaseCache):
+    """PostgreSQL 缓存 (利用 UNLOGGED TABLE 优化性能)"""
+
+    def __init__(self, config: CacheConfig):
+        super().__init__(config)
+        self._conn = None
+        self._table = f"{config.key_prefix}cache"
+
+    def _ensure_table(self):
+        """确保缓存表存在"""
+        if self._conn is None:
+            try:
+                import psycopg2
+                from psycopg2 import pool
+                self._pool = psycopg2.pool.SimpleConnectionPool(
+                    1, 20,
+                    host=self.config.postgres_host,
+                    port=self.config.postgres_port,
+                    database=self.config.postgres_db,
+                    user=os.environ.get("POSTGRES_USER", "postgres"),
+                    password=os.environ.get("POSTGRES_PASSWORD", "")
+                )
+                self._conn = self._pool.getconn()
+                self._conn.autocommit = True
+                with self._conn.cursor() as cur:
+                    cur.execute(f"""
+                        CREATE UNLOGGED TABLE IF NOT EXISTS {self._table} (
+                            key TEXT PRIMARY KEY,
+                            value JSONB,
+                            expiry DOUBLE PRECISION
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_{self._table}_expiry ON {self._table}(expiry);
+                    """)
+                logger.info("Postgres 缓存表已就绪")
+            except Exception as e:
+                logger.error(f"Postgres 缓存初始化失败: {e}")
+                self._conn = None
+
+    def get(self, key: str) -> Any | None:
+        self._ensure_table()
+        if not self._conn: return None
+        import time
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(f"SELECT value, expiry FROM {self._table} WHERE key = %s", (key,))
+                row = cur.fetchone()
+                if row:
+                    val, expiry = row
+                    if expiry and time.time() > expiry:
+                        self.delete(key)
+                        self._stats["misses"] += 1
+                        return None
+                    self._stats["hits"] += 1
+                    return val
+                self._stats["misses"] += 1
+        except Exception:
+            self._conn = None
+        return None
+
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+        self._ensure_table()
+        if not self._conn: return
+        import time
+        expiry = time.time() + (ttl or self.config.default_ttl)
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(f"""
+                    INSERT INTO {self._table} (key, value, expiry)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, expiry = EXCLUDED.expiry
+                """, (key, json.dumps(value), expiry))
+                self._stats["sets"] += 1
+        except Exception:
+            self._conn = None
+
+    def delete(self, key: str) -> bool:
+        self._ensure_table()
+        if not self._conn: return False
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(f"DELETE FROM {self._table} WHERE key = %s", (key,))
+                return cur.rowcount > 0
+        except Exception:
+            return False
+
+    def clear(self) -> None:
+        self._ensure_table()
+        if not self._conn: return
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(f"TRUNCATE TABLE {self._table}")
+                self._stats = {"hits": 0, "misses": 0, "sets": 0}
+        except Exception:
+            pass
+
+
 class CacheManager:
     """缓存管理器"""
 
@@ -253,6 +351,14 @@ class CacheManager:
             try:
                 cls._instance._ensure_client()
                 if cls._instance._client is None:
+                    cls._instance = MemoryCache(config)
+            except Exception:
+                cls._instance = MemoryCache(config)
+        elif config.backend == CacheBackend.POSTGRES:
+            cls._instance = PostgresCache(config)
+            try:
+                cls._instance._ensure_table()
+                if cls._instance._conn is None:
                     cls._instance = MemoryCache(config)
             except Exception:
                 cls._instance = MemoryCache(config)

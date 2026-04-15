@@ -9,7 +9,6 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Tuple
 
 from .merge_strategy import MergeStrategy
 from .safety import SafetyChecker
@@ -40,7 +39,7 @@ class WorktreeManager:
             )
         return session_id
 
-    def create(self, session_id: str, branch_name: Optional[str] = None) -> Path:
+    def create(self, session_id: str, branch_name: str | None = None) -> Path:
         """创建一个新的工作树，并镜像必要的忽略文件"""
         session_id = self._validate_session_id(session_id)
 
@@ -104,7 +103,7 @@ class WorktreeManager:
             if force:
                 shutil.rmtree(worktree_path, ignore_errors=True)
 
-    def integrate(self, session_id: str, method: str = "merge") -> Tuple[bool, str]:
+    def integrate(self, session_id: str, method: str = "merge") -> tuple[bool, str]:
         """整合工作树变更"""
         session_id = self._validate_session_id(session_id)
         worktree_path = self.worktree_base / session_id

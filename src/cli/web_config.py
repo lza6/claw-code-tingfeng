@@ -1,15 +1,12 @@
-import os
-import sys
 import webbrowser
-import uvicorn
 from pathlib import Path
-from fastapi import FastAPI, Request
+
+import uvicorn
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
 
-from ..core.config.models import get_settings, load_settings
-from ..core.config.runtime import set_runtime_config, reload_config
+from ..core.config.runtime import reload_config
 
 app = FastAPI(title="Clawd Config Center")
 
@@ -21,12 +18,12 @@ class ProviderConfig(BaseModel):
     provider: str  # openai, anthropic, openrouter, etc.
     base_url: str
     api_key: str
-    models: List[str]
+    models: list[str]
     weight: int = 1  # 负载均衡权重
     enabled: bool = True
 
 class GlobalConfig(BaseModel):
-    providers: List[ProviderConfig]
+    providers: list[ProviderConfig]
     strategy: str = "round-robin"  # round-robin, random, fallback
     default_model: str = "gpt-4o"
     max_retries: int = 3
@@ -213,7 +210,7 @@ async def index():
     """
 
 def start_web_config(port: int = 8527):
-    print(f"[*] 正在启动 Clawd 配置中心...")
+    print("[*] 正在启动 Clawd 配置中心...")
     print(f"[*] 访问地址: http://127.0.0.1:{port}")
 
     # 自动打开浏览器

@@ -68,12 +68,11 @@ class Tracing:
             exporter = OTLPSpanExporter(
                 endpoint=config.otlp_endpoint or os.getenv("OTLP_ENDPOINT"),
             )
-            provider.add_span_processor(BatchSpanExporter(exporter))
+            provider.add_span_processor(BatchSpanProcessor(exporter))
 
         # 添加 Jaeger 导出器（可选）
         if config.jaeger_endpoint:
             from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-            from opentelemetry.sdk.trace.export import BatchSpanProcessor as BatchSpanProcessor
 
             jaeger_exporter = JaegerExporter(
                 agent_host_name=config.jaeger_endpoint.split(":")[0],

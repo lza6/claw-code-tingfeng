@@ -4,7 +4,9 @@
 保留此类以保持向后兼容。
 """
 from __future__ import annotations
+
 from .code_graph import CodeGraph
+
 
 class DependencyGraph:
     """DependencyGraph 的兼容层实现，内部使用 CodeGraph"""

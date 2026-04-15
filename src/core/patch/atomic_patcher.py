@@ -23,21 +23,99 @@ class AtomicPatcher:
     async def begin_transaction(self, paths: list[Path]) -> None:
         """开始事务，对受影响文件进行内存备份"""
         for p in paths:
+            if p in self._backups:
+                continue
             full_path = self.base_path / p
             if full_path.exists():
-                self._backups[p] = full_path.read_text(encoding="utf-8")
+                try:
+                    # 性能优化：对于频繁的小 Patch，如果已经在事务中且未改变，跳过读取
+                    self._backups[p] = full_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    logger.warning(f"备份文件失败 {p}: {e}")
 
-    def rollback(self) -> None:
-        """回滚所有已备份的文件"""
-        for path, content in self._backups.items():
-            (self.base_path / path).write_text(content, encoding="utf-8")
-        self._backups.clear()
+    async def apply_batch(self, changes: list[AtomicChange]) -> list[PatchResult]:
+        """批量应用变更，合并同一文件的多次修改以减少 I/O 次数"""
+        from collections import defaultdict
 
-    def commit(self) -> None:
-        """提交事务，清除备份"""
-        self._backups.clear()
+        # 1. 事务保护
+        paths = list({c.path for c in changes})
+        await self.begin_transaction(paths)
 
-    def _apply_diff_hunks(self, lines: list[str], diff_lines: list[str]) -> list[str]:
+        # 2. 按路径分组
+        file_changes = defaultdict(list)
+        for c in changes:
+            file_changes[c.path].append(c)
+
+        results = []
+        try:
+            for path, path_changes in file_changes.items():
+                # 3. 内存中合并同一文件的所有 Patch
+                full_path = self.base_path / path
+                content = self._backups.get(path, "")
+
+                current_lines = content.splitlines(keepends=True)
+
+                for change in path_changes:
+                    # 复用 apply_single_change 的逻辑，但在内存中操作
+                    # 这里简化演示，实际实现中应将逻辑从 apply_single_change 提取到 _apply_to_lines
+                    res = await self._apply_to_lines(path, current_lines, change)
+                    if not res.success:
+                        self.rollback()
+                        return [res]
+
+                # 4. 一次性写入
+                new_content = "".join(current_lines)
+                if new_content != content:
+                    full_path.write_text(new_content, encoding="utf-8")
+
+                results.append(PatchResult(success=True, path=path, applied_changes=len(path_changes)))
+
+            self.commit()
+            return results
+        except Exception as e:
+            self.rollback()
+            raise e
+
+    async def _apply_to_lines(self, path: Path, lines: list[str], change: AtomicChange) -> PatchResult:
+        """内部辅助函数：在行列表上应用单个变更"""
+        try:
+            if change.op == PatchOperation.SEARCH_REPLACE:
+                from ...tools_runtime.code_edit.fuzzy_matcher import replace_most_similar_chunk
+                content = "".join(lines)
+                if "=======" in change.content:
+                    parts = change.content.split("=======")
+                    search_part = parts[0].strip()
+                    replace_part = parts[1].strip()
+                else:
+                    search_part = change.old_content or ""
+                    replace_part = change.content
+
+                new_content, match_type = replace_most_similar_chunk(content, search_part, replace_part)
+                if not new_content:
+                    return PatchResult(success=False, path=path, error_message=f"无法匹配搜索块 (match_type: {match_type})")
+
+                # 更新 lines 原位
+                lines[:] = new_content.splitlines(keepends=True)
+
+            elif change.op == PatchOperation.INSERT:
+                if change.line_start is not None:
+                    lines.insert(change.line_start, change.content)
+                else:
+                    lines.append(change.content)
+
+            elif change.op == PatchOperation.REPLACE:
+                if change.line_start is not None and change.line_end is not None:
+                    lines[change.line_start:change.line_end] = [change.content]
+
+            elif change.op == PatchOperation.DELETE:
+                if change.line_start is not None and change.line_end is not None:
+                    del lines[change.line_start:change.line_end]
+
+            return PatchResult(success=True, path=path)
+        except Exception as e:
+            return PatchResult(success=False, path=path, error_message=str(e))
+
+    async def apply_changes(self, changes: list[AtomicChange], use_transaction: bool = True) -> list[PatchResult]:
         """应用统一 Diff 块 (简单实现)"""
         import difflib
         import re
@@ -81,7 +159,8 @@ class AtomicPatcher:
                 self.commit()
             return results
         except Exception as e:
-            if use_transaction: self.rollback()
+            if use_transaction:
+                self.rollback()
             raise e
 
     async def apply_single_change(self, change: AtomicChange) -> PatchResult:

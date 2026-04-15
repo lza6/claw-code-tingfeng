@@ -54,6 +54,8 @@ class ObjectiveClauseKind(str, Enum):
     VERIFICATION = "verification"
     GUARDRAIL = "guardrail"
     OPERATING_RULE = "operating_rule"
+    CONSTRAINT = "constraint"  # 新增: 强约束
+    NON_GOAL = "non_goal"      # 新增: 非目标
 
 
 class ObjectiveRequiredSurface(str, Enum):
@@ -70,6 +72,7 @@ class ObjectiveClause:
     kind: ObjectiveClauseKind
     source_excerpt: str
     required_surfaces: list[ObjectiveRequiredSurface] = field(default_factory=list)
+    evidence_required: bool = False  # 新增: 是否强制需要证据
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,8 @@ class ObjectiveContract:
     objective_hash: str
     state: str  # "draft" | "locked"
     clauses: list[ObjectiveClause] = field(default_factory=list)
+    non_goals: list[str] = field(default_factory=list) # 新增: 非目标列表
+    constraints: list[str] = field(default_factory=list) # 新增: 强约束列表
     created_at: str = ""
     locked_at: str = ""
 
@@ -90,6 +95,7 @@ class AssuranceVerificationMode(str, Enum):
     E2E_TEST = "e2e_test"
     MANUAL_REVIEW = "manual_review"
     STATIC_ANALYSIS = "static_analysis"
+    EVIDENCE_CHECK = "evidence_check"  # 新增: 证据检查
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ class AssuranceProcedure:
     verification_mode: AssuranceVerificationMode
     target_surface: str  # e.g., "src/core/auth.py"
     covers_clauses: list[str] = field(default_factory=list)
+    evidence_patterns: list[str] = field(default_factory=list) # 新增: 证据匹配模式
 
 
 @dataclass(frozen=True)

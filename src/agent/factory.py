@@ -7,13 +7,29 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from ..llm import LLMConfig, LLMProviderType
 from ..utils import debug
 
 if TYPE_CHECKING:
     from .engine import AgentEngine
+
+
+def get_agent_prompt(agent_name: str) -> Optional[str]:
+    """获取指定 Agent 的 Prompt 模板
+
+    参数:
+        agent_name: Agent 名称 (如 "analyst", "planner" 等)
+
+    返回:
+        Prompt 字符串，如果不存在则返回 None
+    """
+    try:
+        from prompts.agents import get_prompt
+        return get_prompt(agent_name)
+    except Exception:
+        return None
 
 
 def create_agent_engine(
@@ -105,3 +121,17 @@ def create_agent_engine(
         developer_mode=developer_mode,
         intent=intent,
     )
+
+
+# ===== 导出 =====
+__all__ = [
+    "create_agent_engine",
+    "get_agent_prompt",
+]
+
+
+# ===== 导出 =====
+__all__ = [
+    "create_agent_engine",
+    "get_agent_prompt",
+]

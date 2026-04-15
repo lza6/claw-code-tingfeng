@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+
 from .entry import JournalEntry
 
 
@@ -29,7 +30,7 @@ def load_journal(path: Path) -> list[JournalEntry]:
     entries = []
     logger = logging.getLogger("core.journal")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:

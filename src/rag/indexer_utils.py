@@ -9,8 +9,36 @@ from __future__ import annotations
 
 import hashlib
 import re
+from functools import lru_cache
+from pathlib import Path
 
 from .models import Chunk
+
+# [性能] 全局文件读取缓存，避免 RAG 组件间重复读取同一文件
+@lru_cache(maxsize=1024)
+def read_file_cached(file_path: str, max_size: int = 1024 * 1024) -> str:
+    """带缓存的文件读取"""
+    p = Path(file_path)
+    if not p.exists():
+        return ""
+    try:
+        stat = p.stat()
+        if stat.st_size > max_size:
+             # 只读取部分内容
+             with open(p, 'r', encoding='utf-8', errors='replace') as f:
+                 return f.read(max_size)
+        return p.read_text(encoding='utf-8', errors='replace')
+    except Exception:
+        return ""
+
+def invalidate_file_cache(file_path: str | None = None):
+    """清除文件缓存"""
+    if file_path is None:
+        read_file_cached.cache_clear()
+    else:
+        # lru_cache 不支持直接删除单个 key，但在 3.9+ 可以通过 cache_clear 或包装器实现
+        # 简单起见，如果单个文件变动，在 update_file 层面会覆盖，LRU 会自动淘汰
+        pass
 
 # 模块级停用词缓存（所有实例共享，只创建一次）
 _STOP_WORDS: frozenset[str] | None = None

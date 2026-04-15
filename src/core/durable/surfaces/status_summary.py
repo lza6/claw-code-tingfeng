@@ -9,8 +9,10 @@ Inspired by GoalX's status pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, List
 from enum import Enum
+from typing import Any
+
+from ..surface import Surface
 
 
 class RunPhase(Enum):
@@ -39,7 +41,7 @@ class ProviderAlert:
 
 
 @dataclass
-class StatusSummary:
+class StatusSummary(Surface):
     """
     High-level summary of run status.
 
@@ -50,7 +52,6 @@ class StatusSummary:
 
     run_id: str
     phase: RunPhase
-    updated_at: str
 
     # Progress
     progress_percentage: float = 0.0  # 0-100
@@ -67,11 +68,11 @@ class StatusSummary:
     # GoalX advanced fields
     continuity_state: str = "running"
     goal_state: str = "open"
-    provider_alerts: List[ProviderAlert] = field(default_factory=list)
+    provider_alerts: list[ProviderAlert] = field(default_factory=list)
 
     # Timing
-    started_at: Optional[str] = None
-    estimated_completion: Optional[str] = None
+    started_at: str | None = None
+    estimated_completion: str | None = None
     elapsed_time_seconds: float = 0.0
 
     # Health
@@ -109,7 +110,7 @@ class StatusSummary:
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StatusSummary":
+    def from_dict(cls, data: dict[str, Any]) -> "StatusSummary":
         """Load from dictionary."""
         alerts = []
         for alert_data in data.get("provider_alerts", []):
@@ -144,12 +145,12 @@ class StatusSummary:
             summary=data.get("summary", "")
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        data = super().to_dict()
+        data.update({
             "run_id": self.run_id,
             "phase": self.phase.value,
-            "updated_at": self.updated_at,
             "progress_percentage": self.progress_percentage,
             "obligations_satisfied": self.obligations_satisfied,
             "obligations_total": self.obligations_total,
@@ -175,7 +176,8 @@ class StatusSummary:
             "warnings": self.warnings,
             "errors": self.errors,
             "summary": self.summary
-        }
+        })
+        return data
 
     def update_progress(
         self,

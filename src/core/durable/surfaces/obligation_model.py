@@ -9,8 +9,10 @@ Inspired by GoalX's obligation-model pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any
+
+from ..surface import Surface
 
 
 class ObligationStatus(Enum):
@@ -31,40 +33,38 @@ class Obligation:
     kind: str = "outcome"  # Type of obligation (GoalX: Kind, e.g., outcome, proof, guardrail)
     source: str = "master"  # Who defined it (GoalX: Source, e.g., user, master)
     status: ObligationStatus = ObligationStatus.OPEN
-    covers_clauses: List[str] = field(default_factory=list)  # (GoalX: CoversClauses)
+    covers_clauses: list[str] = field(default_factory=list)  # (GoalX: CoversClauses)
 
     # Evidence
-    evidence_paths: List[str] = field(default_factory=list)  # (GoalX: EvidencePaths)
-    verification_method: Optional[str] = None
+    evidence_paths: list[str] = field(default_factory=list)  # (GoalX: EvidencePaths)
+    verification_method: str | None = None
 
     # Dependencies
-    depends_on: List[str] = field(default_factory=list)
-    blocks: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
+    blocks: list[str] = field(default_factory=list)
 
     # Tracking
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    assigned_to: Optional[str] = None  # Session ID
+    assigned_to: str | None = None  # Session ID
 
     # Metadata
     priority: int = 0
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     note: str = ""  # (GoalX: Note)
-    approval_ref: Optional[str] = None  # (GoalX: ApprovalRef)
+    approval_ref: str | None = None  # (GoalX: ApprovalRef)
     assurance_required: bool = False  # (GoalX: AssuranceRequired)
 
 
 @dataclass
-class ObligationModel:
+class ObligationModel(Surface):
     """
     Mutable model of all obligations for this run.
     """
-    version: int = 1
     objective_contract_hash: str = ""
-    required: List[Obligation] = field(default_factory=list)
-    optional: List[Obligation] = field(default_factory=list)
-    guardrails: List[Obligation] = field(default_factory=list)
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    required: list[Obligation] = field(default_factory=list)
+    optional: list[Obligation] = field(default_factory=list)
+    guardrails: list[Obligation] = field(default_factory=list)
 
     @classmethod
     def create_default(cls) -> "ObligationModel":
@@ -79,7 +79,7 @@ class ObligationModel:
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ObligationModel":
+    def from_dict(cls, data: dict[str, Any]) -> "ObligationModel":
         """Load from dictionary."""
 
         def parse_items(items_data):
@@ -116,8 +116,9 @@ class ObligationModel:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
+        data = super().to_dict()
 
         def dump_items(items):
             return [{
@@ -141,20 +142,19 @@ class ObligationModel:
                 "assurance_required": i.assurance_required
             } for i in items]
 
-        return {
-            "version": self.version,
+        data.update({
             "objective_contract_hash": self.objective_contract_hash,
             "required": dump_items(self.required),
             "optional": dump_items(self.optional),
-            "guardrails": dump_items(self.guardrails),
-            "updated_at": self.updated_at
-        }
+            "guardrails": dump_items(self.guardrails)
+        })
+        return data
 
-    def all_obligations(self) -> List[Obligation]:
+    def all_obligations(self) -> list[Obligation]:
         """Return all obligations as a flat list."""
         return self.required + self.optional + self.guardrails
 
-    def get_obligation(self, obl_id: str) -> Optional[Obligation]:
+    def get_obligation(self, obl_id: str) -> Obligation | None:
         """Get an obligation by ID."""
         for obl in self.all_obligations():
             if obl.id == obl_id:
@@ -186,7 +186,7 @@ class ObligationModel:
         obl.updated_at = datetime.utcnow().isoformat()
         self.updated_at = datetime.utcnow().isoformat()
 
-    def satisfy_obligation(self, obl_id: str, evidence_paths: List[str]) -> None:
+    def satisfy_obligation(self, obl_id: str, evidence_paths: list[str]) -> None:
         """Mark an obligation as satisfied with evidence."""
         self.update_obligation(
             obl_id,
@@ -194,7 +194,7 @@ class ObligationModel:
             evidence_paths=evidence_paths
         )
 
-    def get_ready_obligations(self) -> List[Obligation]:
+    def get_ready_obligations(self) -> list[Obligation]:
         """Get obligations that are ready to work on (no unsatisfied dependencies)."""
         ready = []
         all_obls = {o.id: o for o in self.all_obligations()}

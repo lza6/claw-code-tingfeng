@@ -51,8 +51,11 @@ class SwarmConfig:
     enable_memory_optimization: bool = True    # 启用内存优化 (结果截断)
     max_dependency_context_length: int = 2000  # 依赖上下文最大长度
 
-    # [Phase 4] 资源与协作配置
+    # [Phase 4] 资源 with 协作配置
     enable_runtime_host: bool = True           # 启用运行时托管监控
     enable_coordination_state: bool = True      # 启用协作状态持久化
+    enable_clarify_gate: bool = True           # 新增: 启用意图澄清门禁 (借鉴 OMX)
+    enable_consensus_planning: bool = True      # 新增: 启用共识规划 (借鉴 OMX)
+    enable_deslop_cleaning: bool = True        # 新增: 启用代码脱水清理 (借鉴 OMX)
     resource_memory_threshold_mb: float = 4096.0 # 内存警告阈值
     resource_cpu_threshold: float = 85.0         # CPU 警告阈值

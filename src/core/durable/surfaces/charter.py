@@ -5,10 +5,12 @@ Defines the core goals, constraints, identity and permissions for a run.
 This is the root configuration surface that sets the boundaries for all other operations.
 """
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
-import os
+from typing import Any
+
+from ..surface import Surface
 
 
 @dataclass
@@ -24,24 +26,23 @@ class RunIdentity:
 @dataclass
 class CharterBoundary:
     """Boundaries and constraints for the run"""
-    allowed_directories: List[str] = field(default_factory=list)
-    forbidden_directories: List[str] = field(default_factory=list)
-    allowed_commands: List[str] = field(default_factory=list)
-    max_duration_seconds: Optional[int] = None
-    max_cost_usd: Optional[float] = None
-    max_tokens: Optional[int] = None
+    allowed_directories: list[str] = field(default_factory=list)
+    forbidden_directories: list[str] = field(default_factory=list)
+    allowed_commands: list[str] = field(default_factory=list)
+    max_duration_seconds: int | None = None
+    max_cost_usd: float | None = None
+    max_tokens: int | None = None
 
 
 @dataclass
-class Charter:
+class Charter(Surface):
     """
     Project Charter defines the core goals, identity and constraints for a run.
     """
     identity: RunIdentity
     objective: str
     boundary: CharterBoundary = field(default_factory=CharterBoundary)
-    context_refs: List[str] = field(default_factory=list)
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    context_refs: list[str] = field(default_factory=list)
 
     @classmethod
     def create(cls, run_id: str, project_root: str, objective: str, run_name: str = "") -> "Charter":
@@ -55,7 +56,7 @@ class Charter:
         return cls(identity=identity, objective=objective)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Charter":
+    def from_dict(cls, data: dict[str, Any]) -> "Charter":
         """Load from dictionary."""
         id_data = data.get("identity", {})
         identity = RunIdentity(
@@ -65,7 +66,7 @@ class Charter:
             run_name=id_data.get("run_name", ""),
             created_at=id_data.get("created_at", datetime.utcnow().isoformat())
         )
-        
+
         boundary_data = data.get("boundary", {})
         boundary = CharterBoundary(
             allowed_directories=boundary_data.get("allowed_directories", []),
@@ -75,7 +76,7 @@ class Charter:
             max_cost_usd=boundary_data.get("max_cost_usd"),
             max_tokens=boundary_data.get("max_tokens")
         )
-        
+
         return cls(
             identity=identity,
             objective=data.get("objective", ""),
@@ -84,9 +85,10 @@ class Charter:
             updated_at=data.get("updated_at", datetime.utcnow().isoformat())
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        data = super().to_dict()
+        data.update({
             "identity": {
                 "run_id": self.identity.run_id,
                 "project_id": self.identity.project_id,
@@ -103,9 +105,9 @@ class Charter:
                 "max_cost_usd": self.boundary.max_cost_usd,
                 "max_tokens": self.boundary.max_tokens
             },
-            "context_refs": self.context_refs,
-            "updated_at": self.updated_at
-        }
-        
+            "context_refs": self.context_refs
+        })
+        return data
+
     def __str__(self) -> str:
         return f"Charter[{self.identity.run_name}]: {self.objective}"

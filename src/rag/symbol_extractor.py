@@ -49,18 +49,30 @@ class FileOutline:
 
 def detect_language(path: str) -> str:
     path = path.lower()
-    if path.endswith('.py'): return 'python'
-    if path.endswith(('.ts', '.tsx')): return 'typescript'
-    if path.endswith(('.js', '.jsx')): return 'javascript'
-    if path.endswith('.zig'): return 'zig'
-    if path.endswith('.rs'): return 'rust'
-    if path.endswith('.go'): return 'go'
-    if path.endswith(('.c', '.h')): return 'c'
-    if path.endswith(('.cpp', '.hpp', '.cc', '.cxx')): return 'cpp'
-    if path.endswith('.php'): return 'php'
-    if path.endswith(('.md', '.markdown')): return 'markdown'
-    if path.endswith('.json'): return 'json'
-    if path.endswith(('.yaml', '.yml')): return 'yaml'
+    if path.endswith('.py'):
+        return 'python'
+    if path.endswith(('.ts', '.tsx')):
+        return 'typescript'
+    if path.endswith(('.js', '.jsx')):
+        return 'javascript'
+    if path.endswith('.zig'):
+        return 'zig'
+    if path.endswith('.rs'):
+        return 'rust'
+    if path.endswith('.go'):
+        return 'go'
+    if path.endswith(('.c', '.h')):
+        return 'c'
+    if path.endswith(('.cpp', '.hpp', '.cc', '.cxx')):
+        return 'cpp'
+    if path.endswith('.php'):
+        return 'php'
+    if path.endswith(('.md', '.markdown')):
+        return 'markdown'
+    if path.endswith('.json'):
+        return 'json'
+    if path.endswith(('.yaml', '.yml')):
+        return 'yaml'
     return 'unknown'
 
 class SymbolExtractor:
@@ -173,7 +185,8 @@ class SymbolExtractor:
                 modules = trimmed[7:].split(',')
                 for m in modules:
                     m_name = m.strip().split()[0]
-                    if m_name: imports.append(m_name)
+                    if m_name:
+                        imports.append(m_name)
             else: # from ... import ...
                 match = re.match(r'from\s+([\w.]+)\s+import', trimmed)
                 if match:
@@ -186,14 +199,16 @@ class SymbolExtractor:
 
         for i, line in enumerate(lines, 1):
             trimmed = line.strip()
-            if not trimmed: continue
+            if not trimmed:
+                continue
 
             if in_block_comment:
                 if '*/' in trimmed:
                     in_block_comment = False
                     # Check if there's code after the comment end
                     after = trimmed.split('*/')[-1].strip()
-                    if after: self._parse_ts_js_line(after, i, symbols, imports)
+                    if after:
+                        self._parse_ts_js_line(after, i, symbols, imports)
                 continue
 
             if '/*' in trimmed:
@@ -201,7 +216,8 @@ class SymbolExtractor:
                     in_block_comment = True
                 # Parse part before /*
                 before = trimmed.split('/*')[0].strip()
-                if before: self._parse_ts_js_line(before, i, symbols, imports)
+                if before:
+                    self._parse_ts_js_line(before, i, symbols, imports)
                 continue
 
             if trimmed.startswith('//'):

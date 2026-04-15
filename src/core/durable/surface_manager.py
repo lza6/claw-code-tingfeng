@@ -10,9 +10,10 @@ Manages lifecycle of canonical state files:
 
 import json
 import shutil
-from pathlib import Path
-from typing import Any, Dict, Optional, Type
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 import jsonschema
 
 from src.core.exceptions import ClawdError
@@ -49,12 +50,12 @@ class SurfaceManager:
         self.surfaces_dir.mkdir(parents=True, exist_ok=True)
 
         # Cache loaded surfaces
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def load_surface(
         self,
         surface_name: str,
-        surface_class: Type,
+        surface_class: type,
         create_if_missing: bool = True
     ) -> Any:
         """
@@ -85,7 +86,7 @@ class SurfaceManager:
                 raise SurfaceError(f"Surface not found: {surface_name}")
 
         # Load from disk
-        with open(surface_path, 'r', encoding='utf-8') as f:
+        with open(surface_path, encoding='utf-8') as f:
             data = json.load(f)
 
         # Validate against schema
@@ -96,16 +97,32 @@ class SurfaceManager:
         self._cache[surface_name] = instance
         return instance
 
-    def save_surface(self, surface_name: str, surface: Any) -> None:
+    def save_surface(self, surface_name: str, surface: Any, expected_version: int | None = None) -> None:
         """
-        Save a surface to disk atomically.
+        Save a surface to disk atomically with optional OCC.
 
         Args:
             surface_name: Name of the surface
             surface: Surface instance with to_dict() method
+            expected_version: If provided, ensures the version on disk matches this before saving
         """
         surface_path = self.surfaces_dir / f"{surface_name}.json"
         backup_path = surface_path.with_suffix('.json.bak')
+
+        # OCC Check
+        if expected_version is not None and surface_path.exists():
+            with open(surface_path, encoding='utf-8') as f:
+                disk_data = json.load(f)
+                actual_version = disk_data.get("version", 0)
+                if actual_version != expected_version:
+                    raise SurfaceError(
+                        f"OCC Conflict for {surface_name}: expected version {expected_version}, "
+                        f"but found {actual_version} on disk."
+                    )
+
+        # Increment version before saving
+        if hasattr(surface, 'version'):
+            surface.version += 1
 
         # Convert to dict
         data = surface.to_dict()
@@ -141,7 +158,7 @@ class SurfaceManager:
             if temp_path.exists():
                 temp_path.unlink()
 
-    def _validate_schema(self, surface_name: str, data: Dict[str, Any]) -> None:
+    def _validate_schema(self, surface_name: str, data: dict[str, Any]) -> None:
         """
         Validate surface data against JSON schema.
 
@@ -158,7 +175,7 @@ class SurfaceManager:
             # No schema defined, skip validation
             return
 
-        with open(schema_path, 'r', encoding='utf-8') as f:
+        with open(schema_path, encoding='utf-8') as f:
             schema = json.load(f)
 
         try:

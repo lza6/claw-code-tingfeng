@@ -12,11 +12,11 @@ Persistent Message Bus - 持久化消息总线
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
-from typing import Any
 
-from .control.inbox import ControlSystem, Inbox, Message, MessagePriority
+from .control.inbox import ControlSystem, Message, MessagePriority
 from .message_bus import AgentMessage, MessageBus, MessageType
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ class PersistentMessageBus:
         """
         self._inner_bus = inner_bus or MessageBus()
         self._control_system = None
+        self._background_tasks: set[asyncio.Task] = set()
 
         if storage_dir is not None:
             try:
@@ -148,7 +149,9 @@ class PersistentMessageBus:
                     import asyncio
                     try:
                         if asyncio.iscoroutinefunction(callback):
-                            asyncio.create_task(callback(agent_msg))
+                            task = asyncio.create_task(callback(agent_msg))
+                            self._background_tasks.add(task)
+                            task.add_done_callback(self._background_tasks.discard)
                         else:
                             callback(agent_msg)
                     except Exception as e:
@@ -240,10 +243,10 @@ class PersistentMessageBus:
                 *(self._inner_bus.publish(msg) for msg in messages)
             )
 
-        try:
-            asyncio.get_running_loop().create_task(_publish_all())
-        except RuntimeError:
-            # 没有运行中的事件循环
-            pass
+        import contextlib
+        with contextlib.suppress(RuntimeError):
+            task = asyncio.get_running_loop().create_task(_publish_all())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         return messages

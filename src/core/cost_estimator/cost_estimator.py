@@ -455,7 +455,7 @@ class CostEstimator:
 
         # [汲取 GoalX] 全局同步预算监控 (如果存在)
         try:
-            from ..events import get_event_bus, Event, EventType
+            from ..events import Event, EventType, get_event_bus
             get_event_bus().publish(Event(
                 type=EventType.COST_RECORDED,
                 data={

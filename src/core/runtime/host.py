@@ -5,16 +5,16 @@ Runtime Host - 运行时托管主机
 提供统一的执行上下文、资源限制和生命周期钩子。
 """
 
-import os
-import signal
-import logging
 import asyncio
-from pathlib import Path
-from typing import Optional, Dict, Any, Callable, List
+import logging
+import os
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from .lease import RuntimeLease
 from ..resource_monitor import ResourceMonitor
+from .lease import RuntimeLease
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class RuntimeHost:
         self,
         run_dir: Path,
         session_id: str,
-        resource_monitor: Optional[ResourceMonitor] = None
+        resource_monitor: ResourceMonitor | None = None
     ):
         self.run_dir = run_dir
         self.session_id = session_id
@@ -40,7 +40,7 @@ class RuntimeHost:
         self.lease = RuntimeLease(run_dir, session_id)
 
         self._is_running = False
-        self._hooks: Dict[str, List[Callable]] = {
+        self._hooks: dict[str, list[Callable]] = {
             "before_start": [],
             "after_stop": [],
             "on_error": []
@@ -74,17 +74,27 @@ class RuntimeHost:
 
     async def stop(self):
         """停止运行时托管"""
+        if not self._is_running:
+            return
+
         logger.info(f"RuntimeHost 停止: {self.session_id}")
         self._is_running = False
 
         if hasattr(self, "_heartbeat_task"):
             self._heartbeat_task.cancel()
             try:
-                await self._heartbeat_task
-            except asyncio.CancelledError:
+                # 给任务一点时间处理取消
+                await asyncio.wait_for(self._heartbeat_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
+            except Exception as e:
+                logger.error(f"取消心跳任务时发生意外错误: {e}")
 
-        self.lease.release()
+        # 确保租约被释放
+        try:
+            self.lease.release()
+        except Exception as e:
+            logger.error(f"释放租约失败: {e}")
 
         # 执行停止后钩子
         for hook in self._hooks["after_stop"]:
@@ -98,6 +108,9 @@ class RuntimeHost:
 
     def _heartbeat(self):
         """执行心跳逻辑"""
+        if not self._is_running:
+            return
+
         try:
             # 检查资源状态
             rstate = self.resource_monitor.check_health()
@@ -114,15 +127,29 @@ class RuntimeHost:
                 logger.warning(f"检测到资源异常: {rstate}")
 
         except Exception as e:
-            logger.error(f"心跳逻辑异常: {e}")
+            # 在关闭期间，logger 可能已经关闭，所以这里要小心
+            try:
+                logger.error(f"心跳逻辑异常: {e}")
+            except (ValueError, RuntimeError):
+                pass
 
     async def _heartbeat_loop(self):
         """租约心跳循环"""
-        while self._is_running:
-            await asyncio.sleep(10)  # 每 10 秒跳动一次
-            self._heartbeat()
+        try:
+            while self._is_running:
+                await asyncio.sleep(10)  # 每 10 秒跳动一次
+                if self._is_running:
+                    self._heartbeat()
+        except asyncio.CancelledError:
+            # 正常取消，静默退出
+            raise
+        except Exception as e:
+            try:
+                logger.error(f"心跳循环异常中止: {e}")
+            except (ValueError, RuntimeError):
+                pass
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """获取运行时状态摘要"""
         rstate = self.resource_monitor.check_health()
         return {

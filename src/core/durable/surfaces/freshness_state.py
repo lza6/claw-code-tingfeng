@@ -6,7 +6,10 @@ Inspired by GoalX's freshness pattern to prevent using stale context or assumpti
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+
+from ..surface import Surface
 
 
 @dataclass
@@ -14,14 +17,14 @@ class FreshnessEntry:
     """Represents the freshness of a specific resource or fact."""
     resource_id: str
     last_verified_at: str
-    valid_until: Optional[str] = None
+    valid_until: str | None = None
     confidence_score: float = 1.0  # 0.0 - 1.0
     is_stale: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
-class FreshnessState:
+class FreshnessState(Surface):
     """
     Tracks the overall 'freshness' of the run state.
 
@@ -31,16 +34,21 @@ class FreshnessState:
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     # Resource ID -> FreshnessEntry
-    resources: Dict[str, FreshnessEntry] = field(default_factory=dict)
+    resources: dict[str, FreshnessEntry] = field(default_factory=dict)
 
     # Global freshness metrics
     overall_freshness_score: float = 1.0
     stale_resource_count: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    @classmethod
+    def create_default(cls) -> "FreshnessState":
+        """Create a default freshness state."""
+        return cls(run_id="")
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        data.update({
             "run_id": self.run_id,
-            "updated_at": self.updated_at,
             "resources": {k: {
                 "resource_id": v.resource_id,
                 "last_verified_at": v.last_verified_at,
@@ -51,17 +59,19 @@ class FreshnessState:
             } for k, v in self.resources.items()},
             "overall_freshness_score": self.overall_freshness_score,
             "stale_resource_count": self.stale_resource_count
-        }
+        })
+        return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FreshnessState":
+    def from_dict(cls, data: dict[str, Any]) -> "FreshnessState":
         resources = {}
         for k, v in data.get("resources", {}).items():
             resources[k] = FreshnessEntry(**v)
 
         return cls(
-            run_id=data["run_id"],
-            updated_at=data["updated_at"],
+            version=data.get("version", 1),
+            run_id=data.get("run_id", ""),
+            updated_at=data.get("updated_at", datetime.utcnow().isoformat()),
             resources=resources,
             overall_freshness_score=data.get("overall_freshness_score", 1.0),
             stale_resource_count=data.get("stale_resource_count", 0)

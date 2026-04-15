@@ -7,7 +7,6 @@ Dimension System — 维度化引导系统 (借鉴 Project B/GoalX)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)

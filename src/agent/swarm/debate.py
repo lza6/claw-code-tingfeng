@@ -1,5 +1,4 @@
-from typing import List, Dict, Any, TYPE_CHECKING, Optional
-from .base_agent import BaseAgent
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .orchestrator import OrchestratorAgent
@@ -21,7 +20,7 @@ class DebateEngine:
 
     def __init__(self, orchestrator: Optional['OrchestratorAgent'] = None):
         self.orchestrator = orchestrator
-        self._saved_run_context: Optional[Dict[str, Any]] = None
+        self._saved_run_context: dict[str, Any] | None = None
 
     def load_saved_run(self, run_dir: str) -> None:
         """[汲取 GoalX] 从保存的运行中加载辩论上下文
@@ -42,7 +41,7 @@ class DebateEngine:
         obligation_path = run_path / "obligation-model.json"
         if obligation_path.exists():
             try:
-                with open(obligation_path, "r", encoding="utf-8") as f:
+                with open(obligation_path, encoding="utf-8") as f:
                     context["obligations"] = json.load(f)
             except Exception:
                 pass
@@ -51,7 +50,7 @@ class DebateEngine:
         evidence_path = run_path / "evidence-log.jsonl"
         if evidence_path.exists():
             try:
-                with open(evidence_path, "r", encoding="utf-8") as f:
+                with open(evidence_path, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             context["evidence"].append(json.loads(line))
@@ -62,14 +61,14 @@ class DebateEngine:
         charter_path = run_path / "run-charter.json"
         if charter_path.exists():
             try:
-                with open(charter_path, "r", encoding="utf-8") as f:
+                with open(charter_path, encoding="utf-8") as f:
                     context["charter"] = json.load(f)
             except Exception:
                 pass
 
         self._saved_run_context = context
 
-    async def conduct_debate(self, context: str, proposal: str, quality_debt_report: Optional[str] = None) -> str:
+    async def conduct_debate(self, context: str, proposal: str, quality_debt_report: str | None = None) -> str:
         """
         主持一场辩论，引入质量债务作为输入，强制 Agent 关注未解决的问题。
         """
@@ -103,7 +102,7 @@ class DebateEngine:
 
         return final_summary
 
-    async def conduct_debate_from_saved_run(self, challenge_focus: str, custom_proposal: Optional[str] = None) -> str:
+    async def conduct_debate_from_saved_run(self, challenge_focus: str, custom_proposal: str | None = None) -> str:
         """[汲取 GoalX Debate Mode] 从保存的运行中发起辩论
 
         加载之前运行中完成的义务和证据，对其进行重新审视和挑战。
@@ -156,7 +155,7 @@ class DebateEngine:
             if not proposals:
                 proposals = [f"继续优化挑战领域: {challenge_focus}"]
 
-            proposal = f"基于之前运行的以下问题:\n" + "\n".join(f"- {p}" for p in proposals[:5])
+            proposal = "基于之前运行的以下问题:\n" + "\n".join(f"- {p}" for p in proposals[:5])
         else:
             proposal = custom_proposal
 
@@ -233,4 +232,4 @@ class DebateEngine:
             )
             return response
         except Exception as e:
-            return f"[{role.upper()} 出错] {str(e)}"
+            return f"[{role.upper()} 出错] {e!s}"

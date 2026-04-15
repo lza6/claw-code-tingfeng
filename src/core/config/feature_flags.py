@@ -46,6 +46,7 @@ DEFAULT_FEATURES = {
     "disable_installation_checks": True,       # 禁用安装检查 (ClawGod 标准)
     "extended_timeout_enabled": True,          # 启用 50 分钟超时 (ClawGod 标准: 3000000ms)
     "green_theme": False,                      # 启用 ClawGod 风格绿色主题
+    "consensus_planning": True,                # 新增: 启用意图共识规划 (借鉴 OMX)
 }
 
 DEFAULT_METADATA = {
@@ -54,6 +55,11 @@ DEFAULT_METADATA = {
         description="Enable God Mode prompts and visuals",
         category="security",
         requires_restart=False
+    ),
+    "consensus_planning": FeatureMetadata(
+        name="consensus_planning",
+        description="Enable consensus planning (Planner-Architect-Critic)",
+        category="performance"
     ),
     "ultraplan": FeatureMetadata(
         name="ultraplan",

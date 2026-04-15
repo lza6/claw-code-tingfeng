@@ -501,7 +501,7 @@ class TenantRateLimiter:
         completion_tokens: int = 0,
     ) -> tuple[bool, dict[str, Any]]:
         """
-        检查租户限制
+        检查租户限制 (真实滑动窗口实现)
 
         Args:
             tenant_id: 租户ID
@@ -513,12 +513,45 @@ class TenantRateLimiter:
         """
         limits = self._limits.get(tenant_id)
         if not limits:
-            # 没有设置限制，允许通过
             return True, {"tenant_id": tenant_id, "limited": False}
 
-        # TODO: 实现滑动窗口统计
-        # 这里简化处理，返回允许
-        return True, {"tenant_id": tenant_id, "limited": True}
+        now = time.time()
+        window_start = now - 60
+
+        if tenant_id not in self._usage:
+            self._usage[tenant_id] = {
+                "requests": [],
+                "prompt_tokens": [],
+                "completion_tokens": []
+            }
+
+        usage = self._usage[tenant_id]
+
+        # 清理过期
+        usage["requests"] = [t for t in usage["requests"] if t > window_start]
+        usage["prompt_tokens"] = [t for t in usage["prompt_tokens"] if t[0] > window_start]
+        usage["completion_tokens"] = [t for t in usage["completion_tokens"] if t[0] > window_start]
+
+        # 1. 检查请求数
+        if len(usage["requests"]) >= limits["requests_per_minute"]:
+            return False, {"reason": "tenant_request_limit_exceeded", "limit": limits["requests_per_minute"]}
+
+        # 2. 检查 Token 数
+        current_prompt = sum(t[1] for t in usage["prompt_tokens"])
+        current_completion = sum(t[1] for t in usage["completion_tokens"])
+
+        if current_prompt + prompt_tokens > limits["prompt_tokens_per_minute"]:
+            return False, {"reason": "tenant_prompt_tokens_limit_exceeded"}
+
+        if current_completion + completion_tokens > limits["completion_tokens_per_minute"]:
+            return False, {"reason": "tenant_completion_tokens_limit_exceeded"}
+
+        # 记录使用
+        usage["requests"].append(now)
+        if prompt_tokens > 0: usage["prompt_tokens"].append((now, prompt_tokens))
+        if completion_tokens > 0: usage["completion_tokens"].append((now, completion_tokens))
+
+        return True, {"tenant_id": tenant_id, "limited": True, "remaining_requests": limits["requests_per_minute"] - len(usage["requests"])}
 
     def get_usage(self, tenant_id: str) -> dict[str, Any] | None:
         """获取租户使用量"""

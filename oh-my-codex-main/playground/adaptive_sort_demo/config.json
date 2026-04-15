@@ -1,0 +1,8 @@
+{
+  "algorithm": "hybrid_sort",
+  "params": {
+    "insertion_threshold": 12,
+    "run_detection_min": 10,
+    "counting_span_limit": 128
+  }
+}

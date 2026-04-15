@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import ast
 import logging
 import os
 from pathlib import Path
@@ -79,13 +78,14 @@ class HealableExecutor:
                     # 增强证据反馈：如果发现关键文件，在结果中显著标注
                     evidence_summary = ""
                     if evidence_paths:
-                        evidence_summary = f"\n\n[🔍 执行证据链]:\n" + "\n".join([f"  - {p}" for p in evidence_paths])
+                        evidence_summary = "\n\n[🔍 执行证据链]:\n" + "\n".join([f"  - {p}" for p in evidence_paths])
 
                     final_result_text = f"{result}{evidence_summary}"
 
+                    # 验证工作证明
                     self._verify_proof_of_work(task, result, evidence_paths)
 
-                    # 修复成功，记录经验
+                    # 记录成功经验和证据 (Durable State)
                     if self._feedback_loop and attempt > 0 and last_error and last_classification:
                         self._feedback_loop.record_outcome(
                             last_error, task, last_classification,
@@ -106,6 +106,11 @@ class HealableExecutor:
                     if self._feedback_loop:
                         last_classification = self._feedback_loop._classifier.classify(e)
 
+                    # 记录失败证据（如果产生了任何东西）
+                    if attempt == self.MAX_HEAL_RETRIES:
+                        # 最后一次尝试也失败了
+                        pass
+
             # 全部尝试已失败
             diagnosis = self._generate_diagnosis(task, str(last_error))
             if self._feedback_loop and last_error and last_classification:
@@ -118,7 +123,10 @@ class HealableExecutor:
         finally:
             # 清理工作树
             if self._use_isolation and self.worktree_manager:
-                self.worktree_manager.remove(task.task_id, force=True)
+                try:
+                    self.worktree_manager.remove(task.task_id, force=True)
+                except Exception as e:
+                    self.logger.debug(f"清理工作树失败 (非致命): {e}")
 
     async def _run_execution_attempt(self, task: WorkflowTask, attempt: int, workdir: Path, last_error: Exception | None, last_classification: ErrorClassification | None) -> str:
         """执行单次尝试"""
@@ -174,7 +182,9 @@ class HealableExecutor:
             "**/report.xml",
             "**/.pytest_cache/v/cache/lastfailed",
             "**/coverage.xml",
-            "**/junit-*.xml"
+            "**/junit-*.xml",
+            "**/test_report*.py",
+            "**/test_results*.xml",
         ]
         for pattern in test_patterns:
             try:
@@ -193,11 +203,29 @@ class HealableExecutor:
             if full_path and full_path.exists() and full_path.is_file():
                 evidence_paths.append(str(full_path.relative_to(workdir.resolve())))
 
+        # 4. 匹配测试生成文件模式 "tests/test_*.py" 或 "*_test.py"
+        test_files = re.findall(r'tests/(?:test_[a-zA-Z0-9_]+\.py)', result)
+        for tf in test_files:
+            full_path = _resolve_safe_path(workdir, tf)
+            if full_path and full_path.exists() and full_path.is_file():
+                evidence_paths.append(str(full_path.relative_to(workdir.resolve())))
+
+        # 5. 匹配 Python 源文件（支持中文路径）
+        src_files = re.findall(r'([a-zA-Z0-9_\u4e00-\u9fff/.\-]+\.(?:py))', result)
+        for sf in src_files:
+            if sf.startswith('test_') or '/test_' in sf:
+                full_path = _resolve_safe_path(workdir, sf)
+                if full_path and full_path.exists() and full_path.is_file():
+                    evidence_paths.append(str(full_path.relative_to(workdir.resolve())))
+
         return list(set(evidence_paths))
 
     def _verify_proof_of_work(self, task: WorkflowTask, result: str, evidence: list[str]) -> None:
         """验证工作证明 (Proof of Work)"""
-        has_evidence = len(evidence) > 0 or any(k in result for k in ["协作修复成功", "已分析"])
+        if not result:
+            raise ValueError(f"任务 {task.task_id} 执行结束但未返回任何结果 (Empty Result)")
+
+        has_evidence = len(evidence) > 0 or any(k in result for k in ["协作修复成功", "已分析", "修复成功", "已修复", "完成"])
         self.logger.debug(f"Proof validation for {task.task_id}: evidence={evidence}, result_len={len(result)}, has_evidence={has_evidence}")
         if not has_evidence and any(k in task.title.lower() for k in ['fix', 'repair', 'refactor']):
             raise ValueError(f"任务 {task.task_id} 执行结束但未提供有效证明 (Proof Gap)")

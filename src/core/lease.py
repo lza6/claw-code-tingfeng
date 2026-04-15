@@ -1,7 +1,7 @@
 import time
-from dataclasses import dataclass
-from typing import Dict, Optional
 import uuid
+from dataclasses import dataclass
+
 
 @dataclass
 class TaskLease:
@@ -19,7 +19,7 @@ class TaskLeaseManager:
     """
     def __init__(self, default_duration: float = 300.0):
         self.default_duration = default_duration
-        self.active_leases: Dict[str, TaskLease] = {}
+        self.active_leases: dict[str, TaskLease] = {}
 
     def acquire(self, task_id: str) -> str:
         lease_id = str(uuid.uuid4())

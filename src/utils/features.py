@@ -106,7 +106,8 @@ class FeatureFlagManager:
                 if feature_name in overrides:
                     val = overrides[feature_name]
                     return val.get("enabled", True) if isinstance(val, dict) else bool(val)
-            except: pass
+            except Exception:
+                pass
 
         env_val = os.environ.get(f"CLAWD_FEATURE_{feature_name.upper()}")
         if env_val is not None:
@@ -206,7 +207,8 @@ class FeatureRegistry:
         return features.is_enabled(name)
 
     def register_defaults_from_manager(self, manager: FeatureFlagManager | None = None) -> None:
-        if manager is None: manager = FeatureFlagManager.get_instance()
+        if manager is None:
+            manager = FeatureFlagManager.get_instance()
         for name, metadata in manager._metadata.items():
             self.register(name, metadata.description, metadata.category,
                           metadata.default_value, metadata.requires_restart)

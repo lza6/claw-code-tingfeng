@@ -9,8 +9,10 @@ Inspired by GoalX's assurance-plan pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any
+
+from ..surface import Surface
 
 
 class VerificationMethod(Enum):
@@ -41,7 +43,7 @@ class AssuranceOracleCheck:
 class AssuranceOracle:
     """Verification oracle to determine success"""
     kind: str = "exit_code"
-    checks: List[AssuranceOracleCheck] = field(default_factory=lambda: [AssuranceOracleCheck()])
+    checks: list[AssuranceOracleCheck] = field(default_factory=lambda: [AssuranceOracleCheck()])
 
 @dataclass
 class AssuranceEvidenceRequirement:
@@ -51,9 +53,9 @@ class AssuranceEvidenceRequirement:
 @dataclass
 class AssuranceTouchpoints:
     """Affected areas to verify"""
-    files: List[str] = field(default_factory=list)
-    symbols: List[str] = field(default_factory=list)
-    processes: List[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    symbols: list[str] = field(default_factory=list)
+    processes: list[str] = field(default_factory=list)
 
 @dataclass
 class AssuranceGatePolicy:
@@ -74,29 +76,29 @@ class AssuranceScenario:
     method: VerificationMethod = VerificationMethod.UNIT_TEST
 
     # What to verify (GoalX CoversObligations)
-    obligation_ids: List[str] = field(default_factory=list)  # Which obligations this verifies
+    obligation_ids: list[str] = field(default_factory=list)  # Which obligations this verifies
 
     # GoalX advanced fields
     harness: AssuranceHarness = field(default_factory=AssuranceHarness)
     oracle: AssuranceOracle = field(default_factory=AssuranceOracle)
-    evidence_reqs: List[AssuranceEvidenceRequirement] = field(default_factory=lambda: [AssuranceEvidenceRequirement()])
+    evidence_reqs: list[AssuranceEvidenceRequirement] = field(default_factory=lambda: [AssuranceEvidenceRequirement()])
     touchpoints: AssuranceTouchpoints = field(default_factory=AssuranceTouchpoints)
     gate_policy: AssuranceGatePolicy = field(default_factory=AssuranceGatePolicy)
 
     # Legacy / How to verify
-    test_command: Optional[str] = None  # Command to run (e.g., "pytest tests/test_foo.py")
+    test_command: str | None = None  # Command to run (e.g., "pytest tests/test_foo.py")
     expected_outcome: str = ""  # What should happen
-    acceptance_criteria: List[str] = field(default_factory=list)  # Specific criteria
+    acceptance_criteria: list[str] = field(default_factory=list)  # Specific criteria
 
     # Status
     executed: bool = False
     passed: bool = False
     execution_log: str = ""
-    executed_at: Optional[str] = None
+    executed_at: str | None = None
 
     # Metadata
     priority: int = 0
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         # Sync legacy command to harness if harness is empty but test_command is set
@@ -105,15 +107,13 @@ class AssuranceScenario:
 
 
 @dataclass
-class AssurancePlan:
+class AssurancePlan(Surface):
     """
     Plan for verifying that the objective is achieved.
 
     Contains scenarios that must pass before the run can be considered complete.
     """
-
-    scenarios: Dict[str, AssuranceScenario] = field(default_factory=dict)
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    scenarios: dict[str, AssuranceScenario] = field(default_factory=dict)
 
     # Overall strategy
     strategy_notes: str = ""  # High-level verification approach
@@ -125,7 +125,7 @@ class AssurancePlan:
         return cls(scenarios={}, strategy_notes="")
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AssurancePlan":
+    def from_dict(cls, data: dict[str, Any]) -> "AssurancePlan":
         """Load from dictionary."""
         scenarios = {}
         for scenario_id, scenario_data in data.get("scenarios", {}).items():
@@ -195,8 +195,9 @@ class AssurancePlan:
             required_coverage=data.get("required_coverage", 80.0)
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
+        data = super().to_dict()
         scenarios_dict = {}
         for scenario_id, scenario in self.scenarios.items():
             scenarios_dict[scenario_id] = {
@@ -236,13 +237,12 @@ class AssurancePlan:
                 "priority": scenario.priority,
                 "tags": scenario.tags
             }
-
-        return {
+        data.update({
             "scenarios": scenarios_dict,
-            "updated_at": self.updated_at,
             "strategy_notes": self.strategy_notes,
             "required_coverage": self.required_coverage
-        }
+        })
+        return data
 
     def add_scenario(self, scenario: AssuranceScenario) -> None:
         """Add a verification scenario."""
@@ -261,13 +261,13 @@ class AssurancePlan:
         scenario.executed_at = datetime.utcnow().isoformat()
         self.updated_at = datetime.utcnow().isoformat()
 
-    def get_pending_scenarios(self) -> List[AssuranceScenario]:
+    def get_pending_scenarios(self) -> list[AssuranceScenario]:
         """Get scenarios that haven't been executed yet."""
         pending = [s for s in self.scenarios.values() if not s.executed]
         pending.sort(key=lambda s: s.priority, reverse=True)
         return pending
 
-    def get_failed_scenarios(self) -> List[AssuranceScenario]:
+    def get_failed_scenarios(self) -> list[AssuranceScenario]:
         """Get scenarios that were executed but failed."""
         return [s for s in self.scenarios.values() if s.executed and not s.passed]
 

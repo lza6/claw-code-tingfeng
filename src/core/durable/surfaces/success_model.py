@@ -7,11 +7,11 @@ Defines the criteria by which a session's outcomes are judged:
 - Proof requirements: evidence needed to demonstrate dimension coverage
 """
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, List, Optional
-import uuid
+from typing import Any
 
 
 class DimensionKind(str, Enum):
@@ -37,9 +37,9 @@ class SuccessDimension:
     kind: DimensionKind = DimensionKind.QUALITY
     text: str = ""
     required: bool = True
-    failure_modes: List[str] = field(default_factory=list)
+    failure_modes: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "kind": self.kind.value if isinstance(self.kind, DimensionKind) else self.kind,
@@ -49,7 +49,7 @@ class SuccessDimension:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SuccessDimension":
+    def from_dict(cls, data: dict[str, Any]) -> "SuccessDimension":
         kind = data.get("kind", DimensionKind.QUALITY)
         if isinstance(kind, str):
             kind = DimensionKind(kind)
@@ -68,14 +68,14 @@ class AntiGoal:
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     text: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "text": self.text,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AntiGoal":
+    def from_dict(cls, data: dict[str, Any]) -> "AntiGoal":
         return cls(
             id=data.get("id", str(uuid.uuid4())[:8]),
             text=data.get("text", ""),
@@ -86,12 +86,12 @@ class AntiGoal:
 class ProofRequirement:
     """Evidence needed to demonstrate that a success dimension has been covered."""
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    covers_dimensions: List[str] = field(default_factory=list)
+    covers_dimensions: list[str] = field(default_factory=list)
     kind: ProofKind = ProofKind.TEST
     required: bool = True
     source_surface: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "covers_dimensions": self.covers_dimensions,
@@ -101,7 +101,7 @@ class ProofRequirement:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ProofRequirement":
+    def from_dict(cls, data: dict[str, Any]) -> "ProofRequirement":
         kind = data.get("kind", ProofKind.TEST)
         if isinstance(kind, str):
             kind = ProofKind(kind)
@@ -125,9 +125,9 @@ class SuccessModel:
     """
     objective_contract_hash: str = ""
     obligation_model_hash: str = ""
-    dimensions: List[SuccessDimension] = field(default_factory=list)
-    anti_goals: List[AntiGoal] = field(default_factory=list)
-    proof_requirements: List[ProofRequirement] = field(default_factory=list)
+    dimensions: list[SuccessDimension] = field(default_factory=list)
+    anti_goals: list[AntiGoal] = field(default_factory=list)
+    proof_requirements: list[ProofRequirement] = field(default_factory=list)
     version: str = "1"
     compiled_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
@@ -189,7 +189,7 @@ class SuccessModel:
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SuccessModel":
+    def from_dict(cls, data: dict[str, Any]) -> "SuccessModel":
         """Load from dictionary."""
         return cls(
             objective_contract_hash=data.get("objective_contract_hash", ""),
@@ -210,7 +210,7 @@ class SuccessModel:
             compiled_at=data.get("compiled_at", datetime.utcnow().isoformat()),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "objective_contract_hash": self.objective_contract_hash,
@@ -222,7 +222,7 @@ class SuccessModel:
             "compiled_at": self.compiled_at,
         }
 
-    def add_dimension(self, kind: DimensionKind, text: str, required: bool = True, failure_modes: Optional[List[str]] = None) -> SuccessDimension:
+    def add_dimension(self, kind: DimensionKind, text: str, required: bool = True, failure_modes: list[str] | None = None) -> SuccessDimension:
         """Add a new success dimension."""
         dim = SuccessDimension(
             kind=kind,

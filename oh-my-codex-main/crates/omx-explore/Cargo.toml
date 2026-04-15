@@ -1,0 +1,10 @@
+[package]
+name = "omx-explore-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "omx-explore-harness"
+path = "src/main.rs"

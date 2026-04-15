@@ -1,0 +1,18 @@
+# 任务意图: EXPLORE (探索)
+{{ guidance }}
+
+## 调查目标
+{{ goal_description }}
+
+## 关键假设
+{% for hypothesis in hypotheses %}
+- [ ] 验证: {{ hypothesis }}
+{% endfor %}
+
+## 探索范围
+{{ scope or "未指定特定范围，请基于目标进行广度探索。" }}
+
+## 指令
+1. 优先收集证据，而非修改代码。
+2. 记录所有尝试过的路径，包括失败的路径。
+3. 输出应包含一份详细的调查报告。
