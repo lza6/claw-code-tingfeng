@@ -1,407 +1,149 @@
 """
-Intent Router - 意图路由与关键词检测
+Intent Router - 意图路由
 
-从 oh-my-codex-main 汲取的关键词检测引擎。
-提供技能激活、任务规模和意图检测能力。
+从 oh-my-codex-main 汲取的意图分类系统。
+提供五种意图类型：DELIVER, EXPLORE, EVOLVE, IMPLEMENT, DEBATE。
+
+注意: 此模块专注于意图分类，不重复实现关键词检测和任务规模检测。
+请使用 keyword_registry 和 task_size_detector 模块。
+
+参考:
+- oh-my-codex-main/src/agent/router.ts
+- oh-my-codex-main/src/agent/intent.rs
 """
 
+from __future__ import annotations
+
 import re
-import json
-import os
-from datetime import datetime
-from dataclasses import dataclass, field, asdict
+from enum import Enum
 from typing import Optional
-from pathlib import Path
 
 
-# ===== 关键词注册表 =====
-KEYWORD_TRIGGER_DEFINITIONS = [
-    {"keyword": "deepsearch", "skill": "deepsearch", "priority": 10},
-    {"keyword": "deep interview", "skill": "deep-interview", "priority": 20},
-    {"keyword": "analyze", "skill": "analyze", "priority": 5},
-    {"keyword": "plan", "skill": "plan", "priority": 15},
-    {"keyword": "build", "skill": "build-fix", "priority": 8},
-    {"keyword": "fix", "skill": "build-fix", "priority": 9},
-    {"keyword": "review", "skill": "code-review", "priority": 12},
-    {"keyword": "security", "skill": "security-review", "priority": 14},
-    {"keyword": "test", "skill": "tdd", "priority": 7},
-    {"keyword": "team", "skill": "team", "priority": 25},
-    {"keyword": "swarm", "skill": "swarm", "priority": 25},
-    {"keyword": "ralph", "skill": "ralph", "priority": 30},
-    {"keyword": "ralplan", "skill": "ralplan", "priority": 22},
-    {"keyword": "doctor", "skill": "doctor", "priority": 6},
-    {"keyword": "help", "skill": "help", "priority": 1},
-    {"keyword": "cancel", "skill": "cancel", "priority": 50},
-]
+class IntentType(str, Enum):
+    """意图类型枚举（借鉴 oh-my-codex）"""
+    DELIVER = "deliver"       # 交付/执行
+    EXPLORE = "explore"       # 探索/分析
+    EVOLVE = "evolve"         # 演进/优化
+    IMPLEMENT = "implement"   # 实现/新增
+    DEBATE = "debate"         # 辩论/审查
 
 
-# ===== 数据类 =====
-@dataclass
-class KeywordMatch:
-    keyword: str
-    skill: str
-    priority: int
-
-
-@dataclass
-class SkillActiveState:
-    version: int = 1
-    active: bool = False
-    skill: str = ""
-    keyword: str = ""
-    phase: str = "planning"  # planning, executing, reviewing, completing
-    activated_at: str = ""
-    updated_at: str = ""
-    source: str = "keyword-detector"
-    session_id: Optional[str] = None
-    thread_id: Optional[str] = None
-    turn_id: Optional[str] = None
-
-
-# ===== 任务规模检测 =====
-class TaskSize:
-    """任务规模枚举"""
-    TRIVIAL = "trivial"
-    SMALL = "small"
-    MEDIUM = "medium"
-    LARGE = "large"
-    HEAVY = "heavy"
-
-
-@dataclass
-class TaskSizeResult:
-    size: str
-    confidence: float
-    factors: dict
-
-
-# ===== 核心函数 =====
-def escape_regex(text: str) -> str:
-    """转义正则特殊字符"""
-    return re.sub(r'[.*+?^${}()|[\]\\]', r'\\$&', text)
-
-
-def is_word_char(ch: str) -> bool:
-    """检查是否为单词字符"""
-    return bool(ch and re.match(r'[A-Za-z0-9_]', ch))
-
-
-def keyword_to_pattern(keyword: str) -> re.Pattern:
-    """将关键词转换为正则模式"""
-    escaped = escape_regex(keyword)
-    starts_with_word = is_word_char(keyword[0]) if keyword else False
-    ends_with_word = is_word_char(keyword[-1]) if keyword else False
-    prefix = r'\b' if starts_with_word else ''
-    suffix = r'\b' if ends_with_word else ''
-    return re.compile(f'{prefix}{escaped}{suffix}', re.IGNORECASE)
-
-
-# 构建关键词模式映射
-KEYWORD_MAP = [
-    {
-        "pattern": keyword_to_pattern(entry["keyword"]),
-        "skill": entry["skill"],
-        "priority": entry["priority"]
-    }
-    for entry in KEYWORD_TRIGGER_DEFINITIONS
-]
-
-KEYWORDS_REQUIRING_INTENT = {"team", "swarm"}
-
-TEAM_SWARM_INTENT_PATTERNS = {
-    "team": [
-        re.compile(r'(?:^|[^\w])\$(?:team)\b', re.IGNORECASE),
-        re.compile(r'/prompts:team\b', re.IGNORECASE),
-        re.compile(r'\b(?:use|run|start|enable|launch|invoke|activate|orchestrate|coordinate)\s+(?:a\s+|an\s+|the\s+)?team\b', re.IGNORECASE),
-        re.compile(r'\bteam\s+(?:mode|orchestration|workflow|agents?)\b', re.IGNORECASE),
+# 意图关键词映射（从 oh-my-codex 汲取）
+INTENT_PATTERNS: dict[IntentType, list[re.Pattern]] = {
+    IntentType.DELIVER: [
+        re.compile(r'\b(deliver|complete|finish|execute|run)\b', re.I),
     ],
-    "swarm": [
-        re.compile(r'(?:^|[^\w])\$(?:swarm)\b', re.IGNORECASE),
-        re.compile(r'/prompts:swarm\b', re.IGNORECASE),
-        re.compile(r'\b(?:use|run|start|enable|launch|invoke|activate|orchestrate|coordinate)\s+(?:a\s+|an\s+|the\s+)?swarm\b', re.IGNORECASE),
-        re.compile(r'\bswarm\s+(?:mode|orchestration|workflow|agents?)\b', re.IGNORECASE),
+    IntentType.EXPLORE: [
+        re.compile(r'\b(explore|search|find|analyze|investigate|discover|look)\b', re.I),
+    ],
+    IntentType.EVOLVE: [
+        re.compile(r'\b(evolve|improve|enhance|optimize|refine|upgrade)\b', re.I),
+    ],
+    IntentType.IMPLEMENT: [
+        re.compile(r'\b(implement|add|create|build|make|develop|write)\b', re.I),
+    ],
+    IntentType.DEBATE: [
+        re.compile(r'\b(debate|review|critique|challenge|disagree|argue|question)\b', re.I),
     ],
 }
 
 
-def has_explicit_prompts_invocation(text: str) -> bool:
-    """检查是否有显式的 /prompts:skill 调用"""
-    return bool(re.search(r'(?:^|\s)/prompts:[\w.-]+(?=[\s.,!?;:]|$)', text, re.IGNORECASE))
-
-
-def extract_explicit_skill_invocations(text: str) -> list[KeywordMatch]:
-    """提取显式的 $skill 调用"""
-    results = []
-    # 匹配 $skill 格式
-    pattern = re.compile(r'(?:^|[^\w])\$([a-z][a-z0-9-]*)\b', re.IGNORECASE)
-
-    for match in pattern.finditer(text):
-        token = (match.group(1) or '').lower()
-        if not token:
-            continue
-
-        # swarm -> team 映射
-        normalized_skill = 'team' if token == 'swarm' else token
-
-        # 查找对应的注册表条目
-        registry_entry = next(
-            (entry for entry in KEYWORD_TRIGGER_DEFINITIONS
-             if entry["skill"].lower() == normalized_skill),
-            None
-        )
-        if not registry_entry:
-            continue
-
-        if not any(item.skill == normalized_skill for item in results):
-            results.append(KeywordMatch(
-                keyword=f'${token}',
-                skill=normalized_skill,
-                priority=registry_entry["priority"]
-            ))
-
-    return results
-
-
-def has_intent_context_for_keyword(text: str, keyword: str) -> bool:
-    """检查关键词是否有适当的意图上下文"""
-    if keyword.lower() not in KEYWORDS_REQUIRING_INTENT:
-        return True
-    k = keyword.lower()
-    if k not in TEAM_SWARM_INTENT_PATTERNS:
-        return True
-    return any(p.search(text) for p in TEAM_SWARM_INTENT_PATTERNS[k])
-
-
-def detect_keywords(text: str) -> list[KeywordMatch]:
-    """
-    检测用户输入中的关键词
-    返回显式 $skill 调用优先，然后是隐式关键词按优先级排序
-    """
-    # 优先处理显式调用
-    explicit = extract_explicit_skill_invocations(text)
-    if has_explicit_prompts_invocation(text) and not explicit:
-        return []
-
-    if explicit:
-        return explicit
-
-    # 检测隐式关键词
-    implicit = []
-    for item in KEYWORD_MAP:
-        match = item["pattern"].search(text)
-        if match:
-            if not has_intent_context_for_keyword(text, match.group(0)):
-                continue
-            implicit.append(KeywordMatch(
-                keyword=match.group(0),
-                skill=item["skill"],
-                priority=item["priority"]
-            ))
-
-    # 合并结果
-    merged = list(explicit)
-    # 按优先级排序
-    sorted_implicit = sorted(implicit, key=lambda x: x.priority, reverse=True)
-    for item in sorted_implicit:
-        if not any(existing.skill == item.skill for existing in merged):
-            merged.append(item)
-
-    return merged
-
-
-def detect_primary_keyword(text: str) -> Optional[KeywordMatch]:
-    """获取最高优先级的关键词匹配"""
-    matches = detect_keywords(text)
-    return matches[0] if matches else None
-
-
-# ===== 任务规模检测 =====
-def detect_task_size(text: str) -> TaskSizeResult:
-    """
-    检测任务规模
-    基于文本长度、复杂度和关键词进行判断
-    """
-    text_lower = text.lower()
-    word_count = len(text.split())
-
-    # 默认因素
-    factors = {
-        "word_count": word_count,
-        "has_code": "code" in text_lower or "function" in text_lower,
-        "has_refactor": "refactor" in text_lower or "reorganize" in text_lower,
-        "has_security": "security" in text_lower or "vulnerable" in text_lower,
-        "has_database": "database" in text_lower or "query" in text_lower,
-    }
-
-    # 复杂度计算
-    complexity_score = 0
-    if word_count > 100:
-        complexity_score += 3
-    elif word_count > 50:
-        complexity_score += 2
-    elif word_count > 20:
-        complexity_score += 1
-
-    if factors["has_code"]:
-        complexity_score += 2
-    if factors["has_refactor"]:
-        complexity_score += 2
-    if factors["has_security"]:
-        complexity_score += 3
-    if factors["has_database"]:
-        complexity_score += 2
-
-    # 判断规模
-    if complexity_score >= 8:
-        size = TaskSize.HEAVY
-        confidence = 0.9
-    elif complexity_score >= 5:
-        size = TaskSize.LARGE
-        confidence = 0.8
-    elif complexity_score >= 3:
-        size = TaskSize.MEDIUM
-        confidence = 0.7
-    elif complexity_score >= 1:
-        size = TaskSize.SMALL
-        confidence = 0.6
-    else:
-        size = TaskSize.TRIVIAL
-        confidence = 0.5
-
-    return TaskSizeResult(size=size, confidence=confidence, factors=factors)
-
-
-# ===== 技能激活状态管理 =====
-SKILL_ACTIVE_STATE_FILE = "skill-active-state.json"
-
-
-def read_skill_active_state(state_dir: str) -> Optional[SkillActiveState]:
-    """读取技能激活状态"""
-    state_path = Path(state_dir) / SKILL_ACTIVE_STATE_FILE
-    try:
-        if state_path.exists():
-            with open(state_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return SkillActiveState(**data)
-    except Exception:
-        pass
-    return None
-
-
-def write_skill_active_state(state_dir: str, state: SkillActiveState) -> bool:
-    """写入技能激活状态"""
-    state_path = Path(state_dir) / SKILL_ACTIVE_STATE_FILE
-    try:
-        with open(state_path, 'w', encoding='utf-8') as f:
-            json.dump(asdict(state), f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        print(f"[intent_router] warning: failed to persist skill active state: {e}")
-        return False
-
-
-def record_skill_activation(
-    text: str,
-    state_dir: str,
-    session_id: Optional[str] = None,
-    thread_id: Optional[str] = None,
-    turn_id: Optional[str] = None,
-) -> Optional[SkillActiveState]:
-    """
-    记录技能激活状态
-    从用户输入中检测关键词并更新状态
-    """
-    now = datetime.now().isoformat()
-    match = detect_primary_keyword(text)
-    if not match:
-        return None
-
-    # 读取之前的状态
-    previous = read_skill_active_state(state_dir)
-
-    # 检测取消意图
-    keywords = detect_keywords(text)
-    has_cancel_intent = any(k.skill == "cancel" for k in keywords)
-
-    # 如果有取消意图
-    if has_cancel_intent and previous and previous.active:
-        state = SkillActiveState(
-            active=False,
-            skill=previous.skill,
-            keyword=previous.keyword,
-            phase="completing",
-            activated_at=previous.activated_at,
-            updated_at=now,
-            source="keyword-detector",
-            session_id=session_id or previous.session_id,
-            thread_id=thread_id or previous.thread_id,
-            turn_id=turn_id or previous.turn_id,
-        )
-        write_skill_active_state(state_dir, state)
-        return state
-
-    # 确定激活时间
-    same_skill = previous and previous.active and previous.skill == match.skill
-    same_keyword = previous and previous.keyword.lower() == match.keyword.lower()
-    activated_at = previous.activated_at if (same_skill and same_keyword) else now
-
-    # 创建新状态
-    state = SkillActiveState(
-        active=True,
-        skill=match.skill,
-        keyword=match.keyword,
-        phase="planning",
-        activated_at=activated_at,
-        updated_at=now,
-        source="keyword-detector",
-        session_id=session_id,
-        thread_id=thread_id,
-        turn_id=turn_id,
-    )
-
-    write_skill_active_state(state_dir, state)
-    return state
-
-
-# ===== 便捷函数 =====
 def classify_intent(text: str) -> str:
     """
-    分类意图类型
-    返回: explore, implement, evolve, debate, deliver
+    分类用户输入意图类型（单一结果）。
+
+    优先级顺序（按此顺序匹配，返回第一个匹配）:
+    1. DEBATE - "debate", "review", "challenge" 等
+    2. EXPLORE - "explore", "search", "find" 等
+    3. EVOLVE - "improve", "optimize", "enhance" 等
+    4. IMPLEMENT - "implement", "add", "build" 等
+    5. DELIVER - 默认（execute, run 等）
+
+    Args:
+        text: 用户输入文本
+
+    Returns:
+        意图类型字符串: "deliver" | "explore" | "evolve" | "implement" | "debate"
     """
     text_lower = text.lower()
 
-    # 辩论模式
-    if any(w in text_lower for w in ["debate", "argue", "challenge", "disagree", "review"]):
-        return "debate"
+    # 按优先级顺序检查
+    for intent_type, patterns in INTENT_PATTERNS.items():
+        for pattern in patterns:
+            if pattern.search(text_lower):
+                return intent_type.value
 
-    # 探索模式
-    if any(w in text_lower for w in ["find", "search", "explore", "analyze", "look"]):
-        return "explore"
+    # 默认返回 deliver
+    return IntentType.DELIVER.value
 
-    # 演进模式
-    if any(w in text_lower for w in ["improve", "evolve", "enhance", "optimize"]):
-        return "evolve"
 
-    # 实现模式
-    if any(w in text_lower for w in ["implement", "add", "create", "build", "fix"]):
-        return "implement"
+def classify_intent_ranked(text: str) -> list[tuple[str, float]]:
+    """
+    返回所有匹配的意图及其置信度得分（降序）。
 
-    # 默认传递模式
-    return "deliver"
+    用于需要多意图支持或置信度区分的场景。
+
+    Args:
+        text: 用户输入文本
+
+    Returns:
+        List of (intent_type, confidence_score)，按置信度降序排列
+    """
+    scores: dict[str, float] = {intent.value: 0.0 for intent in IntentType}
+
+    for intent_type, patterns in INTENT_PATTERNS.items():
+        for pattern in patterns:
+            matches = pattern.findall(text_lower)
+            if matches:
+                # 匹配数越多，置信度越高
+                scores[intent_type.value] += len(matches) * 0.3
+
+    # 过滤掉零分并排序
+    scored = [(intent, score) for intent, score in scores.items() if score > 0]
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    return scored if scored else [(IntentType.DELIVER.value, 1.0)]
+
+
+def has_explicit_debate_intent(text: str) -> bool:
+    """
+    检测是否包含明确的辩论/审查意图。
+
+    Args:
+        text: 用户输入文本
+
+    Returns:
+        True 如果文本包含明确的辩论关键词
+    """
+    debate_keywords = [
+        r'\b(debate|review|critique|challenge|disagree|argue|question)\b',
+        r'\b(security|performance|quality)\s+(review|audit)\b',
+        r'\bcode\s+review\b',
+        r'\bimprove\s+this\b',
+    ]
+    text_lower = text.lower()
+    return any(re.search(pattern, text_lower, re.I) for pattern in debate_keywords)
+
+
+def get_primary_intent(text: str) -> str:
+    """
+    获取主要意图（classify_intent 的别名，保持向后兼容）。
+
+    Args:
+        text: 用户输入文本
+
+    Returns:
+        主要意图类型
+    """
+    return classify_intent(text)
 
 
 # ===== 导出 =====
+
 __all__ = [
-    "KeywordMatch",
-    "SkillActiveState",
-    "TaskSizeResult",
-    "TaskSize",
-    "detect_keywords",
-    "detect_primary_keyword",
-    "detect_task_size",
+    "IntentType",
     "classify_intent",
-    "record_skill_activation",
-    "read_skill_active_state",
-    "write_skill_active_state",
+    "classify_intent_ranked",
+    "has_explicit_debate_intent",
+    "get_primary_intent",
 ]
