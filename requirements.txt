@@ -8,7 +8,7 @@ anthropic>=0.40.0
 litellm>=1.40.0  # 参考 Onyx LLM 集成
 
 # ==================== 后台任务（参考 Onyx Celery）====================
-celery[redis]>=5.3.0
+celery[redis]>=5.6.3
 redis>=5.0.0
 
 # ==================== WebSocket 服务器 ====================
