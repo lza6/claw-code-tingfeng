@@ -25,21 +25,21 @@ classifiers = [
 ]
 
 dependencies = [
-    "openai>=2.30.0",
+    "openai>=2.30.0,<2.33",
     "anthropic>=0.40.0",
     "websockets>=15.0.1",
     "tiktoken>=0.7.0",
-    "httpx>=0.27.0",
-    "aiohttp>=3.9.0",  # 用于通知系统异步HTTP请求
-    "rich>=13.7.0",
-    "textual>=0.47.0",
+    "httpx>=0.27.0,<0.28",
+    "aiohttp>=3.9.0,<3.14",  # 用于通知系统异步HTTP请求
+    "rich>=13.7.0,<14",
+    "textual>=0.47.0,<0.48",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "gitpython>=3.1.0",
-    "typer>=0.12.0",
+    "gitpython>=3.1.0,<3.2",
+    "typer>=0.12.0,<0.25",
     "prompt-toolkit>=3.0.40",
-    "pyyaml>=6.0.1",
-    "jinja2>=3.0.0",
+    "pyyaml>=6.0.1,<6.1",
+    "jinja2>=3.0.0,<3.2",
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0; python_version < '3.11'",
     "toml>=0.10.2; python_version >= '3.11'",
@@ -47,23 +47,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.23",
-    "coverage>=7.0",
+    "pytest>=7.0,<8",
+    "pytest-asyncio>=0.23,<0.24",
+    "coverage>=7.0,<8",
 ]
 voice = [
-    "pydub>=0.25",
-    "sounddevice>=0.4",
-    "soundfile>=0.11",
+    "pydub>=0.25,<0.26",
+    "sounddevice>=0.4,<0.6",
+    "soundfile>=0.11,<0.13",
 ]
 watch = [
-    "watchfiles>=0.20",
-    "pathspec>=0.12",
-    "grep-ast>=0.3",
+    "watchfiles>=0.20,<0.25",
+    "pathspec>=0.12,<0.14",
+    "grep-ast>=0.3,<0.4",
 ]
 scrape = [
-    "playwright>=1.40",
-    "beautifulsoup4>=4.12",
+    "playwright>=1.40,<1.45",
+    "beautifulsoup4>=4.12,<4.13",
 ]
 clipboard = [
     "pyperclip>=1.8",
