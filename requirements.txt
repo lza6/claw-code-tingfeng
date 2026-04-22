@@ -37,7 +37,7 @@ gitpython>=3.1.0
 # ==================== 分布式追踪（参考 Onyx）====================
 opentelemetry-api>=1.22.0
 opentelemetry-sdk>=1.22.0
-opentelemetry-exporter-otlp>=1.22.0
+opentelemetry-exporter-otlp>=1.41.0
 
 # ==================== 追踪Provider（整合自 Onyx）====================
 langfuse>=0.50.0  # Langfuse 追踪
