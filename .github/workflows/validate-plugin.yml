@@ -18,7 +18,7 @@ jobs:
     name: Validate skill structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check all skills have SKILL.md with valid frontmatter
         run: |
@@ -50,7 +50,7 @@ jobs:
     name: Validate slash commands
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check all commands have valid frontmatter
         run: |
@@ -72,7 +72,7 @@ jobs:
     name: Validate plugin manifest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check plugin.json is valid JSON
         run: |
