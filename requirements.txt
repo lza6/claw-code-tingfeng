@@ -40,7 +40,7 @@ opentelemetry-sdk>=1.22.0
 opentelemetry-exporter-otlp>=1.22.0
 
 # ==================== 追踪Provider（整合自 Onyx）====================
-langfuse>=0.50.0  # Langfuse 追踪
+langfuse>=4.5.0  # Langfuse 追踪
 braintrust>=0.50.0  # Braintrust 追踪
 
 # ==================== 可选依赖 ====================
