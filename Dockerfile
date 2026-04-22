@@ -2,7 +2,7 @@
 # 企业级 Docker 配置，包含构建和运行阶段
 
 # ---- 构建阶段 ----
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 RUN pip install --no-cache-dir --prefix=/install .
 
 # ---- 运行阶段 ----
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 LABEL maintainer="Clawd Code Contributors"
 LABEL description="AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
