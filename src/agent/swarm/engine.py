@@ -104,10 +104,9 @@ class SwarmEngine:
         self.ltm = EnterpriseLTM()
 
         # [汲取 OMX] 初始化意图澄清和脱水器
-        from ...workflow.clarify import ClarifyGate
-        from ...llm.model_manager import ModelManager
-        from ..factory import create_model_manager
         from ...self_healing.cleaner import SlopCleaner
+        from ...workflow.clarify import ClarifyGate
+        from ..factory import create_model_manager
         self.clarify_gate = ClarifyGate(create_model_manager())
         self.slop_cleaner = SlopCleaner()
 

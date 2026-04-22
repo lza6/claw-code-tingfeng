@@ -1,0 +1,41 @@
+# Hook 配置文件
+# 格式: [hooks.<HookPoint>.<hook_name>]
+# 参考: src/core/hooks_config.py
+
+[hooks.PostToolUse]
+
+# 代码格式化 - 在 Write/Edit 工具后自动运行
+[hooks.PostToolUse.format]
+matcher = "Write|Edit"
+command = "ruff format {file_path}"
+
+# 代码检查
+[hooks.PostToolUse.lint]
+matcher = "Write|Edit|Patch"
+command = "ruff check {file_path} --fix || true"
+
+# 类型检查 (可选)
+# [hooks.PostToolUse.typecheck]
+# matcher = "Write|Edit"
+# command = "mypy {file_path} --no-error-summary"
+
+[hooks.PreToolUse]
+
+# 文件大小限制 - 在 Write 前检查输入内容
+[hooks.PreToolUse.size_guard]
+matcher = "Write"
+command = "python -c \"import sys, json; data = json.load(sys.stdin); content = data.get('tool_input', {}).get('content', ''); lines = len(content.splitlines()); max_lines=800; sys.exit(0 if lines <= max_lines else 1)\""
+
+[hooks.SessionStart]
+
+# 初始化环境
+[hooks.SessionStart.init]
+matcher = "*"
+command = "echo 'Session started'"
+
+[hooks.SessionEnd]
+
+# 会话结束验证
+[hooks.SessionEnd.verify]
+matcher = "*"
+command = "pytest tests/ -x --tb=short -q"

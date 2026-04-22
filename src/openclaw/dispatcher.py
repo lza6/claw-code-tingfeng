@@ -3,17 +3,14 @@
 Sends instruction payloads to OpenClaw gateways via HTTP or CLI command.
 All calls are non-blocking with timeouts.
 """
-import json
 import os
 import subprocess
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.openclaw.types import (
     OpenClawCommandGatewayConfig,
     OpenClawConfig,
-    OpenClawGatewayConfig,
     OpenClawHttpGatewayConfig,
     OpenClawPayload,
     OpenClawResult,
@@ -46,7 +43,7 @@ def validate_gateway_url(url: str) -> bool:
         return False
 
 
-def clamp_timeout(timeout: Optional[int], default: int) -> int:
+def clamp_timeout(timeout: int | None, default: int) -> int:
     """Clamp timeout to safe bounds."""
     if timeout is None:
         return default
@@ -123,7 +120,7 @@ async def dispatch_to_gateway(
     gateway_name: str,
     event: str,
     instruction: str,
-    context: Optional[dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> OpenClawResult:
     """Dispatch instruction to a gateway."""
     gateway = config.gateways.get(gateway_name)
@@ -154,7 +151,7 @@ async def dispatch_hook_event(
     config: OpenClawConfig,
     event: str,
     instruction: str,
-    context: Optional[dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> list[OpenClawResult]:
     """Dispatch to all hooks for an event."""
     results = []

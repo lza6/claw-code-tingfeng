@@ -5,13 +5,11 @@ Hook Loader - 钩子插件发现和加载
 提供钩子插件的发现、验证和加载功能。
 """
 
+import hashlib
 import os
 import re
-import hashlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from dataclasses import dataclass, field
-
 
 # ===== 环境变量 =====
 HOOK_PLUGIN_ENABLE_ENV = "OMX_HOOK_PLUGINS"
@@ -35,7 +33,7 @@ def short_file_hash(file_name: str) -> str:
     return hashlib.sha256(file_name.encode()).hexdigest()[:8]
 
 
-def read_timeout(raw: Optional[str], fallback: int) -> int:
+def read_timeout(raw: str | None, fallback: int) -> int:
     """读取超时配置"""
     if not raw:
         return fallback
@@ -55,7 +53,7 @@ def hooks_dir(cwd: str) -> str:
     return str(Path(cwd) / ".omx" / "hooks")
 
 
-def is_hook_plugins_enabled(env: Optional[dict] = None) -> bool:
+def is_hook_plugins_enabled(env: dict | None = None) -> bool:
     """检查钩子插件是否启用"""
     env = env or os.environ
     raw = env.get(HOOK_PLUGIN_ENABLE_ENV, "").strip().lower()
@@ -65,7 +63,7 @@ def is_hook_plugins_enabled(env: Optional[dict] = None) -> bool:
     return True
 
 
-def resolve_hook_plugin_timeout_ms(env: Optional[dict] = None, fallback: int = 1500) -> int:
+def resolve_hook_plugin_timeout_ms(env: dict | None = None, fallback: int = 1500) -> int:
     """解析插件超时毫秒数"""
     env = env or os.environ
     return read_timeout(env.get(HOOK_PLUGIN_TIMEOUT_ENV), fallback)
@@ -91,13 +89,13 @@ ON_HOOK_EVENT_EXPORT_PATTERN = re.compile(
 class HookPluginValidation:
     """插件验证结果"""
     valid: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 async def validate_plugin_export(plugin_path: str) -> HookPluginValidation:
     """验证插件导出"""
     try:
-        with open(plugin_path, "r", encoding="utf-8") as f:
+        with open(plugin_path, encoding="utf-8") as f:
             source = f.read()
         if not ON_HOOK_EVENT_EXPORT_PATTERN.search(source):
             return HookPluginValidation(valid=False, reason="missing_onHookEvent_export")
@@ -122,7 +120,7 @@ class HookPluginDescriptor:
     file_path: str
     file_name: str
     valid: bool = True
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 async def discover_hook_plugins(cwd: str) -> list[HookPluginDescriptor]:
@@ -199,13 +197,13 @@ async def load_hook_plugin_descriptors(cwd: str) -> list[HookPluginDescriptor]:
 __all__ = [
     "HOOK_PLUGIN_ENABLE_ENV",
     "HOOK_PLUGIN_TIMEOUT_ENV",
-    "hooks_dir",
-    "is_hook_plugins_enabled",
-    "resolve_hook_plugin_timeout_ms",
-    "ensure_hooks_dir",
-    "validate_plugin_export",
-    "validate_hook_plugin_export",
     "HookPluginDescriptor",
     "discover_hook_plugins",
+    "ensure_hooks_dir",
+    "hooks_dir",
+    "is_hook_plugins_enabled",
     "load_hook_plugin_descriptors",
+    "resolve_hook_plugin_timeout_ms",
+    "validate_hook_plugin_export",
+    "validate_plugin_export",
 ]

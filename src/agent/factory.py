@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from ..llm import LLMConfig, LLMProviderType
 from ..utils import debug
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .engine import AgentEngine
 
 
-def get_agent_prompt(agent_name: str) -> Optional[str]:
+def get_agent_prompt(agent_name: str) -> str | None:
     """获取指定 Agent 的 Prompt 模板
 
     参数:

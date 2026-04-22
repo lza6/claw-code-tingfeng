@@ -7,7 +7,6 @@ Catalog Module - 技能/Agent 清单管理
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class SkillCategory(str, Enum):
@@ -42,7 +41,7 @@ class SkillDefinition:
     category: SkillCategory
     status: SkillStatus
     core: bool = False
-    canonical: Optional[str] = None
+    canonical: str | None = None
 
 
 @dataclass
@@ -52,7 +51,7 @@ class AgentDefinition:
     category: AgentCategory
     status: str  # 'active', 'merged', 'alias', 'internal'
     core: bool = False
-    canonical: Optional[str] = None
+    canonical: str | None = None
 
 
 @dataclass
@@ -172,7 +171,7 @@ class CatalogManifest:
 
 
 # 全局清单实例
-_catalog: Optional[CatalogManifest] = None
+_catalog: CatalogManifest | None = None
 
 
 def get_catalog() -> CatalogManifest:

@@ -1,6 +1,11 @@
 """Session Storage - 会话持久化存储
 
-从 claude-code-rust-master 汲取的架构优点:
+汲取 oh-my-codex-main/src/mcp/state-server.ts 的原子锁设计:
+- 写入锁: 防止并发写入冲突
+- 错误重试: 自动处理临时锁
+- 原子操作: 通过临时文件+rename保证
+
+加上 claude-code-rust-master 的优点:
 - 独立的存储层,与业务逻辑分离
 - 支持 JSON 序列化
 - 异步 I/O 操作
@@ -11,11 +16,32 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from ..core.project_context import ProjectContext
 from .models import Session, SessionInfo
+
+# 写入锁队列（借鉴OMX的stateWriteQueues）
+_write_locks: dict[str, asyncio.Lock] = {}
+_write_locks_lock = Lock()
+
+
+def _get_write_lock(path: Path) -> asyncio.Lock:
+    """获取指定路径的写入锁（线程安全）"""
+    key = str(path.absolute())
+    with _write_locks_lock:
+        if key not in _write_locks:
+            _write_locks[key] = asyncio.Lock()
+        return _write_locks[key]
+
+
+def _release_write_lock(path: Path) -> None:
+    """释放写入锁"""
+    key = str(path.absolute())
+    # 不删除锁对象，避免竞态；锁会被重用于后续操作
 
 
 class SessionStorage:
@@ -23,6 +49,7 @@ class SessionStorage:
 
     负责将会话保存到文件系统,以及从文件系统加载会话。
     使用 JSON 格式存储,便于调试和迁移。
+    借鉴OMX的原子写入和锁机制保证并发安全。
 
     """
 
@@ -49,7 +76,13 @@ class SessionStorage:
         return self.sessions_dir / f"{session_id}.json"
 
     async def save(self, session: Session) -> Path:
-        """保存会话
+        """保存会话（原子写入 + 并发锁）
+
+        借鉴OMX的原子写入机制:
+        1. 获取路径写入锁，防止并发冲突
+        2. 写入临时文件
+        3. fsync确保落盘
+        4. atomic rename替换原文件
 
         Args:
             session: 要保存的会话对象
@@ -60,12 +93,42 @@ class SessionStorage:
         self._ensure_dir()
         path = self._session_path(session.id)
         data = session.to_dict()
+        json_str = json.dumps(data, indent=2, ensure_ascii=False)
 
-        await asyncio.to_thread(
-            path.write_text,
-            json.dumps(data, indent=2, ensure_ascii=False),
-            'utf-8',  # Explicit UTF-8 encoding for Unicode support
-        )
+        # 获取写入锁
+        lock = _get_write_lock(path)
+
+        async with lock:
+            # 原子写入: temp file + fsync + rename
+            tmp_path = path.with_suffix(f'.tmp.{time.time_ns()}.json')
+
+            try:
+                # 写入临时文件
+                await asyncio.to_thread(
+                    tmp_path.write_text,
+                    json_str,
+                    'utf-8'
+                )
+
+                # fsync确保数据落盘（Linux/macOS）
+                try:
+                    import os
+                    with open(tmp_path, 'rb') as f:
+                        await asyncio.to_thread(os.fsync, f.fileno())
+                except (ImportError, OSError):
+                    pass  # Windows或不可用则跳过
+
+                # 原子rename
+                await asyncio.to_thread(tmp_path.replace, path)
+
+            except Exception:
+                # 清理临时文件
+                if tmp_path.exists():
+                    await asyncio.to_thread(tmp_path.unlink, missing_ok=True)
+                raise
+            finally:
+                _release_write_lock(path)
+
         return path
 
     async def load(self, session_id: str) -> Session | None:

@@ -138,4 +138,4 @@ class ASTGrepTool(BaseTool):
                 return ToolResult(success=True, output=result.stdout)
 
         except Exception as e:
-            return ToolResult(success=False, output='', error=f'发生未知错误: {str(e)}', exit_code=1)
+            return ToolResult(success=False, output='', error=f'发生未知错误: {e!s}', exit_code=1)

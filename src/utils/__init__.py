@@ -78,16 +78,14 @@ __all__ = [
     'FileWatcher',
     'InputOutput',
     'LogLevel',
-    # Deprecated args (from aider)
-    'check_deprecated_args',
-    'get_deprecated_message',
-    'is_deprecated_model_arg',
     # URL Utilities (from aider)
     'ParsedURL',
     'Scraper',
     'SoundDeviceError',
     'Voice',
     'build_url',
+    # Deprecated args (from aider)
+    'check_deprecated_args',
     'debug',
     'detect_api_keys',
     # Debug (from Aider)
@@ -98,6 +96,7 @@ __all__ = [
     'extract_urls',
     'get_analytics',
     'get_completions',
+    'get_deprecated_message',
     'get_domain',
     # Env loader
     'get_env',
@@ -109,6 +108,7 @@ __all__ = [
     'get_url_path',
     'get_url_query',
     'info',
+    'is_deprecated_model_arg',
     'is_document_url',
     'is_image_url',
     'is_internal_link',

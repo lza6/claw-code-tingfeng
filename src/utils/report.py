@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import os
 import platform
-import subprocess
 import re
+import subprocess
 import sys
 import urllib.parse
 import webbrowser

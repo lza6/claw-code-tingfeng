@@ -5,29 +5,27 @@ Hook Dispatcher - 钩子事件分发器
 提供钩子事件的调度和执行功能。
 """
 
-import os
-import json
 import asyncio
-import subprocess
-from pathlib import Path
+import json
+import os
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Any
-from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
-from .types import (
-    HookEventEnvelope,
-    HookDispatchResult,
-    HookDispatchOptions,
-    HookPluginDispatchResult,
-    HookPluginDispatchStatus,
-)
 from .loader import (
+    HookPluginDescriptor,
     discover_hook_plugins,
     is_hook_plugins_enabled,
     resolve_hook_plugin_timeout_ms,
-    HookPluginDescriptor,
 )
-
+from .types import (
+    HookDispatchOptions,
+    HookDispatchResult,
+    HookEventEnvelope,
+    HookPluginDispatchResult,
+    HookPluginDispatchStatus,
+)
 
 RESULT_PREFIX = "__OMX_PLUGIN_RESULT__ "
 RUNNER_SIGKILL_GRACE_MS = 250
@@ -54,7 +52,7 @@ async def append_hooks_log(cwd: str, payload: dict[str, Any]) -> None:
         print(f"[omx] warning: failed to append hook dispatch log entry: {e}")
 
 
-def is_team_worker(env: Optional[dict] = None) -> bool:
+def is_team_worker(env: dict | None = None) -> bool:
     """检查是否在团队工作器中运行"""
     env = env or os.environ
     return bool(env.get("OMX_TEAM_WORKER", "").strip())
@@ -66,15 +64,15 @@ class RunnerResult:
     ok: bool
     plugin: str
     reason: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 async def run_plugin_runner(
     plugin: HookPluginDescriptor,
     event: HookEventEnvelope,
     cwd: str,
-    env: Optional[dict] = None,
-    timeout_ms: Optional[int] = None,
+    env: dict | None = None,
+    timeout_ms: int | None = None,
     side_effects_enabled: bool = True,
 ) -> HookPluginDispatchResult:
     """运行插件运行器"""
@@ -179,7 +177,7 @@ async def run_plugin_runner(
         )
 
 
-def is_hook_plugin_feature_enabled(env: Optional[dict] = None) -> bool:
+def is_hook_plugin_feature_enabled(env: dict | None = None) -> bool:
     """检查钩子插件功能是否启用"""
     return is_hook_plugins_enabled(env)
 
@@ -191,7 +189,7 @@ def should_force_enable_runtime_hook_dispatch(event: HookEventEnvelope) -> bool:
 
 async def dispatch_hook_event(
     event: HookEventEnvelope,
-    options: Optional[HookDispatchOptions] = None,
+    options: HookDispatchOptions | None = None,
 ) -> HookDispatchResult:
     """调度钩子事件"""
     options = options or HookDispatchOptions(cwd=os.getcwd())
@@ -268,8 +266,8 @@ async def dispatch_hook_event(
 
 # ===== 导出 =====
 __all__ = [
+    "HookDispatchResult",
     "dispatch_hook_event",
     "is_hook_plugin_feature_enabled",
     "should_force_enable_runtime_hook_dispatch",
-    "HookDispatchResult",
 ]

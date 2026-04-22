@@ -1,56 +1,180 @@
-# GoalX → Clawd Code 整合进度报告
+# 整合实施进度报告
 
-**生成时间**: 2026-04-14 06:40 GMT+8
-**最后更新**: 2026-04-14 06:40 GMT+8
-**阶段**: Phase 6 (P2) - Session & Protocol 完成
+## 生成时间
+2025-10-14
+
+## 总体进度
+
+### 已完成 (阶段1: 通知系统增强) ✅
+
+#### 1.1 会话注册表模块
+- **文件**: `src/notifications/session_registry.py` (12,704 字节)
+- **状态**: ✅ 完成 + 语法验证通过
+- **功能**:
+  - 跟踪平台消息ID到tmux pane的映射
+  - JSONL格式原子写入
+  - 跨进程文件锁机制
+  - 自动清理过期记录 (24小时)
+  - 查询接口: `find_mapping_by_message_id()`, `find_mapping_by_session_id()`
+
+#### 1.2 模板引擎模块
+- **文件**: `src/notifications/template_engine.py` (10,732 字节)
+- **状态**: ✅ 完成 + 语法验证通过
+- **功能**:
+  - `{{variable}}` 变量插值
+  - `{{#if var}}...{{/if}}` 条件处理
+  - 内置27个已知变量
+  - 计算变量: duration, time, modesDisplay, footer等
+  - 便捷函数: `render_notification_template()`
+
+#### 1.3 冷却管理模块
+- **文件**: `src/notifications/cooldown.py` (5,813 字节)
+- **状态**: ✅ 完成 + 语法验证通过
+- **功能**:
+  - 空闲通知冷却控制
+  - 环境变量 + 配置双源配置
+  - 会话作用域状态文件
+  - API: `should_send_idle_notification()`, `record_idle_notification_sent()`
+
+#### 1.4 临时合同管理模块
+- **文件**: `src/notifications/temp_contract.py` (新建)
+- **状态**: ✅ 完成 + 语法验证通过
+- **功能**:
+  - 临时模式状态管理
+  - 会话生命周期绑定
+  - 自动过期清理
+  - 跨进程锁保证一致性
+
+#### 1.5 模块集成
+- **更新**: `src/notifications/__init__.py`
+- **状态**: ✅ 更新完成
+- **新增导出**:
+  - 会话注册表相关 (6个函数/类)
+  - 模板引擎相关 (3个函数)
+  - 冷却管理相关 (4个函数)
 
 ---
 
-## ✅ 已完成的工作
+### 已完成 (阶段2: 任务检测器增强) ✅
 
-### Phase 1: 基础持久化机制 (100%)
-- ✅ **Durable Surfaces 系统**: 完整实现 6 个核心 surface 类。
-- ✅ **Control Inbox 系统**: 实现基于 JSONL 的持久化消息传递。
-- ✅ **验证**: 33 个单元测试全部通过。
-
-### Phase 2: 集成到现有系统 (100%)
-- ✅ **RunStateManager 集成**: 已在 `src/core/persistence/run_state.py` 中集成 `SurfaceManager`。
-- ✅ **MessageBus 增强**: 新增 `src/agent/swarm/persistent_message_bus.py`。
-- ✅ **WorkflowEngine 集成**: 已在 `src/workflow/engine.py` 中集成。
-- ✅ **验证**: 额外编写了 15 个集成测试。
-
-### Phase 3: Worktree 隔离增强 (100%)
-- ✅ **Worktree Manager 完善**: 增强 `src/core/git/worktree/manager.py`。
-- ✅ **并行执行支持**: 利用 `CoordinationState` 支持多 worktree 并发。
-
-### Phase 4: 协议驱动增强 (100%)
-- ✅ **Intent Routing**: 实现基于意图的动态工作流调整。
-
-### Phase 5: Evidence-Gated Memory (100%)
-- ✅ **证据提升系统**: 将任务执行证据转换为情景记忆。
-- ✅ **验证**: 集成测试通过。
-
-### Phase 6: 协议模板与会话持久化 (100%)
-- ✅ **Protocol Templates**: 引入 Jinja2 模板生成协议驱动的任务指令。
-  - 支持 `DELIVER`, `EXPLORE`, `EVOLVE`, `DEBATE`, `IMPLEMENT` 五大意图模板。
-- ✅ **Session Persistence**: 优化会话重建逻辑。
-  - 实现 Worktree ID 的实时持久化与状态同步。
-  - 增强 `WorkflowEngine` 的恢复逻辑，支持隔离环境的存活性探测。
-
-**总计: 25+ 测试全部通过 ✅**
+#### 2.1 任务规模检测器增强
+- **文件**: `src/agent/task_size_detector.py`
+- **状态**: ✅ 增强完成 + 语法验证通过
+- **增强内容**:
+  - ✅ 扩展逃逸前缀列表 (+3个: fast:, easy:, quickfix:)
+  - ✅ 扩展小任务信号模式 (+5个新pattern)
+  - ✅ 扩展大任务信号模式 (+5个新pattern)
+  - ✅ 使用增强检测逻辑替换规则4
+  - ✅ 保持向后兼容
 
 ---
 
-## 🏗️ 核心架构变化
+## 技术细节
 
-1. **双轨持久化**: 快速轨道 (内存) + 安全轨道 (磁盘/Durable Surfaces)。
-2. **证据链记录**: 结构化证据条目，包含结果和产物。
-3. **情景记忆**: 证据自动提升为 `EpisodicMemory`。
-4. **高层状态感知**: `StatusSummary` 提供的实时进度报告。
-5. **协议驱动指令**: 任务由 Jinja2 模板驱动，包含完成标准。
-6. **弹性会话恢复**: 自动处理隔离工作树的存活性和状态重置。
+### 代码质量
+- ✅ 所有新模块通过 `python -m py_compile` 语法检查
+- ✅ 遵循项目编码规范
+- ✅ 完整类型注解
+- ✅ 文档字符串完备
+
+### 迁移策略
+- **保留原有架构**: 所有新模块作为增强，不破坏现有代码
+- **向后兼容**: 旧API保持不变，新功能通过新接口提供
+- **配置驱动**: 新功能可通过配置文件开关控制
 
 ---
 
-**生成者**: Antigravity (Advanced Agentic Coding)
-**状态**: 核心整合阶段全部完成。系统已具备企业级稳定性、自愈能力与记忆进化能力。
+## 待实施 (阶段3+)
+
+### 阶段3: 核心架构增强 (优先级: 🟡 中)
+
+#### 3.1 HUD系统 (新增)
+- **目标**: `src/hud/` 目录 (8个文件)
+- **源**: `oh-my-codex-main/src/hud/`
+- **关键文件**:
+  - `state.py` - 状态管理
+  - `render.py` - 渲染引擎
+  - `authority.py` - 权限控制
+  - `colors.py` - 颜色系统
+  - `index.py` - CLI入口
+- **依赖**: 通知系统提供状态数据
+
+#### 3.2 团队编排增强
+- **目标**: 增强 `src/team/`
+- **新增**: `state/` 子目录 (13个文件)
+- **功能**:
+  - 5阶段状态机 (plan→prd→exec→verify→fix)
+  - 阶段转换验证
+  - 自动恢复机制
+  - 阶段代理分配
+
+#### 3.3 管道系统 (新增)
+- **目标**: `src/pipeline/`
+- **源**: `oh-my-codex-main/src/pipeline/`
+- **文件**:
+  - `orchestrator.py`
+  - `types.py`
+  - `stages/` 目录
+
+### 阶段4: MCP服务器集成 (优先级: 🟢 低)
+
+#### 4.1 MCP服务器套件
+- **目标**: `src/mcp/`
+- **包含**:
+  - `state-server.py` - 状态管理
+  - `memory-server.py` - 项目记忆
+  - `code-intel-server.py` - 代码智能
+  - `trace-server.py` - 追踪服务
+
+### 阶段5: 配置系统增强 (优先级: 🟡 中)
+
+#### 5.1 配置生成器
+- **目标**: `src/config/generator.py`
+- **功能**: 自动合并config.toml，管理MCP注册
+
+---
+
+## 关键指标
+
+| 指标 | 数值 |
+|------|------|
+| 新增模块数 | 4 |
+| 增强模块数 | 2 |
+| 代码行数 (新增) | ~2000+ |
+| 语法验证通过率 | 100% |
+| 向后兼容性 | 完全保持 |
+
+---
+
+## 下一步行动计划
+
+### 立即执行 (本周)
+1. ✅ 完成通知系统核心模块 (已完成)
+2. ⏭️ 增强 `dispatcher.py` 集成新功能 (待开始)
+3. ⏭️ 增强 `config.py` 添加新配置类 (待开始)
+
+### 短期 (下周)
+1. 设计HUD系统架构
+2. 迁移团队编排state模块
+3. 实现管道系统原型
+
+### 中期 (2-3周)
+1. MCP服务器集成
+2. 配置生成器实现
+3. 端到端测试
+
+---
+
+## 风险评估
+
+| 风险 | 等级 | 缓解措施 |
+|------|------|----------|
+| 依赖冲突 | 中 | 隔离新模块，保持独立 |
+| 配置复杂度 | 中 | 提供默认值，环境变量覆盖 |
+| 性能影响 | 低 | 异步非阻塞设计 |
+| 向后兼容 | 低 | 保留旧API，渐进迁移 |
+
+---
+
+**报告生成时间**: 2025-10-14
+**下一更新**: 完成阶段1.5 (dispatcher增强) 后

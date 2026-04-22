@@ -16,12 +16,14 @@ Keyword Registry & Intent Router - 关键词注册表与意图路由
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -187,7 +189,7 @@ def _get_task_size_detector():
     return _task_size_detector
 
 
-def get_task_size_class(text: str) -> Optional[str]:
+def get_task_size_class(text: str) -> str | None:
     """
     获取任务的规模分类。
 
@@ -199,7 +201,8 @@ def get_task_size_class(text: str) -> Optional[str]:
     """
     detector = _get_task_size_detector()
     if detector:
-        return detector(text)
+        result = detector(text)
+        return result.size if result else None
     return None
 
 
@@ -266,9 +269,8 @@ def has_intent_context(text: str, keyword: str) -> bool:
         return True  # 低风险关键词，始终允许
 
     # 特殊处理：team 关键词也接受 $swarm 作为显式调用
-    if keyword.lower() == 'team':
-        if re.search(r'\$swarm\b', text, re.I):
-            return True
+    if keyword.lower() == 'team' and re.search(r'\$swarm\b', text, re.I):
+        return True
 
     # 检查是否有明确的意图指示
     patterns = TEAM_SWARM_INTENT_PATTERNS.get(keyword.lower(), [])
@@ -302,7 +304,7 @@ def detect_keywords(text: str) -> list[KeywordTrigger]:
     return validated_calls
 
 
-def get_trigger_by_keyword(keyword: str) -> Optional[KeywordTrigger]:
+def get_trigger_by_keyword(keyword: str) -> KeywordTrigger | None:
     """
     根据关键词获取触发器定义。
 
@@ -324,39 +326,36 @@ def get_all_keywords() -> list[str]:
     return [trigger.keyword for trigger in KEYWORD_TRIGGER_DEFINITIONS]
 
 
-# 导出公共符号
+# 导出公共符号（按字母顺序排序，区分大小写）
 __all__ = [
-    'KeywordTrigger',
-    'KEYWORD_TRIGGER_DEFINITIONS',
-    'KEYWORDS_REQUIRING_INTENT',
     'EXECUTION_GATE_KEYWORDS',
     'GATE_BYPASS_PREFIXES',
-    'WELL_SPECIFIED_SIGNALS',
+    'KEYWORDS_REQUIRING_INTENT',
+    'KEYWORD_TRIGGER_DEFINITIONS',
     'SKILL_ACTIVE_STATE_FILE',
-    'extract_explicit_skill_invocations',
-    'has_intent_context',
+    'WELL_SPECIFIED_SIGNALS',
+    'KeywordTrigger',
+    'apply_ralplan_gate',
     'detect_keywords',
     'detect_primary_keyword',
-    'has_intent_context_for_keyword',
-    'is_underspecified_for_execution',
-    'apply_ralplan_gate',
-    'record_skill_activation',
-    'get_skill_active_state',
-    'get_trigger_by_keyword',
+    'extract_explicit_skill_invocations',
     'get_all_keywords',
-    # Deep Interview Input Lock (从 oh-my-codex 汲取)
     'get_deep_interview_lock_state',
-    'is_deep_interview_input_blocked',
-    'release_deep_interview_on_cancel',
-    # 任务规模检测 (从 task_size_detector 集成)
+    'get_skill_active_state',
     'get_task_size_class',
-    # EXPLORE 意图支持 (从 oh-my-codex 汲取)
+    'get_trigger_by_keyword',
     'has_explore_intent',
+    'has_intent_context',
+    'has_intent_context_for_keyword',
+    'is_deep_interview_input_blocked',
     'is_read_only_intent',
+    'is_underspecified_for_execution',
+    'record_skill_activation',
+    'release_deep_interview_on_cancel',
 ]
 
 
-def detect_primary_keyword(text: str) -> Optional[str]:
+def detect_primary_keyword(text: str) -> str | None:
     """
     检测文本中的主要关键词（返回最高优先级的匹配）。
 
@@ -409,7 +408,7 @@ def is_underspecified_for_execution(text: str) -> bool:
     return not any(pattern.search(text) for pattern in WELL_SPECIFIED_SIGNALS)
 
 
-def apply_ralplan_gate(keywords: list[KeywordTrigger], text: str, options: dict = None) -> list[KeywordTrigger]:
+def apply_ralplan_gate(keywords: list[KeywordTrigger], text: str, options: dict | None = None) -> list[KeywordTrigger]:
     """
     应用ralplan-first gate：将执行关键词重定向到ralplan，
     除非有明确意图或绕过前缀。
@@ -435,9 +434,7 @@ def apply_ralplan_gate(keywords: list[KeywordTrigger], text: str, options: dict 
         if any(t.keyword == 'ralplan' for t in keywords):
             return True
         # 取消关键词
-        if re.search(r'\b(cancel|abort|stop)\b', text, re.I):
-            return True
-        return False
+        return bool(re.search(r'\b(cancel|abort|stop)\b', text, re.I))
 
     result = []
     for trigger in keywords:
@@ -463,7 +460,7 @@ def apply_ralplan_gate(keywords: list[KeywordTrigger], text: str, options: dict 
     return result
 
 
-def record_skill_activation(skill_name: str, workdir: Optional[Path] = None) -> None:
+def record_skill_activation(skill_name: str, workdir: Path | None = None) -> None:
     """
     记录技能激活状态到持久化文件。
     用于Deep Interview输入锁等功能。
@@ -471,11 +468,21 @@ def record_skill_activation(skill_name: str, workdir: Optional[Path] = None) -> 
     Args:
         skill_name: 已激活的技能名称
         workdir: 工作目录，默认为当前目录
+
+    Raises:
+        ValueError: 如果检测到路径遍历攻击
     """
     if workdir is None:
         workdir = Path.cwd()
 
-    state_file = workdir / '.clawd' / 'state' / 'skill-active-state.json'
+    # 路径验证：确保在预期工作目录内
+    workdir = workdir.resolve()
+    state_file = (workdir / '.clawd' / 'state' / 'skill-active-state.json').resolve()
+
+    # 安全检查：state_file 必须在 workdir 内（防止路径遍历）
+    if not str(state_file).startswith(str(workdir) + os.sep) and str(state_file) != str(workdir):
+        raise ValueError(f"Path traversal detected: {workdir} -> {state_file}")
+
     state_file.parent.mkdir(parents=True, exist_ok=True)
 
     # 读取现有状态
@@ -483,21 +490,22 @@ def record_skill_activation(skill_name: str, workdir: Optional[Path] = None) -> 
     if state_file.exists():
         try:
             state = json.loads(state_file.read_text(encoding='utf-8'))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Failed to read skill state from {state_file}: {e}")
             state = {}
 
     # 更新激活状态
     state['active_skill'] = skill_name
-    state['activated_at'] = str(Path.cwd())
+    state['activated_at'] = datetime.now().isoformat()
 
     # 写回文件
     try:
-        state_file.write_text(json.dumps(state, indent=2), encoding='utf-8')
-    except OSError:
-        pass  # 忽略写入错误
+        state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
+    except OSError as e:
+        logger.error(f"Failed to write skill state to {state_file}: {e}")
 
 
-def get_skill_active_state(workdir: Optional[Path] = None) -> dict:
+def get_skill_active_state(workdir: Path | None = None) -> dict:
     """
     获取当前激活的技能状态。
 
@@ -510,19 +518,26 @@ def get_skill_active_state(workdir: Optional[Path] = None) -> dict:
     if workdir is None:
         workdir = Path.cwd()
 
-    state_file = workdir / '.clawd' / 'state' / 'skill-active-state.json'
+    workdir = workdir.resolve()
+    state_file = (workdir / '.clawd' / 'state' / 'skill-active-state.json').resolve()
+
+    # 安全检查：state_file 必须在 workdir 内
+    if not str(state_file).startswith(str(workdir) + os.sep) and str(state_file) != str(workdir):
+        raise ValueError(f"Path traversal detected: {workdir} -> {state_file}")
+
     if not state_file.exists():
         return {}
 
     try:
         return json.loads(state_file.read_text(encoding='utf-8'))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to read skill state from {state_file}: {e}")
         return {}
 
 
 # ==================== Deep Interview 输入锁 (从 oh-my-codex 汲取) ====================
 
-def get_deep_interview_lock_state(workdir: Optional[Path] = None) -> Optional[dict]:
+def get_deep_interview_lock_state(workdir: Path | None = None) -> dict | None:
     """
     获取深度面试输入锁状态（从 oh-my-codex 汲取）。
 
@@ -543,7 +558,7 @@ def get_deep_interview_lock_state(workdir: Optional[Path] = None) -> Optional[di
     return None
 
 
-def is_deep_interview_input_blocked(user_input: str, workdir: Optional[Path] = None) -> tuple[bool, Optional[str]]:
+def is_deep_interview_input_blocked(user_input: str, workdir: Path | None = None) -> tuple[bool, str | None]:
     """
     检查用户输入是否被深度面试输入锁阻止。
 
@@ -566,7 +581,7 @@ def is_deep_interview_input_blocked(user_input: str, workdir: Optional[Path] = N
     return False, None
 
 
-def release_deep_interview_on_cancel(workdir: Optional[Path] = None) -> bool:
+def release_deep_interview_on_cancel(workdir: Path | None = None) -> bool:
     """
     在取消命令触发时释放深度面试锁。
 
@@ -594,105 +609,15 @@ def release_deep_interview_on_cancel(workdir: Optional[Path] = None) -> bool:
                 state['input_lock']['released_at'] = datetime.now().isoformat()
             state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Failed to release deep interview lock: {e}")
     return False
 
 
-# ==================== 任务规模检测 (从 task_size_detector 集成) ====================
-
-def get_task_size_class(text: str) -> Optional[str]:
-    """
-    获取任务的规模分类（向后兼容函数）。
-
-    此函数作为兼容层，调用 task_size_detector.classify_task_size
-    并返回规模字符串。
-
-    Args:
-        text: 用户输入文本
-
-    Returns:
-        任务规模：'small', 'medium', 'large', 'heavy' 或 None
-    """
-    try:
-        from .task_size_detector import classify_task_size
-        result = classify_task_size(text)
-        return result.size
-    except ImportError:
-        return None
 
 
 # ==================== EXPLORE 意图支持 (从 oh-my-codex 汲取) ====================
 
-def has_explore_intent(text: str) -> bool:
-    """
-    检测用户输入是否包含 EXPLORE 意图。
-
-    EXPLORE 意图用于只读代码探索，不产生修改。
-    参考 oh-my-codex-main 的 explore 模式。
-
-    Args:
-        text: 用户输入文本
-
-    Returns:
-        True 如果包含探索意图，False 否则
-    """
-    explore_patterns = [
-        re.compile(r'\b(explore|search|find|discover|analyze|investigate)\b', re.I),
-        re.compile(r'\bhow\s+(does|do|is|are)\b', re.I),
-        re.compile(r'\bwhat\s+is\b', re.I),
-        re.compile(r'\blist\s+all\b', re.I),
-        re.compile(r'\bshow\s+me\b', re.I),
-    ]
-    return any(pattern.search(text) for pattern in explore_patterns)
-
-
-def is_read_only_intent(text: str) -> bool:
-    """
-    检查是否为只读意图（不修改代码）。
-
-    结合 EXPLORE 意图和关键词检测。
-
-    Args:
-        text: 用户输入文本
-
-    Returns:
-        True 如果意图是只读的，False 否则
-    """
-    # 检查是否有明确的关键词表示探索
-    triggers = detect_keywords(text)
-    explore_triggers = [t for t in triggers if t.keyword in ('explore', 'analyze', 'investigate')]
-    if explore_triggers:
-        return True
-
-    # 检查文本模式
-    return has_explore_intent(text)
-
-
-# ==================== 任务规模检测 (从 task_size_detector 集成) ====================
-
-def get_task_size_class(text: str) -> Optional[str]:
-    """
-    获取任务的规模分类（向后兼容函数）。
-
-    此函数作为兼容层，调用 task_size_detector.classify_task_size
-    并返回规模字符串。
-
-    Args:
-        text: 用户输入文本
-
-    Returns:
-        任务规模：'small', 'medium', 'large', 'heavy' 或 None
-    """
-    try:
-        from .task_size_detector import classify_task_size
-        result = classify_task_size(text)
-        return result.size
-    except ImportError:
-        return None
-
-
-# ==================== EXPLORE 意图支持 (从 oh-my-codex 汲取) ====================
 
 def has_explore_intent(text: str) -> bool:
     """

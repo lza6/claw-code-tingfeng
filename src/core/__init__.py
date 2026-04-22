@@ -118,7 +118,16 @@ from .models import (
     UsageSummary,
 )
 from .project_context import ProjectContext
+from .serialization import JSONSerializer, from_dict, to_dict
 from .session_store import DEFAULT_SESSION_DIR, StoredSession, load_session, save_session
+from .state import (
+    AuthoritySnapshot,
+    BacklogSnapshot,
+    ReadinessSnapshot,
+    ReplaySnapshot,
+    StateManager,
+    SystemSnapshot,
+)
 from .telemetry.exporter import get_metrics_collector as metrics_exporter
 from .telemetry.metrics import (
     MODEL_PRICING,
@@ -140,12 +149,15 @@ from .telemetry.token_tracker import (
     TrackingRecord,
 )
 from .transcript import TranscriptStore
+from .workspace import Workspace, WorkspaceManager
 
 __all__ = [
     # 现有
     'DEFAULT_SESSION_DIR',
     'MODEL_PRICING',
     'ROOT_IMPORTANT_FILES',
+    'AuthoritySnapshot',
+    'BacklogSnapshot',
     # Aider 整合
     'ClawdArgParser',
     'ClawdError',
@@ -174,6 +186,7 @@ __all__ = [
     'HookEvent',
     'HookPayload',
     'HookRunResult',
+    'JSONSerializer',
     'LLMNotConfiguredError',
     'LLMProviderError',
     'LogEntry',
@@ -190,14 +203,18 @@ __all__ = [
     'PortingModule',
     'PortingTask',
     'ProjectContext',
+    'ReadinessSnapshot',
+    'ReplaySnapshot',
     'SecurityError',
     'Session',
+    'StateManager',
     # 会话
     'StoredSession',
     # 观测性
     'StructuredLogger',
     # 基础模型
     'Subsystem',
+    'SystemSnapshot',
     'TokenTracker',
     # 成本追踪
     'TokenUsage',
@@ -207,6 +224,8 @@ __all__ = [
     'UsageRecord',
     'UsageSummary',
     'UsageTracker',
+    'Workspace',
+    'WorkspaceManager',
     'build_port_context',
     'compact_session',
     'create_error',
@@ -215,6 +234,7 @@ __all__ = [
     'filter_important_files',
     'format_compact_summary',
     'format_error',
+    'from_dict',
     'get_event_bus',
     'get_git_manager',
     'get_importance_score',
@@ -232,5 +252,6 @@ __all__ = [
     'save_session',
     'should_compact',
     'sort_by_importance',
+    'to_dict',
     'validate_edit_format',
 ]

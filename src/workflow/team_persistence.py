@@ -17,8 +17,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
-
+from typing import Any
 
 # 常量
 TEAM_STATE_FILE = "team-state.json"
@@ -34,7 +33,7 @@ class TeamMemberState:
     name: str
     role: str
     status: str = "idle"  # idle, busy, waiting, offline
-    current_task: Optional[str] = None
+    current_task: str | None = None
     joined_at: str = ""
     last_active_at: str = ""
 
@@ -58,7 +57,7 @@ class TeamStateData:
     iteration: int = 0
     max_iterations: int = 50
     started_at: str = ""
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     members: list[dict[str, Any]] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
 
@@ -90,7 +89,7 @@ class TeamStateData:
         )
 
 
-def _get_team_state_path(cwd: str = ".", session_id: Optional[str] = None) -> Path:
+def _get_team_state_path(cwd: str = ".", session_id: str | None = None) -> Path:
     """获取团队状态文件路径"""
     if session_id:
         root = TEAM_STATE_DIR / session_id
@@ -104,7 +103,7 @@ def _ensure_team_state(path: Path) -> TeamStateData:
     """确保团队状态文件存在"""
     if path.exists():
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
             return TeamStateData.from_dict(data)
         except Exception:
@@ -122,7 +121,7 @@ def _ensure_team_state(path: Path) -> TeamStateData:
     return state
 
 
-def read_team_state(cwd: str = ".", session_id: Optional[str] = None) -> TeamStateData:
+def read_team_state(cwd: str = ".", session_id: str | None = None) -> TeamStateData:
     """读取团队状态"""
     path = _get_team_state_path(cwd, session_id)
     return _ensure_team_state(path)
@@ -131,7 +130,7 @@ def read_team_state(cwd: str = ".", session_id: Optional[str] = None) -> TeamSta
 def write_team_state(
     state: TeamStateData,
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> bool:
     """写入团队状态"""
     path = _get_team_state_path(cwd, session_id)
@@ -146,7 +145,7 @@ def write_team_state(
 def add_team_member(
     member: TeamMemberState,
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> bool:
     """添加团队成员"""
     state = read_team_state(cwd, session_id)
@@ -170,7 +169,7 @@ def add_team_member(
 def remove_team_member(
     member_id: str,
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> bool:
     """移除团队成员"""
     state = read_team_state(cwd, session_id)
@@ -181,9 +180,9 @@ def remove_team_member(
 def update_member_status(
     member_id: str,
     status: str,
-    current_task: Optional[str] = None,
+    current_task: str | None = None,
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> bool:
     """更新成员状态"""
     state = read_team_state(cwd, session_id)
@@ -202,7 +201,7 @@ def add_team_message(
     content: str,
     msg_type: str = "message",
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> bool:
     """添加团队消息"""
     state = read_team_state(cwd, session_id)
@@ -220,10 +219,10 @@ def add_team_message(
 
 
 def get_team_messages(
-    member_id: Optional[str] = None,
+    member_id: str | None = None,
     limit: int = 100,
     cwd: str = ".",
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """获取团队消息"""
     state = read_team_state(cwd, session_id)
@@ -238,11 +237,11 @@ __all__ = [
     "TeamMemberState",
     "TeamMessage",
     "TeamStateData",
-    "read_team_state",
-    "write_team_state",
     "add_team_member",
-    "remove_team_member",
-    "update_member_status",
     "add_team_message",
     "get_team_messages",
+    "read_team_state",
+    "remove_team_member",
+    "update_member_status",
+    "write_team_state",
 ]

@@ -10,9 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 from enum import Enum
-
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,7 @@ class AgentOverlay:
     active: bool = True
     priority: int = 0
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -71,7 +69,7 @@ class AgentsOverlayManager:
         agent_id: str,
         layer: OverlayLayer,
         priority: int = 0,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> AgentOverlay:
         """注册遮罩"""
         overlay = AgentOverlay(
@@ -92,7 +90,7 @@ class AgentsOverlayManager:
             return True
         return False
 
-    def get(self, agent_id: str) -> Optional[AgentOverlay]:
+    def get(self, agent_id: str) -> AgentOverlay | None:
         """获取遮罩"""
         return self._overlays.get(agent_id)
 
@@ -147,7 +145,7 @@ class AgentsOverlayManager:
 
 
 # 全局单例
-_overlay_manager: Optional[AgentsOverlayManager] = None
+_overlay_manager: AgentsOverlayManager | None = None
 
 
 def get_overlay_manager() -> AgentsOverlayManager:
@@ -160,9 +158,9 @@ def get_overlay_manager() -> AgentsOverlayManager:
 
 # ===== 导出 =====
 __all__ = [
-    "OverlayLayer",
     "AgentOverlay",
-    "OverlayState",
     "AgentsOverlayManager",
+    "OverlayLayer",
+    "OverlayState",
     "get_overlay_manager",
 ]

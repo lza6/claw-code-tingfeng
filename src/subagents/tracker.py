@@ -6,11 +6,9 @@ Subagent Tracker - 子代理跟踪
 """
 
 import json
-from pathlib import Path
-from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime
-
+from pathlib import Path
 
 SUBAGENT_TRACKING_SCHEMA_VERSION = 1
 DEFAULT_SUBAGENT_ACTIVE_WINDOW_MS = 120_000
@@ -23,16 +21,16 @@ class TrackedSubagentThread:
     kind: str  # 'leader' | 'subagent'
     first_seen_at: str
     last_seen_at: str
-    last_turn_id: Optional[str] = None
+    last_turn_id: str | None = None
     turn_count: int = 0
-    mode: Optional[str] = None
+    mode: str | None = None
 
 
 @dataclass
 class TrackedSubagentSession:
     """跟踪的子代理会话"""
     session_id: str
-    leader_thread_id: Optional[str] = None
+    leader_thread_id: str | None = None
     updated_at: str = ""
     threads: dict[str, TrackedSubagentThread] = field(default_factory=dict)
 
@@ -50,8 +48,8 @@ class RecordSubagentTurnInput:
     session_id: str
     thread_id: str
     kind: str  # 'leader' | 'subagent'
-    turn_id: Optional[str] = None
-    mode: Optional[str] = None
+    turn_id: str | None = None
+    mode: str | None = None
 
 
 def subagent_tracking_file(cwd: str) -> str:
@@ -68,7 +66,7 @@ async def load_tracking_state(cwd: str) -> SubagentTrackingState:
         return SubagentTrackingState()
 
     try:
-        with open(tracking_file, "r") as f:
+        with open(tracking_file) as f:
             data = json.load(f)
         return SubagentTrackingState(
             schema_version=data.get("schemaVersion", 1),
@@ -191,15 +189,15 @@ async def get_active_subagents(cwd: str, session_id: str) -> list[TrackedSubagen
 
 # ===== 导出 =====
 __all__ = [
-    "SUBAGENT_TRACKING_SCHEMA_VERSION",
     "DEFAULT_SUBAGENT_ACTIVE_WINDOW_MS",
-    "TrackedSubagentThread",
-    "TrackedSubagentSession",
-    "SubagentTrackingState",
+    "SUBAGENT_TRACKING_SCHEMA_VERSION",
     "RecordSubagentTurnInput",
-    "subagent_tracking_file",
-    "load_tracking_state",
-    "save_tracking_state",
-    "record_subagent_turn",
+    "SubagentTrackingState",
+    "TrackedSubagentSession",
+    "TrackedSubagentThread",
     "get_active_subagents",
+    "load_tracking_state",
+    "record_subagent_turn",
+    "save_tracking_state",
+    "subagent_tracking_file",
 ]

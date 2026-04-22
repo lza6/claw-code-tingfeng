@@ -1,7 +1,7 @@
 """Autoresearch contracts for mission and sandbox definitions."""
 import subprocess
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 AutoresearchKeepPolicy = "score_improvement" | "pass_only"
 
@@ -64,7 +64,7 @@ def extract_frontmatter(content: str) -> tuple[str, str]:
 
 def parse_simple_yaml_frontmatter(frontmatter: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    current_section: Optional[str] = None
+    current_section: str | None = None
 
     for raw_line in frontmatter.split("\n"):
         line = raw_line.replace("\t", "  ")
@@ -97,7 +97,7 @@ def parse_simple_yaml_frontmatter(frontmatter: str) -> dict[str, Any]:
     return result
 
 
-def parse_keep_policy(raw: Optional[str]) -> Optional[AutoresearchKeepPolicy]:
+def parse_keep_policy(raw: str | None) -> AutoresearchKeepPolicy | None:
     if raw is None:
         return None
     normalized = raw.strip().lower()
@@ -112,7 +112,7 @@ class AutoresearchEvaluatorContract:
     """Contract for the evaluator command."""
     command: str
     format: str = "json"
-    keep_policy: Optional[AutoresearchKeepPolicy] = None
+    keep_policy: AutoresearchKeepPolicy | None = None
 
 
 class ParsedSandboxContract:
@@ -125,7 +125,7 @@ class ParsedSandboxContract:
 class AutoresearchEvaluatorResult:
     """Result from evaluator command."""
     pass_: bool
-    score: Optional[float] = None
+    score: float | None = None
 
 
 def parse_sandbox_contract(content: str) -> ParsedSandboxContract:
@@ -194,7 +194,6 @@ class AutoresearchMissionContract:
 
 async def load_autoresearch_mission_contract(mission_dir_arg: str) -> AutoresearchMissionContract:
     """Load a mission contract from a directory."""
-    import asyncio
     from pathlib import Path
 
     mission_dir = Path(mission_dir_arg).resolve()

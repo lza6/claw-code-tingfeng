@@ -18,9 +18,6 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
-
 
 # ===== 常量 =====
 SESSION_ID_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
@@ -42,12 +39,12 @@ class ModeStateFileRef:
 class ResolvedStateScope:
     """解析后的状态作用域"""
     source: str  # 'explicit' | 'session' | 'root'
-    session_id: Optional[str] = None
+    session_id: str | None = None
     state_dir: str = ""
 
 
 # ===== 验证函数 =====
-def validate_session_id(session_id: Optional[str]) -> Optional[str]:
+def validate_session_id(session_id: str | None) -> str | None:
     """验证会话 ID 格式
 
     参数:
@@ -136,7 +133,7 @@ def _enforce_working_directory_policy(resolved_working_directory: str) -> None:
 
 
 # ===== 公共 API =====
-def resolve_working_directory_for_state(working_directory: Optional[str] = None) -> str:
+def resolve_working_directory_for_state(working_directory: str | None = None) -> str:
     """解析状态工作目录
 
     参数:
@@ -195,7 +192,7 @@ def _convert_windows_to_wsl_path(raw: str) -> str:
     return f"{mount_root}/{rest}" if rest else mount_root
 
 
-def get_base_state_dir(working_directory: Optional[str] = None) -> str:
+def get_base_state_dir(working_directory: str | None = None) -> str:
     """获取基础状态目录
 
     参数:
@@ -220,7 +217,7 @@ def get_base_state_dir(working_directory: Optional[str] = None) -> str:
     )
 
 
-def get_state_dir(working_directory: Optional[str] = None, session_id: Optional[str] = None) -> str:
+def get_state_dir(working_directory: str | None = None, session_id: str | None = None) -> str:
     """获取状态目录
 
     参数:
@@ -236,7 +233,7 @@ def get_state_dir(working_directory: Optional[str] = None, session_id: Optional[
     return base
 
 
-def get_state_path(mode: str, working_directory: Optional[str] = None, session_id: Optional[str] = None) -> str:
+def get_state_path(mode: str, working_directory: str | None = None, session_id: str | None = None) -> str:
     """获取状态文件路径
 
     参数:
@@ -253,7 +250,7 @@ def get_state_path(mode: str, working_directory: Optional[str] = None, session_i
     )
 
 
-async def read_current_session_id(working_directory: Optional[str] = None) -> Optional[str]:
+async def read_current_session_id(working_directory: str | None = None) -> str | None:
     """读取当前会话 ID
 
     参数:
@@ -268,7 +265,7 @@ async def read_current_session_id(working_directory: Optional[str] = None) -> Op
         return None
 
     try:
-        with open(session_path, 'r', encoding='utf-8') as f:
+        with open(session_path, encoding='utf-8') as f:
             data = json.load(f)
         session_id = data.get('session_id')
         return validate_session_id(session_id)
@@ -277,8 +274,8 @@ async def read_current_session_id(working_directory: Optional[str] = None) -> Op
 
 
 async def resolve_state_scope(
-    working_directory: Optional[str] = None,
-    explicit_session_id: Optional[str] = None,
+    working_directory: str | None = None,
+    explicit_session_id: str | None = None,
 ) -> ResolvedStateScope:
     """解析状态作用域
 
@@ -312,8 +309,8 @@ async def resolve_state_scope(
 
 
 async def get_read_scoped_state_dirs(
-    working_directory: Optional[str] = None,
-    explicit_session_id: Optional[str] = None,
+    working_directory: str | None = None,
+    explicit_session_id: str | None = None,
 ) -> list[str]:
     """获取读取作用域的状态目录列表
 
@@ -339,8 +336,8 @@ async def get_read_scoped_state_dirs(
 
 async def get_read_scoped_state_paths(
     mode: str,
-    working_directory: Optional[str] = None,
-    explicit_session_id: Optional[str] = None,
+    working_directory: str | None = None,
+    explicit_session_id: str | None = None,
 ) -> list[str]:
     """获取读取作用域的状态文件路径列表"""
     dirs = await get_read_scoped_state_dirs(working_directory, explicit_session_id)
@@ -354,8 +351,8 @@ def is_mode_state_filename(filename: str) -> bool:
 
 
 async def list_mode_state_files_with_scope_preference(
-    working_directory: Optional[str] = None,
-    explicit_session_id: Optional[str] = None,
+    working_directory: str | None = None,
+    explicit_session_id: str | None = None,
 ) -> list[ModeStateFileRef]:
     """列出具有作用域优先级的模式状态文件
 
@@ -388,18 +385,18 @@ async def list_mode_state_files_with_scope_preference(
 
 # ===== 导出 =====
 __all__ = [
-    "validate_session_id",
-    "validate_state_mode_segment",
-    "resolve_working_directory_for_state",
-    "get_base_state_dir",
-    "get_state_dir",
-    "get_state_path",
-    "resolve_state_scope",
-    "read_current_session_id",
-    "get_read_scoped_state_dirs",
-    "get_read_scoped_state_paths",
-    "is_mode_state_filename",
-    "list_mode_state_files_with_scope_preference",
     "ModeStateFileRef",
     "ResolvedStateScope",
+    "get_base_state_dir",
+    "get_read_scoped_state_dirs",
+    "get_read_scoped_state_paths",
+    "get_state_dir",
+    "get_state_path",
+    "is_mode_state_filename",
+    "list_mode_state_files_with_scope_preference",
+    "read_current_session_id",
+    "resolve_state_scope",
+    "resolve_working_directory_for_state",
+    "validate_session_id",
+    "validate_state_mode_segment",
 ]

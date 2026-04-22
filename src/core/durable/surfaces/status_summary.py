@@ -50,8 +50,8 @@ class StatusSummary(Surface):
     to read all other surfaces.
     """
 
-    run_id: str
-    phase: RunPhase
+    run_id: str = ""
+    phase: RunPhase = RunPhase.INITIALIZING
 
     # Progress
     progress_percentage: float = 0.0  # 0-100

@@ -5,7 +5,6 @@ Templates Module - 任务模板清单
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -85,7 +84,7 @@ class TemplateManifest:
         """按类别获取模板"""
         return [t for t in self.templates if t.category == category]
 
-    def get(self, name: str) -> Optional[TemplateDefinition]:
+    def get(self, name: str) -> TemplateDefinition | None:
         """获取模板"""
         for t in self.templates:
             if t.name == name:
@@ -94,7 +93,7 @@ class TemplateManifest:
 
 
 # 全局模板清单
-_template_manifest: Optional[TemplateManifest] = None
+_template_manifest: TemplateManifest | None = None
 
 
 def get_template_manifest() -> TemplateManifest:
@@ -108,10 +107,10 @@ def get_template_manifest() -> TemplateManifest:
 class TemplateLoader:
     """模板加载器"""
 
-    def __init__(self, manifest: Optional[TemplateManifest] = None):
+    def __init__(self, manifest: TemplateManifest | None = None):
         self._manifest = manifest or get_template_manifest()
 
-    def load(self, name: str) -> Optional[dict]:
+    def load(self, name: str) -> dict | None:
         """加载模板"""
         template = self._manifest.get(name)
         if not template:
@@ -148,10 +147,10 @@ class TemplateLoader:
 class TemplateLoader:
     """模板加载器"""
 
-    def __init__(self, manifest: Optional[TemplateManifest] = None):
+    def __init__(self, manifest: TemplateManifest | None = None):
         self._manifest = manifest or get_template_manifest()
 
-    def load(self, name: str) -> Optional[dict]:
+    def load(self, name: str) -> dict | None:
         """加载模板"""
         template = self._manifest.get(name)
         if not template:

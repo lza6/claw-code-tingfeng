@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-
 from ..surface import Surface
 
 
@@ -30,7 +29,7 @@ class FreshnessState(Surface):
 
     Helps the agent decide when to re-explore or re-verify information.
     """
-    run_id: str
+    run_id: str = ""
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     # Resource ID -> FreshnessEntry

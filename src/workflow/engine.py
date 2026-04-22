@@ -38,6 +38,7 @@ from ..core.persistence.run_state import RunStateManager
 from ..core.resource_monitor import ResourceMonitor
 from ..core.runtime.host import RuntimeHost
 from ..llm.model_manager import ModelManager
+from ..mcp import get_state_server
 from ..memory.manager import MemoryManager
 from ..memory.models import JournalEntry
 from ..rag.code_graph import CodeGraph
@@ -135,8 +136,9 @@ class WorkflowEngine:
         self.protocol_manager = ProtocolManager()
         self.resource_monitor = ResourceMonitor()
         self._use_isolation = (self.workdir / ".git").exists()
-        # 延迟初始化依赖 run_id 的组件
-        self.state_manager = None
+
+        # [新增] 集成 OMX 状态管理
+        self.state_manager = get_state_server(self.workdir / ".clawd" / "state")
         self.liveness_monitor = None
         self.budget_guard = BudgetGuard(parse_budget_string(budget_str))
         self.assurance_manager = None
@@ -896,7 +898,8 @@ class WorkflowEngine:
             # [Project B] 同步更新 ControlState
             if self.state_manager.surface_manager:
                 try:
-                    from ..core.durable.surfaces.control_state import ControlState, RunPhase as DurableRunPhase
+                    from ..core.durable.surfaces.control_state import ControlState
+                    from ..core.durable.surfaces.control_state import RunPhase as DurableRunPhase
                     control = self.state_manager.surface_manager.load_surface("control_state", ControlState)
                     control.phase = DurableRunPhase.EXECUTE if all_tasks else DurableRunPhase.PLAN
                     control.active_session_count = len([t for t in all_tasks if t.status == WorkflowStatus.RUNNING])

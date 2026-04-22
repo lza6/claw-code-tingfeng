@@ -5,7 +5,6 @@ Visual Verdict - 可视化判决
 提供视觉验证和判决功能。
 """
 
-from typing import Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -127,12 +126,12 @@ def create_visual_loop_feedback(
 
 # ===== 导出 =====
 __all__ = [
-    "VisualVerdictStatus",
-    "VisualVerdict",
-    "VisualLoopFeedback",
     "VISUAL_NEXT_ACTIONS_LIMIT",
     "VISUAL_VERDICT_STATUSES",
+    "VisualLoopFeedback",
+    "VisualVerdict",
+    "VisualVerdictStatus",
+    "create_visual_loop_feedback",
     "parse_visual_verdict_status",
     "validate_verdict_data",
-    "create_visual_loop_feedback",
 ]

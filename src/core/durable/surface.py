@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field, asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Type, TypeVar, Generic
+from typing import Any, Generic, TypeVar
 
 from ...utils.file_ops import atomic_write_json
 
@@ -29,7 +30,7 @@ class Surface:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
+    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Create a surface from a dictionary."""
         # This is a basic implementation; subclasses should override for complex nested structures
         fields = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
@@ -45,7 +46,7 @@ class SurfaceManager(Generic[T]):
 
     Handles atomic reading and writing with optimistic concurrency control.
     """
-    def __init__(self, surface_cls: Type[T], storage_path: Path):
+    def __init__(self, surface_cls: type[T], storage_path: Path):
         self.surface_cls = surface_cls
         self.storage_path = storage_path
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)

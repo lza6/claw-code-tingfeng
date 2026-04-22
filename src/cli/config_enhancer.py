@@ -5,9 +5,8 @@ CLI Config Enhancer - CLI 配置增强
 增强 CLI 配置加载和原生资源管理。
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
 import os
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -15,7 +14,7 @@ class AgentConfig:
     """Agent配置"""
     name: str
     enabled: bool = True
-    model: Optional[str] = None
+    model: str | None = None
     max_retries: int = 3
     timeout: int = 300
 
@@ -42,7 +41,7 @@ class ConfigEnhancer:
     """配置增强器"""
 
     def __init__(self):
-        self._config: Optional[CLIConfig] = None
+        self._config: CLIConfig | None = None
 
     def load(self) -> CLIConfig:
         """加载配置"""
@@ -87,12 +86,12 @@ class ConfigEnhancer:
                 ))
         return assets
 
-    def _which(self, cmd: str) -> Optional[str]:
+    def _which(self, cmd: str) -> str | None:
         """查找命令路径"""
         import shutil
         return shutil.which(cmd)
 
-    def get_agent_config(self, name: str) -> Optional[AgentConfig]:
+    def get_agent_config(self, name: str) -> AgentConfig | None:
         """获取 Agent 配置"""
         config = self.load()
         for agent in config.agents:
@@ -107,7 +106,7 @@ class ConfigEnhancer:
 
 
 # 全局配置实例
-_config_enhancer: Optional[ConfigEnhancer] = None
+_config_enhancer: ConfigEnhancer | None = None
 
 
 def get_config_enhancer() -> ConfigEnhancer:

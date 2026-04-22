@@ -6,15 +6,15 @@ Templates Module - 任务模板系统
 """
 
 from src.templates.manifest import (
-    TemplateManifest,
     TemplateDefinition,
     TemplateLoader,
+    TemplateManifest,
     get_template_manifest,
 )
 
 __all__ = [
-    "TemplateManifest",
     "TemplateDefinition",
     "TemplateLoader",
+    "TemplateManifest",
     "get_template_manifest",
 ]

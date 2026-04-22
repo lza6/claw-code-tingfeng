@@ -6,14 +6,14 @@
 3. 角色代入：完全代入特定技能所要求的专家身份、约束和执行流。
 """
 from __future__ import annotations
+
 import logging
 import re
 from pathlib import Path
-from typing import Any, Optional
 
 from .base_agent import BaseAgent
 from .message_bus import AgentMessage, MessageBus
-from .roles import AgentRole, ROLE_SYSTEM_PROMPTS
+from .roles import ROLE_SYSTEM_PROMPTS, AgentRole
 
 logger = logging.getLogger("agent.synthesized")
 
@@ -23,7 +23,7 @@ class SynthesizedAgent(BaseAgent):
         agent_id: str,
         message_bus: MessageBus,
         dynamic_instruction: str = "",
-        skill_name: Optional[str] = None
+        skill_name: str | None = None
     ) -> None:
         super().__init__(agent_id, AgentRole.SYNTHESIZED, message_bus)
         self.dynamic_instruction = dynamic_instruction

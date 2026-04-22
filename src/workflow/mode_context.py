@@ -5,18 +5,18 @@ Mode State Context - 模式状态上下文
 提供模式运行时上下文管理。
 """
 
-from dataclasses import dataclass
-from typing import Any, Optional
-import os
 import datetime
+import os
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class ModeStateContext:
     """模式状态上下文"""
     active: bool = False
-    tmux_pane_id: Optional[str] = None
-    tmux_pane_set_at: Optional[str] = None
+    tmux_pane_id: str | None = None
+    tmux_pane_set_at: str | None = None
     extra: dict[str, Any] = None
 
     def __post_init__(self):
@@ -24,7 +24,7 @@ class ModeStateContext:
             self.extra = {}
 
 
-def capture_tmux_pane_from_env(env: Optional[dict] = None) -> Optional[str]:
+def capture_tmux_pane_from_env(env: dict | None = None) -> str | None:
     """从环境变量捕获 tmux pane"""
     env = env or os.environ
     pane = env.get("TMUX_PANE")
@@ -41,8 +41,8 @@ def has_non_empty_string(value: Any) -> bool:
 def with_mode_runtime_context(
     existing: ModeStateContext,
     next_state: ModeStateContext,
-    env: Optional[dict] = None,
-    now_iso: Optional[str] = None,
+    env: dict | None = None,
+    now_iso: str | None = None,
 ) -> ModeStateContext:
     """合并模式运行时上下文"""
     env = env or os.environ

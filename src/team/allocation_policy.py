@@ -10,8 +10,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,7 @@ class AllocationPolicyManager:
     - 容量管理
     """
 
-    def __init__(self, policy: Optional[AllocationPolicy] = None):
+    def __init__(self, policy: AllocationPolicy | None = None):
         self.policy = policy or AllocationPolicy()
         self._workers: dict[str, WorkerCapacity] = {}
 
@@ -81,11 +79,11 @@ class AllocationPolicyManager:
             return True
         return False
 
-    def get_worker(self, worker_id: str) -> Optional[WorkerCapacity]:
+    def get_worker(self, worker_id: str) -> WorkerCapacity | None:
         """获取 Worker"""
         return self._workers.get(worker_id)
 
-    def select_worker(self) -> Optional[str]:
+    def select_worker(self) -> str | None:
         """选择 Worker"""
         available = [w for w in self._workers.values() if w.available]
         if not available:
@@ -146,7 +144,7 @@ class AllocationPolicyManager:
 
 
 # 全局单例
-_allocation_manager: Optional[AllocationPolicyManager] = None
+_allocation_manager: AllocationPolicyManager | None = None
 
 
 def get_allocation_manager() -> AllocationPolicyManager:
@@ -159,10 +157,10 @@ def get_allocation_manager() -> AllocationPolicyManager:
 
 # ===== 导出 =====
 __all__ = [
+    "AllocationPolicy",
+    "AllocationPolicyManager",
     "AllocationStrategy",
     "ResourceType",
     "WorkerCapacity",
-    "AllocationPolicy",
-    "AllocationPolicyManager",
     "get_allocation_manager",
 ]

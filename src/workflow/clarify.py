@@ -4,12 +4,10 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from ..llm.model_manager import ModelManager
-from .models import ObjectiveContract
 
 logger = logging.getLogger("workflow.clarify")
 

@@ -18,9 +18,8 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .indexer_utils import read_file_cached
 
@@ -46,13 +45,12 @@ class CodeNode:
 def _parse_file_task(root_dir: Path, rel_path: str):
     """独立的进程任务: 解析单个文件"""
     from .code_graph import CodeNode, _parse_content_for_node
-    import hashlib
     abs_path = root_dir / rel_path
     try:
         stat = abs_path.stat()
         if stat.st_size > MAX_PARSE_SIZE:
              # 对于超大文件，只读取头部进行解析，避免内存爆炸
-             with open(abs_path, 'r', encoding='utf-8', errors='replace') as f:
+             with open(abs_path, encoding='utf-8', errors='replace') as f:
                  source = f.read(MAX_PARSE_SIZE)
         else:
              source = abs_path.read_text(encoding='utf-8', errors='replace')
@@ -74,7 +72,6 @@ def _parse_content_for_node(source: str, node: CodeNode):
     """解析逻辑抽离，以便多进程调用"""
     # 静态导入，避免循环引用
     import ast
-    import re
     ext = node.language
     if ext == 'py':
         try:

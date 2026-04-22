@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -293,15 +293,15 @@ def calculate_team_phase(
 
 # ===== 导出 =====
 __all__ = [
-    "TeamPhase",
-    "TerminalPhase",
     "TaskCounts",
+    "TeamPhase",
     "TeamPhaseState",
-    "is_valid_transition",
-    "is_terminal_phase",
-    "infer_phase_target_from_task_counts",
+    "TerminalPhase",
     "build_transition_path",
-    "reconcile_phase_state_for_monitor",
     "calculate_team_phase",
     "default_persisted_phase_state",
+    "infer_phase_target_from_task_counts",
+    "is_terminal_phase",
+    "is_valid_transition",
+    "reconcile_phase_state_for_monitor",
 ]

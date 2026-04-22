@@ -4,7 +4,7 @@ Defines types for the OpenClaw gateway waker system.
 Each hook event can be mapped to a gateway with a pre-defined instruction.
 """
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 # Hook events that can trigger OpenClaw gateway calls
 OpenClawHookEvent = "session_start" | "session_end" | "session_idle" | "ask_user_question" | "stop"
@@ -16,7 +16,7 @@ class OpenClawHttpGatewayConfig:
     """HTTP gateway configuration."""
     type: str = "http"
     url: str = ""
-    headers: Optional[dict[str, str]] = None
+    headers: dict[str, str] | None = None
     method: str = "POST"
     timeout: int = 10000
 
@@ -49,7 +49,7 @@ class OpenClawConfig:
     """Top-level config schema."""
     enabled: bool = False
     gateways: dict[str, OpenClawGatewayConfig] = None
-    hooks: Optional[dict[str, OpenClawHookMapping]] = None
+    hooks: dict[str, OpenClawHookMapping] | None = None
 
     def __post_init__(self):
         if self.gateways is None:
@@ -66,15 +66,15 @@ class OpenClawPayload:
     instruction: str = ""
     text: str = ""
     timestamp: str = ""
-    session_id: Optional[str] = None
-    project_path: Optional[str] = None
-    project_name: Optional[str] = None
-    tmux_session: Optional[str] = None
-    tmux_tail: Optional[str] = None
-    channel: Optional[str] = None
-    to: Optional[str] = None
-    thread_id: Optional[str] = None
-    context: Optional[dict[str, Any]] = None
+    session_id: str | None = None
+    project_path: str | None = None
+    project_name: str | None = None
+    tmux_session: str | None = None
+    tmux_tail: str | None = None
+    channel: str | None = None
+    to: str | None = None
+    thread_id: str | None = None
+    context: dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.context is None:
@@ -85,17 +85,17 @@ class OpenClawPayload:
 @dataclass
 class OpenClawContext:
     """Context data passed from the hook."""
-    session_id: Optional[str] = None
-    project_path: Optional[str] = None
-    tmux_session: Optional[str] = None
-    prompt: Optional[str] = None
-    context_summary: Optional[str] = None
-    reason: Optional[str] = None
-    question: Optional[str] = None
-    tmux_tail: Optional[str] = None
-    reply_channel: Optional[str] = None
-    reply_target: Optional[str] = None
-    reply_thread: Optional[str] = None
+    session_id: str | None = None
+    project_path: str | None = None
+    tmux_session: str | None = None
+    prompt: str | None = None
+    context_summary: str | None = None
+    reason: str | None = None
+    question: str | None = None
+    tmux_tail: str | None = None
+    reply_channel: str | None = None
+    reply_target: str | None = None
+    reply_thread: str | None = None
 
 
 # Result of a gateway wake attempt
@@ -104,8 +104,8 @@ class OpenClawResult:
     """Result of a gateway wake attempt."""
     gateway: str = ""
     success: bool = False
-    error: Optional[str] = None
-    status_code: Optional[int] = None
+    error: str | None = None
+    status_code: int | None = None
 
 
 # Type aliases for backward compatibility

@@ -6,8 +6,8 @@ Hook Extensibility Types - 钩子扩展系统类型定义
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Protocol, TypeVar
 from enum import Enum
+from typing import Any
 
 
 # ===== 钩子事件版本 =====
@@ -52,12 +52,12 @@ class HookEventEnvelope:
     timestamp: str = ""
     source: HookEventSource = HookEventSource.NATIVE
     context: dict[str, Any] = field(default_factory=dict)
-    session_id: Optional[str] = None
-    thread_id: Optional[str] = None
-    turn_id: Optional[str] = None
-    mode: Optional[str] = None
-    confidence: Optional[float] = None
-    parser_reason: Optional[str] = None
+    session_id: str | None = None
+    thread_id: str | None = None
+    turn_id: str | None = None
+    mode: str | None = None
+    confidence: float | None = None
+    parser_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -85,25 +85,25 @@ class HookPluginDescriptor:
     file_path: str
     file_name: str
     valid: bool = True
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass
 class HookPluginLogContext:
     """钩子插件日志上下文"""
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
     event: str = ""
-    plugin_id: Optional[str] = None
-    status: Optional[str] = None
-    reason: Optional[str] = None
-    source: Optional[HookEventSource] = None
+    plugin_id: str | None = None
+    status: str | None = None
+    reason: str | None = None
+    source: HookEventSource | None = None
 
 
 @dataclass
 class HookPluginTmuxSendKeysOptions:
     """TMux发送按键选项"""
-    pane_id: Optional[str] = None
-    session_name: Optional[str] = None
+    pane_id: str | None = None
+    session_name: str | None = None
     text: str = ""
     submit: bool = True
     cooldown_ms: int = 0
@@ -114,9 +114,9 @@ class HookPluginTmuxSendKeysResult:
     """TMux发送按键结果"""
     ok: bool
     reason: str
-    target: Optional[str] = None
-    pane_id: Optional[str] = None
-    error: Optional[str] = None
+    target: str | None = None
+    pane_id: str | None = None
+    error: str | None = None
 
 
 # ===== OMX状态类型 =====
@@ -124,45 +124,45 @@ class HookPluginTmuxSendKeysResult:
 class HookPluginOmxSessionState:
     """OMX会话状态"""
     session_id: str
-    started_at: Optional[str] = None
-    cwd: Optional[str] = None
-    pid: Optional[int] = None
-    platform: Optional[str] = None
-    pid_start_ticks: Optional[int] = None
-    pid_cmdline: Optional[str] = None
+    started_at: str | None = None
+    cwd: str | None = None
+    pid: int | None = None
+    platform: str | None = None
+    pid_start_ticks: int | None = None
+    pid_cmdline: str | None = None
 
 
 @dataclass
 class HookPluginOmxHudState:
     """OMX HUD状态"""
-    last_turn_at: Optional[str] = None
-    turn_count: Optional[int] = None
-    last_agent_output: Optional[str] = None
+    last_turn_at: str | None = None
+    turn_count: int | None = None
+    last_agent_output: str | None = None
 
 
 @dataclass
 class HookPluginOmxNotifyFallbackState:
     """OMX通知回退状态"""
-    pid: Optional[int] = None
-    parent_pid: Optional[int] = None
-    started_at: Optional[str] = None
-    cwd: Optional[str] = None
-    notify_script: Optional[str] = None
-    poll_ms: Optional[int] = None
-    pid_file: Optional[str] = None
-    max_lifetime_ms: Optional[int] = None
-    tracked_files: Optional[int] = None
-    seen_turns: Optional[int] = None
-    stop_reason: Optional[str] = None
-    stop_signal: Optional[str] = None
+    pid: int | None = None
+    parent_pid: int | None = None
+    started_at: str | None = None
+    cwd: str | None = None
+    notify_script: str | None = None
+    poll_ms: int | None = None
+    pid_file: str | None = None
+    max_lifetime_ms: int | None = None
+    tracked_files: int | None = None
+    seen_turns: int | None = None
+    stop_reason: str | None = None
+    stop_signal: str | None = None
     stopping: bool = False
 
 
 @dataclass
 class HookPluginOmxUpdateCheckState:
     """OMX更新检查状态"""
-    last_checked_at: Optional[str] = None
-    last_seen_latest: Optional[str] = None
+    last_checked_at: str | None = None
+    last_seen_latest: str | None = None
 
 
 # ===== 调度结果类型 =====
@@ -186,14 +186,14 @@ class HookPluginDispatchResult:
     path: str
     ok: bool
     duration_ms: int
-    plugin_id: Optional[str] = None
-    file: Optional[str] = None
-    status: Optional[HookPluginDispatchStatus] = None
-    duration_ms: Optional[int] = None
-    reason: Optional[str] = None
-    output: Optional[Any] = None
-    error: Optional[str] = None
-    exit_code: Optional[int] = None
+    plugin_id: str | None = None
+    file: str | None = None
+    status: HookPluginDispatchStatus | None = None
+    duration_ms: int | None = None
+    reason: str | None = None
+    output: Any | None = None
+    error: str | None = None
+    exit_code: int | None = None
     skipped: bool = False
 
 
@@ -202,7 +202,7 @@ class HookDispatchResult:
     """钩子调度结果"""
     enabled: bool
     event: str
-    source: Optional[HookEventSource] = None
+    source: HookEventSource | None = None
     plugin_count: int = 0
     reason: str = ""
     results: list[HookPluginDispatchResult] = field(default_factory=list)
@@ -211,22 +211,22 @@ class HookDispatchResult:
 @dataclass
 class HookDispatchOptions:
     """钩子调度选项"""
-    cwd: Optional[str] = None
-    event: Optional[HookEventEnvelope] = None
-    env: Optional[dict] = None
-    timeout_ms: Optional[int] = None
-    allow_in_team_worker: Optional[bool] = None
-    allow_team_worker_side_effects: Optional[bool] = None
-    side_effects_enabled: Optional[bool] = None
-    enabled: Optional[bool] = None
+    cwd: str | None = None
+    event: HookEventEnvelope | None = None
+    env: dict | None = None
+    timeout_ms: int | None = None
+    allow_in_team_worker: bool | None = None
+    allow_team_worker_side_effects: bool | None = None
+    side_effects_enabled: bool | None = None
+    enabled: bool | None = None
 
 
 @dataclass
 class HookValidateOptions:
     """钩子验证选项"""
-    cwd: Optional[str] = None
-    env: Optional[dict] = None
-    timeout_ms: Optional[int] = None
+    cwd: str | None = None
+    env: dict | None = None
+    timeout_ms: int | None = None
 
 
 @dataclass
@@ -234,8 +234,8 @@ class HookRuntimeDispatchInput:
     """运行时调度输入"""
     cwd: str
     event: HookEventEnvelope
-    allow_team_worker_side_effects: Optional[bool] = None
-    side_effects_enabled: Optional[bool] = None
+    allow_team_worker_side_effects: bool | None = None
+    side_effects_enabled: bool | None = None
 
 
 @dataclass
@@ -249,22 +249,22 @@ class HookRuntimeDispatchResult:
 @dataclass
 class HookDispatchOptions:
     """钩子调度选项"""
-    cwd: Optional[str] = None
-    event: Optional[HookEventEnvelope] = None
-    env: Optional[dict] = None
-    timeout_ms: Optional[int] = None
-    allow_in_team_worker: Optional[bool] = None
-    allow_team_worker_side_effects: Optional[bool] = None
-    side_effects_enabled: Optional[bool] = None
-    enabled: Optional[bool] = None
+    cwd: str | None = None
+    event: HookEventEnvelope | None = None
+    env: dict | None = None
+    timeout_ms: int | None = None
+    allow_in_team_worker: bool | None = None
+    allow_team_worker_side_effects: bool | None = None
+    side_effects_enabled: bool | None = None
+    enabled: bool | None = None
 
 
 @dataclass
 class HookValidateOptions:
     """钩子验证选项"""
-    cwd: Optional[str] = None
-    env: Optional[dict] = None
-    timeout_ms: Optional[int] = None
+    cwd: str | None = None
+    env: dict | None = None
+    timeout_ms: int | None = None
 
 
 @dataclass
@@ -272,8 +272,8 @@ class HookRuntimeDispatchInput:
     """运行时调度输入"""
     cwd: str
     event: HookEventEnvelope
-    allow_team_worker_side_effects: Optional[bool] = None
-    side_effects_enabled: Optional[bool] = None
+    allow_team_worker_side_effects: bool | None = None
+    side_effects_enabled: bool | None = None
 
 
 @dataclass
@@ -286,23 +286,23 @@ class HookRuntimeDispatchResult:
 
 # ===== 导出 =====
 __all__ = [
-    "HookSchemaVersion",
-    "HookEventSource",
-    "HookEventName",
+    "HookDispatchOptions",
+    "HookDispatchResult",
     "HookEventEnvelope",
+    "HookEventName",
+    "HookEventSource",
     "HookPluginDescriptor",
+    "HookPluginDispatchResult",
+    "HookPluginDispatchStatus",
     "HookPluginLogContext",
-    "HookPluginTmuxSendKeysOptions",
-    "HookPluginTmuxSendKeysResult",
-    "HookPluginOmxSessionState",
     "HookPluginOmxHudState",
     "HookPluginOmxNotifyFallbackState",
+    "HookPluginOmxSessionState",
     "HookPluginOmxUpdateCheckState",
-    "HookPluginDispatchStatus",
-    "HookPluginDispatchResult",
-    "HookDispatchResult",
-    "HookDispatchOptions",
-    "HookValidateOptions",
+    "HookPluginTmuxSendKeysOptions",
+    "HookPluginTmuxSendKeysResult",
     "HookRuntimeDispatchInput",
     "HookRuntimeDispatchResult",
+    "HookSchemaVersion",
+    "HookValidateOptions",
 ]

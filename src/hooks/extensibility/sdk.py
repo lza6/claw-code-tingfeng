@@ -5,11 +5,9 @@ Hook SDK - 钩子插件 SDK
 创建钩子插件的 SDK 接口。
 """
 
-import os
 import json
 from pathlib import Path
-from typing import Any, Optional
-from dataclasses import dataclass
+from typing import Any
 
 
 def create_hook_plugin_sdk(
@@ -44,13 +42,13 @@ def create_hook_plugin_tmux_api(cwd: str, plugin_name: str) -> dict:
 
 def create_hook_plugin_logger(cwd: str, plugin_name: str, event: dict) -> dict:
     """创建日志 API"""
-    def log_info(message: str, meta: Optional[dict] = None) -> None:
+    def log_info(message: str, meta: dict | None = None) -> None:
         print(f"[{plugin_name}] INFO: {message}")
 
-    def log_warn(message: str, meta: Optional[dict] = None) -> None:
+    def log_warn(message: str, meta: dict | None = None) -> None:
         print(f"[{plugin_name}] WARN: {message}")
 
-    def log_error(message: str, meta: Optional[dict] = None) -> None:
+    def log_error(message: str, meta: dict | None = None) -> None:
         print(f"[{plugin_name}] ERROR: {message}")
 
     return {
@@ -69,7 +67,7 @@ def create_hook_plugin_state_api(cwd: str, plugin_name: str) -> dict:
         file_path = state_dir / f"{key}.json"
         if file_path.exists():
             try:
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     return json.load(f)
             except Exception:
                 pass
@@ -89,7 +87,7 @@ def create_hook_plugin_state_api(cwd: str, plugin_name: str) -> dict:
         result = {}
         for f in state_dir.glob("*.json"):
             try:
-                with open(f, "r") as f:
+                with open(f) as f:
                     result[f.stem] = json.load(f)
             except Exception:
                 pass
@@ -105,41 +103,41 @@ def create_hook_plugin_state_api(cwd: str, plugin_name: str) -> dict:
 
 def create_hook_plugin_omx_api(cwd: str) -> dict:
     """创建 OMX 状态 API"""
-    async def read_session() -> Optional[dict]:
+    async def read_session() -> dict | None:
         session_file = Path(cwd) / ".omx" / "state" / "session.json"
         if session_file.exists():
             try:
-                with open(session_file, "r") as f:
+                with open(session_file) as f:
                     return json.load(f)
             except Exception:
                 pass
         return None
 
-    async def read_hud() -> Optional[dict]:
+    async def read_hud() -> dict | None:
         hud_file = Path(cwd) / ".omx" / "state" / "hud.json"
         if hud_file.exists():
             try:
-                with open(hud_file, "r") as f:
+                with open(hud_file) as f:
                     return json.load(f)
             except Exception:
                 pass
         return None
 
-    async def read_notify_fallback() -> Optional[dict]:
+    async def read_notify_fallback() -> dict | None:
         notify_file = Path(cwd) / ".omx" / "state" / "notify_fallback.json"
         if notify_file.exists():
             try:
-                with open(notify_file, "r") as f:
+                with open(notify_file) as f:
                     return json.load(f)
             except Exception:
                 pass
         return None
 
-    async def read_update_check() -> Optional[dict]:
+    async def read_update_check() -> dict | None:
         update_file = Path(cwd) / ".omx" / "state" / "update_check.json"
         if update_file.exists():
             try:
-                with open(update_file, "r") as f:
+                with open(update_file) as f:
                     return json.load(f)
             except Exception:
                 pass
@@ -163,6 +161,6 @@ async def clear_hook_plugin_state(cwd: str, plugin_name: str) -> None:
 
 # ===== 导出 =====
 __all__ = [
-    "create_hook_plugin_sdk",
     "clear_hook_plugin_state",
+    "create_hook_plugin_sdk",
 ]

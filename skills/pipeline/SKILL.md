@@ -25,50 +25,6 @@ Pipeline parameters are configurable per run:
 | `maxRalphIterations` | 10 | Ralph verification iteration ceiling |
 | `workerCount` | 2 | Number of Codex CLI team workers |
 | `agentType` | `executor` | Agent type for team workers |
-| `pauseAfterRalplan` | false | Pause after planning phase for review |
-| `pauseAfterExecution` | false | Pause after execution for QA check |
-| `maxQaCycles` | 5 | Maximum QA iteration cycles |
-| `skipValidation` | false | Skip multi-perspective validation |
-
-## Configuration Schema
-
-```typescript
-interface PipelineConfig {
-  name: string;
-  stages: PipelineStage[];
-  options?: {
-    maxRalphIterations?: number;
-    workerCount?: number;
-    agentType?: 'executor' | 'architect' | 'coder';
-    pauseAfterRalplan?: boolean;
-    pauseAfterExecution?: boolean;
-    maxQaCycles?: number;
-    skipValidation?: boolean;
-  };
-}
-```
-| `pauseAfterRalplan` | false | Pause after planning phase for review |
-| `pauseAfterExecution` | false | Pause after execution for QA check |
-| `maxQaCycles` | 5 | Maximum QA iteration cycles |
-| `skipValidation` | false | Skip multi-perspective validation |
-
-## Configuration Schema
-
-```typescript
-interface PipelineConfig {
-  name: string;
-  stages: PipelineStage[];
-  options?: {
-    maxRalphIterations?: number;
-    workerCount?: number;
-    agentType?: 'executor' | 'architect' | 'coder';
-    pauseAfterRalplan?: boolean;
-    pauseAfterExecution?: boolean;
-    maxQaCycles?: number;
-    skipValidation?: boolean;
-  };
-}
-```
 
 ## Stage Interface
 

@@ -6,14 +6,11 @@ Session History Search - 会话历史搜索
 增强版: 添加日期范围搜索、项目过滤、上下文窗口等
 """
 
-import os
 import json
 import re
-from pathlib import Path
-from typing import Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-
+from pathlib import Path
 
 # ===== 常量 =====
 DEFAULT_LIMIT = 10
@@ -26,14 +23,14 @@ DURATION_RE = re.compile(r'^(\d+)([sSmMdDwW])$')
 @dataclass
 class SessionSearchQuery:
     """会话搜索查询"""
-    text: Optional[str] = None
-    agent_name: Optional[str] = None
-    mode: Optional[str] = None
-    date_from: Optional[datetime] = None
-    date_to: Optional[datetime] = None
-    project: Optional[str] = None  # 项目路径过滤
-    session: Optional[str] = None  # 会话ID过滤
-    since: Optional[str] = None    # 时间段: 7d, 24h, 1w
+    text: str | None = None
+    agent_name: str | None = None
+    mode: str | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    project: str | None = None  # 项目路径过滤
+    session: str | None = None  # 会话ID过滤
+    since: str | None = None    # 时间段: 7d, 24h, 1w
     context: int = DEFAULT_CONTEXT  # 上下文窗口大小
     case_sensitive: bool = False
     limit: int = DEFAULT_LIMIT
@@ -47,8 +44,8 @@ class SessionEntry:
     timestamp: str
     user_message: str
     agent_response: str
-    agent_name: Optional[str] = None
-    mode: Optional[str] = None
+    agent_name: str | None = None
+    mode: str | None = None
     tool_calls: list = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
@@ -63,7 +60,7 @@ class SearchResult:
 
 
 # ===== 工具函数 =====
-def parse_since_spec(value: Optional[str], now: Optional[datetime] = None) -> Optional[datetime]:
+def parse_since_spec(value: str | None, now: datetime | None = None) -> datetime | None:
     """解析时间段规格 (如 7d, 24h, 1w)
 
     参数:
@@ -115,7 +112,7 @@ def clamp_integer(value: int, fallback: int, max_val: int) -> int:
     return min(value, max_val)
 
 
-def normalize_project_filter(project: Optional[str], cwd: str) -> Optional[str]:
+def normalize_project_filter(project: str | None, cwd: str) -> str | None:
     """标准化项目过滤"""
     if not project:
         return None
@@ -133,7 +130,7 @@ def normalize_project_filter(project: Optional[str], cwd: str) -> Optional[str]:
     return trimmed
 
 
-def build_snippet(text: str, query: str, context: int, case_sensitive: bool) -> Optional[str]:
+def build_snippet(text: str, query: str, context: int, case_sensitive: bool) -> str | None:
     """构建搜索上下文片段"""
     if not text:
         return None
@@ -150,7 +147,7 @@ def build_snippet(text: str, query: str, context: int, case_sensitive: bool) -> 
     prefix = '…' if start > 0 else ''
     suffix = '…' if end < len(text) else ''
 
-    snippet_text = text[start:end].replace('\s+', ' ').strip()
+    snippet_text = text[start:end].replace(r'\s+', ' ').strip()
     return f"{prefix}{snippet_text}{suffix}"
 
 
@@ -205,7 +202,7 @@ async def search_sessions(
             if query.date_to and file_mtime > query.date_to:
                 continue
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # 会话ID过滤
@@ -260,14 +257,14 @@ async def search_sessions(
     )
 
 
-async def get_session_by_id(cwd: str, session_id: str) -> Optional[SessionEntry]:
+async def get_session_by_id(cwd: str, session_id: str) -> SessionEntry | None:
     """根据ID获取会话"""
     session_file = Path(sessions_dir(cwd)) / f"{session_id}.json"
     if not session_file.exists():
         return None
 
     try:
-        with open(session_file, "r", encoding="utf-8") as f:
+        with open(session_file, encoding="utf-8") as f:
             data = json.load(f)
         return SessionEntry(
             session_id=data.get("session_id", ""),
@@ -286,17 +283,17 @@ async def get_session_by_id(cwd: str, session_id: str) -> Optional[SessionEntry]
 
 # ===== 导出 =====
 __all__ = [
-    "SessionSearchQuery",
-    "SessionEntry",
     "SearchResult",
+    "SessionEntry",
+    "SessionSearchQuery",
+    "build_snippet",
+    "clamp_integer",
+    "get_session_by_id",
+    "list_session_files",
+    "normalize_project_filter",
     # 工具函数
     "parse_since_spec",
-    "clamp_integer",
-    "normalize_project_filter",
-    "build_snippet",
+    "search_sessions",
     # 核心API
     "sessions_dir",
-    "list_session_files",
-    "search_sessions",
-    "get_session_by_id",
 ]

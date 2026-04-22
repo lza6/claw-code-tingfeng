@@ -1,218 +1,227 @@
-"""验证协议 — 汲取 oh-my-codex evidence-backed 验证模式
+"""Workflow Verifier — 结构化验证协议
 
-功能:
-- 结构化验证结果（passed, evidence, summary, confidence）
-- 任务大小分级（small/standard/large）
-- 验证指令生成（按任务大小自动调整检查项）
-- 修复循环指令生成
+汲取 oh-my-codex-main/src/verification/verifier.ts
+
+提供:
+- VerificationResult: 验证结果结构
+- VerificationEvidence: 证据结构
+- 任务大小判断 (determine_task_size)
+- 验证指令生成 (get_verification_instructions)
+- 修复循环指令 (get_fix_loop_instructions)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Literal
 
 
-class TaskSize(Enum):
-    """任务大小分级"""
-    SMALL = 'small'
-    STANDARD = 'standard'
-    LARGE = 'large'
-
-
-class EvidenceType(Enum):
-    """验证证据类型"""
-    TEST = 'test'
-    TYPECHECK = 'typecheck'
-    LINT = 'lint'
-    BUILD = 'build'
-    MANUAL = 'manual'
-    RUNTIME = 'runtime'
-    SECURITY = 'security'
-
-
-class Confidence(Enum):
-    """验证置信度"""
-    HIGH = 'high'
-    MEDIUM = 'medium'
-    LOW = 'low'
+class ConfidenceLevel(Enum):
+    """置信度级别"""
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 @dataclass
 class VerificationEvidence:
     """单条验证证据"""
-    type: EvidenceType
-    passed: bool
-    command: str = ''
-    output: str = ''
-    details: str = ''
 
-    def as_text(self) -> str:
-        status = '✓ PASS' if self.passed else '✗ FAIL'
-        parts = [f'[{status}] {self.type.value}']
-        if self.command:
-            parts.append(f'  命令: {self.command}')
-        if self.details:
-            parts.append(f'  详情: {self.details}')
-        if self.output and not self.passed:
-            # 截取输出前 500 字符
-            truncated = self.output[:500]
-            parts.append(f'  输出: {truncated}')
-        return '\n'.join(parts)
+    type: Literal["test", "typecheck", "lint", "build", "manual", "runtime"]
+    passed: bool
+    command: str | None = None
+    output: str | None = None
+    details: str | None = None
+
+    def to_dict(self) -> dict:
+        """转换为字典格式"""
+        return {
+            "type": self.type,
+            "passed": self.passed,
+            "command": self.command,
+            "output": self.output,
+            "details": self.details,
+        }
 
 
 @dataclass
 class VerificationResult:
-    """验证结果"""
+    """完整的验证结果"""
+
     passed: bool
     evidence: list[VerificationEvidence] = field(default_factory=list)
-    summary: str = ''
-    confidence: Confidence = Confidence.MEDIUM
+    summary: str = ""
+    confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM
 
-    def as_text(self) -> str:
-        status = '✓ 验证通过' if self.passed else '✗ 验证失败'
-        parts = [
-            f'## 验证结果: {status}',
-            f'置信度: {self.confidence.value}',
-            '',
-        ]
-        if self.summary:
-            parts.append(f'摘要: {self.summary}')
-            parts.append('')
+    @property
+    def evidence_dicts(self) -> list[dict]:
+        """证据列表（字典格式）"""
+        return [e.to_dict() for e in self.evidence]
 
-        if self.evidence:
-            parts.append('### 验证证据:')
-            for ev in self.evidence:
-                parts.append(ev.as_text())
-                parts.append('')
+    def to_dict(self) -> dict:
+        """转换为字典格式"""
+        return {
+            "passed": self.passed,
+            "evidence": self.evidence_dicts,
+            "summary": self.summary,
+            "confidence": self.confidence.value,
+        }
 
-        return '\n'.join(parts)
+    def add_evidence(
+        self,
+        evidence_type: Literal["test", "typecheck", "lint", "build", "manual", "runtime"],
+        passed: bool,
+        command: str | None = None,
+        output: str | None = None,
+        details: str | None = None,
+    ) -> None:
+        """添加一条验证证据"""
+        self.evidence.append(
+            VerificationEvidence(
+                type=evidence_type,
+                passed=passed,
+                command=command,
+                output=output,
+                details=details,
+            )
+        )
 
-    def to_reflected_message(self) -> str | None:
-        """转换为反思消息 (Aider 风格)"""
-        if self.passed:
-            return None
-
-        failures = [ev.as_text() for ev in self.evidence if not ev.passed]
-        if not failures:
-            return f"验证未通过，但未找到明确失败条目。摘要: {self.summary}"
-
-        return "发现以下验证失败项，请修复：\n\n" + "\n\n".join(failures)
-
-
-def determine_task_size(file_count: int, line_changes: int) -> TaskSize:
-    """根据文件数和行数变化判定任务大小
-
-    参数:
-        file_count: 影响的文件数
-        line_changes: 代码行变更数
-
-    返回:
-        任务大小分级
-    """
-    if file_count <= 3 and line_changes < 100:
-        return TaskSize.SMALL
-    if file_count <= 15 and line_changes < 500:
-        return TaskSize.STANDARD
-    return TaskSize.LARGE
-
-
-def get_verification_instructions(task_size: TaskSize, task_description: str) -> str:
-    """生成验证指令（按任务大小分级）
-
-    参数:
-        task_size: 任务大小
-        task_description: 任务描述
-
-    返回:
-        验证指令文本
-    """
-    base = f'## 验证协议\n\n验证以下任务已完成: {task_description}\n\n### 必须提供的证据:\n'
-
-    instructions = {
-        TaskSize.SMALL: base + (
-            '1. 对修改文件运行语法/类型检查\n'
-            '2. 运行相关测试\n'
-            '3. 确认变更按预期工作\n\n'
-            '报告: 每项检查的 PASS/FAIL 结果。\n'
-        ),
-        TaskSize.STANDARD: base + (
-            '1. 运行完整类型检查（如适用）\n'
-            '2. 运行测试套件（聚焦变更区域）\n'
-            '3. 对修改文件运行 linter\n'
-            '4. 端到端验证功能/修复\n'
-            '5. 检查相关功能的回归\n\n'
-            '报告: 每项检查的 PASS/FAIL 结果及命令输出。\n'
-        ),
-        TaskSize.LARGE: base + (
-            '1. 运行项目级完整类型检查\n'
-            '2. 运行完整测试套件\n'
-            '3. 对修改文件运行 linter\n'
-            '4. 安全审计（OWASP Top 10 检查）\n'
-            '5. 性能影响评估\n'
-            '6. API 兼容性检查（如适用）\n'
-            '7. 所有受影响功能的端到端验证\n'
-            '8. 相邻功能的回归测试\n\n'
-            '报告: 每项检查的详细 PASS/FAIL 结果。\n'
-            '包含置信度（high/medium/low）及理由。\n'
-        ),
-    }
-
-    return instructions[task_size]
-
-
-def get_fix_loop_instructions(max_retries: int = 3) -> str:
-    """生成修复-验证循环指令
-
-    参数:
-        max_retries: 最大重试次数
-
-    返回:
-        修复循环指令文本
-    """
-    return (
-        f'## 修复-验证循环\n\n'
-        f'如验证失败:\n'
-        f'1. 定位每个失败的根因\n'
-        f'2. 用最小变更修复问题\n'
-        f'3. 重新运行验证\n'
-        f'4. 最多重试 {max_retries} 次\n'
-        f'5. 若 {max_retries} 次后仍失败，输出:\n'
-        f'   - 已尝试的方案\n'
-        f'   - 失败原因分析\n'
-        f'   - 建议的后续步骤\n'
-    )
+    def is_fully_passed(self) -> bool:
+        """所有证据是否都通过"""
+        return all(e.passed for e in self.evidence)
 
 
 def has_structured_verification_evidence(summary: str | None) -> bool:
-    """启发式检查任务完成摘要中是否包含结构化验证证据
+    """检查摘要中是否包含结构化验证证据
 
-    用于运行时完成门控（尽力检测，向后兼容）。
-
-    参数:
-        summary: 任务完成摘要文本
-
-    返回:
-        是否包含结构化验证证据
+    参考: oh-my-codex-main/src/verification/verifier.ts
     """
-    if not isinstance(summary, str):
+    if not summary or not isinstance(summary, str):
         return False
+
     text = summary.strip()
     if not text:
         return False
 
-    # 检查是否有验证段
-    import re
-    has_section = bool(re.search(r'验证(?:\s*证据)?\s*:', text)) or \
-                  bool(re.search(r'##\s*验证', text)) or \
-                  bool(re.search(r'verification(?:\s+evidence)?\s*:', text, re.I)) or \
-                  bool(re.search(r'##\s*verification', text, re.I))
-
-    if not has_section:
+    # 检查是否有验证部分
+    has_verification_section = (
+        "verification" in text.lower() or "## verification" in text.lower()
+    )
+    if not has_verification_section:
         return False
 
     # 检查是否有证据信号
-    has_signal = bool(re.search(r'\b(pass|passed|fail|failed|通过|失败)\b', text, re.I)) or \
-                 bool(re.search(r'`[^`]+`', text)) or \
-                 bool(re.search(r'\b(command|test|build|typecheck|lint|命令|测试|构建)\b', text, re.I))
+    has_evidence_signal = any(
+        keyword in text.lower()
+        for keyword in ["pass", "fail", "test", "build", "typecheck", "lint", "command"]
+    )
 
-    return has_signal
+    return has_evidence_signal
+
+
+def determine_task_size(
+    file_count: int,
+    line_changes: int | None = None,
+) -> Literal["small", "standard", "large"]:
+    """根据文件数和代码变更行数判断任务大小
+
+    参考: oh-my-codex-main/src/verification/verifier.ts::determineTaskSize
+
+    标准:
+    - small: ≤3个文件, <100行变更
+    - standard: ≤15个文件, <500行变更
+    - large: 其他情况
+    """
+    if file_count <= 3 and (line_changes is None or line_changes < 100):
+        return "small"
+    if file_count <= 15 and (line_changes is None or line_changes < 500):
+        return "standard"
+    return "large"
+
+
+def get_verification_instructions(
+    task_size: Literal["small", "standard", "large"],
+    task_description: str,
+) -> str:
+    """获取验证指令模板
+
+    参考: oh-my-codex-main/src/verification/verifier.ts::getVerificationInstructions
+    """
+    base_instructions = f"""
+## Verification Protocol
+
+Verify the following task is complete: {task_description}
+
+### Required Evidence:
+"""
+
+    if task_size == "small":
+        return base_instructions + """
+1. Run type checker on modified files (if TypeScript/typed language)
+2. Run tests related to the change
+3. Confirm the change works as described
+
+Report: PASS/FAIL with evidence for each check.
+"""
+
+    elif task_size == "standard":
+        return base_instructions + """
+1. Run full type check (tsc --noEmit or equivalent)
+2. Run test suite (focus on changed areas)
+3. Run linter on modified files
+4. Verify the feature/fix works end-to-end
+5. Check for regressions in related functionality
+
+Report: PASS/FAIL with command output for each check.
+"""
+
+    else:  # large
+        return base_instructions + """
+1. Run full type check across the project
+2. Run complete test suite
+3. Run linter across modified files
+4. Security review of changes (OWASP top 10)
+5. Performance impact assessment
+6. API compatibility check (if applicable)
+7. End-to-end verification of all affected features
+8. Regression testing of adjacent functionality
+
+Report: PASS/FAIL with detailed evidence for each check.
+Include confidence level (high/medium/low) with justification.
+"""
+
+
+def get_fix_loop_instructions(max_retries: int = 3) -> str:
+    """获取修复循环指令
+
+    参考: oh-my-codex-main/src/verification/verifier.ts::getFixLoopInstructions
+    """
+    return f"""
+## Fix-Verify Loop
+
+If verification fails:
+1. Identify the root cause of each failure
+2. Fix the issue (prefer minimal changes)
+3. Re-run verification
+4. Repeat up to {max_retries} times
+5. If still failing after {max_retries} attempts, escalate with:
+   - What was attempted
+   - What failed and why
+   - Recommended next steps
+"""
+
+
+def create_verification_result_from_evidence(
+    evidence: list[tuple[Literal["test", "typecheck", "lint", "build", "manual", "runtime"], bool, str | None]],
+    summary: str = "",
+    confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM,
+) -> VerificationResult:
+    """从证据列表创建验证结果"""
+    result = VerificationResult(passed=True, summary=summary, confidence=confidence)
+
+    for ev_type, passed, command in evidence:
+        result.add_evidence(ev_type, passed, command=command)
+
+    result.passed = result.is_fully_passed()
+    return result

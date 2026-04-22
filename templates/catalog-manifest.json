@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026.04.17.1",
+  "skills": [
+    {
+      "name": "autopilot",
+      "category": "execution",
+      "status": "active",
+      "core": true
+    },
+    {
+      "name": "ralph",
+      "category": "execution",
+      "status": "active",
+      "core": true
+    },
+    {
+      "name": "ultrawork",
+      "category": "execution",
+      "status": "active",
+      "core": true
+    },
+    {
+      "name": "team",
+      "category": "execution",
+      "status": "active",
+      "core": true
+    },
+    {
+      "name": "ecomode",
+      "category": "execution",
+      "status": "merged",
+      "canonical": "ultrawork"
+    },
+    {
+      "name": "swarm",
+      "category": "execution",
+      "status": "alias",
+      "canonical": "team"
+    },
+    {
+      "name": "plan",
+      "category": "planning",
+      "status": "active"
+    },
+    {
+      "name": "ralplan",
+      "category": "planning",
+      "status": "active",
+      "core": true,
+      "canonical": "plan"
+    },
+    {
+      "name": "deep-interview",
+      "category": "planning",
+      "status": "active"
+    },
+    {
+      "name": "analyze",
+      "category": "shortcut",
+      "status": "alias",
+      "canonical": "debugger"
+    },
+    {
+      "name": "build-fix",
+      "category": "shortcut",
+      "status": "alias",
+      "canonical": "build-fixer"
+    },
+    {
+      "name": "code-review",
+      "category": "shortcut",
+      "status": "active",
+      "canonical": "code-reviewer"
+    },
+    {
+      "name": "security-review",
+      "category": "shortcut",
+      "status": "active",
+      "canonical": "security-reviewer"
+    },
+    {
+      "name": "tdd",
+      "category": "shortcut",
+      "status": "alias",
+      "canonical": "test-engineer"
+    },
+    {
+      "name": "cancel",
+      "category": "utility",
+      "status": "active"
+    },
+    {
+      "name": "doctor",
+      "category": "utility",
+      "status": "active"
+    },
+    {
+      "name": "help",
+      "category": "utility",
+      "status": "active"
+    },
+    {
+      "name": "hud",
+      "category": "utility",
+      "status": "active"
+    }
+  ],
+  "agents": [
+    {
+      "name": "explore",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "analyst",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "planner",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "architect",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "debugger",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "executor",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "verifier",
+      "category": "build",
+      "status": "active"
+    },
+    {
+      "name": "code-reviewer",
+      "category": "review",
+      "status": "active"
+    },
+    {
+      "name": "security-reviewer",
+      "category": "review",
+      "status": "active"
+    },
+    {
+      "name": "test-engineer",
+      "category": "domain",
+      "status": "active"
+    },
+    {
+      "name": "build-fixer",
+      "category": "domain",
+      "status": "active"
+    },
+    {
+      "name": "designer",
+      "category": "domain",
+      "status": "active"
+    },
+    {
+      "name": "git-master",
+      "category": "domain",
+      "status": "active"
+    },
+    {
+      "name": "code-simplifier",
+      "category": "domain",
+      "status": "internal"
+    }
+  ]
+}

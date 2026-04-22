@@ -38,7 +38,7 @@ class Orchestrator:
     def load(self) -> None:
         """Load existing session assignments from disk with OCC."""
         if self.surface_path.exists():
-            with open(self.surface_path, "r", encoding="utf-8") as f:
+            with open(self.surface_path, encoding="utf-8") as f:
                 data = json.load(f)
                 # Extract sessions data, ignoring version field
                 sessions_data = {k: v for k, v in data.items() if k != "version"}

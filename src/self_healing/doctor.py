@@ -8,10 +8,11 @@ import logging
 import os
 import platform
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +37,10 @@ class ProjectDoctor:
     def __init__(self, project_root: Path | None = None, detection_threshold: float = 0.2):
         self.project_root = project_root or Path.cwd()
         self.detection_threshold = detection_threshold  # WARN if > 20% error rate
-        self.results: List[DiagnosticResult] = []
+        self.results: list[DiagnosticResult] = []
         self._failed_checks = 0
 
-    def run_all(self) -> List[DiagnosticResult]:
+    def run_all(self) -> list[DiagnosticResult]:
         """Run all registered diagnostic checks."""
         self.results = []
         self._failed_checks = 0
@@ -70,7 +71,7 @@ class ProjectDoctor:
         logger.info("✅ Project Doctor diagnostics completed.")
         return self.results
 
-    def diagnose_and_repair(self) -> Dict[str, List[DiagnosticResult]]:
+    def diagnose_and_repair(self) -> dict[str, list[DiagnosticResult]]:
         """
         Diagnostic-first approach with auto-repair capabilities.
         Returns repair actions grouped by symptom.
@@ -177,7 +178,7 @@ class ProjectDoctor:
                     id="disk_space",
                     name="Disk Space",
                     status="WARN",
-                    message=f"Error checking disk space: {str(e)}",
+                    message=f"Error checking disk space: {e!s}",
                     details={"error": str(e)}
                 )
             )

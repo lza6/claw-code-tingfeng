@@ -41,6 +41,10 @@ class ErrorCode(str, Enum):
     TOOL_EXECUTION_FAILED = 'E2002'
     TOOL_TIMEOUT = 'E2003'
     TOOL_INVALID_ARGS = 'E2004'
+    TOOL_REGISTRATION_ERROR = 'E2005'       # 工具注册失败
+    TOOL_CAPSULE_ISOLATION_FAILED = 'E2006'  # 工具胶囊隔离失败
+    TOOL_OBSERVABILITY_HOOK_ERROR = 'E2007'  # 工具监控钩子错误
+    TOOL_PARALLEL_LIMIT_EXCEEDED = 'E2008'   # 并行工具数超限
 
     # 安全
     SECURITY_COMMAND_INJECTION = 'E3001'
@@ -80,36 +84,115 @@ class ErrorCode(str, Enum):
     TOKEN_LIMIT_EXCEEDED = 'E8002'
     TENANT_LIMIT_EXCEEDED = 'E8003'
 
+    # 状态/运行时 (借鉴 omx-runtime-core)
+    STATE_LEASE_NOT_HELD = 'E9001'  # 权限租约未持有
+    STATE_LEASE_STALE = 'E9002'     # 权限租约过期
+    STATE_LEASE_CONFLICT = 'E9003'  # 权限租约冲突
+    STATE_DISPATCH_NOT_FOUND = 'E9004'       # 调度记录未找到
+    STATE_INVALID_TRANSITION = 'E9005'       # 无效状态转换
+    STATE_MAILBOX_NOT_FOUND = 'E9006'        # 邮箱消息未找到
+    STATE_ALREADY_DELIVERED = 'E9007'        # 消息已交付
+    STATE_RECOVERY_FAILED = 'E9008'          # 状态恢复失败
+    STATE_PERSISTENCE_ERROR = 'E9009'        # 持久化错误
+    STATE_INTEGRITY_CHECK_FAILED = 'E9010'   # 完整性检查失败
 
-@dataclass(frozen=True)
+
+@dataclass
 class ClawdError(Exception):
-    """Clawd 基础异常
+    """Clawd 基础异常（非 frozen 以支持错误链）
 
     属性:
         code: 错误码
         message: 人类可读的错误描述
         details: 额外上下文信息（用于调试）
         recoverable: 是否可恢复（True = 可重试，False = 需人工干预）
+        __cause__: 原始异常（错误链支持，从 oh-my-codex Rust error handling 汲取）
     """
     code: ErrorCode
     message: str
     details: dict[str, Any] = field(default_factory=dict)
     recoverable: bool = True
 
+    def __init__(
+        self,
+        code: ErrorCode,
+        message: str,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+        cause: Exception | None = None,
+    ) -> None:
+        self.code = code
+        self.message = message
+        self.details = details or {}
+        self.recoverable = recoverable
+
+        # 初始化 Exception 基类
+        super().__init__(message)
+
+        # 设置异常链（从 oh-my-codex Rust error handling 汲取）
+        if cause is not None:
+            self.__cause__ = cause
+
     def __str__(self) -> str:
         detail_str = ''
         if self.details:
             detail_str = f' | 详情: {self.details}'
-        return f'[{self.code.value}] {self.message}{detail_str}'
+
+        # 如果有原因异常，添加到消息中
+        cause_str = ''
+        if self.__cause__ is not None:
+            cause_str = f' | 原因: {type(self.__cause__).__name__}: {self.__cause__}'
+
+        return f'[{self.code.value}] {self.message}{detail_str}{cause_str}'
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典格式（用于日志/上报）"""
-        return {
+        result = {
             'code': self.code.value,
             'message': self.message,
             'details': self.details,
             'recoverable': self.recoverable,
         }
+
+        # 如果有原因异常，包含其信息
+        if self.__cause__ is not None:
+            result['cause'] = {
+                'type': type(self.__cause__).__name__,
+                'message': str(self.__cause__),
+            }
+
+        return result
+
+    @classmethod
+    def from_exception(
+        cls,
+        ex: Exception,
+        code: ErrorCode = ErrorCode.UNKNOWN_ERROR,
+        message: str | None = None,
+        details: dict[str, Any] | None = None,
+        recoverable: bool | None = None,
+    ) -> ClawdError:
+        """从原生异常创建 ClawdError（保留错误链）
+
+        从 oh-my-codex Rust error handling 汲取的错误链模式。
+
+        参数:
+            ex: 原始异常
+            code: 错误码（默认 UNKNOWN_ERROR）
+            message: 自定义消息（默认为原始异常消息）
+            details: 额外上下文
+            recoverable: 是否可恢复（默认为 True）
+
+        返回:
+            ClawdError 实例，保留原始异常作为 __cause__
+        """
+        return cls(
+            code=code,
+            message=message or str(ex),
+            details=details or {},
+            recoverable=recoverable if recoverable is not None else True,
+            cause=ex,  # 保留错误链
+        )
 
 
 # ==================== LLM 异常 ====================
@@ -319,6 +402,306 @@ class ConfigFileNotFoundError(ConfigurationError):
             code=ErrorCode.CONFIG_FILE_NOT_FOUND,
             details={'file_path': file_path},
         )
+
+
+# ==================== 状态/运行时异常（借鉴 omx-runtime-core）====================
+
+class StateError(ClawdError):
+    """状态/运行时错误基类"""
+    pass
+
+
+class AuthorityError(StateError):
+    """权限/租约错误 - 对应 omx-runtime-core 的 AuthorityError"""
+
+    def __init__(
+        self,
+        message: str,
+        code: ErrorCode = ErrorCode.STATE_LEASE_NOT_HELD,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        super().__init__(code=code, message=message, details=details or {}, recoverable=recoverable)
+
+
+class AlreadyHeldByOtherError(AuthorityError):
+    """权限已被其他持有者占用"""
+
+    def __init__(self, current_owner: str) -> None:
+        super().__init__(
+            message=f"权限已被 {current_owner} 持有",
+            code=ErrorCode.STATE_LEASE_CONFLICT,
+            details={"current_owner": current_owner},
+            recoverable=False,
+        )
+
+
+class OwnerMismatchError(AuthorityError):
+    """权限持有者不匹配"""
+
+    def __init__(self, current_owner: str) -> None:
+        super().__init__(
+            message=f"权限持有者不匹配: 当前持有者为 {current_owner}",
+            code=ErrorCode.STATE_LEASE_CONFLICT,
+            details={"current_owner": current_owner},
+            recoverable=False,
+        )
+
+
+class NotHeldError(AuthorityError):
+    """未持有权限"""
+
+    def __init__(self) -> None:
+        super().__init__(message="未持有权限租约", code=ErrorCode.STATE_LEASE_NOT_HELD, recoverable=True)
+
+
+class DispatchError(StateError):
+    """调度错误 - 对应 omx-runtime-core 的 DispatchError"""
+
+    def __init__(
+        self,
+        message: str,
+        request_id: str,
+        code: ErrorCode = ErrorCode.STATE_DISPATCH_NOT_FOUND,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        details = details or {}
+        details["request_id"] = request_id
+        super().__init__(message=message, code=code, details=details, recoverable=recoverable)
+
+
+class DispatchNotFoundError(DispatchError):
+    """调度记录未找到"""
+
+    def __init__(self, request_id: str) -> None:
+        super().__init__(
+            message=f"调度记录未找到: {request_id}",
+            code=ErrorCode.STATE_DISPATCH_NOT_FOUND,
+            details={"request_id": request_id},
+            recoverable=False,
+        )
+
+
+class InvalidTransitionError(DispatchError):
+    """无效的状态转换"""
+
+    def __init__(self, request_id: str, from_status: str, to_status: str) -> None:
+        super().__init__(
+            message=f"无效的状态转换: {request_id}: {from_status} -> {to_status}",
+            code=ErrorCode.STATE_INVALID_TRANSITION,
+            details={"request_id": request_id, "from": from_status, "to": to_status},
+            recoverable=False,
+        )
+
+
+class MailboxError(StateError):
+    """邮箱错误 - 对应 omx-runtime-core 的 MailboxError"""
+
+    def __init__(
+        self,
+        message: str,
+        message_id: str,
+        code: ErrorCode = ErrorCode.STATE_MAILBOX_NOT_FOUND,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        details = details or {}
+        details["message_id"] = message_id
+        super().__init__(message=message, code=code, details=details, recoverable=recoverable)
+
+
+class MailboxNotFoundError(MailboxError):
+    """邮箱消息未找到"""
+
+    def __init__(self, message_id: str) -> None:
+        super().__init__(
+            message=f"邮箱记录未找到: {message_id}",
+            code=ErrorCode.STATE_MAILBOX_NOT_FOUND,
+            details={"message_id": message_id},
+            recoverable=False,
+        )
+
+
+class AlreadyDeliveredError(MailboxError):
+    """消息已交付"""
+
+    def __init__(self, message_id: str) -> None:
+        super().__init__(
+            message=f"邮箱消息已交付: {message_id}",
+            code=ErrorCode.STATE_ALREADY_DELIVERED,
+            details={"message_id": message_id},
+            recoverable=False,
+        )
+
+
+class PersistenceError(StateError):
+    """持久化错误"""
+
+    def __init__(self, message: str, path: str | None = None, cause: Exception | None = None) -> None:
+        details = {"path": path} if path else {}
+        super().__init__(message=message, code=ErrorCode.STATE_PERSISTENCE_ERROR, details=details, recoverable=False)
+        if cause:
+            self.__cause__ = cause
+
+
+class RecoveryError(StateError):
+    """状态恢复错误"""
+
+    def __init__(self, message: str, cause: Exception | None = None) -> None:
+        super().__init__(message=message, code=ErrorCode.STATE_RECOVERY_FAILED, recoverable=False)
+        if cause:
+            self.__cause__ = cause
+
+
+# ==================== 状态/运行时异常（借鉴 omx-runtime-core）====================
+
+class StateError(ClawdError):
+    """状态/运行时错误基类"""
+    pass
+
+
+class AuthorityError(StateError):
+    """权限/租约错误 - 对应 omx-runtime-core 的 AuthorityError"""
+
+    def __init__(
+        self,
+        message: str,
+        code: ErrorCode = ErrorCode.STATE_LEASE_NOT_HELD,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        super().__init__(code=code, message=message, details=details or {}, recoverable=recoverable)
+
+
+class AlreadyHeldByOtherError(AuthorityError):
+    """权限已被其他持有者占用"""
+
+    def __init__(self, current_owner: str) -> None:
+        super().__init__(
+            message=f"权限已被 {current_owner} 持有",
+            code=ErrorCode.STATE_LEASE_CONFLICT,
+            details={"current_owner": current_owner},
+            recoverable=False,
+        )
+
+
+class OwnerMismatchError(AuthorityError):
+    """权限持有者不匹配"""
+
+    def __init__(self, current_owner: str) -> None:
+        super().__init__(
+            message=f"权限持有者不匹配: 当前持有者为 {current_owner}",
+            code=ErrorCode.STATE_LEASE_CONFLICT,
+            details={"current_owner": current_owner},
+            recoverable=False,
+        )
+
+
+class NotHeldError(AuthorityError):
+    """未持有权限"""
+
+    def __init__(self) -> None:
+        super().__init__(message="未持有权限租约", code=ErrorCode.STATE_LEASE_NOT_HELD, recoverable=True)
+
+
+class DispatchError(StateError):
+    """调度错误 - 对应 omx-runtime-core 的 DispatchError"""
+
+    def __init__(
+        self,
+        message: str,
+        request_id: str,
+        code: ErrorCode = ErrorCode.STATE_DISPATCH_NOT_FOUND,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        details = details or {}
+        details["request_id"] = request_id
+        super().__init__(message=message, code=code, details=details, recoverable=recoverable)
+
+
+class DispatchNotFoundError(DispatchError):
+    """调度记录未找到"""
+
+    def __init__(self, request_id: str) -> None:
+        super().__init__(
+            message=f"调度记录未找到: {request_id}",
+            code=ErrorCode.STATE_DISPATCH_NOT_FOUND,
+            details={"request_id": request_id},
+            recoverable=False,
+        )
+
+
+class InvalidTransitionError(DispatchError):
+    """无效的状态转换"""
+
+    def __init__(self, request_id: str, from_status: str, to_status: str) -> None:
+        super().__init__(
+            message=f"无效的状态转换: {request_id}: {from_status} -> {to_status}",
+            code=ErrorCode.STATE_INVALID_TRANSITION,
+            details={"request_id": request_id, "from": from_status, "to": to_status},
+            recoverable=False,
+        )
+
+
+class MailboxError(StateError):
+    """邮箱错误 - 对应 omx-runtime-core 的 MailboxError"""
+
+    def __init__(
+        self,
+        message: str,
+        message_id: str,
+        code: ErrorCode = ErrorCode.STATE_MAILBOX_NOT_FOUND,
+        details: dict[str, Any] | None = None,
+        recoverable: bool = True,
+    ) -> None:
+        details = details or {}
+        details["message_id"] = message_id
+        super().__init__(message=message, code=code, details=details, recoverable=recoverable)
+
+
+class MailboxNotFoundError(MailboxError):
+    """邮箱消息未找到"""
+
+    def __init__(self, message_id: str) -> None:
+        super().__init__(
+            message=f"邮箱记录未找到: {message_id}",
+            code=ErrorCode.STATE_MAILBOX_NOT_FOUND,
+            details={"message_id": message_id},
+            recoverable=False,
+        )
+
+
+class AlreadyDeliveredError(MailboxError):
+    """消息已交付"""
+
+    def __init__(self, message_id: str) -> None:
+        super().__init__(
+            message=f"邮箱消息已交付: {message_id}",
+            code=ErrorCode.STATE_ALREADY_DELIVERED,
+            details={"message_id": message_id},
+            recoverable=False,
+        )
+
+
+class PersistenceError(StateError):
+    """持久化错误"""
+
+    def __init__(self, message: str, path: str | None = None, cause: Exception | None = None) -> None:
+        details = {"path": path} if path else {}
+        super().__init__(message=message, code=ErrorCode.STATE_PERSISTENCE_ERROR, details=details, recoverable=False)
+        if cause:
+            self.__cause__ = cause
+
+
+class RecoveryError(StateError):
+    """状态恢复错误"""
+
+    def __init__(self, message: str, cause: Exception | None = None) -> None:
+        super().__init__(message=message, code=ErrorCode.STATE_RECOVERY_FAILED, recoverable=False)
+        if cause:
+            self.__cause__ = cause
 
 
 # ==================== 便捷函数 ====================

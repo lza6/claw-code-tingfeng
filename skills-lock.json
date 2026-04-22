@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "accessibility": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "github",
+      "computedHash": "494d59fffe67c87b485f4ee2fb1abd73fc9d0d508c4c8bd9c43a9edd3242f730"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "python-background-jobs": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "05cccc6b1d42b0ffbf2ded8ee6f641251adf2262ee0019f3c1a8daeb5a9be548"
+    },
+    "python-executor": {
+      "source": "inferen-sh/skills",
+      "sourceType": "github",
+      "computedHash": "217d4b526d1a9f7baca36da191b6d4015944b2d1ec8f2b2798a0eaa8a18a6c2e"
+    },
+    "python-testing-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "a16a6d7d7e0a5154a5058fd9aacf8e675368b2a4a0dc5edf0fee775169c6abe0"
+    },
+    "seo": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "github",
+      "computedHash": "680cc12a17e9308b4592a2751db51615c618993f75362cb8e64207f6355a8c63"
+    }
+  }
+}

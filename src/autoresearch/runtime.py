@@ -1,23 +1,18 @@
 """Autoresearch runtime for running self-improving experiments."""
 import json
-import os
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.autoresearch.contracts import (
     AutoresearchError,
     AutoresearchEvaluatorContract,
-    AutoresearchEvaluatorResult,
     AutoresearchKeepPolicy,
     AutoresearchMissionContract,
-    load_autoresearch_mission_contract,
     parse_evaluator_result,
-    slugify_mission_name,
 )
-
 
 AutoresearchCandidateStatus = "candidate" | "noop" | "abort" | "interrupted"
 AutoresearchDecisionStatus = "baseline" | "keep" | "discard" | "ambiguous" | "noop" | "abort" | "interrupted" | "error"
@@ -28,7 +23,7 @@ def now_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
 
-def build_autoresearch_run_tag(date: Optional[datetime] = None) -> str:
+def build_autoresearch_run_tag(date: datetime | None = None) -> str:
     date = date or datetime.now()
     iso = date.isoformat().replace("-", "").replace(":", "")
     return iso.replace(".000Z", "Z").replace("T", "T")
@@ -52,7 +47,7 @@ def run_git(repo_path: Path, args: list[str]) -> str:
         raise AutoresearchError(stderr or f"git {args} failed")
 
 
-def try_resolve_git_commit(worktree_path: Path, ref: str) -> Optional[str]:
+def try_resolve_git_commit(worktree_path: Path, ref: str) -> str | None:
     result = subprocess.run(
         ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
         cwd=worktree_path,
@@ -92,7 +87,7 @@ def is_allowed_runtime_dirty_line(line: str) -> bool:
         return False
     path = line[3:].strip()
     return line.startswith("?? ") and any(
-        exclude.endswith("/") and (path.startswith(exclude) or path == exclude[:-1])
+        (exclude.endswith("/") and (path.startswith(exclude) or path == exclude[:-1]))
         or path == exclude
         for exclude in AUTORESEARCH_WORKTREE_EXCLUDES
     )
@@ -123,18 +118,18 @@ class AutoresearchEvaluationRecord:
     command: str
     ran_at: str
     status: "pass" | "fail" | "error"
-    pass_: Optional[bool] = None
-    score: Optional[float] = None
-    exit_code: Optional[int] = None
-    stdout: Optional[str] = None
-    stderr: Optional[str] = None
-    parse_error: Optional[str] = None
+    pass_: bool | None = None
+    score: float | None = None
+    exit_code: int | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    parse_error: str | None = None
 
 
 @dataclass
 class AutoresearchCandidateArtifact:
     status: AutoresearchCandidateStatus
-    candidate_commit: Optional[str]
+    candidate_commit: str | None
     base_commit: str
     description: str
     notes: list[str]
@@ -149,10 +144,10 @@ class AutoresearchLedgerEntry:
     decision_reason: str
     candidate_status: AutoresearchCandidateStatus | "baseline"
     base_commit: str
-    candidate_commit: Optional[str]
+    candidate_commit: str | None
     kept_commit: str
     keep_policy: AutoresearchKeepPolicy
-    evaluator: Optional[AutoresearchEvaluationRecord]
+    evaluator: AutoresearchEvaluationRecord | None
     created_at: str
     notes: list[str]
     description: str
@@ -172,22 +167,22 @@ class AutoresearchRunManifest:
     branch_name: str = ""
     baseline_commit: str = ""
     last_kept_commit: str = ""
-    last_kept_score: Optional[float] = None
-    latest_candidate_commit: Optional[str] = None
+    last_kept_score: float | None = None
+    latest_candidate_commit: str | None = None
     results_file: str = ""
     instructions_file: str = ""
     manifest_file: str = ""
     ledger_file: str = ""
     latest_evaluator_file: str = ""
     candidate_file: str = ""
-    evaluator: Optional[AutoresearchEvaluatorContract] = None
+    evaluator: AutoresearchEvaluatorContract | None = None
     keep_policy: AutoresearchKeepPolicy = "score_improvement"
     status: AutoresearchRunStatus = "running"
-    stop_reason: Optional[str] = None
+    stop_reason: str | None = None
     iteration: int = 0
     created_at: str = ""
     updated_at: str = ""
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
 
 
 AUTORESEARCH_RESULTS_HEADER = "iteration\tcommit\tpass\tscore\tstatus\tdescription\n"
@@ -257,14 +252,14 @@ async def read_autoresearch_ledger_entries(ledger_file: Path) -> list[dict]:
     return read_json_file(ledger_file).get("entries", [])
 
 
-def comparable_score(prev: Optional[float], current: Optional[float]) -> bool:
+def comparable_score(prev: float | None, current: float | None) -> bool:
     return isinstance(prev, (int, float)) and isinstance(current, (int, float))
 
 
 def decide_autoresearch_outcome(
     manifest: dict,
     candidate: AutoresearchCandidateArtifact,
-    evaluation: Optional[AutoresearchEvaluationRecord],
+    evaluation: AutoresearchEvaluationRecord | None,
 ) -> dict:
     keep_policy = manifest.get("keep_policy", "score_improvement")
     last_kept_score = manifest.get("last_kept_score")
@@ -296,8 +291,8 @@ def decide_autoresearch_outcome(
 async def run_autoresearch_evaluator(
     contract: AutoresearchMissionContract,
     worktree_path: Path,
-    ledger_file: Optional[Path] = None,
-    latest_evaluator_file: Optional[Path] = None,
+    ledger_file: Path | None = None,
+    latest_evaluator_file: Path | None = None,
 ) -> AutoresearchEvaluationRecord:
     ran_at = now_iso()
     evaluator_command = contract.sandbox.evaluator.command
@@ -399,7 +394,7 @@ async def prepare_autoresearch_runtime(
     contract: AutoresearchMissionContract,
     project_root: Path,
     worktree_path: Path,
-    options: Optional[dict] = None,
+    options: dict | None = None,
 ) -> dict:
     options = options or {}
     run_tag = options.get("run_tag") or build_autoresearch_run_tag()

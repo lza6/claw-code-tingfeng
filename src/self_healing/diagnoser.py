@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.self_healing.agent.engine import AgentEngine
+# 延迟导入以避免循环依赖和模块未找到错误
+if TYPE_CHECKING:
+    from src.agent.engine import AgentEngine
+
 from ..agent.factory import create_agent_engine
 from ..llm import LLMConfig
 

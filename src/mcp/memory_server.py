@@ -12,8 +12,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ class MemoryServer:
     - 持久化
     """
 
-    def __init__(self, storage_dir: Optional[str] = None):
+    def __init__(self, storage_dir: str | None = None):
         self.storage_dir = storage_dir
         self._index = MemoryIndex()
 
@@ -65,7 +63,7 @@ class MemoryServer:
             logger.error(f"[Memory] Store failed: {e}")
             return False
 
-    def retrieve(self, entry_id: str) -> Optional[MemoryEntry]:
+    def retrieve(self, entry_id: str) -> MemoryEntry | None:
         """检索记忆"""
         return self._index.entries.get(entry_id)
 
@@ -107,7 +105,7 @@ class MemoryServer:
         """获取索引"""
         return self._index
 
-    def save_to_file(self, path: Optional[str] = None) -> bool:
+    def save_to_file(self, path: str | None = None) -> bool:
         """保存到文件"""
         save_path = path or (self.storage_dir and f"{self.storage_dir}/memory.json")
         if not save_path:
@@ -164,7 +162,7 @@ class MemoryServer:
 
 
 # 全局单例
-_memory_server: Optional[MemoryServer] = None
+_memory_server: MemoryServer | None = None
 
 
 def get_memory_server() -> MemoryServer:

@@ -1,42 +1,25 @@
-from .app import AppConfig, get_app_config
-from .enums import (
-    ApprovalMode,
-    ConfigSource,
-    ConfigSourceKind,
-    LLMProviderEnum,
-    LogLevelEnum,
+"""Configuration package for claw-code-tingfeng.
+
+集中管理所有配置相关功能:
+- Feature flags (功能开关)
+- Config TOML 合并与修复
+- Skill catalog (Skill 清单)
+"""
+
+from .merger import (
+    OMX_FEATURE_FLAGS,
+    OMX_TOP_LEVEL_KEYS,
+    get_model_from_config,
+    get_reasoning_effort,
+    merge_config,
+    merge_config_file,
 )
-from .injector import ConfigInjector, get_config_injector
-from .models import AgentSettings, get_settings, load_settings, reload_settings, reset_settings
-from .runtime import (
-    apply_config_overrides,
-    get_config_priority_report,
-    get_runtime_config,
-    reload_config,
-    set_runtime_config,
-)
-from .validator import ConfigValidator, validate_config
 
 __all__ = [
-    "AgentSettings",
-    "AppConfig",
-    "ApprovalMode",
-    "ConfigInjector",
-    "ConfigSource",
-    "ConfigSourceKind",
-    "ConfigValidator",
-    "LLMProviderEnum",
-    "LogLevelEnum",
-    "apply_config_overrides",
-    "get_app_config",
-    "get_config_injector",
-    "get_config_priority_report",
-    "get_runtime_config",
-    "get_settings",
-    "load_settings",
-    "reload_config",
-    "reload_settings",
-    "reset_settings",
-    "set_runtime_config",
-    "validate_config",
+    'OMX_FEATURE_FLAGS',
+    'OMX_TOP_LEVEL_KEYS',
+    'get_model_from_config',
+    'get_reasoning_effort',
+    'merge_config',
+    'merge_config_file',
 ]

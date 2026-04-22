@@ -1,409 +1,470 @@
-# GoalX → Clawd Code 整合建议清单
+# 项目整合计划 - Clawd Code x oh-my-codex
 
-**生成时间**: 2026-04-13  
-**目标**: 从 GoalX (Go) 汲取优秀设计，增强 Clawd Code (Python) 的自主性和持久化能力
-
----
-
-## 📋 整合策略总览
-
-### 核心原则
-1. **避免重复造轮子**: 优先复用现有模块，仅在功能缺失时新增
-2. **协议优先**: 学习 GoalX 的 protocol-driven 设计，强化 Clawd 的 prompt 模板系统
-3. **持久化优先**: 引入 GoalX 的 durable surfaces 理念，减少对会话历史的依赖
-4. **隔离边界**: 借鉴 worktree 隔离模式，增强 Clawd 的并行执行安全性
+**生成时间**: 2026-04-17
+**版本**: v2.0 (深度分析版)
+**状态**: 待执行
 
 ---
 
-## 🎯 Phase 1: 持久化状态系统 (Durable State)
+## 一、整合目标
 
-### 1.1 引入 Canonical Surfaces 机制
-**目标**: 减少对 LLM 会话历史的依赖，建立机器可读的状态文件
+从 oh-my-codex (OMX) 项目中汲取优秀设计，优化 claw-code-tingfeng (Clawd Code) 的架构和实现。
 
-**新增文件**:
-```
-src/core/durable/
-├── __init__.py
-├── surface_manager.py       # 管理所有 durable surfaces
-├── surfaces/
-│   ├── objective_contract.py   # 不可变的用户目标契约
-│   ├── obligation_model.py     # 可变的必须满足的条件
-│   ├── assurance_plan.py       # 验证策略
-│   ├── evidence_log.py         # 验证证据记录
-│   ├── coordination_state.py   # 会话协调状态
-│   └── status_summary.py       # 运行状态摘要
-└── schemas/                    # JSON Schema 验证
-    ├── objective.schema.json
-    ├── obligation.schema.json
-    └── assurance.schema.json
-```
-
-**修改文件**:
-- `src/workflow/engine.py`: 集成 surface_manager，在每个阶段更新 durable surfaces
-- `src/agent/checkpoint.py`: 扩展检查点系统，保存 canonical surfaces
-- `src/core/persistence/run_state.py`: 添加 surface 快照功能
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/core/persistence/` 基础设施
-- ✅ 扩展现有的 `RunStateManager`，而非新建状态管理器
+**核心原则**:
+1. **不重复造轮子** - 功能相同时优先采用更优实现
+2. **保持技术栈一致** - 所有迁移代码适配 Python 生态
+3. **渐进式改进** - 优先工具类、配置优化、通用算法
+4. **向后兼容** - 保留现有 API，标记废弃接口
 
 ---
 
-### 1.2 Control Inbox 消息系统
-**目标**: 实现 master-worker 之间的持久化消息传递
+## 二、架构对比总结
 
-**新增文件**:
-```
-src/agent/swarm/control/
-├── __init__.py
-├── inbox.py                 # JSONL append-only inbox
-├── message.py               # 消息结构定义
-├── cursor.py                # 读取游标管理
-└── tell.py                  # 消息发送接口
-```
+### 项目 A (claw-code-tingfeng) - Python 实现
+- **核心架构**: Swarm 多 Agent 协作系统 + GoalX 持久化表面
+- **配置系统**: 6层配置优先级（defaults → .env → runtime → CLI → file → API）
+- **通知系统**: 基础 Discord/Telegram/Slack/Webhook 支持
+- **团队状态**: ModeState 系统 + Git Worktree 隔离
+- **编排系统**: Workflow 5阶段管道 + Pipeline Orchestrator
+- **LLM 抽象**: 9个提供商支持 + Circuit Breaker + Rate Limiter
 
-**修改文件**:
-- `src/agent/swarm/orchestrator.py`: 使用 inbox 替代内存中的 message_bus
-- `src/agent/swarm/message_bus.py`: 重构为基于文件的持久化实现
-
-**不重复造轮子**:
-- ✅ 保留现有的 `MessageBus` 接口，仅改变底层实现
-- ✅ 复用 `src/core/events/` 的事件系统作为补充
+### 项目 B (oh-my-codex-main) - TypeScript 实现
+- **核心架构**: Team + Pipeline 双引擎（OMX 架构）+ tmux 会话管理
+- **配置系统**: TOML 配置生成/合并 + 幂等性保证 + 热重载
+- **通知系统**: 成熟的通知框架（Profiles、Events、Hook Templates、Reply Listener）
+- **团队状态**: 模块化 state/ 目录（15+ 状态管理文件）+ Mailbox 系统
+- **编排系统**: Pipeline Orchestrator + Team Orchestrator + Ralph 验证
+- **扩展特性**: HUD、OpenClaw 网关、Hook 插件系统、关键词路由引擎
 
 ---
 
-## 🎯 Phase 2: Worktree 隔离与并行执行
+## 三、相似功能模块详细对比（避免重复造轮子）
 
-### 2.1 Git Worktree 管理器
-**目标**: 为并行 agent 提供隔离的工作空间
-
-**新增文件**:
-```
-src/core/git/worktree/
-├── __init__.py
-├── manager.py               # Worktree 生命周期管理
-├── isolation.py             # 隔离策略
-├── merge_strategy.py        # 合并策略 (keep/discard/partial)
-└── safety.py                # 安全检查 (dirty state, conflicts)
-```
-
-**修改文件**:
-- `src/agent/swarm/orchestrator.py`: 为每个 worker 分配独立 worktree
-- `src/workflow/engine.py`: 在 worktree 中执行任务，完成后合并
-- `src/core/git/operations.py`: 扩展 git 操作支持 worktree
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/core/git/` 模块
-- ✅ 扩展 `GitOperations` 类，而非新建 git 封装
+| 功能领域 | 项目A实现 | 项目B实现 | B的优势点 | 整合策略 |
+|---------|----------|----------|----------|---------|
+| **Agent 定义** | definitions.py (480行, 40+角色) | definitions.ts (350行, 34+角色) | 五维分类法更清晰, 移除硬编码路由 | ✅ 简化路由逻辑 |
+| **Team 运行时** | team_types.py (287行) | runtime.ts (118KB!) | tmux 隔离, Worktree 管理, Shutdown 合并 | ✅ 增强隔离机制 |
+| **Pipeline 编排** | pipeline_orchestrator.py (763行) | orchestrator.ts (300行) | 极简设计, 职责分离清晰 | ✅ 精简冗余代码 |
+| **Hooks 系统** | hooks/ 目录脚本 | keyword-detector.ts (17KB) | 结构化注册表, 优先级排序, 输入锁 | ✅ 实现关键词注册表 |
+| **配置管理** | merger.py (396行) | generator.ts (27KB) | 幂等合并, strip-then-insert | ✅ 改进合并算法 |
+| **Ralph 账本** | ralph_ledger.py (299行) | ralph/ 完整实现 | 迁移策略完善, 聚合统计 | 🔄 添加聚合统计 |
+| **任务检测** | task_size_detector.py (252行) | task-size-detector.ts (243行) | 文档更清晰, 常量组织更好 | ✅ 完善文档注释 |
+| **Worktree** | worktree_isolation.py (527行) | worktree.ts | 错误处理更严格, 验证更全面 | ✅ 增强验证逻辑 |
+| **路径管理** | paths.py (405行) | paths.ts (223行) | 代码量减少45%, 去重逻辑清晰 | ✅ 简化实现 |
+| **MCP 服务器** | state_server.py (单一) | mcp/ 多个服务器 | 模块化设计, 职责单一 | 🔄 拆分服务器 |
 
 ---
 
-### 2.2 Session Coordination
-**目标**: 跟踪哪些 session 负责哪些任务，避免冲突
+## 四、B项目优于A项目的关键点（深度分析）
 
-**新增文件**:
+### 🔴 高优先级改进点
+
+#### 1. **Agent 系统简化** (立即实施)
+**问题**: `select_agent_for_task` 使用硬编码关键词匹配，这是 LLM 应该做的事情。
+
+**B的优势**:
+- 移除了伪智能路由，将选择委托给 orchestrator
+- 五维分类法（Posture/ModelClass/RoutingRole/ToolAccess/Category）更清晰
+- 导出接口简洁统一
+
+**整合方案**:
+```python
+# 删除硬编码路由逻辑
+def select_agent_for_task(task_description: str) -> str:
+    """Fallback: 当 intent_router 不可用时返回默认 agent"""
+    return "executor"  # 简单兜底
 ```
-src/agent/swarm/coordination/
-├── __init__.py
-├── coordinator.py           # 会话协调器
-├── coverage_map.py          # 任务覆盖映射
-├── decision_log.py          # 决策记录
-└── surface_availability.py  # 资源可用性跟踪
-```
 
-**修改文件**:
-- `src/agent/swarm/orchestrator.py`: 集成 coordinator
-- `src/workflow/task_planner.py`: 使用 coverage_map 分配任务
-
-**不重复造轮子**:
-- ✅ 复用现有的 `TaskDAG` 依赖管理
-- ✅ 扩展现有的任务分配逻辑
+**影响文件**:
+- `src/agent/definitions.py` (-50 行)
 
 ---
 
-## 🎯 Phase 3: 运行时监控与恢复
+#### 2. **Worktree 隔离增强** (立即实施)
+**问题**: 缺少 Leader Workspace 清洁检查和 Shutdown 合并报告。
 
-### 3.1 Runtime Host & Lease System
-**目标**: 后台监控长时间运行的 agent，支持崩溃恢复
+**B的优势**:
+- `assertCleanLeaderWorkspaceForWorkerWorktrees` 防止脏状态传播
+- `WorkerShutdownMergeReport` 追踪每个 Worker 的合并结果
+- 三种合并模式: merged / conflict / noop / skipped
 
-**新增文件**:
+**整合方案**:
+```python
+def assert_clean_leader_workspace(cwd: str) -> None:
+    """在执行团队任务前检查领导者工作区是否干净"""
+    status_lines = read_workspace_status_lines(cwd)
+    if status_lines:
+        preview = ' | '.join(status_lines[:8])
+        raise RuntimeError(
+            f"Leader workspace is dirty. Cannot create worker worktrees.\n"
+            f"Preview: {preview}\n"
+            f"Please commit or stash changes before starting parallel execution."
+        )
+
+@dataclass
+class WorkerShutdownMergeReport:
+    worker_name: str
+    merge_result: str  # merged / conflict / noop / skipped
+    commit_sha: Optional[str] = None
+    conflict_files: List[str] = field(default_factory=list)
 ```
-src/core/runtime/
-├── __init__.py
-├── host.py                  # 运行时监控主机
-├── lease.py                 # 心跳租约系统
-├── supervisor.py            # 进程监督器
-└── recovery.py              # 崩溃恢复逻辑
-```
 
-**修改文件**:
-- `src/agent/engine_loop.py`: 集成 lease 心跳
-- `src/workflow/engine.py`: 支持从中断点恢复
-- `src/cli/repl.py`: 添加后台运行模式
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/agent/checkpoint.py` 检查点系统
-- ✅ 扩展现有的异常恢复机制
+**影响文件**:
+- `src/workflow/worktree_isolation.py` (+80 行)
+- `src/agent/swarm/team_types.py` (+30 行)
 
 ---
 
-### 3.2 Resource Monitoring
-**目标**: 监控内存/CPU 使用，防止资源耗尽
+#### 3. **Pipeline 编排精简** (立即实施)
+**问题**: `PipelineOrchestrator` 包含冗余的 `PipelineState` 类和 `StageAdapter`。
 
-**新增文件**:
+**B的优势**:
+- 300行 vs 763行，代码量只有 A 的 40%
+- 移除了冗余的适配器模式
+- 配置验证更严格（提前失败）
+
+**整合方案**:
+```python
+# 标记为 deprecated
+@deprecated("Use ModeStateManager directly")
+class PipelineState:
+    ...
+
+# 强化配置验证
+def validate_config(config: PipelineConfig) -> None:
+    if not config.name or not config.name.strip():
+        raise ValueError("Pipeline config requires a non-empty name")
+    if not config.stages:
+        raise ValueError("Pipeline must have at least one stage")
 ```
-src/core/monitoring/
-├── __init__.py
-├── resource_tracker.py      # 资源使用跟踪
-├── admission_control.py     # 准入控制
-└── alerts.py                # 资源告警
-```
 
-**修改文件**:
-- `src/agent/engine_metrics.py`: 集成 resource_tracker
-- `src/workflow/engine.py`: 添加资源检查门控
-
-**不重复造轮子**:
-- ✅ 复用现有的 `engine_metrics.py` 指标系统
-- ✅ 扩展现有的监控能力
+**影响文件**:
+- `src/workflow/pipeline_orchestrator.py` (-150 行)
 
 ---
 
-## 🎯 Phase 4: 协议驱动的 Agent 系统
+#### 4. **关键词注册表** (立即实施)
+**问题**: 关键词检测分散在各处，缺乏统一管理。
 
-### 4.1 Protocol Templates
-**目标**: 学习 GoalX 的 master.md + program.md 模板系统
+**B的优势**:
+- 结构化的 `KEYWORD_TRIGGER_DEFINITIONS`
+- 优先级排序确保高优先级技能先匹配
+- 显式技能调用语法 (`$skill`)
+- 输入锁机制防止误操作
 
-**新增文件**:
+**整合方案**:
+```python
+# src/agent/keyword_registry.py
+@dataclass
+class KeywordTrigger:
+    keyword: str
+    skill: str
+    priority: int
+    requires_intent: bool = False
+
+KEYWORD_TRIGGER_DEFINITIONS = [
+    KeywordTrigger('ralph', 'ralph_loop', 10),
+    KeywordTrigger('team', 'team_execution', 20, requires_intent=True),
+    KeywordTrigger('swarm', 'team_execution', 20, requires_intent=True),
+    # ...
+]
+
+def extract_explicit_skill_invocations(text: str) -> list[KeywordTrigger]:
+    """提取 $skill 格式的显式调用"""
+    import re
+    results = []
+    for match in re.finditer(r'\$([a-z][a-z0-9-]*)\b', text, re.I):
+        token = match.group(1).lower()
+        normalized = 'team' if token == 'swarm' else token
+        for trigger in KEYWORD_TRIGGER_DEFINITIONS:
+            if trigger.keyword == normalized:
+                results.append(trigger)
+                break
+    return sorted(results, key=lambda t: t.priority, reverse=True)
 ```
-src/agent/protocols/
-├── __init__.py
-├── master_protocol.py       # Master agent 协议模板
-├── worker_protocol.py       # Worker agent 协议模板
-├── intent_router.py         # 意图路由 (deliver/explore/evolve/debate)
-└── templates/
-    ├── master.md.j2         # Jinja2 模板
-    ├── worker.md.j2
-    ├── deliver.md.j2
-    ├── explore.md.j2
-    ├── evolve.md.j2
-    └── debate.md.j2
-```
 
-**修改文件**:
-- `src/agent/swarm/orchestrator.py`: 使用 master_protocol 生成指令
-- `src/agent/swarm/base_agent.py`: 使用 worker_protocol 生成指令
-- `src/llm/prompts/`: 重构为基于模板的系统
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/llm/prompts/` 目录结构
-- ✅ 扩展为更系统化的协议模板
+**影响文件**:
+- 新增 `src/agent/keyword_registry.py` (~100 行)
+- `src/agent/intent_router.py` (集成关键词检测)
 
 ---
 
-### 4.2 Intent-Based Routing
-**目标**: 支持不同的执行意图 (deliver/explore/evolve/debate/implement)
+### 🟡 中优先级改进点
 
-**新增文件**:
+#### 5. **配置管理幂等性**
+**B的优势**:
+- strip-then-insert 模式保证幂等性
+- 清理孤儿配置（orphaned managed notify）
+- 精细的 TOML 解析（只解析顶层键值对）
+
+**整合方案**:
+```python
+def strip_omx_top_level_keys(config: str) -> str:
+    """移除顶层的 OMX 配置键（遇到第一个 [table] 停止）"""
+    lines = config.splitlines()
+    result = []
+
+    for line in lines:
+        if re.match(r'^\s*\[', line):
+            break  # 遇到表头立即停止
+
+        if is_omx_managed_key(line):
+            continue  # 跳过 OMX 管理的键
+
+        result.append(line)
+
+    return '\n'.join(result)
 ```
-src/workflow/intents/
-├── __init__.py
-├── base_intent.py           # 意图基类
-├── deliver_intent.py        # 交付结果路径
-├── explore_intent.py        # 探索调研路径
-├── evolve_intent.py         # 持续改进路径
-├── debate_intent.py         # 挑战验证路径
-└── implement_intent.py      # 实现路径
-```
 
-**修改文件**:
-- `src/workflow/engine.py`: 根据 intent 选择执行策略
-- `src/cli/commands/`: 添加 intent 参数
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/workflow/` 工作流引擎
-- ✅ 扩展为支持多种意图
+**影响文件**:
+- `src/core/config/merger.py` (+50 行, -20 行)
 
 ---
 
-## 🎯 Phase 5: 长期记忆增强
+#### 6. **Hooks 输入锁机制**
+**B的优势**:
+- 防止 Deep Interview 期间用户误触自动批准快捷键
+- 拦截 blocked inputs 并显示提示消息
 
-### 5.1 Evidence-Gated Memory
-**目标**: 防止幻觉进入长期记忆，所有记忆必须有证据支持
-
-**新增文件**:
-```
-src/memory/evidence/
-├── __init__.py
-├── gate.py                  # 证据门控
-├── proposal.py              # 记忆提案
-├── promotion.py             # 提案晋升逻辑
-└── validator.py             # 证据验证器
-```
-
-**修改文件**:
-- `src/memory/long_term.py`: 集成 evidence gate
-- `src/memory/manager.py`: 添加 proposal → canonical 流程
-
-**不重复造轮子**:
-- ✅ 复用现有的 `src/memory/` 企业级记忆系统
-- ✅ 扩展为证据驱动的记忆管理
-
----
-
-### 5.2 Memory Kinds & Selectors
-**目标**: 分类记忆类型，支持选择器检索
-
-**新增文件**:
-```
-src/memory/kinds/
-├── __init__.py
-├── fact.py                  # 事实记忆
-├── procedure.py             # 过程记忆
-├── pitfall.py               # 陷阱记忆
-├── success_prior.py         # 成功先例
-└── secret_ref.py            # 密钥引用
+**整合方案**:
+```python
+@dataclass
+class DeepInterviewInputLock:
+    active: bool = False
+    scope: str = 'deep-interview-auto-approval'
+    acquired_at: Optional[str] = None
+    blocked_inputs: List[str] = field(default_factory=lambda: [
+        'yes', 'y', 'proceed', 'continue', 'ok', 'sure', 'go ahead'
+    ])
+    message: str = "Deep interview is active; auto-approval shortcuts are blocked."
 ```
 
-**修改文件**:
-- `src/memory/storage.py`: 支持按 kind 存储和检索
-- `src/memory/retrieval.py`: 添加 selector-based 检索
-
-**不重复造轮子**:
-- ✅ 复用现有的记忆存储基础设施
-- ✅ 扩展分类和检索能力
+**影响文件**:
+- `src/cli/repl_session.py` (+40 行)
+- `src/core/session_store.py` (+20 行)
 
 ---
 
-## 🎯 Phase 6: 工具与命令增强
+#### 7. **路径管理简化**
+**B的优势**:
+- 223行 vs 405行，代码量减少 45%
+- Skill 目录去重逻辑更清晰
+- Legacy 技能目录重叠检测
 
-### 6.1 新增 GoalX 风格命令
-**目标**: 添加 GoalX 的核心命令到 Clawd CLI
+**整合方案**:
+```python
+from pathlib import Path
 
-**新增文件**:
-```
-src/cli/commands/goalx/
-├── __init__.py
-├── run.py                   # goalx run "objective"
-├── add.py                   # goalx add --worktree "task"
-├── keep.py                  # goalx keep session-N
-├── tell.py                  # goalx tell session-N "message"
-├── wait.py                  # goalx wait --inbox master
-├── integrate.py             # goalx integrate --method partial_adopt
-└── extend.py                # goalx extend --budget +2h
-```
+def get_user_skills_dir() -> str:
+    return str(Path(get_codex_home()) / 'skills')
 
-**修改文件**:
-- `src/cli/repl.py`: 注册新命令
-- `src/cli/commands/__init__.py`: 导入 goalx 命令
+def list_installed_skill_directories(project_root: Optional[str] = None
+                                    ) -> List[InstalledSkillDirectory]:
+    root = project_root or get_project_root()
+    ordered_dirs = [
+        (get_project_skills_dir(root), 'project'),
+        (get_user_skills_dir(), 'user'),
+    ]
 
-**不重复造轮子**:
-- ✅ 复用现有的 CLI 框架
-- ✅ 添加新命令而非重写 CLI
+    deduped: List[InstalledSkillDirectory] = []
+    seen_names = set()
 
----
+    for dir_path, scope in ordered_dirs:
+        skills = _read_installed_skills_from_dir(dir_path, scope)
+        for skill in skills:
+            if skill.name in seen_names:
+                continue
+            seen_names.add(skill.name)
+            deduped.append(skill)
 
-### 6.2 Journal & Artifacts
-**目标**: 结构化的执行日志和产物管理
-
-**新增文件**:
-```
-src/core/artifacts/
-├── __init__.py
-├── journal.py               # 执行日志
-├── artifact_manager.py      # 产物管理器
-└── report_generator.py      # 报告生成器
+    return deduped
 ```
 
-**修改文件**:
-- `src/workflow/engine.py`: 记录 journal 条目
-- `src/agent/engine_loop.py`: 保存 artifacts
-
-**不重复造轮子**:
-- ✅ 复用现有的日志系统
-- ✅ 扩展为结构化的 journal
+**影响文件**:
+- `src/core/paths.py` (-50 行)
 
 ---
 
-## 📊 实施优先级
+### 🟢 低优先级改进点
 
-### P0 (立即实施 - 基础设施)
-1. **Durable Surfaces** (Phase 1.1) - 核心持久化机制
-2. **Control Inbox** (Phase 1.2) - 持久化消息系统
-3. **Protocol Templates** (Phase 4.1) - 协议驱动基础
+#### 8. **MCP 服务器模块化**
+**B的优势**:
+- 多个专用 MCP 服务器（state, memory, team, code-intel, trace）
+- 每个服务器专注单一职责
 
-### P1 (短期实施 - 隔离与监控)
-4. **Worktree Manager** (Phase 2.1) - 并行执行隔离
-5. **Runtime Host** (Phase 3.1) - 运行时监控
-6. **Session Coordination** (Phase 2.2) - 任务协调
+**整合方案**:
+- 拆分 `state_server.py` 为多个专用服务器
+- 统一注册到 MCP 管理器
 
-### P2 (中期实施 - 增强功能)
-7. **Intent Routing** (Phase 4.2) - 多意图支持
-8. **Evidence-Gated Memory** (Phase 5.1) - 记忆质量保证
-9. **Resource Monitoring** (Phase 3.2) - 资源管理
-
-### P3 (长期实施 - 完善生态)
-10. **GoalX Commands** (Phase 6.1) - 命令集扩展
-11. **Memory Kinds** (Phase 5.2) - 记忆分类
-12. **Journal & Artifacts** (Phase 6.2) - 产物管理
+**影响文件**:
+- 新增 `src/mcp/memory_server.py` (~100 行)
+- 新增 `src/mcp/team_server.py` (~80 行)
+- 新增 `src/mcp/code_intel_server.py` (~120 行)
 
 ---
 
-## 🔧 技术债务清理
+#### 9. **Ralph 聚合统计**
+**B的优势**:
+- 视觉反馈的趋势分析
+- 迭代效率指标
 
-### 需要重构的现有模块
-1. `src/agent/swarm/message_bus.py` → 改为基于文件的持久化
-2. `src/workflow/engine.py` → 集成 durable surfaces
-3. `src/agent/checkpoint.py` → 扩展为支持 canonical surfaces
-4. `src/core/git/operations.py` → 添加 worktree 支持
-5. `src/llm/prompts/` → 重构为协议模板系统
+**整合方案**:
+```python
+@dataclass
+class RalphAggregateStats:
+    total_iterations: int
+    avg_score_improvement: float
+    score_trend: List[float]
+    common_issues: Dict[str, int]
+    avg_iteration_duration_ms: float
 
-### 需要删除的冗余代码
-- 无 (GoalX 是 Go 项目，与 Python 代码库无重叠)
+def compute_aggregate_stats(ledger: RalphProgressLedger) -> RalphAggregateStats:
+    """计算 Ralph 迭代的聚合统计"""
+    scores = [entry.get('score', 0) for entry in ledger.entries]
+    improvements = [scores[i+1] - scores[i] for i in range(len(scores)-1)]
 
----
+    return RalphAggregateStats(
+        total_iterations=len(ledger.entries),
+        avg_score_improvement=sum(improvements) / len(improvements) if improvements else 0,
+        score_trend=scores,
+        common_issues=_count_common_issues(ledger.entries),
+        avg_iteration_duration_ms=_compute_avg_duration(ledger.entries),
+    )
+```
 
-## 📈 预期收益
-
-### 可靠性提升
-- ✅ 崩溃后可恢复 (Runtime Host + Lease)
-- ✅ 状态持久化 (Durable Surfaces)
-- ✅ 并行执行隔离 (Worktree)
-
-### 自主性增强
-- ✅ 减少对会话历史依赖 (Canonical Surfaces)
-- ✅ 多意图执行策略 (Intent Routing)
-- ✅ 证据驱动的记忆 (Evidence Gate)
-
-### 可维护性改进
-- ✅ 协议驱动设计 (Protocol Templates)
-- ✅ 结构化日志 (Journal)
-- ✅ 清晰的任务协调 (Coordination)
-
----
-
-## ⚠️ 风险与缓解
-
-### 风险 1: 过度工程化
-**缓解**: 分阶段实施，每个 Phase 独立验证价值
-
-### 风险 2: 性能开销
-**缓解**: 文件 I/O 使用异步，worktree 按需创建
-
-### 风险 3: 兼容性破坏
-**缓解**: 保持现有 API 不变，新功能作为可选扩展
+**影响文件**:
+- `src/workflow/ralph_ledger.py` (+60 行)
 
 ---
 
-## 📝 下一步行动
+## 五、B项目扩展点（A项目缺失）
 
-1. **Review**: 与团队 review 此清单，确认优先级
-2. **Spike**: 对 P0 项目进行技术预研 (2-3 天)
-3. **Implement**: 按优先级逐个实施
-4. **Test**: 每个 Phase 完成后进行集成测试
-5. **Document**: 更新 ARCHITECTURE.md 和 CLAUDE.md
+### 核心扩展点：
+
+1. **Hook 插件系统** (`src/hooks/extensibility/`)
+   - 插件加载 + 验证 + 运行时
+   - SDK 工具集（tmux, log, state, omx）
+   - 事件总线（session-start, turn-complete, session-end）
+
+2. **Pipeline 阶段化** (`src/pipeline/stages/`)
+   - Ralph Verify 阶段
+   - Ralplan 阶段
+   - Team Exec 阶段
+   - 阶段结果聚合
+
+3. **Team 工作区模式**
+   - Single workspace
+   - Git worktree 模式
+   - 自动工作区管理
+
+4. **配置验证与修复**
+   - `validate_config()` 函数
+   - `repair_config_if_needed()`
+   - 配置完整性检查
+
+5. **Notification 高级特性**
+   - 平台特定 Mention 格式（Discord/Slack）
+   - 模板引擎（Template Engine）
+   - 事件路由（Event Routing）
 
 ---
 
-**生成者**: Claude Opus 4.6  
-**审核状态**: 待人工审核
+## 六、整合实施路线图
+
+### Phase 1: 基础优化 (P0 优先级) - Day 1-3
+
+#### Day 1: Agent 系统简化 + 关键词注册表
+- [ ] 修改 `src/agent/definitions.py` - 移除硬编码路由
+- [ ] 创建 `src/agent/keyword_registry.py` - 实现关键词注册表
+- [ ] 更新 `src/agent/intent_router.py` - 集成关键词检测
+- [ ] 编写单元测试验证
+
+#### Day 2: Worktree 隔离增强
+- [ ] 修改 `src/workflow/worktree_isolation.py` - 添加清洁检查
+- [ ] 修改 `src/agent/swarm/team_types.py` - 添加合并报告
+- [ ] 更新团队启动流程 - 调用清洁检查
+- [ ] 编写集成测试验证
+
+#### Day 3: Pipeline 编排精简
+- [ ] 修改 `src/workflow/pipeline_orchestrator.py` - 删除冗余类
+- [ ] 强化配置验证 - 提前失败
+- [ ] 更新相关测试用例
+- [ ] 运行全量测试确保无回归
+
+---
+
+### Phase 2: 中级改进 (P1 优先级) - Day 4-5
+
+#### Day 4: 配置管理幂等性 + 路径管理简化
+- [ ] 修改 `src/core/config/merger.py` - 实现 strip-then-insert
+- [ ] 修改 `src/core/paths.py` - 简化路径管理
+- [ ] 更新相关测试用例
+- [ ] 验证配置合并幂等性
+
+#### Day 5: Hooks 输入锁机制
+- [ ] 修改 `src/core/session_store.py` - 添加输入锁数据结构
+- [ ] 修改 `src/cli/repl_session.py` - 实现输入拦截
+- [ ] 在 Deep Interview 模式下启用输入锁
+- [ ] 编写用户交互测试
+
+---
+
+### Phase 3: 高级特性 (P2 优先级) - Day 6-7
+
+#### Day 6-7: MCP 服务器模块化 + Ralph 聚合统计
+- [ ] 拆分 `src/mcp/state_server.py` 为多个专用服务器
+- [ ] 修改 `src/workflow/ralph_ledger.py` - 添加聚合统计
+- [ ] 更新 MCP 注册逻辑
+- [ ] 编写端到端测试
+
+---
+
+## 七、风险评估与缓解
+
+| 风险 | 概率 | 影响 | 缓解措施 |
+|------|------|------|----------|
+| 破坏现有 API | 中 | 高 | 保留 deprecated 接口，提供迁移指南 |
+| 测试失败 | 低 | 中 | 充分单元测试，CI 门禁 |
+| 性能回退 | 低 | 中 | 基准测试对比 |
+| 用户混淆 | 低 | 低 | 清晰的文档和变更日志 |
+
+---
+
+## 八、验收标准
+
+### 功能验收
+- [ ] 所有 P0 改进通过单元测试
+- [ ] 现有测试套件 100% 通过
+- [ ] 无回归错误
+
+### 质量验收
+- [ ] ruff check 无错误
+- [ ] 代码覆盖率不低于当前水平 (50%)
+- [ ] 文档同步更新
+
+### 性能验收
+- [ ] Pipeline 编排执行时间不增加
+- [ ] Agent 路由延迟 < 10ms
+- [ ] 内存占用不增加 > 5%
+
+---
+
+## 九、后续优化方向
+
+1. **自主能力演进** - Experience Retrieval 系统
+2. **深度辩论机制** - 证据驱动的 Challenge/Review
+3. **可视化调试工具** - 实时查看 Swarm 状态
+4. **更多 LLM 提供商** - 扩展 litellm 集成
+
+---
+
+## 十、参考资源
+
+- [oh-my-codex 官方文档](https://github.com/oh-my-codex/oh-my-codex)
+- [Clawd Code 架构文档](docs/ARCHITECTURE.md)
+- [Agent Skills 规范](docs/skill-anatomy.md)
+
+---
+
+**文档维护者**: AI Assistant (Lingma)
+**最后更新**: 2026-04-17

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .models import Chunk
 
+
 # [性能] 全局文件读取缓存，避免 RAG 组件间重复读取同一文件
 @lru_cache(maxsize=1024)
 def read_file_cached(file_path: str, max_size: int = 1024 * 1024) -> str:
@@ -25,7 +26,7 @@ def read_file_cached(file_path: str, max_size: int = 1024 * 1024) -> str:
         stat = p.stat()
         if stat.st_size > max_size:
              # 只读取部分内容
-             with open(p, 'r', encoding='utf-8', errors='replace') as f:
+             with open(p, encoding='utf-8', errors='replace') as f:
                  return f.read(max_size)
         return p.read_text(encoding='utf-8', errors='replace')
     except Exception:

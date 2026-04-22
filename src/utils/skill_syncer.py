@@ -8,6 +8,7 @@
 import shutil
 from pathlib import Path
 
+
 def sync_skills(source_dir: str, target_dir: str):
     source_path = Path(source_dir)
     target_path = Path(target_dir)

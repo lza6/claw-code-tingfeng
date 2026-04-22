@@ -5,22 +5,21 @@ Hook Plugin Runner - 钩子插件运行器
 从 stdin 读取请求并执行钩子插件。
 """
 
-import sys
-import json
 import asyncio
-from pathlib import Path
-from typing import Any, Optional
-from dataclasses import dataclass, field, field
 
 # 导入 SDK 和类型
 import importlib.util
+import json
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
 class RunnerRequest:
     """运行器请求"""
     cwd: str
-    plugin_id: Optional[str] = None
+    plugin_id: str | None = None
     plugin_path: str = ""
     event: dict = field(default_factory=dict)
     side_effects_enabled: bool = True
@@ -32,7 +31,7 @@ class RunnerResult:
     ok: bool
     plugin: str
     reason: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 RESULT_PREFIX = "__OMX_PLUGIN_RESULT__ "

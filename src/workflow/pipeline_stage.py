@@ -10,10 +10,10 @@ Stage 结果: 每个阶段执行后返回状态和生成的工件。
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from abc import ABC, abstractmethod
 import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -21,9 +21,9 @@ class StageContext:
     """阶段上下文 - 传入每个管道阶段"""
     task: str  # 用户提供的原始任务描述
     artifacts: dict[str, Any] = field(default_factory=dict)  # 之前阶段累积的工件
-    previous_stage_result: Optional[StageResult] = None  # 前一阶段的结果
+    previous_stage_result: StageResult | None = None  # 前一阶段的结果
     cwd: str = ""  # 管道运行的工作目录
-    session_id: Optional[str] = None  # 可选的会话 ID
+    session_id: str | None = None  # 可选的会话 ID
 
     def get_artifact(self, key: str, default: Any = None) -> Any:
         """获取工件"""
@@ -40,7 +40,7 @@ class StageResult:
     status: str  # 'completed' | 'failed' | 'skipped'
     artifacts: dict[str, Any] = field(default_factory=dict)  # 本阶段生成的工件
     duration_ms: int = 0  # 阶段执行的 wall-clock 时间（毫秒）
-    error: Optional[str] = None  # 失败时的人类可读错误描述
+    error: str | None = None  # 失败时的人类可读错误描述
 
     @staticmethod
     def completed(artifacts: dict[str, Any] = None, duration_ms: int = 0) -> StageResult:
@@ -114,8 +114,8 @@ class TimingStage(PipelineStage):
 
 # ===== 导出 =====
 __all__ = [
+    "PipelineStage",
     "StageContext",
     "StageResult",
-    "PipelineStage",
     "TimingStage",
 ]

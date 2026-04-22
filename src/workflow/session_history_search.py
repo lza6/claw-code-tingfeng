@@ -14,13 +14,10 @@ Session History Search - 会话历史搜索
 from __future__ import annotations
 
 import json
-import os
-import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
-
+from typing import Any
 
 # 常量
 SESSION_STATE_DIR = Path(".clawd") / "state"
@@ -34,7 +31,7 @@ class SessionMatch:
     phase: str
     task: str
     started_at: str
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     active: bool = False
     duration_ms: int = 0
 
@@ -68,21 +65,21 @@ def _list_session_files(cwd: str = ".") -> list[tuple[str, Path]]:
     return files
 
 
-def _parse_session_file(path: Path) -> Optional[dict[str, Any]]:
+def _parse_session_file(path: Path) -> dict[str, Any] | None:
     """解析会话状态文件"""
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return json.load(f)
     except Exception:
         return None
 
 
 def search_sessions(
-    modes: Optional[list[str]] = None,
+    modes: list[str] | None = None,
     active_only: bool = False,
-    phases: Optional[list[str]] = None,
-    since: Optional[datetime] = None,
-    until: Optional[datetime] = None,
+    phases: list[str] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
     cwd: str = ".",
 ) -> SessionSearchResult:
     """搜索会话历史
@@ -186,9 +183,9 @@ def count_sessions(cwd: str = ".") -> dict[str, int]:
 
 
 def get_latest_session(
-    mode: Optional[str] = None,
+    mode: str | None = None,
     cwd: str = ".",
-) -> Optional[SessionMatch]:
+) -> SessionMatch | None:
     """获取最新会话"""
     modes = [mode] if mode else None
     result = search_sessions(modes=modes, cwd=cwd)
@@ -205,8 +202,8 @@ def get_active_sessions(cwd: str = ".") -> list[SessionMatch]:
 __all__ = [
     "SessionMatch",
     "SessionSearchResult",
-    "search_sessions",
     "count_sessions",
-    "get_latest_session",
     "get_active_sessions",
+    "get_latest_session",
+    "search_sessions",
 ]

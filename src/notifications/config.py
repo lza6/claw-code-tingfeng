@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
 
 from .types import (
     DiscordBotNotificationConfig,
@@ -25,7 +23,6 @@ from .types import (
     VerbosityLevel,
     WebhookNotificationConfig,
 )
-
 
 # ===== 常量 =====
 DEFAULT_CONFIG_PATHS = [
@@ -115,7 +112,7 @@ def _apply_env_overrides(config: FullNotificationConfig) -> None:
                 pass
 
 
-def _from_dict(cls, data: dict) -> Optional[object]:
+def _from_dict(cls, data: dict) -> object | None:
     """从字典创建 dataclass 实例"""
     if not data:
         return None
@@ -126,8 +123,8 @@ def _from_dict(cls, data: dict) -> Optional[object]:
 
 
 def load_notification_config(
-    config_path: Optional[str] = None,
-    cwd: Optional[str] = None,
+    config_path: str | None = None,
+    cwd: str | None = None,
 ) -> FullNotificationConfig:
     """加载通知配置
 
@@ -151,7 +148,7 @@ def load_notification_config(
     for path in search_paths:
         if path and Path(path).exists():
             try:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, encoding='utf-8') as f:
                     config_data = json.load(f)
                 break
             except (OSError, json.JSONDecodeError):
@@ -211,8 +208,8 @@ def load_notification_config(
 
 
 def load_reply_config(
-    config_path: Optional[str] = None,
-    cwd: Optional[str] = None,
+    config_path: str | None = None,
+    cwd: str | None = None,
 ) -> ReplyConfig:
     """加载 Reply 配置"""
     config = ReplyConfig()
@@ -226,7 +223,7 @@ def load_reply_config(
     for path in search_paths:
         if path and Path(path).exists():
             try:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, encoding='utf-8') as f:
                     full_data = json.load(f)
                     if isinstance(full_data, dict):
                         config_data = full_data.get('reply')
@@ -247,7 +244,7 @@ def load_reply_config(
     return config
 
 
-def is_notifications_enabled(config: Optional[FullNotificationConfig] = None) -> bool:
+def is_notifications_enabled(config: FullNotificationConfig | None = None) -> bool:
     """检查通知是否启用
 
     参数:
@@ -263,8 +260,8 @@ def is_notifications_enabled(config: Optional[FullNotificationConfig] = None) ->
 
 # ===== 导出 =====
 __all__ = [
-    "parse_mention_allowed_mentions",
+    "is_notifications_enabled",
     "load_notification_config",
     "load_reply_config",
-    "is_notifications_enabled",
+    "parse_mention_allowed_mentions",
 ]

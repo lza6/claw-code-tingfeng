@@ -8,7 +8,6 @@ import ast
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ class ContextFingerprint:
             tree = ast.parse(source)
             generator = FingerprintGenerator()
             generator.visit(tree)
-            
+
             # 将特征列表排序并哈希
             feature_str = "|".join(sorted(generator.features))
             return hashlib.blake2b(feature_str.encode()).hexdigest()

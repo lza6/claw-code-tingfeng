@@ -245,6 +245,440 @@ clawd pipeline "重构认证模块"
 
 ---
 
+### 10. 意图路由系统 (`src/agent/intent_router.py`)
+
+**问题**: 项目A的意图识别较为基础，项目B提供了更精细的五意图分类系统（DELIVER/EXPLORE/EVOLVE/IMPLEMENT/DEBATE），需要集成以实现智能任务路由。
+
+**方案**:
+- 借鉴 oh-my-codex 的五意图分类体系
+- 实现 `IntentType` 枚举定义五种意图类型
+- `classify_intent()` 函数返回单一意图（按优先级匹配第一个）
+- `classify_intent_ranked()` 函数返回所有匹配意图及置信度得分（降序）
+- `has_explicit_debate_intent()` 检测明确的辩论/审查意图
+- `get_primary_intent()` 为向后兼容提供 `classify_intent` 的别名
+- 感知执行上下文：通过意图分类决定资源分配和验证策略
+
+**函数说明**:
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `classify_intent` | `(text: str) -> str` | 单一意图分类，按优先级顺序匹配（DEBATE→EXPLORE→EVOLVE→IMPLEMENT→DELIVER），返回第一个匹配的意图字符串 |
+| `classify_intent_ranked` | `(text: str) -> List[Tuple[str, float]]` | 多意图置信度排序，统计各意图匹配模式数量并加权计算分数，返回降序列表 |
+| `has_explicit_debate_intent` | `(text: str) -> bool` | 检测明确的辩论/审查意图，匹配 `debate`、`review`、`security review`、`code review` 等关键词 |
+| `get_primary_intent` | `(text: str) -> str` | `classify_intent` 的别名，保持向后兼容 |
+
+**意图类型定义** (`IntentType` 枚举):
+
+| 值 | 标签 | 典型关键词 | 推荐执行车道 | 验证策略 |
+|----|----|-------------|-------------|----------|
+| `deliver` | DELIVER | execute, run, complete, finish | Standard | 普通单元测试 |
+| `explore` | EXPLORE | search, find, analyze, investigate, discover | Fast Lane | 无需代码验证，生成报告 |
+| `evolve` | EVOLVE | improve, optimize, enhance, refine, upgrade | Frontier | Architect 评审，接受成功标准 |
+| `implement` | IMPLEMENT | add, create, build, make, develop, write | Deep Worker | 强制 80%+ 测试覆盖率 |
+| `debate` | DEBATE | review, critique, challenge, disagree, argue, question | Multi-Agent | 逻辑一致性与证据链检查 |
+
+**使用示例**:
+```python
+from src.agent.intent_router import classify_intent, classify_intent_ranked, IntentType
+
+# 单一意图分类
+intent = classify_intent("请重构用户认证模块 → 返回 IntentType.IMPLEMENT (实现意图)
+
+# 多意图排序（适用于需要多意图支持的场景）
+ranked = classify_intent_ranked("分析代码库性能瓶颈并提出优化方案")
+# 返回: [("explore", 0.6), ("evolve", 0.3), ("implement", 0.3)]
+
+# 明确辩论意图检测
+is_debate = has_explicit_debate_intent("请审查这段代码的安全性")
+# 返回: True（匹配了 "review" 关键词）
+```
+
+**下游影响**:
+- **资源分配**: EVOLVE/DEBATE 使用 Frontier 模型，EXPLORE 使用 FAST 模型
+- **验证策略**: DEBATE 跳过单元测试，启用证据链检查；IMPLEMENT 要求 80%+ 覆盖率
+- **Agent 选择**: DELIVER → executor；EXPLORE → explore；EVOLVE → architect；DEBATE → code-reviewer + multi-agent
+
+---
+
+### 11. 关键词注册表 (`src/agent/keyword_registry.py`)
+
+**问题**: 项目A的技能激活机制较为简单，项目B提供了结构化的关键词注册表、优先级排序和执行门控机制，需要集成以实现智能技能路由。
+
+**方案**:
+- 引入 `KeywordTrigger` 不可变数据类（keyword, skill, priority, requires_intent, description）
+- 注册 40+ 技能关键词（如 ralph, team, swarm, deep-interview, ralplan, pipeline 等）
+- 实现 `EXECUTION_GATE_KEYWORDS` 执行门控关键词集合（需通过 ralplan-first gate）
+- 定义 `WELL_SPECIFIED_SIGNALS` 15+ 正则模式（验证提示完整性）
+- 提供 `detect_keywords()` 主函数（结合显式调用检测和意图验证）
+- 实现 `apply_ralplan_gate()` 函数（ralplan-first Gate 逻辑）
+- 添加 Deep Interview 输入锁相关函数（阻止面试期间的自动批准）
+
+#### 11.1 关键词注册表结构
+
+| 关键词 | 触发技能 | 优先级 | 需要意图验证 | 说明 |
+|--------|----------|--------|------------|------|
+| `$ralph` | `ralph_loop` | 10 | ❌ | 启动 RALPH 持久化循环 |
+| `$team` / `$swarm` | `team_execution` | 20 | ✅ | 团队并行执行（高风险） |
+| `$ralplan` | `ralplan` | 25 | ❌ | 生成并审批执行计划 |
+| `$pipeline` | `pipeline_orchestrator` | 18 | ❌ | 多阶段工作流管道 |
+| `$deep-interview` | `deep_interview` | 15 | ❌ | 深度需求澄清流程 |
+| `$review` | `code_review` | 14 | ❌ | 五轴代码审查 |
+| `$test` | `test_engineer` | 13 | ❌ | 测试工程师工作流 |
+| `$build` | `incremental_implementation` | 16 | ❌ | 增量 TDD 实现 |
+| `$ship` | `shipping_and_launch` | 17 | ❌ | 预发布清单检查 |
+
+**优先级规则**: 数值越高优先级越高（`ralplan`=25 > `team`=20 > `pipeline`=18 > `build`=16 > `ship`=17 > `deep-interview`=15 > `review`=14 > `test`=13 > `ralph`=10）；相同优先级按关键词长度排序
+
+#### 11.2 执行门控 (Execution Gate)
+
+**受保护的高风险关键词**:
+```python
+EXECUTION_GATE_KEYWORDS = {'ralph', 'autopilot', 'team', 'ultrawork', 'swarm'}
+```
+
+**Gate 逻辑流程**:
+1. 检测到受保护关键词 → 检查是否为 `underspecified`（使用 `WELL_SPECIFIED_SIGNALS`）
+2. 如果提示模糊 → 自动重定向到 `$ralplan` 规划阶段
+3. 如果满足绕过条件 → 直接执行原始关键词
+
+**绕过条件**:
+- 前缀: `force:`, `!`（强制跳过 Gate）
+- 已包含 `$ralplan` 关键词（显式规划）
+- 取消操作: `cancel`, `abort`, `stop`
+
+#### 11.3 Well-Specified 信号检测
+
+系统检测 15+ 正则模式验证提示完整性：
+
+| 信号类型 | 示例正则 | 说明 |
+|---------|---------|------|
+| 文件引用 | `\b[\w/.-]+\.(?:py|ts|js|go|rs)\b` | 明确的文件路径 |
+| 代码结构 | `\b(?:function|class|method)\s+\w+` | 代码实体引用 |
+| VCS 引用 | `PR\s*#\d+`, `commit\s+[0-9a-f]{7}` | Pull Request / Commit |
+| 测试语言 | `\b(?:should|must|expect)\s+(?:return|throw)` | 验收标准 |
+| 错误信息 | `TypeError`, `ReferenceError`, `error:` | 错误追踪 |
+| 代码块 | ````[\s\S]{20,}?````` | Markdown 代码块（≥20字符） |
+
+缺失这些信号 → 触发 ralplan-first gate → 重定向到规划阶段
+
+#### 11.4 Deep Interview 输入锁
+
+当 `$deep-interview` 技能激活时，输入锁会阻止某些自动批准快捷方式（如 `yes`, `proceed`, `continue`），直到面试完成。
+
+**相关函数**:
+- `get_deep_interview_lock_state()` - 获取锁状态
+- `is_deep_interview_input_blocked()` - 检查用户输入是否被阻止
+- `release_deep_interview_on_cancel()` - 取消时释放锁
+
+**使用示例**:
+```python
+from src.agent.keyword_registry import detect_keywords, apply_ralplan_gate
+
+# 1. 提取显式技能调用
+triggers = detect_keywords("$team 请实现 OAuth2 登录")
+# → [KeywordTrigger(keyword='team', skill='team_execution', priority=20)]
+
+# 2. 应用执行门控（智能重定向）
+keywords = [get_trigger_by_keyword('team')]
+gated = apply_ralplan_gate(keywords, "实现登录功能")
+# 如果提示模糊，返回 [ralplan_trigger] 而非 [team_trigger]
+
+# 3. 记录技能激活状态（用于 Deep Interview 输入锁）
+record_skill_activation('deep-interview', workdir=Path.cwd())
+```
+
+---
+
+### 12. 任务规模检测 (`src/agent/task_size_detector.py`)
+
+**问题**: 项目A缺乏任务规模评估机制，容易对小任务过度编排或对大任务准备不足，项目B提供了四级规模分类系统以实现智能资源分配。
+
+**方案**:
+- 借鉴 oh-my-codex 的任务规模检测器
+- 实现 `classify_task_size()` 函数，返回任务规模：`TRIVIAL` / `SMALL` / `MEDIUM` / `LARGE` / `HEAVY`
+- 基于多维度评估：输入长度、关键词信号、领域因素、历史数据
+- 提供 `get_task_size_class()` 向后兼容函数
+- 结合 Agent 推荐系统，根据规模推荐合适的执行 Agent
+
+#### 12.1 规模分类标准
+
+| 规模 | 判定条件（优先级从高到低） | Agent 推荐 | 编排策略 |
+|------|-----------------------|------------|----------|
+| **TRIVIAL** | 1. 逃逸前缀: `quick:`, `simple:`, `tiny:`<br>2. 词数 ≤ 50<br>3. 单文件修改 | `executor` / `explore` | 直接交付，跳过 ralplan |
+| **SMALL** | 1. 词数 < 100<br>2. 单文件修改信号 | `executor` | 标准规划-执行 |
+| **MEDIUM** | 1. 词数 100-200<br>2. 默认值 | `executor` + `planner` | 需要 task DAG |
+| **LARGE** | 1. 词数 > 200<br>2. 大任务关键词: `refactor`, `migrate`, `architecture` | `architect` + `planner` + `orchestrator` | 多角色协作 |
+| **HEAVY** | 1. `entire codebase` / `whole project` 信号<br>2. 多模块依赖 | `team-executor` + `multi-agent` | 全团队并行 + 辩论模式 |
+
+#### 12.2 领域因素 (Domain Factors)
+
+检测到的领域因素会调整规模评估:
+- `database` — 涉及数据库 schema/migration
+- `api` — API 设计/修改
+- `auth` — 认证/授权逻辑
+- `ui` / `frontend` — 界面改动
+- `test` — 测试编写/修改
+- `refactor` — 代码重构（权重 +1）
+- `performance` — 性能优化
+- `debug` — 调试/修复
+- `security` — 安全补丁（触发辩论模式）
+
+#### 12.3 复杂度分析
+
+`analyze_task_complexity()` 计算基础置信度:
+```
+基础分数 = 50（默认 MEDIUM）
++ 每领域因素 * 10
++ refactor 因子 * 15
++ 词数超过阈值 * 20
+- 小任务信号 * 15
+```
+
+#### 12.4 使用示例
+
+```python
+from src.agent.task_size_detector import classify_task_size, get_recommended_agent_count
+
+# 小任务检测
+size = classify_task_size("quick: 修复登录按钮颜色")
+# 返回: "trivial"
+
+# 大任务识别
+size = classify_task_size("重构整个用户认证系统，包括数据库迁移、API 更新和前端组件")
+# 返回: "large"
+
+# Agent 数量推荐
+count = get_recommended_agent_count("large", domain_factors=['database', 'api'])
+# 返回: 3（需要 architect + planner + executor 并行）
+
+# 完整任务分析
+result = analyze_task_complexity("设计新的支付网关集成方案")
+# 返回: TaskComplexity(size='large', confidence=0.75, agent_count=2, factors=['api', 'payment'])
+```
+
+---
+
+## 后续优化建议 (项目B遗留)
+
+虽然整合已完成，但以下优化可在未来考虑：
+
+### 10. 意图路由系统 (`src/agent/intent_router.py`)
+
+**问题**: 项目A的意图识别较为基础，项目B提供了更精细的五意图分类系统（DELIVER/EXPLORE/EVOLVE/IMPLEMENT/DEBATE），需要集成以实现智能任务路由。
+
+**方案**:
+- 借鉴 oh-my-codex 的五意图分类体系
+- 实现 `IntentType` 枚举定义五种意图类型
+- `classify_intent()` 函数返回单一意图（按优先级匹配第一个）
+- `classify_intent_ranked()` 函数返回所有匹配意图及置信度得分（降序）
+- `has_explicit_debate_intent()` 检测明确的辩论/审查意图
+- `get_primary_intent()` 为向后兼容提供 `classify_intent` 的别名
+- 感知执行上下文：通过意图分类决定资源分配和验证策略
+
+**函数说明**:
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `classify_intent` | `(text: str) -> str` | 单一意图分类，按优先级顺序匹配（DEBATE→EXPLORE→EVOLVE→IMPLEMENT→DELIVER），返回第一个匹配的意图字符串 |
+| `classify_intent_ranked` | `(text: str) -> List[Tuple[str, float]]` | 多意图置信度排序，统计各意图匹配模式数量并加权计算分数，返回降序列表 |
+| `has_explicit_debate_intent` | `(text: str) -> bool` | 检测明确的辩论/审查意图，匹配 `debate`、`review`、`security review`、`code review` 等关键词 |
+| `get_primary_intent` | `(text: str) -> str` | `classify_intent` 的别名，保持向后兼容 |
+
+**意图类型定义** (`IntentType` 枚举):
+
+| 值 | 标签 | 典型关键词 | 推荐执行车道 | 验证策略 |
+|----|----|-------------|-------------|----------|
+| `deliver` | DELIVER | execute, run, complete, finish | Standard | 普通单元测试 |
+| `explore` | EXPLORE | search, find, analyze, investigate, discover | Fast Lane | 无需代码验证，生成报告 |
+| `evolve` | EVOLVE | improve, optimize, enhance, refine, upgrade | Frontier | Architect 评审，接受成功标准 |
+| `implement` | IMPLEMENT | add, create, build, make, develop, write | Deep Worker | 强制 80%+ 测试覆盖率 |
+| `debate` | DEBATE | review, critique, challenge, disagree, argue, question | Multi-Agent | 逻辑一致性与证据链检查 |
+
+**使用示例**:
+```python
+from src.agent.intent_router import classify_intent, classify_intent_ranked, IntentType
+
+# 单一意图分类
+intent = classify_intent("请重构用户认证模块 → 返回 IntentType.IMPLEMENT (实现意图)
+
+# 多意图排序（适用于需要多意图支持的场景）
+ranked = classify_intent_ranked("分析代码库性能瓶颈并提出优化方案")
+# 返回: [("explore", 0.6), ("evolve", 0.3), ("implement", 0.3)]
+
+# 明确辩论意图检测
+is_debate = has_explicit_debate_intent("请审查这段代码的安全性")
+# 返回: True（匹配了 "review" 关键词）
+```
+
+**下游影响**:
+- **资源分配**: EVOLVE/DEBATE 使用 Frontier 模型，EXPLORE 使用 FAST 模型
+- **验证策略**: DEBATE 跳过单元测试，启用证据链检查；IMPLEMENT 要求 80%+ 覆盖率
+- **Agent 选择**: DELIVER → executor；EXPLORE → explore；EVOLVE → architect；DEBATE → code-reviewer + multi-agent
+
+---
+
+### 11. 关键词注册表 (`src/agent/keyword_registry.py`)
+
+**问题**: 项目A的技能激活机制较为简单，项目B提供了结构化的关键词注册表、优先级排序和执行门控机制，需要集成以实现智能技能路由。
+
+**方案**:
+- 引入 `KeywordTrigger` 不可变数据类（keyword, skill, priority, requires_intent, description）
+- 注册 40+ 技能关键词（如 ralph, team, swarm, deep-interview, ralplan, pipeline 等）
+- 实现 `EXECUTION_GATE_KEYWORDS` 执行门控关键词集合（需通过 ralplan-first gate）
+- 定义 `WELL_SPECIFIED_SIGNALS` 15+ 正则模式（验证提示完整性）
+- 提供 `detect_keywords()` 主函数（结合显式调用检测和意图验证）
+- 实现 `apply_ralplan_gate()` 函数（ralplan-first Gate 逻辑）
+- 添加 Deep Interview 输入锁相关函数（阻止面试期间的自动批准）
+
+#### 11.1 关键词注册表结构
+
+| 关键词 | 触发技能 | 优先级 | 需要意图验证 | 说明 |
+|--------|----------|--------|------------|------|
+| `$ralph` | `ralph_loop` | 10 | ❌ | 启动 RALPH 持久化循环 |
+| `$team` / `$swarm` | `team_execution` | 20 | ✅ | 团队并行执行（高风险） |
+| `$ralplan` | `ralplan` | 25 | ❌ | 生成并审批执行计划 |
+| `$pipeline` | `pipeline_orchestrator` | 18 | ❌ | 多阶段工作流管道 |
+| `$deep-interview` | `deep_interview` | 15 | ❌ | 深度需求澄清流程 |
+| `$review` | `code_review` | 14 | ❌ | 五轴代码审查 |
+| `$test` | `test_engineer` | 13 | ❌ | 测试工程师工作流 |
+| `$build` | `incremental_implementation` | 16 | ❌ | 增量 TDD 实现 |
+| `$ship` | `shipping_and_launch` | 17 | ❌ | 预发布清单检查 |
+
+**优先级规则**: 数值越高优先级越高（`ralplan`=25 > `team`=20 > `pipeline`=18 > `build`=16 > `ship`=17 > `deep-interview`=15 > `review`=14 > `test`=13 > `ralph`=10）；相同优先级按关键词长度排序
+
+#### 11.2 执行门控 (Execution Gate)
+
+**受保护的高风险关键词**:
+```python
+EXECUTION_GATE_KEYWORDS = {'ralph', 'autopilot', 'team', 'ultrawork', 'swarm'}
+```
+
+**Gate 逻辑流程**:
+1. 检测到受保护关键词 → 检查是否为 `underspecified`（使用 `WELL_SPECIFIED_SIGNALS`）
+2. 如果提示模糊 → 自动重定向到 `$ralplan` 规划阶段
+3. 如果满足绕过条件 → 直接执行原始关键词
+
+**绕过条件**:
+- 前缀: `force:`, `!`（强制跳过 Gate）
+- 已包含 `$ralplan` 关键词（显式规划）
+- 取消操作: `cancel`, `abort`, `stop`
+
+#### 11.3 Well-Specified 信号检测
+
+系统检测 15+ 正则模式验证提示完整性：
+
+| 信号类型 | 示例正则 | 说明 |
+|---------|---------|------|
+| 文件引用 | `\b[\w/.-]+\.(?:py|ts|js|go|rs)\b` | 明确的文件路径 |
+| 代码结构 | `\b(?:function|class|method)\s+\w+` | 代码实体引用 |
+| VCS 引用 | `PR\s*#\d+`, `commit\s+[0-9a-f]{7}` | Pull Request / Commit |
+| 测试语言 | `\b(?:should|must|expect)\s+(?:return|throw)` | 验收标准 |
+| 错误信息 | `TypeError`, `ReferenceError`, `error:` | 错误追踪 |
+| 代码块 | ````[\s\S]{20,}?````` | Markdown 代码块（≥20字符） |
+
+缺失这些信号 → 触发 ralplan-first gate → 重定向到规划阶段
+
+#### 11.4 Deep Interview 输入锁
+
+当 `$deep-interview` 技能激活时，输入锁会阻止某些自动批准快捷方式（如 `yes`, `proceed`, `continue`），直到面试完成。
+
+**相关函数**:
+- `get_deep_interview_lock_state()` - 获取锁状态
+- `is_deep_interview_input_blocked()` - 检查用户输入是否被阻止
+- `release_deep_interview_on_cancel()` - 取消时释放锁
+
+**使用示例**:
+```python
+from src.agent.keyword_registry import detect_keywords, apply_ralplan_gate
+
+# 1. 提取显式技能调用
+triggers = detect_keywords("$team 请实现 OAuth2 登录")
+# → [KeywordTrigger(keyword='team', skill='team_execution', priority=20)]
+
+# 2. 应用执行门控（智能重定向）
+keywords = [get_trigger_by_keyword('team')]
+gated = apply_ralplan_gate(keywords, "实现登录功能")
+# 如果提示模糊，返回 [ralplan_trigger] 而非 [team_trigger]
+
+# 3. 记录技能激活状态（用于 Deep Interview 输入锁）
+record_skill_activation('deep-interview', workdir=Path.cwd())
+```
+
+---
+
+### 12. 任务规模检测 (`src/agent/task_size_detector.py`)
+
+**问题**: 项目A缺乏任务规模评估机制，容易对小任务过度编排或对大任务准备不足，项目B提供了四级规模分类系统以实现智能资源分配。
+
+**方案**:
+- 借鉴 oh-my-codex 的任务规模检测器
+- 实现 `classify_task_size()` 函数，返回任务规模：`TRIVIAL` / `SMALL` / `MEDIUM` / `LARGE` / `HEAVY`
+- 基于多维度评估：输入长度、关键词信号、领域因素、历史数据
+- 提供 `get_task_size_class()` 向后兼容函数
+- 结合 Agent 推荐系统，根据规模推荐合适的执行 Agent
+
+#### 12.1 规模分类标准
+
+| 规模 | 判定条件（优先级从高到低） | Agent 推荐 | 编排策略 |
+|------|-----------------------|------------|----------|
+| **TRIVIAL** | 1. 逃逸前缀: `quick:`, `simple:`, `tiny:`<br>2. 词数 ≤ 50<br>3. 单文件修改 | `executor` / `explore` | 直接交付，跳过 ralplan |
+| **SMALL** | 1. 词数 < 100<br>2. 单文件修改信号 | `executor` | 标准规划-执行 |
+| **MEDIUM** | 1. 词数 100-200<br>2. 默认值 | `executor` + `planner` | 需要 task DAG |
+| **LARGE** | 1. 词数 > 200<br>2. 大任务关键词: `refactor`, `migrate`, `architecture` | `architect` + `planner` + `orchestrator` | 多角色协作 |
+| **HEAVY** | 1. `entire codebase` / `whole project` 信号<br>2. 多模块依赖 | `team-executor` + `multi-agent` | 全团队并行 + 辩论模式 |
+
+#### 12.2 领域因素 (Domain Factors)
+
+检测到的领域因素会调整规模评估:
+- `database` — 涉及数据库 schema/migration
+- `api` — API 设计/修改
+- `auth` — 认证/授权逻辑
+- `ui` / `frontend` — 界面改动
+- `test` — 测试编写/修改
+- `refactor` — 代码重构（权重 +1）
+- `performance` — 性能优化
+- `debug` — 调试/修复
+- `security` — 安全补丁（触发辩论模式）
+
+#### 12.3 复杂度分析
+
+`analyze_task_complexity()` 计算基础置信度:
+```
+基础分数 = 50（默认 MEDIUM）
++ 每领域因素 * 10
++ refactor 因子 * 15
++ 词数超过阈值 * 20
+- 小任务信号 * 15
+```
+
+#### 12.4 使用示例
+
+```python
+from src.agent.task_size_detector import classify_task_size, get_recommended_agent_count
+
+# 小任务检测
+size = classify_task_size("quick: 修复登录按钮颜色")
+# 返回: "trivial"
+
+# 大任务识别
+size = classify_task_size("重构整个用户认证系统，包括数据库迁移、API 更新和前端组件")
+# 返回: "large"
+
+# Agent 数量推荐
+count = get_recommended_agent_count("large", domain_factors=['database', 'api'])
+# 返回: 3（需要 architect + planner + executor 并行）
+
+# 完整任务分析
+result = analyze_task_complexity("设计新的支付网关集成方案")
+# 返回: TaskComplexity(size='large', confidence=0.75, agent_count=2, factors=['api', 'payment'])
+```
+
+---
+
+## 后续优化建议 (项目B遗留)
+
+虽然整合已完成，但以下优化可在未来考虑：
+
 ## 后续优化建议 (项目B遗留)
 
 虽然整合已完成，但以下优化可在未来考虑：

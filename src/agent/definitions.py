@@ -1,405 +1,453 @@
-"""
-Agent Definitions - Agent角色定义
+"""Agent Role Definitions for Clawd Code
 
-从 oh-my-codex-main/src/agents/definitions.ts 转换而来。
-定义所有可用的Agent角色及其配置。
+借鉴 oh-my-codex 的精细化角色分类体系。
+每个 Agent 有: 名称、描述、推理级别、姿态、模型类别、路由角色、工具访问模式、分类。
 """
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+
+
+class ReasoningEffort(str, Enum):
+    """推理努力级别"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    XHIGH = "xhigh"
 
 
 class AgentPosture(str, Enum):
-    """Agent姿态"""
-    FRONTIER_ORCHESTRATOR = "frontier-orchestrator"
-    DEEP_WORKER = "deep-worker"
-    FAST_LANE = "fast-lane"
+    """Agent 姿态 (借鉴 OMX)"""
+    FRONTIER_ORCHESTRATOR = "frontier-orchestrator"  # 顶层路由和决策
+    DEEP_WORKER = "deep-worker"                      # 深度执行专家
+    FAST_LANE = "fast-lane"                          # 快速通道 (读/分析)
 
 
-class AgentModelClass(str, Enum):
+class ModelClass(str, Enum):
     """模型类别"""
-    FRONTIER = "frontier"
-    STANDARD = "standard"
-    FAST = "fast"
+    FRONTIER = "frontier"   # 最强模型 (o1/Claude Sonnet)
+    STANDARD = "standard"   # 标准模型 (GPT-4o, Claude)
+    FAST = "fast"          # 快速模型 (GPT-4o-mini, Haiku)
 
 
-class AgentRoutingRole(str, Enum):
+class RoutingRole(str, Enum):
     """路由角色"""
-    LEADER = "leader"
-    SPECIALIST = "specialist"
-    EXECUTOR = "executor"
+    LEADER = "leader"       # 领导/协调角色
+    SPECIALIST = "specialist"  # 专项专家
+    EXECUTOR = "executor"   # 执行者
 
 
-class AgentToolAccess(str, Enum):
+class ToolAccess(str, Enum):
     """工具访问模式"""
-    READ_ONLY = "read-only"
-    ANALYSIS = "analysis"
-    EXECUTION = "execution"
-    DATA = "data"
+    READ_ONLY = "read-only"    # 只读 (浏览/分析)
+    ANALYSIS = "analysis"      # 分析 (需要计算)
+    EXECUTION = "execution"    # 执行 (修改文件/运行)
+    DATA = "data"             # 数据操作
 
 
 class AgentCategory(str, Enum):
-    """Agent类别"""
-    BUILD = "build"
-    REVIEW = "review"
-    DOMAIN = "domain"
-    PRODUCT = "product"
-    COORDINATION = "coordination"
+    """Agent 分类"""
+    BUILD = "build"         # 构建/实现
+    REVIEW = "review"       # 审查/质量
+    DOMAIN = "domain"       # 领域专家
+    PRODUCT = "product"     # 产品/需求
+    COORDINATION = "coordination"  # 协调
 
 
-@dataclass
+@dataclass(frozen=True)
 class AgentDefinition:
-    """Agent定义"""
+    """Agent 定义"""
     name: str
     description: str
-    reasoning_effort: str  # 'low' | 'medium' | 'high'
-    posture: str  # AgentPosture
-    model_class: str  # AgentModelClass
-    routing_role: str  # AgentRoutingRole
-    tools: str  # AgentToolAccess
-    category: str  # AgentCategory
+    reasoningEffort: ReasoningEffort
+    posture: AgentPosture
+    modelClass: ModelClass
+    routingRole: RoutingRole
+    tools: ToolAccess
+    category: AgentCategory
 
 
-# ===== Agent定义 =====
+# ==================== 核心 Agent 定义 (借鉴 oh-my-codex) ====================
+
+EXECUTOR_AGENT = AgentDefinition(
+    name='executor',
+    description='Code implementation, refactoring, feature work',
+    reasoningEffort=ReasoningEffort.HIGH,
+    posture=AgentPosture.DEEP_WORKER,
+    modelClass=ModelClass.STANDARD,
+    routingRole=RoutingRole.EXECUTOR,
+    tools=ToolAccess.EXECUTION,
+    category=AgentCategory.BUILD,
+)
+
+TEAM_EXECUTOR_AGENT = AgentDefinition(
+    name='team-executor',
+    description='Supervised team execution for conservative delivery lanes',
+    reasoningEffort=ReasoningEffort.MEDIUM,
+    posture=AgentPosture.DEEP_WORKER,
+    modelClass=ModelClass.FRONTIER,
+    routingRole=RoutingRole.EXECUTOR,
+    tools=ToolAccess.EXECUTION,
+    category=AgentCategory.BUILD,
+)
+
+
+# ==================== Agent 定义注册表 ====================
+
 AGENT_DEFINITIONS: dict[str, AgentDefinition] = {
-    # Build/Analysis Lane
-    "explore": AgentDefinition(
-        name="explore",
-        description="Fast codebase search and file/symbol mapping",
-        reasoning_effort="low",
-        posture=AgentPosture.FAST_LANE.value,
-        model_class=AgentModelClass.FAST.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.BUILD.value,
+    # ========== 构建/分析车道 ==========
+    'explore': AgentDefinition(
+        name='explore',
+        description='Fast codebase search and file/symbol mapping',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.FAST_LANE,
+        modelClass=ModelClass.FAST,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.BUILD,
     ),
-    "analyst": AgentDefinition(
-        name="analyst",
-        description="Requirements clarity, acceptance criteria, hidden constraints",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.BUILD.value,
+    'analyst': AgentDefinition(
+        name='analyst',
+        description='Requirements clarity, acceptance criteria, hidden constraints',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.BUILD,
     ),
-    "planner": AgentDefinition(
-        name="planner",
-        description="Task sequencing, execution plans, risk flags",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.BUILD.value,
+    'planner': AgentDefinition(
+        name='planner',
+        description='Task sequencing, execution plans, risk flags',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.BUILD,
     ),
-    "architect": AgentDefinition(
-        name="architect",
-        description="System design, boundaries, interfaces, long-horizon tradeoffs",
-        reasoning_effort="high",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.BUILD.value,
+    'architect': AgentDefinition(
+        name='architect',
+        description='System design, boundaries, interfaces, long-horizon tradeoffs',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.BUILD,
     ),
-    "debugger": AgentDefinition(
-        name="debugger",
-        description="Root-cause analysis, regression isolation, failure diagnosis",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.BUILD.value,
+    'debugger': AgentDefinition(
+        name='debugger',
+        description='Root-cause analysis, regression isolation, failure diagnosis',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.BUILD,
     ),
-    "executor": AgentDefinition(
-        name="executor",
-        description="Code implementation, refactoring, feature work",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.BUILD.value,
-    ),
-    "team-executor": AgentDefinition(
-        name="team-executor",
-        description="Supervised team execution for conservative delivery lanes",
-        reasoning_effort="medium",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.BUILD.value,
-    ),
-    "verifier": AgentDefinition(
-        name="verifier",
-        description="Completion evidence, claim validation, test adequacy",
-        reasoning_effort="high",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.BUILD.value,
+    'executor': EXECUTOR_AGENT,
+    'team-executor': TEAM_EXECUTOR_AGENT,
+    'verifier': AgentDefinition(
+        name='verifier',
+        description='Completion evidence, claim validation, test adequacy',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.BUILD,
     ),
 
-    # Review Lane
-    "style-reviewer": AgentDefinition(
-        name="style-reviewer",
-        description="Formatting, naming, idioms, lint conventions",
-        reasoning_effort="low",
-        posture=AgentPosture.FAST_LANE.value,
-        model_class=AgentModelClass.FAST.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
+    # ========== 审查车道 ==========
+    'style-reviewer': AgentDefinition(
+        name='style-reviewer',
+        description='Formatting, naming, idioms, lint conventions',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.FAST_LANE,
+        modelClass=ModelClass.FAST,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
-    "quality-reviewer": AgentDefinition(
-        name="quality-reviewer",
-        description="Logic defects, maintainability, anti-patterns",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
+    'quality-reviewer': AgentDefinition(
+        name='quality-reviewer',
+        description='Logic defects, maintainability, anti-patterns',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
-    "api-reviewer": AgentDefinition(
-        name="api-reviewer",
-        description="API contracts, versioning, backward compatibility",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
+    'api-reviewer': AgentDefinition(
+        name='api-reviewer',
+        description='API contracts, versioning, backward compatibility',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
-    "security-reviewer": AgentDefinition(
-        name="security-reviewer",
-        description="Vulnerabilities, trust boundaries, authn/authz",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
+    'security-reviewer': AgentDefinition(
+        name='security-reviewer',
+        description='Vulnerabilities, trust boundaries, authn/authz',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
-    "performance-reviewer": AgentDefinition(
-        name="performance-reviewer",
-        description="Hotspots, complexity, memory/latency optimization",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
+    'performance-reviewer': AgentDefinition(
+        name='performance-reviewer',
+        description='Hotspots, complexity, memory/latency optimization',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
-    "code-reviewer": AgentDefinition(
-        name="code-reviewer",
-        description="Comprehensive review across all concerns",
-        reasoning_effort="high",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.REVIEW.value,
-    ),
-
-    # Domain Specialists
-    "dependency-expert": AgentDefinition(
-        name="dependency-expert",
-        description="External SDK/API/package evaluation",
-        reasoning_effort="high",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "test-engineer": AgentDefinition(
-        name="test-engineer",
-        description="Test strategy, coverage, flaky-test hardening",
-        reasoning_effort="medium",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "quality-strategist": AgentDefinition(
-        name="quality-strategist",
-        description="Quality strategy, release readiness, risk assessment",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "build-fixer": AgentDefinition(
-        name="build-fixer",
-        description="Build/toolchain/type failures resolution",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "designer": AgentDefinition(
-        name="designer",
-        description="UX/UI architecture, interaction design",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "writer": AgentDefinition(
-        name="writer",
-        description="Documentation, migration notes, user guidance",
-        reasoning_effort="high",
-        posture=AgentPosture.FAST_LANE.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "qa-tester": AgentDefinition(
-        name="qa-tester",
-        description="Interactive CLI/service runtime validation",
-        reasoning_effort="low",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "git-master": AgentDefinition(
-        name="git-master",
-        description="Commit strategy, history hygiene, rebasing",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "code-simplifier": AgentDefinition(
-        name="code-simplifier",
-        description="Simplifies recently modified code for clarity and consistency without changing behavior",
-        reasoning_effort="high",
-        posture=AgentPosture.DEEP_WORKER.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.EXECUTOR.value,
-        tools=AgentToolAccess.EXECUTION.value,
-        category=AgentCategory.DOMAIN.value,
-    ),
-    "researcher": AgentDefinition(
-        name="researcher",
-        description="External documentation and reference research",
-        reasoning_effort="high",
-        posture=AgentPosture.FAST_LANE.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.DOMAIN.value,
+    'code-reviewer': AgentDefinition(
+        name='code-reviewer',
+        description='Comprehensive review across all concerns',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.REVIEW,
     ),
 
-    # Product Lane
-    "product-manager": AgentDefinition(
-        name="product-manager",
-        description="Problem framing, personas/JTBD, PRDs",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.PRODUCT.value,
+    # ========== 领域专家 ==========
+    'dependency-expert': AgentDefinition(
+        name='dependency-expert',
+        description='External SDK/API/package evaluation',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.DOMAIN,
     ),
-    "ux-researcher": AgentDefinition(
-        name="ux-researcher",
-        description="Heuristic audits, usability, accessibility",
-        reasoning_effort="medium",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.PRODUCT.value,
+    'test-engineer': AgentDefinition(
+        name='test-engineer',
+        description='Test strategy, coverage, flaky-test hardening',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
     ),
-    "information-architect": AgentDefinition(
-        name="information-architect",
-        description="Taxonomy, navigation, findability",
-        reasoning_effort="low",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.PRODUCT.value,
+    'quality-strategist': AgentDefinition(
+        name='quality-strategist',
+        description='Quality strategy, release readiness, risk assessment',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.DOMAIN,
     ),
-    "product-analyst": AgentDefinition(
-        name="product-analyst",
-        description="Product metrics, funnel analysis, experiments",
-        reasoning_effort="low",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.STANDARD.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.ANALYSIS.value,
-        category=AgentCategory.PRODUCT.value,
+    'build-fixer': AgentDefinition(
+        name='build-fixer',
+        description='Build/toolchain/type failures resolution',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'designer': AgentDefinition(
+        name='designer',
+        description='UX/UI architecture, interaction design',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'writer': AgentDefinition(
+        name='writer',
+        description='Documentation, migration notes, user guidance',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FAST_LANE,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'qa-tester': AgentDefinition(
+        name='qa-tester',
+        description='Interactive CLI/service runtime validation',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'git-master': AgentDefinition(
+        name='git-master',
+        description='Commit strategy, history hygiene, rebasing',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'code-simplifier': AgentDefinition(
+        name='code-simplifier',
+        description='Simplifies recently modified code for clarity and consistency without changing behavior',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.DEEP_WORKER,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.EXECUTOR,
+        tools=ToolAccess.EXECUTION,
+        category=AgentCategory.DOMAIN,
+    ),
+    'researcher': AgentDefinition(
+        name='researcher',
+        description='External documentation and reference research',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FAST_LANE,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.DOMAIN,
     ),
 
-    # Coordination
-    "critic": AgentDefinition(
-        name="critic",
-        description="Plan/design critical challenge and review",
-        reasoning_effort="high",
-        posture=AgentPosture.FRONTIER_ORCHESTRATOR.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.LEADER.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.COORDINATION.value,
+    # ========== 产品车道 ==========
+    'product-manager': AgentDefinition(
+        name='product-manager',
+        description='Problem framing, personas/JTBD, PRDs',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.PRODUCT,
     ),
-    "vision": AgentDefinition(
-        name="vision",
-        description="Image/screenshot/diagram analysis",
-        reasoning_effort="low",
-        posture=AgentPosture.FAST_LANE.value,
-        model_class=AgentModelClass.FRONTIER.value,
-        routing_role=AgentRoutingRole.SPECIALIST.value,
-        tools=AgentToolAccess.READ_ONLY.value,
-        category=AgentCategory.COORDINATION.value,
+    'ux-researcher': AgentDefinition(
+        name='ux-researcher',
+        description='Heuristic audits, usability, accessibility',
+        reasoningEffort=ReasoningEffort.MEDIUM,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.PRODUCT,
+    ),
+    'information-architect': AgentDefinition(
+        name='information-architect',
+        description='Taxonomy, navigation, findability',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.PRODUCT,
+    ),
+    'product-analyst': AgentDefinition(
+        name='product-analyst',
+        description='Product metrics, funnel analysis, experiments',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.STANDARD,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.ANALYSIS,
+        category=AgentCategory.PRODUCT,
+    ),
+
+    # ========== 协调角色 ==========
+    'critic': AgentDefinition(
+        name='critic',
+        description='Plan/design critical challenge and review',
+        reasoningEffort=ReasoningEffort.HIGH,
+        posture=AgentPosture.FRONTIER_ORCHESTRATOR,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.LEADER,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.COORDINATION,
+    ),
+    'vision': AgentDefinition(
+        name='vision',
+        description='Image/screenshot/diagram analysis',
+        reasoningEffort=ReasoningEffort.LOW,
+        posture=AgentPosture.FAST_LANE,
+        modelClass=ModelClass.FRONTIER,
+        routingRole=RoutingRole.SPECIALIST,
+        tools=ToolAccess.READ_ONLY,
+        category=AgentCategory.COORDINATION,
     ),
 }
 
 
-def get_agent(name: str) -> Optional[AgentDefinition]:
-    """获取Agent定义"""
+# ==================== 工具函数 ====================
+
+def get_agent(name: str) -> AgentDefinition | None:
+    """根据名称获取 Agent 定义"""
     return AGENT_DEFINITIONS.get(name)
 
 
-def get_agents_by_category(category: str) -> list[AgentDefinition]:
-    """获取指定类别的所有Agent"""
+def get_agents_by_category(category: AgentCategory) -> list[AgentDefinition]:
+    """按分类获取所有 Agent"""
     return [a for a in AGENT_DEFINITIONS.values() if a.category == category]
 
 
 def get_agent_names() -> list[str]:
-    """获取所有Agent名称"""
+    """获取所有 Agent 名称"""
     return list(AGENT_DEFINITIONS.keys())
 
 
-# ===== 导出 =====
+def get_agents_by_posture(posture: AgentPosture) -> list[AgentDefinition]:
+    """按姿态获取 Agent"""
+    return [a for a in AGENT_DEFINITIONS.values() if a.posture == posture]
+
+
+def get_agents_by_routing_role(routing_role: RoutingRole) -> list[AgentDefinition]:
+    """按路由角色获取 Agent"""
+    return [a for a in AGENT_DEFINITIONS.values() if a.routingRole == routing_role]
+
+
+def select_agent_for_task(task_description: str, required_tools: str | None = None) -> AgentDefinition:
+    """
+    Fallback: 当 intent_router 不可用时返回默认 agent。
+
+    注意: 真正的 Agent 路由应该由 intent_router.py 或 LLM-based router 处理。
+    此函数仅作为降级策略，避免在路由失败时系统崩溃。
+
+    Args:
+        task_description: 任务描述（未使用，保留接口兼容性）
+        required_tools: 所需工具访问模式（未使用，保留接口兼容性）
+
+    Returns:
+        默认的 executor agent
+    """
+    # 简单兜底：始终返回 executor
+    return AGENT_DEFINITIONS['executor']
+
+
+# 导出所有公共符号
 __all__ = [
-    "AgentDefinition",
-    "AgentPosture",
-    "AgentModelClass",
-    "AgentRoutingRole",
-    "AgentToolAccess",
-    "AgentCategory",
-    "AGENT_DEFINITIONS",
-    "get_agent",
-    "get_agents_by_category",
-    "get_agent_names",
+    'AGENT_DEFINITIONS',
+    'AgentCategory',
+    'AgentDefinition',
+    'AgentPosture',
+    'ModelClass',
+    'ReasoningEffort',
+    'RoutingRole',
+    'ToolAccess',
+    'get_agent',
+    'get_agent_names',
+    'get_agents_by_category',
+    'get_agents_by_posture',
+    'get_agents_by_routing_role',
+    'select_agent_for_task',
 ]

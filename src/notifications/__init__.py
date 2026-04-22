@@ -27,89 +27,117 @@
     result = await dispatch_notifications(config, payload.event, payload)
 """
 
-from .types import (
-    # 事件
-    NotificationEvent,
-    VerbosityLevel,
-    NotificationPlatform,
-
-    # 配置
-    DiscordNotificationConfig,
-    DiscordBotNotificationConfig,
-    TelegramNotificationConfig,
-    SlackNotificationConfig,
-    WebhookNotificationConfig,
-    CustomWebhookCommandConfig,
-    CustomCliCommandConfig,
-    EventNotificationConfig,
-    FullNotificationConfig,
-
-    # 负载
-    FullNotificationPayload,
-
-    # 结果
-    NotificationResult,
-    DispatchResult,
-
-    # Reply
-    ReplyConfig,
-)
-
 from .config import (
-    parse_mention_allowed_mentions,
+    is_notifications_enabled,
     load_notification_config,
     load_reply_config,
-    is_notifications_enabled,
+    parse_mention_allowed_mentions,
 )
-
+from .cooldown import (
+    get_idle_notification_cooldown_seconds,
+    is_cooldown_enabled,
+    record_idle_notification_sent,
+    should_send_idle_notification,
+)
 from .dispatcher import (
-    validate_discord_url,
-    validate_telegram_token,
-    validate_slack_url,
-    validate_webhook_url,
+    dispatch_notifications,
     send_discord,
     send_discord_bot,
-    send_telegram,
     send_slack,
+    send_telegram,
     send_webhook,
-    dispatch_notifications,
+    validate_discord_url,
+    validate_slack_url,
+    validate_telegram_token,
+    validate_webhook_url,
+)
+from .session_registry import (
+    SessionMapping,
+    find_mapping_by_message_id,
+    find_mapping_by_session_id,
+    prune_old_entries,
+    register_session,
+)
+from .session_registry import (
+    get_stats as get_session_registry_stats,
+)
+from .template_engine import (
+    compute_template_variables,
+    interpolate_template,
+    render_notification_template,
+)
+from .types import (
+    CustomCliCommandConfig,
+    CustomWebhookCommandConfig,
+    DiscordBotNotificationConfig,
+    # 配置
+    DiscordNotificationConfig,
+    DispatchResult,
+    EventNotificationConfig,
+    FullNotificationConfig,
+    # 负载
+    FullNotificationPayload,
+    # 事件
+    NotificationEvent,
+    NotificationPlatform,
+    # 结果
+    NotificationResult,
+    # Reply
+    ReplyConfig,
+    SlackNotificationConfig,
+    TelegramNotificationConfig,
+    VerbosityLevel,
+    WebhookNotificationConfig,
 )
 
-
 __all__ = [
-    # 类型
-    "NotificationEvent",
-    "VerbosityLevel",
-    "NotificationPlatform",
-    "DiscordNotificationConfig",
-    "DiscordBotNotificationConfig",
-    "TelegramNotificationConfig",
-    "SlackNotificationConfig",
-    "WebhookNotificationConfig",
-    "CustomWebhookCommandConfig",
     "CustomCliCommandConfig",
+    "CustomWebhookCommandConfig",
+    "DiscordBotNotificationConfig",
+    "DiscordNotificationConfig",
+    "DispatchResult",
     "EventNotificationConfig",
     "FullNotificationConfig",
     "FullNotificationPayload",
+    # 类型
+    "NotificationEvent",
+    "NotificationPlatform",
     "NotificationResult",
-    "DispatchResult",
     "ReplyConfig",
-
-    # 配置
-    "parse_mention_allowed_mentions",
+    # 会话注册表
+    "SessionMapping",
+    "SlackNotificationConfig",
+    "TelegramNotificationConfig",
+    "VerbosityLevel",
+    "WebhookNotificationConfig",
+    "compute_template_variables",
+    "dispatch_notifications",
+    "find_mapping_by_message_id",
+    "find_mapping_by_session_id",
+    # 冷却管理
+    "get_idle_notification_cooldown_seconds",
+    "get_session_registry_stats",
+    # 模板引擎
+    "interpolate_template",
+    "is_cooldown_enabled",
+    "is_notifications_enabled",
     "load_notification_config",
     "load_reply_config",
-    "is_notifications_enabled",
-
-    # 分发
-    "validate_discord_url",
-    "validate_telegram_token",
-    "validate_slack_url",
-    "validate_webhook_url",
+    # 配置
+    "parse_mention_allowed_mentions",
+    "prune_old_entries",
+    "record_idle_notification_sent",
+    "register_session",
+    "render_notification_template",
     "send_discord",
     "send_discord_bot",
-    "send_telegram",
     "send_slack",
+    "send_telegram",
     "send_webhook",
-    "dispatch_notifications",
+    "should_send_idle_notification",
+    # 分发
+    "validate_discord_url",
+    "validate_slack_url",
+    "validate_telegram_token",
+    "validate_webhook_url",
 ]

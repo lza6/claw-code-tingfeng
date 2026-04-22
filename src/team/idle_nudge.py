@@ -13,13 +13,10 @@ Idle Nudge - 空闲提醒机制
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass, field
-from typing import Optional
-
+from dataclasses import dataclass
 
 # ===== 常量 =====
 DEFAULT_DELAY_MS = 30_000  # 30秒
@@ -41,8 +38,8 @@ class NudgeConfig:
 class PaneNudgeState:
     """Pane的nudge状态"""
     nudge_count: int = 0
-    first_idle_at: Optional[int] = None
-    last_nudge_at: Optional[int] = None
+    first_idle_at: int | None = None
+    last_nudge_at: int | None = None
 
 
 # ===== 工具函数 =====
@@ -152,7 +149,7 @@ def send_to_worker(session_name: str, pane_id: str, message: str) -> bool:
 class NudgeTracker:
     """空闲pane nudge追踪器"""
 
-    def __init__(self, config: Optional[NudgeConfig] = None):
+    def __init__(self, config: NudgeConfig | None = None):
         self.config = config or NudgeConfig()
         self.states: dict[str, PaneNudgeState] = {}
         self.last_scan_at = 0
@@ -160,7 +157,7 @@ class NudgeTracker:
     def check_and_nudge(
         self,
         pane_ids: list[str],
-        leader_pane_id: Optional[str],
+        leader_pane_id: str | None,
         session_name: str,
     ) -> list[str]:
         """检查worker panes并在适当时nudge
@@ -244,12 +241,12 @@ class NudgeTracker:
 # ===== 导出 =====
 __all__ = [
     "NudgeConfig",
-    "PaneNudgeState",
     "NudgeTracker",
+    "PaneNudgeState",
     # 工具函数
     "capture_pane",
-    "pane_looks_ready",
-    "pane_has_active_task",
     "is_pane_idle",
+    "pane_has_active_task",
+    "pane_looks_ready",
     "send_to_worker",
 ]

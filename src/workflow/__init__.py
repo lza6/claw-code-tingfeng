@@ -15,19 +15,6 @@ from .error_classifier import ErrorCategory, ErrorClassification, ErrorClassifie
 from .experience_bank import ExperienceBank, ExperienceRecord
 from .feedback_loop import ErrorAnalyzer, ExceptionFeedbackLoop, FeedbackResult
 from .hotfix_manager import HotfixManager
-from .models import (
-    TechDebtPriority,
-    TechDebtRecord,
-    VersionBumpType,
-    VersionInfo,
-    WorkflowPhase,
-    WorkflowPhaseCategory,
-    WorkflowResult,
-    WorkflowStatus,
-    WorkflowTask,
-)
-from .tech_debt import TechDebtManager
-from .version_manager import VersionManager
 
 # 从 oh-my-codex 汲取的模式状态管理
 from .mode_state import (
@@ -43,6 +30,24 @@ from .mode_state import (
     start_mode,
     update_mode_state,
 )
+from .models import (
+    TechDebtPriority,
+    TechDebtRecord,
+    VersionBumpType,
+    VersionInfo,
+    WorkflowPhase,
+    WorkflowPhaseCategory,
+    WorkflowResult,
+    WorkflowStatus,
+    WorkflowTask,
+)
+
+# 从 oh-my-codex 汲取的管道恢复
+from .pipeline_orchestrator import (
+    can_resume_pipeline,
+    cancel_pipeline,
+    read_pipeline_state,
+)
 
 # 从 oh-my-codex 汲取的 RALPH 账本
 from .ralph_ledger import (
@@ -52,29 +57,8 @@ from .ralph_ledger import (
     get_latest_visual_feedback,
     get_ralph_progress_path,
     migrate_legacy_progress,
-    record_visual_feedback,
     read_ralph_progress,
-)
-
-# 从 oh-my-codex 汲取的团队工作流
-from .team import (
-    TeamPhase,
-    TerminalPhase,
-    TaskCounts,
-    TeamPhaseState,
-    calculate_team_phase,
-    default_persisted_phase_state,
-    infer_phase_target_from_task_counts,
-    is_terminal_phase,
-    is_valid_transition,
-    reconcile_phase_state_for_monitor,
-)
-
-# 从 oh-my-codex 汲取的管道恢复
-from .pipeline_orchestrator import (
-    can_resume_pipeline,
-    cancel_pipeline,
-    read_pipeline_state,
+    record_visual_feedback,
 )
 
 # 从 oh-my-codex 汲取的会话历史搜索
@@ -85,6 +69,20 @@ from .session_history_search import (
     get_active_sessions,
     get_latest_session,
     search_sessions,
+)
+
+# 从 oh-my-codex 汲取的团队工作流
+from .team import (
+    TaskCounts,
+    TeamPhase,
+    TeamPhaseState,
+    TerminalPhase,
+    calculate_team_phase,
+    default_persisted_phase_state,
+    infer_phase_target_from_task_counts,
+    is_terminal_phase,
+    is_valid_transition,
+    reconcile_phase_state_for_monitor,
 )
 
 # 从 oh-my-codex 汲取的团队持久化
@@ -100,6 +98,8 @@ from .team_persistence import (
     update_member_status,
     write_team_state,
 )
+from .tech_debt import TechDebtManager
+from .version_manager import VersionManager
 
 
 def __getattr__(name: str):
@@ -114,58 +114,6 @@ __all__ = [
     'ALL_SUPPORTED_MODES',
     'ALL_SUPPORTED_MODES',
     'EXCLUSIVE_MODES',
-    'ModeState',
-    'ModeStateManager',
-    'ModeType',
-    'assert_mode_allowed',
-    'cancel_mode',
-    'check_mode_conflict',
-    'list_active_modes',
-    'read_mode_state',
-    'start_mode',
-    'update_mode_state',
-    # Ralph Ledger (from oh-my-codex)
-    'RalphProgressLedger',
-    'RalphVisualFeedback',
-    'add_progress_entry',
-    'get_latest_visual_feedback',
-    'get_ralph_progress_path',
-    'migrate_legacy_progress',
-    'record_visual_feedback',
-    'read_ralph_progress',
-    # Pipeline recovery
-    'can_resume_pipeline',
-    'cancel_pipeline',
-    'read_pipeline_state',
-    # Session history search
-    'SessionMatch',
-    'SessionSearchResult',
-    'count_sessions',
-    'get_active_sessions',
-    'get_latest_session',
-    'search_sessions',
-    # Team persistence
-    'TeamMemberState',
-    'TeamMessage',
-    'TeamStateData',
-    'add_team_member',
-    'add_team_message',
-    'get_team_messages',
-    'read_team_state',
-    'remove_team_member',
-    'update_member_status',
-    'write_team_state',
-    # Team Workflow (from oh-my-codex)
-    'TeamPhase',
-    'TerminalPhase',
-    'TaskCounts',
-    'TeamPhaseState',
-    'calculate_team_phase',
-    'default_persisted_phase_state',
-    'infer_phase_target_from_task_counts',
-    'is_terminal_phase',
-    'is_valid_transition',
-    'reconcile_phase_state_for_monitor',
     # Original exports
     'ErrorAnalyzer',
     'ErrorCategory',
@@ -178,9 +126,27 @@ __all__ = [
     'ExperienceRecord',
     'FeedbackResult',
     'HotfixManager',
+    'ModeState',
+    'ModeStateManager',
+    'ModeType',
+    # Ralph Ledger (from oh-my-codex)
+    'RalphProgressLedger',
+    'RalphVisualFeedback',
+    # Session history search
+    'SessionMatch',
+    'SessionSearchResult',
+    'TaskCounts',
+    # Team persistence
+    'TeamMemberState',
+    'TeamMessage',
+    # Team Workflow (from oh-my-codex)
+    'TeamPhase',
+    'TeamPhaseState',
+    'TeamStateData',
     'TechDebtManager',
     'TechDebtPriority',
     'TechDebtRecord',
+    'TerminalPhase',
     'VersionBumpType',
     'VersionInfo',
     'VersionManager',
@@ -190,4 +156,38 @@ __all__ = [
     'WorkflowResult',
     'WorkflowStatus',
     'WorkflowTask',
+    'add_progress_entry',
+    'add_team_member',
+    'add_team_message',
+    'assert_mode_allowed',
+    'calculate_team_phase',
+    # Pipeline recovery
+    'can_resume_pipeline',
+    'cancel_mode',
+    'cancel_pipeline',
+    'check_mode_conflict',
+    'count_sessions',
+    'default_persisted_phase_state',
+    'get_active_sessions',
+    'get_latest_session',
+    'get_latest_visual_feedback',
+    'get_ralph_progress_path',
+    'get_team_messages',
+    'infer_phase_target_from_task_counts',
+    'is_terminal_phase',
+    'is_valid_transition',
+    'list_active_modes',
+    'migrate_legacy_progress',
+    'read_mode_state',
+    'read_pipeline_state',
+    'read_ralph_progress',
+    'read_team_state',
+    'reconcile_phase_state_for_monitor',
+    'record_visual_feedback',
+    'remove_team_member',
+    'search_sessions',
+    'start_mode',
+    'update_member_status',
+    'update_mode_state',
+    'write_team_state',
 ]

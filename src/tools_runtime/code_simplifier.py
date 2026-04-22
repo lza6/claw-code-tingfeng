@@ -9,18 +9,16 @@ Code Simplifier - 代码简化器
 """
 
 import os
-import re
 import subprocess
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, List
+from pathlib import Path
 
 
 # ===== 配置类 =====
 @dataclass
 class CodeSimplifierConfig:
     enabled: bool = False
-    extensions: List[str] = None
+    extensions: list[str] = None
     max_files: int = 10
 
     def __post_init__(self):
@@ -39,7 +37,7 @@ TRIGGER_MARKER_FILENAME = 'code-simplifier-triggered.marker'
 class CodeSimplifierResult:
     triggered: bool
     message: str
-    files: List[str] = None
+    files: list[str] = None
 
     def __post_init__(self):
         if self.files is None:
@@ -47,7 +45,7 @@ class CodeSimplifierResult:
 
 
 # ===== 配置读取 =====
-def read_clawd_config(config_path: Optional[str] = None) -> dict:
+def read_clawd_config(config_path: str | None = None) -> dict:
     """读取 Clawd 配置"""
     if config_path is None:
         config_path = os.path.expanduser('~/.clawd/config.json')
@@ -58,13 +56,13 @@ def read_clawd_config(config_path: Optional[str] = None) -> dict:
 
     try:
         import json
-        with open(config_file, 'r', encoding='utf-8') as f:
+        with open(config_file, encoding='utf-8') as f:
             return json.load(f)
     except Exception:
         return {}
 
 
-def is_code_simplifier_enabled(config_path: Optional[str] = None) -> bool:
+def is_code_simplifier_enabled(config_path: str | None = None) -> bool:
     """检查代码简化器是否启用"""
     config = read_clawd_config(config_path)
     return config.get('codeSimplifier', {}).get('enabled', False) is True
@@ -73,9 +71,9 @@ def is_code_simplifier_enabled(config_path: Optional[str] = None) -> bool:
 # ===== 文件获取 =====
 def get_modified_files(
     cwd: str,
-    extensions: List[str] = None,
+    extensions: list[str] = None,
     max_files: int = DEFAULT_MAX_FILES,
-) -> List[str]:
+) -> list[str]:
     """通过 git status 获取修改的文件"""
     if extensions is None:
         extensions = DEFAULT_EXTENSIONS
@@ -153,7 +151,7 @@ def clear_trigger_marker(state_dir: str) -> None:
 
 
 # ===== 消息构建 =====
-def build_simplifier_message(files: List[str]) -> str:
+def build_simplifier_message(files: list[str]) -> str:
     """构建简化器消息"""
     file_list = '\n'.join(f'  - {f}' for f in files)
     file_args = '\\n'.join(files)
@@ -171,7 +169,7 @@ def build_simplifier_message(files: List[str]) -> str:
 def process_code_simplifier(
     cwd: str,
     state_dir: str,
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
 ) -> CodeSimplifierResult:
     """
     处理代码简化器钩子
@@ -270,10 +268,10 @@ def remove_docstring_redundancy(text: str) -> str:
 __all__ = [
     "CodeSimplifierConfig",
     "CodeSimplifierResult",
+    "build_simplifier_message",
+    "get_modified_files",
     "is_code_simplifier_enabled",
     "process_code_simplifier",
-    "get_modified_files",
-    "build_simplifier_message",
-    "simplify_imports",
     "remove_docstring_redundancy",
+    "simplify_imports",
 ]

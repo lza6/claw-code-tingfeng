@@ -1,23 +1,20 @@
-"""Workflow Stages - 管道阶段实现"""
+"""Pipeline 阶段注册中心
 
-from .ralplan import RalplanStage, RalplanConfig, RalplanDRSummary, create_ralplan_stage
-from .team_exec import TeamExecStage, TeamExecConfig, create_team_exec_stage, build_team_instruction
-from .ralph_verify import RalphVerifyStage, RalphVerifyConfig, create_ralph_verify_stage, build_ralph_instruction
+导出所有内置阶段和工厂函数。
+"""
+
+from .precontext_intake_stage import PreContextIntakeStage, create_precontext_intake_stage
+from .ralph_verify_stage import RalphVerifyStage, create_ralph_verify_stage
+from .ralplan_stage import RalplanStage, create_ralplan_stage
+from .team_exec_stage import TeamExecStage, create_team_exec_stage
 
 __all__ = [
-    # Ralplan
-    "RalplanStage",
-    "RalplanConfig",
-    "RalplanDRSummary",
-    "create_ralplan_stage",
-    # Team Exec
-    "TeamExecStage",
-    "TeamExecConfig",
-    "create_team_exec_stage",
-    "build_team_instruction",
-    # Ralph Verify
+    "PreContextIntakeStage",
     "RalphVerifyStage",
-    "RalphVerifyConfig",
+    "RalplanStage",
+    "TeamExecStage",
+    "create_precontext_intake_stage",
     "create_ralph_verify_stage",
-    "build_ralph_instruction",
+    "create_ralplan_stage",
+    "create_team_exec_stage",
 ]

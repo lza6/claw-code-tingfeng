@@ -13,15 +13,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
-from ..pipeline_stage import StageContext, StageResult, PipelineStage
 from ..artifacts import (
-    read_planning_artifacts,
-    is_planning_complete,
     read_approved_execution_launch_hint,
-    get_test_specs_for_prd,
 )
+from ..pipeline_stage import PipelineStage, StageContext, StageResult
 
 logger = logging.getLogger(__name__)
 

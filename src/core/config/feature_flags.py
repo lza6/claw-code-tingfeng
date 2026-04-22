@@ -47,6 +47,14 @@ DEFAULT_FEATURES = {
     "extended_timeout_enabled": True,          # 启用 50 分钟超时 (ClawGod 标准: 3000000ms)
     "green_theme": False,                      # 启用 ClawGod 风格绿色主题
     "consensus_planning": True,                # 新增: 启用意图共识规划 (借鉴 OMX)
+
+    # 工具集成配置 (Tool Integration)
+    "tool_integration_enabled": True,          # 启用统一工具管理系统
+    "tool_capsule_mode": False,                # 启用工具胶囊模式 (隔离执行环境)
+    "tool_observability_hooks": True,          # 在 replay_engine 中注入工具使用监控
+    "tool_error_hierarchy": True,              # 使用扩展的工具错误层次结构
+    "max_parallel_tools": 3,                   # 最大并行工具数
+    "tool_timeout_ms": 30000,                  # 工具执行超时 (毫秒)
 }
 
 DEFAULT_METADATA = {
@@ -195,5 +203,27 @@ DEFAULT_METADATA = {
         description="Enable ClawGod-style green theme branding",
         category="ui",
         requires_restart=True
+    ),
+    # 工具集成配置元数据
+    "tool_integration_enabled": FeatureMetadata(
+        name="tool_integration_enabled",
+        description="Enable unified tool management system",
+        category="performance"
+    ),
+    "tool_capsule_mode": FeatureMetadata(
+        name="tool_capsule_mode",
+        description="Enable tool capsule mode (isolated execution environment)",
+        category="security",
+        requires_restart=True
+    ),
+    "tool_observability_hooks": FeatureMetadata(
+        name="tool_observability_hooks",
+        description="Inject tool usage monitoring hooks in replay_engine",
+        category="performance"
+    ),
+    "tool_error_hierarchy": FeatureMetadata(
+        name="tool_error_hierarchy",
+        description="Use extended tool error hierarchy for better error handling",
+        category="performance"
     ),
 }

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Optional
 
 
 class IntentType(str, Enum):
@@ -93,7 +92,7 @@ def classify_intent_ranked(text: str) -> list[tuple[str, float]]:
 
     for intent_type, patterns in INTENT_PATTERNS.items():
         for pattern in patterns:
-            matches = pattern.findall(text_lower)
+            matches = pattern.findall(text.lower())
             if matches:
                 # 匹配数越多，置信度越高
                 scores[intent_type.value] += len(matches) * 0.3
@@ -144,6 +143,6 @@ __all__ = [
     "IntentType",
     "classify_intent",
     "classify_intent_ranked",
-    "has_explicit_debate_intent",
     "get_primary_intent",
+    "has_explicit_debate_intent",
 ]

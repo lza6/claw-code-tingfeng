@@ -8,8 +8,6 @@ Task Size Detector - 任务规模检测
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-
 
 # ==================== 任务规模枚举 ====================
 
@@ -79,13 +77,7 @@ SMALL_TASK_SIGNALS = [
 
 
 # 小任务信号扩展（从 oh-my-codex-main 汲取）
-SMALL_TASK_SIGNALS_EXTENDED = SMALL_TASK_SIGNALS + [
-    re.compile(r"\bpatch\b", re.I),
-    re.compile(r"\bhotfix\b", re.I),
-    re.compile(r"\btypo\s+fix\b", re.I),
-    re.compile(r"\bupdate\s+version\s+number\b", re.I),
-    re.compile(r"\bfix\s+small\s+issue\b", re.I),
-]
+SMALL_TASK_SIGNALS_EXTENDED = [*SMALL_TASK_SIGNALS, re.compile(r"\bpatch\b", re.I), re.compile(r"\bhotfix\b", re.I), re.compile(r"\btypo\s+fix\b", re.I), re.compile(r"\bupdate\s+version\s+number\b", re.I), re.compile(r"\bfix\s+small\s+issue\b", re.I)]
 
 
 # ==================== 大任务信号 ====================
@@ -113,12 +105,7 @@ LARGE_TASK_SIGNALS = [
 
 
 # 大任务信号扩展（从 oh-my-codex-main 汲取）
-LARGE_TASK_SIGNALS_EXTENDED = LARGE_TASK_SIGNALS + [
-    re.compile(r"\bmodernize\b", re.I),
-    re.compile(r"\bupdate\s+dependencies\b", re.I),
-    re.compile(r"\bsecurity\s+patch\b", re.I),
-    re.compile(r"\bperformance\s+optimization\b", re.I),
-]
+LARGE_TASK_SIGNALS_EXTENDED = [*LARGE_TASK_SIGNALS, re.compile(r"\bmodernize\b", re.I), re.compile(r"\bupdate\s+dependencies\b", re.I), re.compile(r"\bsecurity\s+patch\b", re.I), re.compile(r"\bperformance\s+optimization\b", re.I)]
 
 
 # ==================== 重 Orchestration 关键词 ====================
@@ -143,9 +130,9 @@ class TaskSizeResult:
     reason: str
     word_count: int
     has_escape_hatch: bool
-    escape_prefix_used: Optional[str] = None
+    escape_prefix_used: str | None = None
     confidence: float = 1.0  # 置信度（0-1）
-    factors: Optional[dict] = None  # 决策因素详情
+    factors: dict | None = None  # 决策因素详情
 
 
 @dataclass
@@ -164,7 +151,7 @@ def count_words(text: str) -> int:
     return len(text.strip().split())
 
 
-def detect_escape_hatch(text: str) -> Optional[str]:
+def detect_escape_hatch(text: str) -> str | None:
     """检测逃逸 hatch 前缀"""
     trimmed = text.strip().lower()
     for prefix in ESCAPE_HATCH_PREFIXES:
@@ -190,7 +177,7 @@ def is_heavy_mode(keyword_type: str) -> bool:
 
 def classify_task_size(
     text: str,
-    thresholds: Optional[TaskSizeThresholds] = None,
+    thresholds: TaskSizeThresholds | None = None,
 ) -> TaskSizeResult:
     """
     分类任务规模（借鉴 oh-my-codex 的优先级策略）
@@ -366,20 +353,20 @@ def _get_recommended_agents(size: str, factors: dict[str, bool]) -> list[str]:
 # ==================== 导出 ====================
 
 __all__ = [
-    "TaskSize",
-    "TaskSizeResult",
-    "TaskComplexityResult",
-    "TaskSizeThresholds",
     "DEFAULT_THRESHOLDS",
     "ESCAPE_HATCH_PREFIXES",
-    "SMALL_TASK_SIGNALS",
-    "LARGE_TASK_SIGNALS",
     "HEAVY_MODE_KEYWORDS",
+    "LARGE_TASK_SIGNALS",
+    "SMALL_TASK_SIGNALS",
+    "TaskComplexityResult",
+    "TaskSize",
+    "TaskSizeResult",
+    "TaskSizeThresholds",
+    "analyze_task_complexity",
+    "classify_task_size",
     "count_words",
     "detect_escape_hatch",
-    "has_small_task_signals",
     "has_large_task_signals",
-    "classify_task_size",
-    "analyze_task_complexity",
+    "has_small_task_signals",
     "is_heavy_mode",
 ]

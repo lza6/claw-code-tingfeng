@@ -22,8 +22,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
 
 # ===== 常量 =====
 DEFAULT_POLL_MS = 75
@@ -37,17 +35,17 @@ MIN_TIMEOUT_MS = 100
 class HudAuthorityOptions:
     """HUD Authority 选项"""
     cwd: str
-    node_path: Optional[str] = None
-    package_root: Optional[str] = None
+    node_path: str | None = None
+    package_root: str | None = None
     poll_ms: int = DEFAULT_POLL_MS
     timeout_ms: int = DEFAULT_TIMEOUT_MS
-    env: Optional[dict] = None
+    env: dict | None = None
 
 
 @dataclass
 class HudAuthorityDeps:
     """HUD Authority 依赖（用于测试注入）"""
-    run_process: Optional[callable] = None
+    run_process: callable | None = None
 
 
 # ===== 辅助函数 =====
@@ -124,12 +122,12 @@ def _default_run_process(
 # ===== 公共 API =====
 async def run_hud_authority_tick(
     cwd: str,
-    node_path: Optional[str] = None,
-    package_root: Optional[str] = None,
+    node_path: str | None = None,
+    package_root: str | None = None,
     poll_ms: int = DEFAULT_POLL_MS,
     timeout_ms: int = DEFAULT_TIMEOUT_MS,
-    env: Optional[dict] = None,
-    deps: Optional[HudAuthorityDeps] = None,
+    env: dict | None = None,
+    deps: HudAuthorityDeps | None = None,
 ) -> None:
     """运行 HUD 权限守护进程心跳
 
@@ -199,7 +197,7 @@ def is_hud_authority_enabled() -> bool:
     return os.environ.get('OMX_HUD_AUTHORITY') == '1'
 
 
-def read_authority_owner(cwd: str) -> Optional[dict]:
+def read_authority_owner(cwd: str) -> dict | None:
     """读取权限所有者信息
 
     参数:
@@ -213,7 +211,7 @@ def read_authority_owner(cwd: str) -> Optional[dict]:
         return None
 
     try:
-        with open(owner_path, 'r', encoding='utf-8') as f:
+        with open(owner_path, encoding='utf-8') as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -256,10 +254,10 @@ def is_authority_owner_alive(cwd: str) -> bool:
 
 # ===== 导出 =====
 __all__ = [
-    "HudAuthorityOptions",
     "HudAuthorityDeps",
-    "run_hud_authority_tick",
+    "HudAuthorityOptions",
+    "is_authority_owner_alive",
     "is_hud_authority_enabled",
     "read_authority_owner",
-    "is_authority_owner_alive",
+    "run_hud_authority_tick",
 ]

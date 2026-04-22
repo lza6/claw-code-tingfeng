@@ -16,11 +16,20 @@ from .memory_server import (
     get_memory_server,
 )
 
+# 导入状态服务器
+from .state_server import (
+    SUPPORTED_MODES,
+    Mode,
+    ModeState,
+    StateServer,
+    build_mcp_tools,
+    get_state_server,
+)
 from .trace_server import (
-    TraceLevel,
     TraceEntry,
-    TraceSession,
+    TraceLevel,
     TraceServer,
+    TraceSession,
     get_trace_server,
 )
 
@@ -277,91 +286,108 @@ class MCPServer:
             handler=self.tool_run_command,
         ))
 
+    def register_state_tools(self):
+        """注册状态管理工具（来自 oh-my-codex）"""
+        state_tools = build_mcp_tools()
+        for tool_def in state_tools:
+            self.register_tool(MCPTool(
+                name=tool_def["name"],
+                description=tool_def["description"],
+                input_schema=tool_def["inputSchema"],
+                handler=None,  # 将在运行时动态路由
+            ))
 
-# STDIO 模式入口
-async def run_stdio_server():
-    """STDIO 模式运行服务器"""
-    import json
-    import sys
+    # STDIO 模式入口
+    async def run_stdio_server():
+        """STDIO 模式运行服务器"""
+        import json
+        import sys
 
-    server = MCPServer()
-    server.register_standard_tools()
+        server = MCPServer()
+        server.register_standard_tools()
+        server.register_state_tools()
 
-    logger.info("MCP Server running in STDIO mode")
+        logger.info("MCP Server running in STDIO mode")
 
-    while True:
-        try:
-            line = await asyncio.get_event_loop().run_in_executor(
-                None, sys.stdin.readline
+        while True:
+            try:
+                line = await asyncio.get_event_loop().run_in_executor(
+                    None, sys.stdin.readline
+                )
+                if not line:
+                    break
+
+                request_data = json.loads(line)
+                request = MCPRequest(
+                    method=MCPMethod(request_data.get("method", "")),
+                    params=request_data.get("params", {}),
+                    id=request_data.get("id"),
+                )
+
+                response = await server.handle_request(request)
+                print(json.dumps({
+                    "result": response.result,
+                    "error": response.error,
+                    "id": response.id,
+                }), flush=True)
+
+            except Exception:
+                logger.exception("Error in STDIO loop")
+
+    # SSE 模式入口
+    async def run_sse_server(host: str = "0.0.0.0", port: int = 8080):
+        """SSE 模式运行服务器"""
+        from aiohttp import web
+
+        server = MCPServer()
+        server.register_standard_tools()
+        server.register_state_tools()
+
+        async def handle_mcp(request):
+            data = await request.json()
+            mcp_request = MCPRequest(
+                method=MCPMethod(data.get("method")),
+                params=data.get("params", {}),
+                id=data.get("id"),
             )
-            if not line:
-                break
-
-            request_data = json.loads(line)
-            request = MCPRequest(
-                method=MCPMethod(request_data.get("method", "")),
-                params=request_data.get("params", {}),
-                id=request_data.get("id"),
-            )
-
-            response = await server.handle_request(request)
-            print(json.dumps({
+            response = await server.handle_request(mcp_request)
+            return web.json_response({
                 "result": response.result,
                 "error": response.error,
                 "id": response.id,
-            }), flush=True)
+            })
 
-        except Exception:
-            logger.exception("Error in STDIO loop")
+        app = web.Application()
+        app.router.add_post("/mcp", handle_mcp)
 
-
-# SSE 模式入口
-async def run_sse_server(host: str = "0.0.0.0", port: int = 8080):
-    """SSE 模式运行服务器"""
-    from aiohttp import web
-
-    server = MCPServer()
-    server.register_standard_tools()
-
-    async def handle_mcp(request):
-        data = await request.json()
-        mcp_request = MCPRequest(
-            method=MCPMethod(data.get("method")),
-            params=data.get("params", {}),
-            id=data.get("id"),
-        )
-        response = await server.handle_request(mcp_request)
-        return web.json_response({
-            "result": response.result,
-            "error": response.error,
-            "id": response.id,
-        })
-
-    app = web.Application()
-    app.router.add_post("/mcp", handle_mcp)
-
-    logger.info(f"MCP Server running on {host}:{port}")
-    await web.run_app(app, host=host, port=port)
+        logger.info(f"MCP Server running on {host}:{port}")
+        await web.run_app(app, host=host, port=port)
 
 
 __all__ = [
+    "SUPPORTED_MODES",
     "MCPMethod",
     "MCPRequest",
     "MCPResponse",
     "MCPServer",
     "MCPTool",
     "MCPTransport",
-    "run_sse_server",
-    "run_stdio_server",
     # Memory Server
     "MemoryEntry",
     "MemoryIndex",
     "MemoryServer",
-    "get_memory_server",
+    # State Server (新增)
+    "Mode",
+    "ModeState",
+    "StateServer",
+    "TraceEntry",
     # Trace Server
     "TraceLevel",
-    "TraceEntry",
-    "TraceSession",
     "TraceServer",
+    "TraceSession",
+    "get_memory_server",
+    "get_state_server",
     "get_trace_server",
+    "run_sse_server",
+    "run_stdio_server",
 ]

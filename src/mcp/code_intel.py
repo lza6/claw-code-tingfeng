@@ -11,15 +11,10 @@ MCP Code Intelligence Server
 """
 
 import asyncio
-import hashlib
 import json
-import os
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
-
 
 # ==== 工具响应格式 =====
 
@@ -118,7 +113,7 @@ def parse_tsc_output(output: str, project_dir: str) -> list[Diagnostic]:
     return diagnostics
 
 
-async def find_tsconfig(dir: str) -> Optional[str]:
+async def find_tsconfig(dir: str) -> str | None:
     """查找 tsconfig"""
     candidates = ["tsconfig.json", "tsconfig.build.json"]
     for candidate in candidates:
@@ -131,7 +126,7 @@ async def find_tsconfig(dir: str) -> Optional[str]:
 async def run_tsc_diagnostics(
     target: str,
     project_dir: str,
-    severity: Optional[str] = None
+    severity: str | None = None
 ) -> DiagnosticsResult:
     """运行 tsc 诊断
 
@@ -293,8 +288,8 @@ class FileIndex:
 
 async def index_project(
     cwd: str,
-    extensions: Optional[list[str]] = None,
-    exclude_dirs: Optional[list[str]] = None
+    extensions: list[str] | None = None,
+    exclude_dirs: list[str] | None = None
 ) -> list[FileIndex]:
     """索引项目文件
 
@@ -343,7 +338,7 @@ class CodeIntelTool:
     def __init__(self, cwd: str = "."):
         self.cwd = cwd
 
-    async def diagnose(self, target: str = ".", severity: Optional[str] = None) -> dict:
+    async def diagnose(self, target: str = ".", severity: str | None = None) -> dict:
         """运行 tsc 诊断
 
         MCP 工具: mcp-code-intel-diagnose
@@ -408,7 +403,7 @@ class CodeIntelTool:
             "count": len(symbols)
         })
 
-    async def index(self, extensions: Optional[list[str]] = None) -> dict:
+    async def index(self, extensions: list[str] | None = None) -> dict:
         """索引项目文件
 
         MCP 工具: mcp-code-intel-index

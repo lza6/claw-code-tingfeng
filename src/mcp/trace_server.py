@@ -13,8 +13,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +58,12 @@ class TraceServer:
     - 过滤搜索
     """
 
-    def __init__(self, storage_dir: Optional[str] = None):
+    def __init__(self, storage_dir: str | None = None):
         self.storage_dir = storage_dir
         self._sessions: dict[str, TraceSession] = {}
-        self._current_session_id: Optional[str] = None
+        self._current_session_id: str | None = None
 
-    def start_session(self, session_id: str, metadata: Optional[dict] = None) -> TraceSession:
+    def start_session(self, session_id: str, metadata: dict | None = None) -> TraceSession:
         """开始追踪会话"""
         session = TraceSession(
             session_id=session_id,
@@ -76,7 +74,7 @@ class TraceServer:
         logger.info(f"[Trace] Started session: {session_id}")
         return session
 
-    def end_session(self, session_id: Optional[str] = None) -> bool:
+    def end_session(self, session_id: str | None = None) -> bool:
         """结束追踪会话"""
         session_id = session_id or self._current_session_id
         if session_id and session_id in self._sessions:
@@ -90,9 +88,9 @@ class TraceServer:
         message: str,
         level: str = "info",
         source: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
         stack_trace: str = "",
-    ) -> Optional[TraceEntry]:
+    ) -> TraceEntry | None:
         """记录追踪条目"""
         session_id = self._current_session_id
         if not session_id or session_id not in self._sessions:
@@ -111,11 +109,11 @@ class TraceServer:
         self._sessions[session_id].entries.append(entry)
         return entry
 
-    def get_session(self, session_id: str) -> Optional[TraceSession]:
+    def get_session(self, session_id: str) -> TraceSession | None:
         """获取会话"""
         return self._sessions.get(session_id)
 
-    def get_current_session(self) -> Optional[TraceSession]:
+    def get_current_session(self) -> TraceSession | None:
         """获取当前会话"""
         if self._current_session_id:
             return self._sessions.get(self._current_session_id)
@@ -124,8 +122,8 @@ class TraceServer:
     def search(
         self,
         query: str,
-        session_id: Optional[str] = None,
-        level: Optional[str] = None,
+        session_id: str | None = None,
+        level: str | None = None,
     ) -> list[TraceEntry]:
         """搜索追踪"""
         sessions = [self._sessions[session_id]] if session_id else self._sessions.values()
@@ -141,7 +139,7 @@ class TraceServer:
 
         return results
 
-    def export_session_json(self, session_id: str) -> Optional[str]:
+    def export_session_json(self, session_id: str) -> str | None:
         """导出会话为 JSON"""
         session = self.get_session(session_id)
         if not session:
@@ -166,7 +164,7 @@ class TraceServer:
             ],
         }, indent=2, ensure_ascii=False)
 
-    def save_to_file(self, path: Optional[str] = None) -> bool:
+    def save_to_file(self, path: str | None = None) -> bool:
         """保存到文件"""
         if not path:
             return False
@@ -189,7 +187,7 @@ class TraceServer:
             logger.error(f"[Trace] Save failed: {e}")
             return False
 
-    def clear(self, session_id: Optional[str] = None) -> None:
+    def clear(self, session_id: str | None = None) -> None:
         """清除追踪"""
         if session_id:
             if session_id in self._sessions:
@@ -202,7 +200,7 @@ class TraceServer:
 
 
 # 全局单例
-_trace_server: Optional[TraceServer] = None
+_trace_server: TraceServer | None = None
 
 
 def get_trace_server() -> TraceServer:
@@ -215,9 +213,9 @@ def get_trace_server() -> TraceServer:
 
 # ===== 导出 =====
 __all__ = [
-    "TraceLevel",
     "TraceEntry",
-    "TraceSession",
+    "TraceLevel",
     "TraceServer",
+    "TraceSession",
     "get_trace_server",
 ]

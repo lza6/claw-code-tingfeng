@@ -248,7 +248,6 @@ class PostgresCache(BaseCache):
         if self._conn is None:
             try:
                 import psycopg2
-                from psycopg2 import pool
                 self._pool = psycopg2.pool.SimpleConnectionPool(
                     1, 20,
                     host=self.config.postgres_host,

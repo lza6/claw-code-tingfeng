@@ -1,13 +1,13 @@
 """Catalog Registry - 技能注册表"""
 
-from typing import Optional
-from src.catalog.manifest import get_catalog, CatalogManifest, SkillDefinition, AgentDefinition
+
+from src.catalog.manifest import AgentDefinition, CatalogManifest, SkillDefinition, get_catalog
 
 
 class CatalogRegistry:
     """技能/Agent 注册表"""
 
-    def __init__(self, manifest: Optional[CatalogManifest] = None):
+    def __init__(self, manifest: CatalogManifest | None = None):
         self._manifest = manifest or get_catalog()
         self._skill_cache: dict[str, SkillDefinition] = {}
         self._agent_cache: dict[str, AgentDefinition] = {}
@@ -20,17 +20,17 @@ class CatalogRegistry:
         for agent in self._manifest.agents:
             self._agent_cache[agent.name] = agent
 
-    def get_skill(self, name: str) -> Optional[SkillDefinition]:
+    def get_skill(self, name: str) -> SkillDefinition | None:
         """获取技能定义"""
         resolved = self._manifest.resolve_canonical(name)
         return self._skill_cache.get(resolved)
 
-    def get_agent(self, name: str) -> Optional[AgentDefinition]:
+    def get_agent(self, name: str) -> AgentDefinition | None:
         """获取 Agent 定义"""
         resolved = self._manifest.resolve_canonical(name)
         return self._agent_cache.get(resolved)
 
-    def list_skills(self, category: Optional[str] = None, active_only: bool = False) -> list[SkillDefinition]:
+    def list_skills(self, category: str | None = None, active_only: bool = False) -> list[SkillDefinition]:
         """列出技能"""
         skills = self._manifest.skills
         if active_only:
@@ -39,7 +39,7 @@ class CatalogRegistry:
             skills = [s for s in skills if s.category.value == category]
         return skills
 
-    def list_agents(self, category: Optional[str] = None, active_only: bool = False) -> list[AgentDefinition]:
+    def list_agents(self, category: str | None = None, active_only: bool = False) -> list[AgentDefinition]:
         """列出 Agent"""
         agents = self._manifest.agents
         if active_only:
@@ -57,7 +57,7 @@ class CatalogRegistry:
 
 
 # 全局注册表实例
-_registry: Optional[CatalogRegistry] = None
+_registry: CatalogRegistry | None = None
 
 
 def get_registry() -> CatalogRegistry:

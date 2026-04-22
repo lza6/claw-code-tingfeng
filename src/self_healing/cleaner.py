@@ -3,8 +3,10 @@
 核心目标：自动检测并切除 AI 生成代码中的"赘肉"，保持项目极简。
 """
 from __future__ import annotations
+
 import re
 from pathlib import Path
+
 
 class SlopCleaner:
     # 典型的 AI 废话模式
@@ -68,10 +70,10 @@ class SlopCleaner:
     def clean_file(cls, file_path: Path | str):
         path = Path(file_path)
         if not path.exists(): return
-        
+
         content = path.read_text(encoding='utf-8')
         cleaned = cls.strip_slop(content)
-        
+
         if len(cleaned) < len(content):
             path.write_text(cleaned, encoding='utf-8')
             return True

@@ -55,9 +55,9 @@ class ToolRegistry:
 
     def register_advanced_tools(self, t_index, s_index, workdir):
         """Register the new advanced tools from Project B integration."""
+        from .ast_grep_tool import ASTGrepTool
         from .search_v2_tool import SearchV2Tool
         from .symbol_find_tool import SymbolFindTool
-        from .ast_grep_tool import ASTGrepTool
 
         self.register(SearchV2Tool(t_index, workdir))
         self.register(SymbolFindTool(s_index))

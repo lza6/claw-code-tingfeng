@@ -10,17 +10,85 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 # ===== 事件类型 =====
 class NotificationEvent(str, Enum):
-    """可以触发通知的事件"""
+    """可以触发通知的事件 (对齐 oh-my-codex HookEventName - 35+ events)
+
+    参考: oh-my-codex-main/src/hooks/extensibility/types.ts
+    分类:
+        - 会话生命周期 (Session lifecycle)
+        - Agent 生命周期 (Agent lifecycle)
+        - 任务/工作流 (Task/Workflow)
+        - Pipeline 阶段 (Pipeline stages)
+        - 团队协作 (Team collaboration)
+        - 审核/审查 (Audit/Review)
+        - 自我修复 (Self-healing)
+        - 资源/性能 (Resource/Performance)
+        - 通知系统自身 (Notification system)
+        - 阻塞/用户交互 (Blocking/User interaction)
+    """
+
+    # ========== 会话生命周期 (已有) ==========
     SESSION_START = 'session-start'
     SESSION_STOP = 'session-stop'
     SESSION_END = 'session-end'
     SESSION_IDLE = 'session-idle'
+
+    # ========== 用户交互 ==========
     ASK_USER_QUESTION = 'ask-user-question'
+    USER_RESPONDED = 'user-responded'
+
+    # ========== Agent 生命周期 ==========
+    AGENT_START = 'agent-start'
+    AGENT_END = 'agent-end'
+
+    # ========== 任务/工作流 ==========
+    TASK_CREATED = 'task-created'
+    TASK_ASSIGNED = 'task-assigned'
+    TASK_STARTED = 'task-started'
+    TASK_COMPLETE = 'task-complete'
+    TASK_FAILED = 'task-failed'
+    TASK_RETRY = 'task-retry'
+
+    # ========== Pipeline 阶段 ==========
+    PIPELINE_START = 'pipeline-start'
+    PIPELINE_STAGE_START = 'pipeline-stage-start'
+    PIPELINE_STAGE_COMPLETE = 'pipeline-stage-complete'
+    PIPELINE_STAGE_FAILED = 'pipeline-stage-failed'
+    PIPELINE_COMPLETE = 'pipeline-complete'
+    PIPELINE_RESUMED = 'pipeline-resumed'
+
+    # ========== 团队协作 ==========
+    WORKER_JOINED = 'worker-joined'
+    WORKER_LEFT = 'worker-left'
+    TEAM_DISPATCH = 'team-dispatch'
+    TEAM_RESULT = 'team-result'
+
+    # ========== 审核/审查 ==========
+    AUDIT_REQUEST = 'audit-request'
+    AUDIT_RESULT = 'audit-result'
+    REVIEW_REQUEST = 'review-request'
+    REVIEW_RESULT = 'review-result'
+
+    # ========== 自我修复 ==========
+    ERROR_DETECTED = 'error-detected'
+    ERROR_DIAGNOSED = 'error-diagnosed'
+    FIX_APPLIED = 'fix-applied'
+    HEAL_COMPLETE = 'heal-complete'
+    HEAL_FAILED = 'heal-failed'
+
+    # ========== 资源/性能 ==========
+    BUDGET_EXCEEDED = 'budget-exceeded'
+    RESOURCE_WARNING = 'resource-warning'
+
+    # ========== 通知系统自身 ==========
+    NOTIFICATION_SENT = 'notification-sent'
+    NOTIFICATION_FAILED = 'notification-failed'
+
+    # ========== 阻塞 ==========
+    BLOCKED = 'blocked'
 
 
 class VerbosityLevel(str, Enum):
@@ -117,11 +185,11 @@ class EventNotificationConfig:
     """每个事件的通知配置"""
     enabled: bool = False
     message_template: str = ''
-    discord: Optional[DiscordNotificationConfig] = None
-    discord_bot: Optional[DiscordBotNotificationConfig] = None
-    telegram: Optional[TelegramNotificationConfig] = None
-    slack: Optional[SlackNotificationConfig] = None
-    webhook: Optional[WebhookNotificationConfig] = None
+    discord: DiscordNotificationConfig | None = None
+    discord_bot: DiscordBotNotificationConfig | None = None
+    telegram: TelegramNotificationConfig | None = None
+    slack: SlackNotificationConfig | None = None
+    webhook: WebhookNotificationConfig | None = None
 
 
 # ===== 顶级配置 =====
@@ -132,21 +200,21 @@ class FullNotificationConfig:
     verbosity: VerbosityLevel = VerbosityLevel.SESSION
 
     # 默认平台配置
-    discord: Optional[DiscordNotificationConfig] = None
-    discord_bot: Optional[DiscordBotNotificationConfig] = None
-    telegram: Optional[TelegramNotificationConfig] = None
-    slack: Optional[SlackNotificationConfig] = None
-    webhook: Optional[WebhookNotificationConfig] = None
+    discord: DiscordNotificationConfig | None = None
+    discord_bot: DiscordBotNotificationConfig | None = None
+    telegram: TelegramNotificationConfig | None = None
+    slack: SlackNotificationConfig | None = None
+    webhook: WebhookNotificationConfig | None = None
 
     # OpenClaw 网关
     openclaw_enabled: bool = False
 
     # 自定义传输
-    custom_webhook_command: Optional[CustomWebhookCommandConfig] = None
-    custom_cli_command: Optional[CustomCliCommandConfig] = None
+    custom_webhook_command: CustomWebhookCommandConfig | None = None
+    custom_cli_command: CustomCliCommandConfig | None = None
 
     # 每个事件的配置
-    events: Optional[dict[str, EventNotificationConfig]] = None
+    events: dict[str, EventNotificationConfig] | None = None
 
 
 # ===== 负载 =====
@@ -217,20 +285,20 @@ class ReplyConfig:
 
 # ===== 导出 =====
 __all__ = [
-    "NotificationEvent",
-    "VerbosityLevel",
-    "NotificationPlatform",
-    "DiscordNotificationConfig",
-    "DiscordBotNotificationConfig",
-    "TelegramNotificationConfig",
-    "SlackNotificationConfig",
-    "WebhookNotificationConfig",
-    "CustomWebhookCommandConfig",
     "CustomCliCommandConfig",
+    "CustomWebhookCommandConfig",
+    "DiscordBotNotificationConfig",
+    "DiscordNotificationConfig",
+    "DispatchResult",
     "EventNotificationConfig",
     "FullNotificationConfig",
     "FullNotificationPayload",
+    "NotificationEvent",
+    "NotificationPlatform",
     "NotificationResult",
-    "DispatchResult",
     "ReplyConfig",
+    "SlackNotificationConfig",
+    "TelegramNotificationConfig",
+    "VerbosityLevel",
+    "WebhookNotificationConfig",
 ]

@@ -7,14 +7,12 @@ Codebase Map - 代码库地图构建
 
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +83,7 @@ class CodebaseMapper:
 
     def __init__(self, root_path: str):
         self.root_path = Path(root_path).resolve()
-        self._cache: Optional[CodebaseMap] = None
+        self._cache: CodebaseMap | None = None
 
     def scan(self, max_depth: int = 10) -> CodebaseMap:
         """扫描代码库"""
@@ -192,7 +190,7 @@ class CodebaseMapper:
 
 # ===== 导出 =====
 __all__ = [
-    "FileNode",
     "CodebaseMap",
     "CodebaseMapper",
+    "FileNode",
 ]

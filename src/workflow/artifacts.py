@@ -17,7 +17,6 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 # ===== 类型定义 =====
@@ -48,8 +47,8 @@ class ApprovedExecutionLaunchHint:
     mode: str  # 'team' | 'ralph'
     command: str
     task: str
-    worker_count: Optional[int] = None
-    agent_type: Optional[str] = None
+    worker_count: int | None = None
+    agent_type: str | None = None
     linked_ralph: bool = False
 
 
@@ -76,7 +75,7 @@ def _read_matching_paths(dir_path: str, pattern: re.Pattern) -> list[str]:
         return []
 
 
-def _decode_quoted_value(raw: str) -> Optional[str]:
+def _decode_quoted_value(raw: str) -> str | None:
     """解码引号中的值"""
     normalized = raw.strip()
     if not normalized:
@@ -92,7 +91,7 @@ def _decode_quoted_value(raw: str) -> Optional[str]:
     return None
 
 
-def _artifact_slug(path: str, prefix_pattern: re.Pattern) -> Optional[str]:
+def _artifact_slug(path: str, prefix_pattern: re.Pattern) -> str | None:
     """从文件路径提取 slug"""
     filename = os.path.basename(path)
     match = prefix_pattern.match(filename)
@@ -104,7 +103,7 @@ def _artifact_slug(path: str, prefix_pattern: re.Pattern) -> Optional[str]:
 def _filter_artifacts_for_slug(
     paths: list[str],
     prefix_pattern: re.Pattern,
-    slug: Optional[str],
+    slug: str | None,
 ) -> list[str]:
     """按 slug 过滤产物"""
     if not slug:
@@ -156,7 +155,7 @@ def is_planning_complete(artifacts: PlanningArtifacts) -> bool:
     return len(artifacts.prd_paths) > 0 and len(artifacts.test_spec_paths) > 0
 
 
-def read_approved_plan_text(cwd: str = ".") -> Optional[tuple[str, ApprovedPlanContext]]:
+def read_approved_plan_text(cwd: str = ".") -> tuple[str, ApprovedPlanContext] | None:
     """读取已批准的计划文本
 
     参数:
@@ -180,7 +179,7 @@ def read_approved_plan_text(cwd: str = ".") -> Optional[tuple[str, ApprovedPlanC
         return None
 
     try:
-        with open(latest_prd_path, 'r', encoding='utf-8') as f:
+        with open(latest_prd_path, encoding='utf-8') as f:
             content = f.read()
 
         context = ApprovedPlanContext(
@@ -204,7 +203,7 @@ def read_approved_plan_text(cwd: str = ".") -> Optional[tuple[str, ApprovedPlanC
 def read_approved_execution_launch_hint(
     cwd: str = ".",
     mode: str = "team",
-) -> Optional[ApprovedExecutionLaunchHint]:
+) -> ApprovedExecutionLaunchHint | None:
     """读取已批准的执行启动提示
 
     从 PRD 内容中解析 team 或 ralph 命令。
@@ -277,7 +276,7 @@ def read_approved_execution_launch_hint(
 
 
 # ===== 便捷函数 =====
-def get_latest_prd_path(cwd: str = ".") -> Optional[str]:
+def get_latest_prd_path(cwd: str = ".") -> str | None:
     """获取最新的 PRD 文件路径"""
     artifacts = read_planning_artifacts(cwd)
     return artifacts.prd_paths[-1] if artifacts.prd_paths else None
@@ -299,15 +298,15 @@ def get_test_specs_for_prd(prd_path: str, cwd: str = ".") -> list[str]:
 
 # ===== 导出 =====
 __all__ = [
-    "PlanningArtifacts",
-    "ApprovedPlanContext",
     "ApprovedExecutionLaunchHint",
+    "ApprovedPlanContext",
+    "PlanningArtifacts",
+    "get_latest_prd_path",
     "get_plans_dir",
     "get_specs_dir",
-    "read_planning_artifacts",
-    "is_planning_complete",
-    "read_approved_plan_text",
-    "read_approved_execution_launch_hint",
-    "get_latest_prd_path",
     "get_test_specs_for_prd",
+    "is_planning_complete",
+    "read_approved_execution_launch_hint",
+    "read_approved_plan_text",
+    "read_planning_artifacts",
 ]

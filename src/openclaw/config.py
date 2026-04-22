@@ -6,20 +6,18 @@ Supports HTTP and CLI command gateway configurations.
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.openclaw.types import (
     OpenClawCommandGatewayConfig,
     OpenClawConfig,
     OpenClawGatewayConfig,
-    OpenClawHookEvent,
     OpenClawHookMapping,
     OpenClawHttpGatewayConfig,
 )
 
-
 # Cached config (None = not yet read, False = read but file missing/invalid)
-_cached_config: Optional[OpenClawConfig | None] = None
+_cached_config: OpenClawConfig | None | None = None
 
 VALID_HOOK_EVENTS = [
     "session_start",
@@ -55,7 +53,7 @@ def _parse_events(value: Any) -> list[str]:
     return events if events else list(DEFAULT_ALIAS_EVENTS)
 
 
-def _parse_gateway(gateway_name: str, config: dict[str, Any]) -> Optional[OpenClawGatewayConfig]:
+def _parse_gateway(gateway_name: str, config: dict[str, Any]) -> OpenClawGatewayConfig | None:
     """Parse a gateway config."""
     gateway_type = config.get("type", "http")
     if gateway_type == "command":
@@ -74,7 +72,7 @@ def _parse_gateway(gateway_name: str, config: dict[str, Any]) -> Optional[OpenCl
         )
 
 
-def _normalize_from_aliases(notifications: dict[str, Any]) -> Optional[OpenClawConfig]:
+def _normalize_from_aliases(notifications: dict[str, Any]) -> OpenClawConfig | None:
     """Normalize from custom aliases (legacy)."""
     webhook_alias = notifications.get("custom_webhook_command")
     cli_alias = notifications.get("custom_cli_command")
@@ -123,7 +121,7 @@ def _normalize_from_aliases(notifications: dict[str, Any]) -> Optional[OpenClawC
     )
 
 
-def read_openclaw_config(config_path: Optional[Path] = None) -> Optional[OpenClawConfig]:
+def read_openclaw_config(config_path: Path | None = None) -> OpenClawConfig | None:
     """Read OpenClaw config from file."""
     global _cached_config
     if _cached_config is not None:

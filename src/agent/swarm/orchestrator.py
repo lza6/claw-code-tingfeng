@@ -44,18 +44,28 @@ class TaskDAG:
     性能优化 (v0.37.0):
     - 维护就绪队列，避免每次遍历所有任务 (O(N) → O(1))
     - 添加反向索引加速查找
+
+    汲取 oh-my-codex-main/src/team/role-router.ts (TaskDAG 概念):
+    - 更精细的任务状态跟踪
+    - 支持优先级和权重
     """
 
     def __init__(self, tasks: list[dict[str, str]] | None = None) -> None:
         self.tasks = {t['task_id']: t for t in (tasks or [])}
         self.adj: dict[str, list[str]] = {}
         self.in_degree: dict[str, int] = {}
-        self._completed: set[str] = set()  # 跟踪已完成的任务
-        self._ready_queue: set[str] = set()  # [优化 v0.37.0] 维护就绪队列
+        self._completed: set[str] = set()
+        self._ready_queue: set[str] = set()
+        self._task_priority: dict[str, int] = {}  # [新增] 任务优先级
+        self._task_weight: dict[str, float] = {}   # [新增] 任务权重（用于调度）
 
         for t_id in self.tasks:
             self.adj[t_id] = []
             self.in_degree[t_id] = 0
+            # 提取优先级和权重
+            task = self.tasks[t_id]
+            self._task_priority[t_id] = task.get('priority', 0)
+            self._task_weight[t_id] = task.get('weight', 1.0)
 
         for t_id, task in self.tasks.items():
             deps = task.get('depends_on', '')
@@ -66,16 +76,24 @@ class TaskDAG:
                         self.adj[dep].append(t_id)
                         self.in_degree[t_id] += 1
 
-        # [优化 v0.37.0] 初始化时就计算就绪队列
+        # 初始化就绪队列（按优先级排序）
         for t_id, degree in self.in_degree.items():
             if degree == 0:
                 self._ready_queue.add(t_id)
 
     def get_ready_tasks(self, completed_ids: set[str]) -> list[str]:
-        """获取目前可执行的子任务 (依赖已满足)
+        """获取目前可执行的子任务（依赖已满足）- 按优先级排序
 
         [优化 v0.37.0] 使用就绪队列，从 O(N) 降至 O(1)
+        [增强] 按优先级和权重排序返回
         """
+        ready = list(self._ready_queue - completed_ids)
+        # 按优先级降序、权重大排序
+        ready.sort(key=lambda t: (-self._task_priority.get(t, 0), -self._task_weight.get(t, 1.0)))
+        return ready
+
+    def get_ready_tasks_unsorted(self, completed_ids: set[str]) -> list[str]:
+        """获取未排序的就绪任务列表（用于并行场景）"""
         return list(self._ready_queue - completed_ids)
 
     def mark_task_completed(self, task_id: str) -> None:

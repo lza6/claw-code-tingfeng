@@ -7,7 +7,6 @@ Prompt Guidance Contract - 提示词指导合约
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -196,15 +195,15 @@ def get_all_contracts() -> list[GuidanceSurfaceContract]:
 
 # ===== 导出 =====
 __all__ = [
-    "GuidanceSurfaceContract",
-    "ROOT_TEMPLATE_CONTRACTS",
-    "CORE_ROLE_CONTRACTS",
-    "SCENARIO_ROLE_CONTRACTS",
-    "WAVE_TWO_CONTRACTS",
     "CATALOG_CONTRACTS",
+    "CORE_ROLE_CONTRACTS",
     "LEGACY_PROMPT_CONTRACTS",
-    "SPECIALIZED_PROMPT_CONTRACTS",
+    "ROOT_TEMPLATE_CONTRACTS",
+    "SCENARIO_ROLE_CONTRACTS",
     "SKILL_CONTRACTS",
-    "validate_contract",
+    "SPECIALIZED_PROMPT_CONTRACTS",
+    "WAVE_TWO_CONTRACTS",
+    "GuidanceSurfaceContract",
     "get_all_contracts",
+    "validate_contract",
 ]

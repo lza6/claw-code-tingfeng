@@ -9,12 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +56,9 @@ class SessionManager:
     - 自动保存
     """
 
-    def __init__(self, storage_path: Optional[str] = None):
+    def __init__(self, storage_path: str | None = None):
         self.storage_path = storage_path
-        self._current: Optional[SessionContext] = None
+        self._current: SessionContext | None = None
         self._metadata = SessionMetadata()
 
     def create(self, session_id: str, cwd: str = "") -> SessionContext:
@@ -76,7 +74,7 @@ class SessionManager:
         logger.info(f"[Session] Created session: {session_id}")
         return self._current
 
-    def get_current(self) -> Optional[SessionContext]:
+    def get_current(self) -> SessionContext | None:
         """获取当前会话"""
         return self._current
 
@@ -114,7 +112,7 @@ class SessionManager:
         """获取元数据"""
         return self._metadata
 
-    def save(self, path: Optional[str] = None) -> bool:
+    def save(self, path: str | None = None) -> bool:
         """保存会话"""
         save_path = path or self.storage_path
         if not save_path or not self._current:
@@ -163,7 +161,7 @@ MODE_NAME_ALIASES: dict[str, str] = {
 }
 
 
-def get_deprecation_warning(mode: str) -> Optional[str]:
+def get_deprecation_warning(mode: str) -> str | None:
     """检查模式是否已弃用并返回警告信息"""
     if mode in MODE_NAME_ALIASES:
         new_mode = MODE_NAME_ALIASES[mode]
@@ -177,8 +175,8 @@ def resolve_mode_name(mode: str) -> str:
 
 
 # ===== 全局单例 =====
-_state_dir: Optional[str] = None
-_session_manager: Optional[SessionManager] = None
+_state_dir: str | None = None
+_session_manager: SessionManager | None = None
 
 
 def set_state_directory(path: str) -> None:
@@ -187,12 +185,12 @@ def set_state_directory(path: str) -> None:
     _state_dir = path
 
 
-def get_state_directory() -> Optional[str]:
+def get_state_directory() -> str | None:
     """获取状态目录"""
     return _state_dir
 
 
-def get_mode_state_path(mode: str, project_root: Optional[str] = None) -> str:
+def get_mode_state_path(mode: str, project_root: str | None = None) -> str:
     """获取指定模式的状态文件路径"""
     base_dir = project_root or _state_dir or ".clawd"
     return f"{base_dir}/state/{mode}-state.json"
@@ -200,7 +198,7 @@ def get_mode_state_path(mode: str, project_root: Optional[str] = None) -> str:
 
 async def assert_mode_start_allowed(
     mode: str,
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
 ) -> None:
     """断言模式启动是否允许（独占模式互斥检查）
 
@@ -227,7 +225,7 @@ async def assert_mode_start_allowed(
                     f"Cannot start {mode}: {other_mode} is already active. "
                     f"Run cancel first."
                 )
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             raise RuntimeError(
                 f"Cannot start {mode}: {other_mode} state file is malformed. "
                 f"Run cancel or repair the state file."
@@ -246,17 +244,17 @@ def get_session_manager() -> SessionManager:
 
 # ===== 导出 =====
 __all__ = [
-    "SessionState",
-    "SessionContext",
-    "SessionMetadata",
-    "SessionManager",
-    "get_session_manager",
     # Mode 管理
     "EXCLUSIVE_MODES",
+    "SessionContext",
+    "SessionManager",
+    "SessionMetadata",
+    "SessionState",
+    "assert_mode_start_allowed",
     "get_deprecation_warning",
+    "get_mode_state_path",
+    "get_session_manager",
+    "get_state_directory",
     "resolve_mode_name",
     "set_state_directory",
-    "get_state_directory",
-    "get_mode_state_path",
-    "assert_mode_start_allowed",
 ]

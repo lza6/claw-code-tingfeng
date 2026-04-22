@@ -8,7 +8,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..utils.file_ops import atomic_write_json
 
@@ -19,7 +19,7 @@ class NotepadEntry:
     """记事本条目"""
     content: str
     timestamp: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     priority: int = 0  # 0: 普通, 1: 高优先级
 
 class Notepad:
@@ -32,19 +32,19 @@ class Notepad:
     - 状态持久化
     """
 
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Path | None = None):
         self.storage_path = storage_path or Path(".clawd/notepad.json")
-        self.priority_context: List[NotepadEntry] = []
-        self.working_logs: List[NotepadEntry] = []
+        self.priority_context: list[NotepadEntry] = []
+        self.working_logs: list[NotepadEntry] = []
         self.scratchpad: str = ""
         self._load()
 
-    def add_priority(self, content: str, metadata: Optional[Dict] = None):
+    def add_priority(self, content: str, metadata: dict | None = None):
         """添加高优先级上下文（如当前任务目标）"""
         self.priority_context.append(NotepadEntry(content=content, metadata=metadata or {}, priority=1))
         self._save()
 
-    def add_log(self, content: str, metadata: Optional[Dict] = None):
+    def add_log(self, content: str, metadata: dict | None = None):
         """添加工作记录"""
         self.working_logs.append(NotepadEntry(content=content, metadata=metadata or {}))
         # 简单剪枝：保留最近 50 条
@@ -105,7 +105,7 @@ class Notepad:
         if not self.storage_path.exists():
             return
         try:
-            with open(self.storage_path, 'r', encoding='utf-8') as f:
+            with open(self.storage_path, encoding='utf-8') as f:
                 data = json.load(f)
                 self.scratchpad = data.get("scratchpad", "")
                 self.priority_context = [NotepadEntry(**e) for e in data.get("priority_context", [])]

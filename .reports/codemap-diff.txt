@@ -1,0 +1,41 @@
+# Codemap Update Report
+# Generated: 2026-04-18
+
+## Files Created/Updated
+
+docs/CODEMAPS/architecture.md     - System overview, core modules, dependencies
+docs/CODEMAPS/backend.md          - CLI commands, agent architecture, integrations
+docs/CODEMAPS/frontend.md        - TUI components, state management
+docs/CODEMAPS/data.md            - Storage, schemas, data flow
+docs/CODEMAPS/dependencies.md    - External services, Python packages
+
+## Summary
+
+- Files scanned: 695 Python files in src/
+- New codemaps created: 5
+- Total token estimate: ~3000 (~600 per codemap)
+
+## Architecture Changes (since last scan)
+
+This is the first comprehensive codemap generation, establishing baseline.
+
+New modules detected:
+- src/core/config/mode_config.py (oh-my-codex integration)
+- src/core/hook_registry/async_executor.py (plugin system)
+- src/agent/swarm/planner_agent.py, critic_agent.py (new agents)
+- src/agent/swarm/worktree_manager.py (git worktree isolation)
+- src/workflow/stages/ (pipeline stages)
+  - ralplan_stage.py
+  - team_exec_stage.py
+  - ralph_verify_stage.py
+  - precontext_intake_stage.py
+- src/notification/types.py, src/notifications/types.py (38 events)
+
+## Staleness
+
+All codemaps generated fresh on 2026-04-18. No staleness warnings apply.
+
+## Next Steps
+
+- Re-run after major feature additions
+- Consider incremental diffs for smaller changes

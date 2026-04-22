@@ -6,26 +6,26 @@ Catalog Module - 技能/Agent 清单管理系统
 """
 
 from src.catalog.manifest import (
-    CatalogManifest,
-    SkillDefinition,
-    AgentDefinition,
-    SkillCategory,
-    SkillStatus,
     AgentCategory,
+    AgentDefinition,
+    CatalogManifest,
+    SkillCategory,
+    SkillDefinition,
+    SkillStatus,
     get_catalog,
     reload_catalog,
 )
 from src.catalog.registry import CatalogRegistry, get_registry
 
 __all__ = [
-    "CatalogManifest",
-    "SkillDefinition",
-    "AgentDefinition",
-    "SkillCategory",
-    "SkillStatus",
     "AgentCategory",
+    "AgentDefinition",
+    "CatalogManifest",
     "CatalogRegistry",
+    "SkillCategory",
+    "SkillDefinition",
+    "SkillStatus",
     "get_catalog",
-    "reload_catalog",
     "get_registry",
+    "reload_catalog",
 ]

@@ -7,7 +7,6 @@ Task Analyzer - 任务规模分析
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 
 # ===== 任务规模 =====
@@ -110,7 +109,7 @@ class TaskSizeResult:
     reason: str
     word_count: int
     has_escape_hatch: bool
-    escape_prefix_used: Optional[str] = None
+    escape_prefix_used: str | None = None
 
 
 # ===== 核心函数 =====
@@ -119,7 +118,7 @@ def count_words(text: str) -> int:
     return len(text.strip().split())
 
 
-def detect_escape_hatch(text: str) -> Optional[str]:
+def detect_escape_hatch(text: str) -> str | None:
     """检测逃逸 hatch 前缀"""
     trimmed = text.strip().lower()
     for prefix in ESCAPE_HATCH_PREFIXES:
@@ -279,13 +278,13 @@ def _get_recommended_agents(size: str, factors: dict) -> list[str]:
 # ===== 导出 =====
 __all__ = [
     "TaskSize",
-    "TaskSizeThresholds",
     "TaskSizeResult",
-    "classify_task_size",
+    "TaskSizeThresholds",
     "analyze_task_complexity",
-    "is_heavy_mode",
+    "classify_task_size",
     "count_words",
     "detect_escape_hatch",
-    "has_small_task_signals",
     "has_large_task_signals",
+    "has_small_task_signals",
+    "is_heavy_mode",
 ]

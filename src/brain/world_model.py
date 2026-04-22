@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import logging
-from collections import deque
 from functools import lru_cache
 from pathlib import Path
 from typing import Any

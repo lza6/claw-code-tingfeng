@@ -3,18 +3,19 @@
 基于项目 B 的 Registry 逻辑，提供跨语言的工具链识别与诊断能力。
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Dict, List
+
 
 @dataclass
 class LangProfile:
     name: str
     pattern: str
-    executables: List[str]
+    executables: list[str]
     description: str
 
 class LangEngine:
-    REGISTRY: Dict[str, LangProfile] = {
+    REGISTRY: dict[str, LangProfile] = {
         "python": LangProfile(
             name="python",
             pattern=r"python|pip|uv|poetry|pytest",

@@ -1,9 +1,7 @@
 import hashlib
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from ..llm.model_manager import ModelManager
 from .models import (

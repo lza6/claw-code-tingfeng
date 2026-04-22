@@ -8,11 +8,10 @@ Phase Controller - 阶段控制器
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +69,11 @@ class PhaseController:
     def __init__(self):
         self._phases: dict[str, PhaseContext] = {}
         self._transitions: list[PhaseTransition] = []
-        self._current_phase: Optional[str] = None
-        self._on_transition: Optional[Callable[[str, str], None]] = None
-        self._on_phase_complete: Optional[Callable[[str], None]] = None
+        self._current_phase: str | None = None
+        self._on_transition: Callable[[str, str], None] | None = None
+        self._on_phase_complete: Callable[[str], None] | None = None
 
-    def register_phase(self, phase_name: str, metadata: Optional[dict] = None) -> PhaseContext:
+    def register_phase(self, phase_name: str, metadata: dict | None = None) -> PhaseContext:
         """注册阶段"""
         phase = PhaseContext(
             phase=phase_name,
@@ -115,7 +114,7 @@ class PhaseController:
         logger.info(f"[Phase] Started: {phase_name}")
         return True
 
-    def complete_phase(self, phase_name: str, artifacts: Optional[dict] = None) -> bool:
+    def complete_phase(self, phase_name: str, artifacts: dict | None = None) -> bool:
         """完成阶段"""
         if phase_name not in self._phases:
             return False
@@ -162,11 +161,11 @@ class PhaseController:
         logger.info(f"[Phase] Skipped: {phase_name}")
         return True
 
-    def get_phase(self, phase_name: str) -> Optional[PhaseContext]:
+    def get_phase(self, phase_name: str) -> PhaseContext | None:
         """获取阶段"""
         return self._phases.get(phase_name)
 
-    def get_current_phase(self) -> Optional[PhaseContext]:
+    def get_current_phase(self) -> PhaseContext | None:
         """获取当前阶段"""
         if self._current_phase:
             return self._phases.get(self._current_phase)
@@ -197,7 +196,7 @@ class PhaseController:
 
 
 # 全局单例
-_phase_controller: Optional[PhaseController] = None
+_phase_controller: PhaseController | None = None
 
 
 def get_phase_controller() -> PhaseController:
@@ -210,10 +209,10 @@ def get_phase_controller() -> PhaseController:
 
 # ===== 导出 =====
 __all__ = [
-    "PhaseType",
-    "PhaseState",
-    "PhaseTransition",
     "PhaseContext",
     "PhaseController",
+    "PhaseState",
+    "PhaseTransition",
+    "PhaseType",
     "get_phase_controller",
 ]

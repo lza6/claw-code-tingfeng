@@ -6,12 +6,11 @@
 3. 生成结构化 JSON 报告，辅助自动迭代
 """
 from __future__ import annotations
+
 import json
 import logging
-import asyncio
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger("utils.visual_verifier")
 
@@ -19,8 +18,8 @@ logger = logging.getLogger("utils.visual_verifier")
 class VisualVerdict:
     score: int
     verdict: str  # pass, revise, fail
-    differences: List[str]
-    suggestions: List[str]
+    differences: list[str]
+    suggestions: list[str]
     reasoning: str
 
 class VisualVerifier:
@@ -44,7 +43,7 @@ class VisualVerifier:
 
         return path
 
-    async def get_verdict(self, screenshot_path: Path, reference_paths: List[Path] = None) -> VisualVerdict:
+    async def get_verdict(self, screenshot_path: Path, reference_paths: list[Path] = None) -> VisualVerdict:
         """调用多模态模型生成视觉评审结论"""
         # 这里需要调用 llm 模块的多模态接口
         # 暂时模拟返回结果，后续集成 llm.message_handler

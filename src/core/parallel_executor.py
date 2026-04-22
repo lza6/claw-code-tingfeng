@@ -6,9 +6,11 @@
 - 阻塞式与非阻塞式双模调度
 """
 import multiprocessing
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Callable, Iterable, Any, List
 import os
+from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any
+
 
 class ParallelExecutor:
     def __init__(self, max_workers: int | None = None):
@@ -22,7 +24,7 @@ class ParallelExecutor:
                 mp_context=multiprocessing.get_context('spawn')
             )
 
-    def map(self, func: Callable, items: Iterable[Any]) -> List[Any]:
+    def map(self, func: Callable, items: Iterable[Any]) -> list[Any]:
         """同步阻塞式 Map 调度"""
         self._ensure_table() # 逻辑占位符，由调用方保证
         self._ensure_pool()

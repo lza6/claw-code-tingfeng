@@ -5,11 +5,10 @@ Runtime Bridge - 运行时桥接
 提供与 Rust 运行时的桥接功能。
 """
 
-import os
 import json
-from pathlib import Path
-from typing import Optional, Any
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -25,11 +24,11 @@ class RuntimeSnapshot:
 @dataclass
 class AuthoritySnapshot:
     """权限快照"""
-    owner: Optional[str]
-    lease_id: Optional[str]
-    leased_until: Optional[str]
+    owner: str | None
+    lease_id: str | None
+    leased_until: str | None
     stale: bool
-    stale_reason: Optional[str]
+    stale_reason: str | None
 
 
 @dataclass
@@ -44,9 +43,9 @@ class BacklogSnapshot:
 @dataclass
 class ReplaySnapshot:
     """回放快照"""
-    cursor: Optional[str]
+    cursor: str | None
     pending_events: int
-    last_replayed_event_id: Optional[str]
+    last_replayed_event_id: str | None
     deferred_leader_notification: bool
 
 
@@ -54,7 +53,7 @@ class ReplaySnapshot:
 class ReadinessSnapshot:
     """就绪快照"""
     ready: bool
-    reason: Optional[str]
+    reason: str | None
 
 
 def omx_state_dir(cwd: str) -> str:
@@ -62,7 +61,7 @@ def omx_state_dir(cwd: str) -> str:
     return str(Path(cwd) / ".omx" / "state")
 
 
-def read_runtime_snapshot(cwd: str) -> Optional[RuntimeSnapshot]:
+def read_runtime_snapshot(cwd: str) -> RuntimeSnapshot | None:
     """读取运行时快照"""
     state_dir = omx_state_dir(cwd)
     snapshot_file = Path(state_dir) / "snapshot.json"
@@ -71,7 +70,7 @@ def read_runtime_snapshot(cwd: str) -> Optional[RuntimeSnapshot]:
         return None
 
     try:
-        with open(snapshot_file, "r") as f:
+        with open(snapshot_file) as f:
             data = json.load(f)
         return RuntimeSnapshot(
             schema_version=data.get("schema_version", 1),
@@ -84,7 +83,7 @@ def read_runtime_snapshot(cwd: str) -> Optional[RuntimeSnapshot]:
         return None
 
 
-def read_authority_snapshot(cwd: str) -> Optional[AuthoritySnapshot]:
+def read_authority_snapshot(cwd: str) -> AuthoritySnapshot | None:
     """读取权限快照"""
     snapshot = read_runtime_snapshot(cwd)
     if not snapshot:
@@ -108,7 +107,7 @@ def is_runtime_ready(cwd: str) -> bool:
     return snapshot.readiness.get("ready", False)
 
 
-def get_bridge_enabled(env: Optional[dict] = None) -> bool:
+def get_bridge_enabled(env: dict | None = None) -> bool:
     """检查桥接是否启用"""
     env = env or os.environ
     return env.get("OMX_RUNTIME_BRIDGE", "1") != "0"
@@ -116,14 +115,14 @@ def get_bridge_enabled(env: Optional[dict] = None) -> bool:
 
 # ===== 导出 =====
 __all__ = [
-    "RuntimeSnapshot",
     "AuthoritySnapshot",
     "BacklogSnapshot",
-    "ReplaySnapshot",
     "ReadinessSnapshot",
-    "omx_state_dir",
-    "read_runtime_snapshot",
-    "read_authority_snapshot",
-    "is_runtime_ready",
+    "ReplaySnapshot",
+    "RuntimeSnapshot",
     "get_bridge_enabled",
+    "is_runtime_ready",
+    "omx_state_dir",
+    "read_authority_snapshot",
+    "read_runtime_snapshot",
 ]
