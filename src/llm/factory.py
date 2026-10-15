@@ -33,6 +33,41 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _as_str(value: Any) -> str | None:
+    """把第三方响应里的字段安全地收敛成 `str | None`。
+
+    LLM 提供商的返回结构不由我们控制：字段可能缺失、可能是 None，
+    也可能在代理/兼容层里变成非字符串对象。直接塞进 pydantic 模型会抛
+    ValidationError 并让整条 Agent 环路失败 —— 为字段类型不标准而丢掉
+    一次完整对话，代价完全不成比例。
+
+    非字符串一律降级为 None，而不是 str() 强转 —— 强转会写出
+    `<MagicMock ...>` 这类垃圾内容并混入下游上下文。
+    """
+    return value if isinstance(value, str) else None
+
+
+def _as_int(value: Any) -> int:
+    """把第三方返回的计数字段收敛成 int。
+
+    token 用量只用于统计与成本估算，不该因为某个代理层返回了
+    `"15"` 或 None 就让整次调用失败。无法解析时返回 0。
+    bool 被显式排除 —— `True` 是 int 的子类，但把它当 token 数无意义。
+    """
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # 提供商常量（参考 Onyx well_known_providers）
 # ---------------------------------------------------------------------------
@@ -490,22 +525,23 @@ class _LiteLLMCompatWrapper:
                 ))
 
         message = Message(
-            role=message_data.get("role", "assistant"),
-            content=message_data.get("content"),
+            role=_as_str(message_data.get("role")) or "assistant",
+            content=_as_str(message_data.get("content")) or None,
             tool_calls=tool_calls,
-            finish_reason=choice.finish_reason if hasattr(choice, "finish_reason") else None,
-            reasoning_content=message_data.get("reasoning_content"),
+            finish_reason=_as_str(getattr(choice, "finish_reason", None)),
+            reasoning_content=_as_str(message_data.get("reasoning_content")),
         )
 
+        raw_usage = getattr(response, "usage", None)
         usage = Usage(
-            prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
-            completion_tokens=response.usage.completion_tokens if response.usage else 0,
-            total_tokens=response.usage.total_tokens if response.usage else 0,
+            prompt_tokens=_as_int(getattr(raw_usage, "prompt_tokens", 0)),
+            completion_tokens=_as_int(getattr(raw_usage, "completion_tokens", 0)),
+            total_tokens=_as_int(getattr(raw_usage, "total_tokens", 0)),
         )
 
         return ModelResponse(
-            id=response.id if hasattr(response, 'id') else "",
-            model=response.model if hasattr(response, 'model') else self._config.model_name,
+            id=_as_str(getattr(response, 'id', None)) or "",
+            model=_as_str(getattr(response, 'model', None)) or self._config.model_name,
             choices=[message],
             usage=usage,
         )
@@ -565,15 +601,15 @@ class _LiteLLMCompatWrapper:
                         ))
 
                 yield ModelResponseStream(
-                    id=chunk.id if hasattr(chunk, 'id') else "",
-                    model=chunk.model if hasattr(chunk, 'model') else self._config.model_name,
+                    id=_as_str(getattr(chunk, 'id', None)) or "",
+                    model=_as_str(getattr(chunk, 'model', None)) or self._config.model_name,
                     delta=Message(
-                        role=delta_data.get("role", "assistant"),
-                        content=delta_data.get("content"),
+                        role=_as_str(delta_data.get("role")) or "assistant",
+                        content=_as_str(delta_data.get("content")),
                         tool_calls=delta_tool_calls,
-                        reasoning_content=delta_data.get("reasoning_content"),
+                        reasoning_content=_as_str(delta_data.get("reasoning_content")),
                     ),
-                    finish_reason=chunk.choices[0].finish_reason if chunk.choices else None,
+                    finish_reason=_as_str(chunk.choices[0].finish_reason) if chunk.choices else None,
                 )
         except Exception as e:
             logger.error(f"LLM stream failed: {e}")

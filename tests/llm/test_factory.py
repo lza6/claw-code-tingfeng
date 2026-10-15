@@ -302,3 +302,89 @@ class TestLiteLLMCompatWrapper:
         assert len(result.choices) == 1
         assert result.choices[0].role == "assistant"
         assert result.usage.prompt_tokens == 10
+
+
+class TestMalformedProviderResponse:
+    """第三方响应结构异常时的健壮性回归测试。
+
+    背景: 真实 E2E 修复过程中给 Message 补上了 finish_reason 字段，
+    但直接透传 choice.finish_reason。当 provider / 代理层返回的该字段
+    不是字符串时，pydantic 抛 ValidationError，整条 Agent 环路失败 ——
+    为"某个字段类型不标准"而丢掉一次完整对话，代价完全不成比例。
+    现在非字符串字段一律降级，绝不 str() 强转（那会写出 "<MagicMock ...>"
+    这类垃圾内容并混入下游上下文）。
+    """
+
+    def _wrapper(self):
+        config = MagicMock()
+        config.model_provider = "openai"
+        config.model_name = "gpt-4o"
+        config.temperature = 0.7
+        config.api_key = "test-key"
+        config.api_base = None
+        return _LiteLLMCompatWrapper(config=config)
+
+    def test_non_string_fields_are_degraded_not_crashing(self):
+        """finish_reason / id / model 为非字符串时不应抛异常"""
+        from src.llm import factory as factory_mod
+
+        response = MagicMock()
+        response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "hi"}
+        # 关键：这些字段不是字符串
+        response.id = 12345
+        response.model = object()
+        response.choices[0].finish_reason = object()
+
+        with patch.object(factory_mod, "get_litellm") as mock_litellm:
+            mock_client = MagicMock()
+            mock_client.completion.return_value = response
+            mock_litellm.return_value = mock_client
+
+            result = self._wrapper().invoke([{"role": "user", "content": "Hi"}])
+
+        assert result.choices[0].content == "hi"
+        assert result.choices[0].finish_reason is None
+        assert result.id == ""
+        assert result.model == "gpt-4o"   # 回退到配置里的模型名
+
+    def test_non_numeric_usage_is_degraded_to_zero(self):
+        """token 计数为非数值时降级为 0，而不是让统计拖垮主流程"""
+        from src.llm import factory as factory_mod
+
+        response = MagicMock()
+        response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "hi"}
+        response.usage.prompt_tokens = "not-a-number"
+        response.usage.completion_tokens = None
+        response.usage.total_tokens = object()
+
+        with patch.object(factory_mod, "get_litellm") as mock_litellm:
+            mock_client = MagicMock()
+            mock_client.completion.return_value = response
+            mock_litellm.return_value = mock_client
+
+            result = self._wrapper().invoke([{"role": "user", "content": "Hi"}])
+
+        assert result.usage.prompt_tokens == 0
+        assert result.usage.completion_tokens == 0
+        assert result.usage.total_tokens == 0
+
+    def test_numeric_string_usage_is_parsed(self):
+        """字符串形式的 token 数应被解析而不是丢弃"""
+        from src.llm import factory as factory_mod
+
+        response = MagicMock()
+        response.choices[0].message.model_dump.return_value = {"role": "assistant", "content": "hi"}
+        response.usage.prompt_tokens = "17"
+        response.usage.completion_tokens = 15
+        response.usage.total_tokens = 32.0
+
+        with patch.object(factory_mod, "get_litellm") as mock_litellm:
+            mock_client = MagicMock()
+            mock_client.completion.return_value = response
+            mock_litellm.return_value = mock_client
+
+            result = self._wrapper().invoke([{"role": "user", "content": "Hi"}])
+
+        assert result.usage.prompt_tokens == 17
+        assert result.usage.completion_tokens == 15
+        assert result.usage.total_tokens == 32
