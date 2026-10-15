@@ -531,7 +531,7 @@ def _get_omx_tables_block(package_root: str, include_tui: bool = True) -> str:
     if include_tui:
         lines.extend([
             "",
-            "# OMX TUI StatusLine (Clawd Code v0.50.0+)",
+            "# TUI 状态栏",
             "[tui]",
             DEFAULT_TUI_STATUS_LINE,
             "",

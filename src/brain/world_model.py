@@ -173,7 +173,9 @@ class RepositoryWorldModel:
             try:
                 import json
                 fingerprints = json.loads(fp_path.read_text(encoding='utf-8'))
-            except Exception: pass
+            except Exception as e:
+                # 指纹损坏不应阻断初始化，但需可见：否则会静默退化为全量索引
+                logger.warning(f"指纹文件解析失败，将按全量索引处理 {fp_path}: {e}")
 
         from .fingerprint import ContextFingerprint
 
@@ -214,27 +216,45 @@ class RepositoryWorldModel:
         try:
             fp_path.parent.mkdir(parents=True, exist_ok=True)
             fp_path.write_text(json.dumps(new_fingerprints), encoding='utf-8')
-        except Exception: pass
+        except Exception as e:
+            # 不阻断初始化，但要可见：写失败意味着下次仍会全量重索引
+            logger.warning(f"指纹文件写入失败 {fp_path}: {e}")
 
         self._is_initialized = True
         logger.info("世界模型初始化完成。")
 
         # 发布 RAG 指标更新
+        #
+        # 注意: 这里曾被 try/except 完全吞掉，且引用了未定义的 `indexed_count`，
+        # 导致 RAG_INDEX_UPDATED 事件**永远不会发布**（NameError 被静默吃掉），
+        # 依赖该事件的 UI 指标与遥测长期失效。现在改为显式计算并记录失败原因。
         try:
             from ..core.events import Event, EventType, get_event_bus
             text_stats = self.text_indexer.get_stats()
-            metrics = {
-                'indexed_files': indexed_count,
-                'total_terms': text_stats.get('index_terms', 0),
-                'coverage_percent': (indexed_count / max(text_stats.get('total_documents', 1), 1)) * 100
-            }
+
+            indexed_files = text_stats.get('total_documents', 0)
+            skipped_files = text_stats.get('skipped_files', 0)
+            discovered_files = indexed_files + skipped_files
+
+            # 覆盖率 = 成功入索引的文件 / 发现的全部文件。
+            # 不能用 indexed / total_documents，那恒等于 100%，毫无信息量。
+            coverage_percent = (
+                indexed_files / discovered_files * 100 if discovered_files else 0.0
+            )
+
             get_event_bus().publish(Event(
                 type=EventType.RAG_INDEX_UPDATED,
-                data=metrics,
+                data={
+                    'indexed_files': indexed_files,
+                    'skipped_files': skipped_files,
+                    'total_terms': text_stats.get('index_terms', 0),
+                    'coverage_percent': coverage_percent,
+                },
                 source='world_model'
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            # 不再静默：事件发布链路故障需要可见，否则又会像上次一样长期隐身
+            logger.warning(f"发布 RAG_INDEX_UPDATED 事件失败: {e}")
 
     def predict_relevant_files(self, current_file: str, depth: int = 1) -> list[str]:
         """预测相关文件 (优化版: 结果缓存)"""

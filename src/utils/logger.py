@@ -5,6 +5,7 @@ Maintains backward compatibility with the legacy ClawdLogger interface.
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import sys
@@ -79,6 +80,39 @@ def sanitize_for_log(data: Any) -> str:
     except Exception:
         return "[Unserializable Data]"
 
+def _make_utf8_stream_handler(stream) -> logging.StreamHandler:
+    """构造对中文/emoji 安全的控制台 Handler。
+
+    背景:
+        中文 Windows 的 `sys.stdout.encoding` 默认是 GBK。当日志包含
+        emoji（如 U+26A0）或部分 CJK 字符时，logging 内部的
+        StreamHandler.emit 会抛 UnicodeEncodeError，Python 的
+        handleError 再把整段堆栈打到 stderr —— 用户看到的是一屏
+        乱码加调用栈，而非他们实际关心的问题。
+
+    做法:
+        优先调用 TextIOWrapper.reconfigure() 把流切到 UTF-8（Python 3.7+），
+        失败时退回到一个带 errors='replace' 的包装流，保证"永远不崩"。
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if callable(reconfigure):
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+            return logging.StreamHandler(stream)
+        except (ValueError, OSError):
+            # 例如流已被 detach，或本身不是 TextIOWrapper
+            pass
+
+    try:
+        safe_stream = io.TextIOWrapper(
+            stream.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        )
+        return logging.StreamHandler(safe_stream)
+    except (AttributeError, ValueError):
+        # 无 .buffer（如已重定向到 StringIO）——直接使用原流
+        return logging.StreamHandler(stream)
+
+
 def setup_logging(level: int = logging.INFO, log_file: str | None = None):
     """Initialize structured logging."""
     root_logger = logging.getLogger()
@@ -87,8 +121,8 @@ def setup_logging(level: int = logging.INFO, log_file: str | None = None):
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Console Handler (Human-readable)
-    console = logging.StreamHandler(sys.stdout)
+    # Console Handler (Human-readable, UTF-8 safe)
+    console = _make_utf8_stream_handler(sys.stdout)
     console.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
     root_logger.addHandler(console)
 

@@ -24,6 +24,49 @@ from .enums import (
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# 提供商专属环境变量 -> 通用配置字段 的别名表
+#
+# 依据 `.env.example` 的公开约定（OPENAI_API_KEY / OPENAI_MODEL / OPENAI_BASE_URL）。
+# 顺序即回退优先级：靠前的变量先被采用。
+# 仅在通用字段未显式提供时生效，因此不影响既有部署。
+# ---------------------------------------------------------------------------
+_PROVIDER_ENV_ALIASES: dict[str, tuple[str, ...]] = {
+    "llm_api_key": (
+        "LLM_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GROQ_API_KEY",
+        "MISTRAL_API_KEY",
+        "TOGETHER_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+    ),
+    "llm_model": (
+        "LLM_MODEL",
+        "OPENAI_MODEL",
+        "ANTHROPIC_MODEL",
+        "OPENROUTER_MODEL",
+        "DEEPSEEK_MODEL",
+        "GROQ_MODEL",
+        "MISTRAL_MODEL",
+        "TOGETHER_MODEL",
+        "GOOGLE_MODEL",
+    ),
+    "llm_base_url": (
+        "LLM_BASE_URL",
+        "OPENAI_BASE_URL",
+        "OPENAI_API_BASE",
+        "ANTHROPIC_BASE_URL",
+        "OPENROUTER_BASE_URL",
+        "DEEPSEEK_BASE_URL",
+        "GROQ_BASE_URL",
+    ),
+}
+
+
 class AgentSettings(BaseSettings):
     """Agent 核心配置"""
 
@@ -276,6 +319,43 @@ class AgentSettings(BaseSettings):
 
     # 来源追踪 (Enhanced for v0.60.0)
     _sources: dict[str, ConfigSource] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_provider_env_aliases(cls, data: Any) -> Any:
+        """把提供商专属环境变量映射到通用配置字段。
+
+        背景:
+            `.env.example` 采用业界通行约定（OPENAI_API_KEY / ANTHROPIC_API_KEY /
+            OPENAI_MODEL / OPENAI_BASE_URL），而本模型的字段名是通用的
+            llm_api_key / llm_model / llm_base_url。pydantic-settings 默认只按
+            `field_name.upper()` 取环境变量，导致严格按文档配置的用户拿到
+            `llm_api_key=None`、`llm_model='gpt-4'`、`llm_base_url=None`，
+            任何 LLM 调用都必然失败（无密钥 + 错误端点）。
+
+        优先级（高 -> 低）:
+            1. 显式传入 / 通用变量 (llm_api_key, LLM_API_KEY)
+            2. 当前提供商专属变量 (OPENAI_API_KEY 等)
+            3. 其它提供商专属变量（回退顺序与 _PROVIDER_ENV_ALIASES 一致）
+            4. 字段默认值
+
+        Note:
+            只补齐"缺失"的键，不覆盖调用方显式提供的值，保证向后兼容。
+        """
+        if not isinstance(data, dict):
+            return data
+
+        for field_name, aliases in _PROVIDER_ENV_ALIASES.items():
+            # 已显式提供（含通用变量 LLM_API_KEY 等）-> 不覆盖
+            if field_name in data:
+                continue
+            for env_name in aliases:
+                value = os.environ.get(env_name)
+                if value:
+                    data[field_name] = value
+                    break
+
+        return data
 
     def _track_sources(self) -> None:
         """追踪配置来源 (Enhanced based on Project B's configResolver)

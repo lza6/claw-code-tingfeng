@@ -72,12 +72,10 @@ def strip_omx_top_level_keys(config: str) -> str:
 
     # 检查是否需要移除标记行
     if any(key in config for key in OMX_TOP_LEVEL_KEYS):
-        lines = [
-            l for l in lines
-            if l.strip() != "# oh-my-codex top-level settings (must be before any [table])"
-        ]
+        marker = "# oh-my-codex top-level settings (must be before any [table])"
+        lines = [line for line in lines if line.strip() != marker]
 
-    first_table = next((i for i, l in enumerate(lines) if re.match(r'^\s*\[', l)), -1)
+    first_table = next((i for i, line in enumerate(lines) if re.match(r'^\s*\[', line)), -1)
     boundary = first_table if first_table >= 0 else len(lines)
 
     result: list[str] = []
@@ -293,7 +291,14 @@ def merge_config(
     root_values = parse_root_key_values(config)
     existing_model = root_values.get("model")
 
-    # 3. 构建新配置
+    # 3. 构建 OMX 顶层配置行
+    #
+    #    这些行**必须位于任何 [table] 之前**。TOML 的语义是：表头之后出现的
+    #    裸键值归属于该表。历史实现无条件把这段文本追加到配置末尾，第一次
+    #    merge 时因为顶层区还在最前面而侥幸正确；第二次 merge 时 [features]
+    #    /[env]/[agents] 已存在，追加就落到 [agents] 之下 —— notify、
+    #    model_reasoning_effort、developer_instructions 全部被解析为
+    #    agents.* 子键，顶层配置静默丢失，且每启动一次就深一层。
     new_lines: list[str] = []
 
     # 添加 OMX 顶层设置
@@ -306,17 +311,30 @@ def merge_config(
         # 默认使用 o1-preview 或 Claude
         new_lines.append('model = "o1-preview"')
 
-    new_lines.append("")  # 空行分隔
+    block = '\n'.join(new_lines)
 
-    config += '\n' + '\n'.join(new_lines)
+    # 4. 插入到第一个表头之前；若配置里还没有任何表，则追加到末尾
+    lines = config.splitlines()
+    first_table = next(
+        (i for i, line in enumerate(lines) if re.match(r'^\s*\[', line)),
+        -1,
+    )
 
-    # 4. 更新 features
+    if first_table >= 0:
+        head = '\n'.join(lines[:first_table]).rstrip()
+        tail = '\n'.join(lines[first_table:])
+        config = f"{head}\n\n{block}\n\n{tail}" if head else f"{block}\n\n{tail}"
+    else:
+        base = config.rstrip()
+        config = f"{base}\n\n{block}" if base else block
+
+    # 5. 更新 features
     config = upsert_feature_flags(config)
 
-    # 5. 更新 env
+    # 6. 更新 env
     config = upsert_env_settings(config)
 
-    # 6. 更新 agents
+    # 7. 更新 agents
     config = upsert_agents_settings(config)
 
     return config

@@ -6,6 +6,7 @@ Setup 和配置命令：项目初始化、配置生成、环境检查
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -18,6 +19,20 @@ from ...config.generator import merge_config, repair_config_if_needed
 
 app = typer.Typer(help="项目初始化和配置管理")
 console = Console()
+
+
+def _repo_root() -> Path:
+    """定位仓库根目录（含 pyproject.toml 与 templates/ 的那一层）。
+
+    不用固定层数的 `parents[N]`：那种写法在源码运行、可编辑安装、
+    打包安装三种布局下层级不同，容易少算一级而静默找不到模板。
+    改为向上探测特征文件，布局变化时仍然正确。
+    """
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "pyproject.toml").is_file() and (candidate / "templates").is_dir():
+            return candidate
+    # 兜底：返回本文件向上四级，让调用方的 exists() 判断给出可读的"模板未找到"
+    return Path(__file__).resolve().parents[3]
 
 
 @app.command("setup")
@@ -37,7 +52,6 @@ def setup_cmd(
     """
     from ... import __version__
     from ...core.config import ensure_project_dirs
-
     workdir = Path.cwd()
     clawd_dir = workdir / ".clawd"
 
@@ -73,12 +87,15 @@ def setup_cmd(
                 console.print("  [yellow]强制重建配置[/yellow]")
 
             # 生成新配置
-            merge_config(
+            # 注意: src.config.generator.merge_config 是 async 函数；
+            # 早期这里直接同步调用，只拿到一个从未 await 的协程，
+            # 配置文件根本不会生成（用户看到"✓ 创建配置文件"但磁盘上没有）。
+            asyncio.run(merge_config(
                 str(config_path),
                 str(workdir),
                 verbose=False,
                 include_tui=True,
-            )
+            ))
             console.print(f"  [green]✓ 创建配置文件: {config_path}[/green]")
 
         progress.update(task, completed=True)
@@ -87,7 +104,10 @@ def setup_cmd(
         task = progress.add_task("创建 AGENTS.md...", total=None)
         agents_path = workdir / "AGENTS.md"
         if not agents_path.exists() or force:
-            template_path = Path(__file__).parent.parent.parent / "templates" / "AGENTS.md"
+            # 模板位于仓库根 templates/，本文件在 src/cli/commands/ 下，
+            # 因此需要向上四级（commands -> cli -> src -> 仓库根）。
+            # 历史实现少算一级，导致永远提示"模板未找到"。
+            template_path = _repo_root() / "templates" / "AGENTS.md"
             if template_path.exists():
                 agents_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
                 console.print("  [green]✓ 创建 AGENTS.md[/green]")
@@ -100,11 +120,14 @@ def setup_cmd(
         task = progress.add_task("生成技能清单...", total=None)
         catalog_path = workdir / ".clawd" / "catalog-manifest.json"
         if not catalog_path.exists() or force:
-            template_path = Path(__file__).parent.parent.parent / "templates" / "catalog-manifest.json"
+            template_path = _repo_root() / "templates" / "catalog-manifest.json"
             if template_path.exists():
+                catalog_path.parent.mkdir(parents=True, exist_ok=True)
                 import shutil
                 shutil.copy(template_path, catalog_path)
                 console.print("  [green]✓ 创建技能清单: catalog-manifest.json[/green]")
+            else:
+                console.print("  [dim]跳过: 技能清单模板未找到[/dim]")
 
         progress.update(task, completed=True)
 
@@ -205,7 +228,7 @@ def doctor_cmd(
         console.print("\n[yellow]正在自动修复...[/yellow]")
         # 修复配置
         if not config_path.exists():
-            merge_config(str(config_path), str(workdir), verbose=True)
+            asyncio.run(merge_config(str(config_path), str(workdir), verbose=True))
         else:
             repaired = repair_config_if_needed(str(config_path), str(workdir))
             if repaired:
@@ -281,6 +304,11 @@ def init_project(
         setup_cmd(force=False, no_mcp=not use_mcp)
 
 
-def register_setup_commands(app: typer.Typer) -> None:
-    """注册 setup 相关命令"""
-    app.add_typer(app, name="setup")
+def register_setup_commands(parent_app: typer.Typer) -> None:
+    """把 setup 子命令树挂到父 app 上。
+
+    注意: 形参不能叫 `app`。历史实现写的是
+    `app.add_typer(app, name="setup")` —— 在参数遮蔽模块级 `app` 的情况下，
+    这等于把父应用注册到它自己身上，形成自引用并导致递归。
+    """
+    parent_app.add_typer(app, name="setup")

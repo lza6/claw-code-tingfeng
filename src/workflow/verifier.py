@@ -17,11 +17,37 @@ from enum import Enum
 from typing import Literal
 
 
-class ConfidenceLevel(Enum):
+class Confidence(Enum):
     """置信度级别"""
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+
+
+# 向后兼容别名：早期版本使用 ConfidenceLevel 命名
+ConfidenceLevel = Confidence
+
+
+class TaskSize(str, Enum):
+    """任务规模分级。
+
+    继承 str 是刻意的：`determine_task_size()` 历史上返回裸字符串，
+    既有调用方仍以 `== "small"` 形式比较。str 子类枚举让
+    `TaskSize.SMALL == "small"` 同时成立，因此本次补齐 API 不构成破坏性变更。
+    """
+    SMALL = "small"
+    STANDARD = "standard"
+    LARGE = "large"
+
+
+class EvidenceType(str, Enum):
+    """验证证据类型（同样继承 str 以兼容既有字符串用法）"""
+    TEST = "test"
+    TYPECHECK = "typecheck"
+    LINT = "lint"
+    BUILD = "build"
+    MANUAL = "manual"
+    RUNTIME = "runtime"
 
 
 @dataclass
@@ -33,6 +59,20 @@ class VerificationEvidence:
     command: str | None = None
     output: str | None = None
     details: str | None = None
+
+    def as_text(self) -> str:
+        """人类可读的单行描述，便于在终端与日志中展示"""
+        status = "PASS" if self.passed else "FAIL"
+        parts = [f"[{status}] {self.type}"]
+        if self.command:
+            parts.append(f"cmd={self.command}")
+        if self.details:
+            parts.append(str(self.details))
+        if self.output:
+            # 只保留摘要：完整输出可能很长，调用方需要时应直接读 .output
+            snippet = str(self.output).strip().replace("\n", " ")
+            parts.append(snippet[:200])
+        return " | ".join(parts)
 
     def to_dict(self) -> dict:
         """转换为字典格式"""
@@ -123,7 +163,7 @@ def has_structured_verification_evidence(summary: str | None) -> bool:
 def determine_task_size(
     file_count: int,
     line_changes: int | None = None,
-) -> Literal["small", "standard", "large"]:
+) -> TaskSize:
     """根据文件数和代码变更行数判断任务大小
 
     参考: oh-my-codex-main/src/verification/verifier.ts::determineTaskSize
@@ -132,22 +172,27 @@ def determine_task_size(
     - small: ≤3个文件, <100行变更
     - standard: ≤15个文件, <500行变更
     - large: 其他情况
+
+    返回 TaskSize（str 子类），因此 `== "small"` 与 `== TaskSize.SMALL` 均成立。
     """
     if file_count <= 3 and (line_changes is None or line_changes < 100):
-        return "small"
+        return TaskSize.SMALL
     if file_count <= 15 and (line_changes is None or line_changes < 500):
-        return "standard"
-    return "large"
+        return TaskSize.STANDARD
+    return TaskSize.LARGE
 
 
 def get_verification_instructions(
-    task_size: Literal["small", "standard", "large"],
+    task_size: TaskSize | str,
     task_description: str,
 ) -> str:
     """获取验证指令模板
 
     参考: oh-my-codex-main/src/verification/verifier.ts::getVerificationInstructions
+
+    task_size 接受 TaskSize 或等价的字符串（"small"/"standard"/"large"）。
     """
+    task_size = TaskSize(task_size) if not isinstance(task_size, TaskSize) else task_size
     base_instructions = f"""
 ## Verification Protocol
 

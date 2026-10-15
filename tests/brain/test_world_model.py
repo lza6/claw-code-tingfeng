@@ -1,9 +1,7 @@
 """WorldModel 模块单元测试"""
-import ast
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from src.brain.world_model import RepositoryWorldModel
 
 
@@ -240,3 +238,85 @@ class TestRepositoryWorldModelEdgeCases:
 
         patterns = wm._detect_patterns(str(test_file))
         assert patterns == []
+
+class TestRagIndexUpdatedEvent:
+    """RAG_INDEX_UPDATED 事件发布回归测试。
+
+    背景: world_model.initialize() 中的指标发布代码引用了未定义的
+    `indexed_count`，而外层 try/except 把 NameError 完全吞掉，
+    导致该事件**从未被发布过**，依赖它的 UI 指标与遥测长期静默失效。
+    """
+
+    @pytest.mark.asyncio
+    async def test_initialize_publishes_rag_index_updated(self, tmp_path):
+        """initialize 完成后必须发布一次 RAG_INDEX_UPDATED，且字段有意义"""
+        from src.core.events import EventType, get_event_bus
+
+        (tmp_path / "sample.py").write_text("x = 1\n", encoding="utf-8")
+
+        mock_indexer = MagicMock()
+        mock_indexer.get_stats.return_value = {
+            "total_documents": 3,
+            "total_chunks": 5,
+            "index_terms": 42,
+            "skipped_files": 1,
+        }
+        mock_indexer.add_file_async = AsyncMock()
+
+        wm = RepositoryWorldModel(
+            root_dir=tmp_path,
+            text_indexer=mock_indexer,
+            dependency_graph=MagicMock(),
+        )
+
+        bus = get_event_bus()
+        bus.clear()
+        received = []
+        bus.subscribe(EventType.RAG_INDEX_UPDATED, received.append)
+
+        try:
+            await wm.initialize()
+        finally:
+            bus.clear()
+
+        assert received, "RAG_INDEX_UPDATED 事件未发布（回归：indexed_count 未定义）"
+
+        data = received[0].data
+        assert data["indexed_files"] == 3
+        assert data["total_terms"] == 42
+        assert data["skipped_files"] == 1
+        # 覆盖率必须是"已索引 / 已发现"，而不是恒等于 100% 的自除
+        assert data["coverage_percent"] == pytest.approx(75.0)
+
+    @pytest.mark.asyncio
+    async def test_coverage_percent_is_zero_when_nothing_discovered(self, tmp_path):
+        """零文件场景下覆盖率应为 0.0，而不是 ZeroDivisionError"""
+        from src.core.events import EventType, get_event_bus
+
+        mock_indexer = MagicMock()
+        mock_indexer.get_stats.return_value = {
+            "total_documents": 0,
+            "total_chunks": 0,
+            "index_terms": 0,
+            "skipped_files": 0,
+        }
+        mock_indexer.add_file_async = AsyncMock()
+
+        wm = RepositoryWorldModel(
+            root_dir=tmp_path,
+            text_indexer=mock_indexer,
+            dependency_graph=MagicMock(),
+        )
+
+        bus = get_event_bus()
+        bus.clear()
+        received = []
+        bus.subscribe(EventType.RAG_INDEX_UPDATED, received.append)
+
+        try:
+            await wm.initialize()
+        finally:
+            bus.clear()
+
+        assert received, "RAG_INDEX_UPDATED 事件未发布"
+        assert received[0].data["coverage_percent"] == 0.0

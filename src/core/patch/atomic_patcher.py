@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from .models import AtomicChange, PatchOperation, PatchResult
@@ -115,29 +116,31 @@ class AtomicPatcher:
         except Exception as e:
             return PatchResult(success=False, path=path, error_message=str(e))
 
-    async def apply_changes(self, changes: list[AtomicChange], use_transaction: bool = True) -> list[PatchResult]:
-        """应用统一 Diff 块 (简单实现)"""
-        import difflib
-        import re
+    def commit(self) -> None:
+        """提交事务：丢弃备份，使已写入的变更成为最终状态。
 
-        result = list(lines)
-        # 这是一个极简实现，主要处理由 HeuristicToolParser 产生的 diff
-        # 如果 diff 包含上下文，我们尝试匹配上下文
-        # 如果是简单的 + / - 格式
-        current_pos = 0
-        hunk_header = re.compile(r'^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@')
+        与 rollback() 配对使用。调用后 _backups 清空，
+        后续的 rollback() 将无从恢复（这是预期行为——事务已结束）。
+        """
+        self._backups.clear()
 
-        # 如果没有 hunk header，假设是全文替换或简单的逐行 diff
-        if not any(hunk_header.match(l) for l in diff_lines):
-            # 尝试使用 difflib.unified_diff 的逆向过程
-            # 这里的 diff_lines 可能是原始 diff 格式
-            # 为简单起见，如果是非结构化 diff，回退到 difflib
-            return list(difflib.restore(diff_lines, 2)) # 1 为原始，2 为新
+    def rollback(self) -> None:
+        """回滚事务：把所有被备份的文件恢复到事务开始时的内容。
 
-        # 处理带 @@ 的标准 diff
-        # 注意: 这里的实现非常基础，生产环境应使用更完善的 patch 库
-        # 鉴于 Aider 也有自己的 diff 应用逻辑，我们以后可以移植它
-        return list(difflib.restore(diff_lines, 2))
+        只恢复 begin_transaction 记录过的文件。事务期间**新建**的文件
+        不会被删除——删除用户文件的风险高于留下一个多余文件，且
+        调用方可通过 PatchResult 感知失败。
+
+        恢复失败的单个文件只记录警告，不中断其余文件的恢复：
+        尽可能把系统还原到一致状态，比在第一个错误处停下更有价值。
+        """
+        for rel_path, original in self._backups.items():
+            full_path = self.base_path / rel_path
+            try:
+                full_path.write_text(original, encoding="utf-8")
+            except Exception as e:
+                logger.error(f"回滚文件失败 {rel_path}: {e}")
+        self._backups.clear()
 
     async def apply_changes(self, changes: list[AtomicChange], use_transaction: bool = True) -> list[PatchResult]:
         """按序应用多个原子变更"""
@@ -162,6 +165,176 @@ class AtomicPatcher:
             if use_transaction:
                 self.rollback()
             raise e
+
+    # ------------------------------------------------------------------
+    # Unified diff 支持
+    #
+    # 说明: 这里的实现服务于自愈引擎的 apply_patch() 与 DIFF 操作。
+    # 设计取舍是"宁可失败也不要写错" —— 上下文行不匹配时直接抛错，
+    # 而不是尽力猜测位置，因为猜错会把文件改坏且难以察觉。
+    # ------------------------------------------------------------------
+
+    # @@ -oldStart[,oldCount] +newStart[,newCount] @@
+    _DIFF_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+    @staticmethod
+    def _strip_diff_header(diff_lines: list[str]) -> list[str]:
+        """去掉 `--- a/x` / `+++ b/x` / `diff --git` 等文件级头部"""
+        out: list[str] = []
+        for line in diff_lines:
+            if line.startswith(("--- ", "+++ ", "diff --git ", "index ", "new file mode ", "deleted file mode ")):
+                continue
+            out.append(line)
+        return out
+
+    @classmethod
+    def _parse_hunks(cls, diff_lines: list[str]) -> list[tuple[int, list[str]]]:
+        """解析 unified diff 为 [(old_start_1based, hunk_body_lines), ...]"""
+        hunks: list[tuple[int, list[str]]] = []
+        current_start: int | None = None
+        current_body: list[str] = []
+
+        for raw in diff_lines:
+            probe = raw.rstrip("\r\n")
+            m = cls._DIFF_HUNK_RE.match(probe)
+            if m:
+                if current_start is not None:
+                    hunks.append((current_start, current_body))
+                current_start = int(m.group(1))
+                current_body = []
+                continue
+            if current_start is None:
+                continue  # 尚未进入任何 hunk
+            if probe.startswith(("+", "-", " ")):
+                current_body.append(raw)
+            # "\ No newline at end of file" 之类的元信息直接忽略
+
+        if current_start is not None:
+            hunks.append((current_start, current_body))
+        return hunks
+
+    @classmethod
+    def _apply_diff_hunks(cls, lines: list[str], diff_lines: list[str]) -> list[str]:
+        """把 unified diff 应用到行列表，返回新的行列表。
+
+        Args:
+            lines: 目标文件内容，`splitlines(keepends=True)` 的结果
+            diff_lines: unified diff 文本的行列表
+
+        Raises:
+            ValueError: hunk 头部缺失，或上下文/删除行在目标文件中匹配不上。
+                抛出而非静默跳过，避免"补丁没生效但看起来成功"。
+        """
+        hunks = cls._parse_hunks(diff_lines)
+        if not hunks:
+            raise ValueError("diff 中未找到任何 @@ hunk 头部")
+
+        result = list(lines)
+
+        # 从后往前应用：前面的 hunk 不会影响后面 hunk 的行号
+        for old_start, body in reversed(hunks):
+            old_lines: list[str] = []
+            new_lines: list[str] = []
+            for raw in body:
+                tag, text = raw[0], raw[1:]
+                if tag == " ":
+                    old_lines.append(text)
+                    new_lines.append(text)
+                elif tag == "-":
+                    old_lines.append(text)
+                else:  # '+'
+                    new_lines.append(text)
+
+            # 定位：先用 diff 声明的行号，不匹配则在其邻近双向搜索
+            pos = cls._locate_hunk(result, old_lines, old_start - 1)
+            if pos is None:
+                preview = "".join(old_lines).strip()[:60].replace("\n", "\\n")
+                raise ValueError(f"hunk @@ -{old_start} 的上下文在目标文件中找不到: {preview!r}")
+
+            result[pos:pos + len(old_lines)] = new_lines
+
+        return result
+
+    @staticmethod
+    def _locate_hunk(lines: list[str], old_lines: list[str], hint: int) -> int | None:
+        """在 lines 中定位 old_lines 的起始下标。
+
+        先试 diff 给出的 hint，再以 hint 为中心向两侧扩散搜索（真实场景中
+        前面的 hunk 可能已改变行号偏移）；全部失败返回 None。
+        """
+        if not old_lines:
+            # 纯插入 hunk：没有上下文可校验，只能信任 hint
+            return max(0, min(hint, len(lines)))
+
+        n = len(old_lines)
+        max_start = len(lines) - n
+        if max_start < 0:
+            return None
+
+        def matches(start: int) -> bool:
+            if start < 0 or start > max_start:
+                return False
+            return all(
+                lines[start + i].rstrip("\r\n") == old_lines[i].rstrip("\r\n")
+                for i in range(n)
+            )
+
+        if matches(hint):
+            return hint
+
+        # 向两侧扩散：优先相信接近 hint 的位置
+        for delta in range(1, len(lines) + 1):
+            if matches(hint - delta):
+                return hint - delta
+            if matches(hint + delta):
+                return hint + delta
+        return None
+
+    def apply_patch(self, file_path: str | Path, patch_content: str) -> bool:
+        """把 unified diff 文本同步应用到文件，返回是否成功。
+
+        提供给自愈引擎的同步入口（self_healing/engine.py 直接以
+        `success = patcher.apply_patch(...)` 形式调用，不走 await）。
+
+        安全保证:
+            - 先算出完整新内容、通过 Python 语法校验后才落盘；
+              任何一步失败都返回 False 且**不修改原文件**。
+            - 不抛异常，错误通过日志与返回值暴露，便于上层回退到全量修复。
+        """
+        full_path = self.base_path / file_path
+        if not full_path.exists():
+            logger.warning(f"apply_patch: 文件不存在 {full_path}")
+            return False
+
+        try:
+            original = full_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning(f"apply_patch: 读取失败 {full_path}: {e}")
+            return False
+
+        try:
+            diff_lines = self._strip_diff_header(patch_content.splitlines(keepends=True))
+            new_lines = self._apply_diff_hunks(original.splitlines(keepends=True), diff_lines)
+        except ValueError as e:
+            logger.warning(f"apply_patch: 补丁无法应用 {full_path}: {e}")
+            return False
+
+        new_content = "".join(new_lines)
+
+        if full_path.suffix == ".py":
+            try:
+                compile(new_content, str(full_path), "exec")
+            except SyntaxError as e:
+                logger.warning(f"apply_patch: 语法校验失败 {full_path}: {e}")
+                return False
+
+        try:
+            full_path.write_text(new_content, encoding="utf-8")
+        except OSError as e:
+            logger.error(f"apply_patch: 写入失败 {full_path}: {e}")
+            return False
+
+        return True
 
     async def apply_single_change(self, change: AtomicChange) -> PatchResult:
         """应用单个原子变更"""

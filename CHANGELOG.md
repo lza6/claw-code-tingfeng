@@ -9,6 +9,98 @@
 
 ## [未发布]
 
+### v0.51.0 (2026-10-16)
+
+本次为**止血版本**：修复了一批"项目声称可用、实际运行即崩"的缺陷。
+所有修复均附有实测复现与验收命令，详见 `计划书/下一步改进指南.md`。
+
+#### 🔴 修复（阻塞级）
+
+- **LLM 栈完全不可用**（`src/llm/factory.py`）
+  `get_default_llm()` / `get_vision_llm()` 访问了不存在的
+  `settings.context_window`，任何调用都抛 `AttributeError`。
+  修正为实际字段 `settings.max_context_tokens`。
+- **API Key 与自定义端点从未生效**（`src/core/config/models.py`）
+  `.env.example` 约定 `OPENAI_API_KEY` / `OPENAI_MODEL` / `OPENAI_BASE_URL`，
+  但 `AgentSettings` 只识别 `LLM_API_KEY` 等通用名，导致按文档配置的用户
+  拿到 `llm_api_key=None`、`llm_model='gpt-4'`、`llm_base_url=None`。
+  新增提供商环境变量别名解析层，兼容全部既有配置方式。
+- **自定义端点被忽略，请求打到官方 API**（`src/llm/factory.py`）
+  `_LiteLLMCompatWrapper` 构造 litellm 参数时遗漏 `api_key` / `api_base`，
+  使用 OpenRouter / NIM / 自建网关的用户必然 401。
+  抽出 `_build_call_kwargs()` 供 `invoke`/`stream` 共用。
+- **工具调用结果被丢弃，Agent 环路断裂**（`src/llm/factory.py`）
+  响应解析只取 `role` / `content`，`tool_calls` 与 `reasoning_content`
+  从未回填，模型即使返回工具调用也被当作普通文本处理。同步修复流式路径。
+- **原子补丁引擎不可用**（`src/core/patch/atomic_patcher.py`）
+  `apply_batch` / `apply_changes` 调用的 `commit()` 与 `rollback()` **根本未定义**，
+  而 `src/agent/engine_loop.py` 在每次文件编辑后都会调用它们 ——
+  即每次成功改文件都会崩溃。补齐两个方法；
+  另删除被静默覆盖且引用未定义变量的重复 `apply_changes`；
+  补齐被引用但从未实现的 `_apply_diff_hunks` 与 `apply_patch`。
+- **配置文件反复合并会自我污染**（`src/core/config/merger.py`）
+  `merge_config` 把 OMX 顶层配置追加到字符串末尾，第二次合并起
+  `notify` / `model_reasoning_effort` / `developer_instructions`
+  会落到 `[agents]` 表之下，被 TOML 解析成 `agents.*`，顶层配置静默丢失。
+  改为插入到第一个表头之前，并新增幂等性测试。
+- **Windows 中文环境启动即报编码错误**（`src/utils/logger.py`, `src/main.py`）
+  控制台默认 GBK，日志中的 emoji / CJK 触发 `UnicodeEncodeError`，
+  用户看到满屏乱码与调用栈。统一将 stdout/stderr 切至 UTF-8（`errors='replace'`）。
+- **RAG 索引事件永不发布**（`src/brain/world_model.py`）
+  指标代码引用未定义的 `indexed_count`，异常被 `except: pass` 吞掉，
+  `RAG_INDEX_UPDATED` 长期静默失效。同时修正恒等于 100% 的覆盖率公式。
+- **配置包公开 API 缺失，Agent 主入口崩溃**（`src/core/config/__init__.py`）
+  该包只 re-export 了 `merger`，`AgentSettings` / `get_settings` /
+  `load_settings` 全部 `ImportError` —— 而 `src/agent/factory.py:70` 正是
+  这样导入的，导致 `create_agent_engine()`（创建 Agent 的主入口）
+  以 `ImportError` 崩溃，且该异常不在 `except (KeyError, ValueError)` 捕获范围内。
+  现已补全 re-export，并新增 `ensure_project_dirs()`。
+- **`clawd setup` 静默不生成配置文件**（`src/cli/commands/setup_commands.py`）
+  `src.config.generator.merge_config` 是 `async def`，却被同步调用 ——
+  只得到一个从未 await 的协程，弹出 `RuntimeWarning` 而配置文件根本没写到磁盘
+  （用户看到"✓ 创建配置文件"却是空的）。
+- **`clawd setup` 无法找到模板**（`src/cli/commands/setup_commands.py`）
+  模板路径少算一级目录（指向 `src/templates/`，实际在仓库根 `templates/`），
+  导致 AGENTS.md 与 catalog-manifest.json 永远"跳过: 模板未找到"。
+  改为向上探测 `pyproject.toml` + `templates/`，兼容各种安装布局。
+- **`register_setup_commands` 自引用**（`src/cli/commands/setup_commands.py`）
+  `app.add_typer(app, name="setup")` 中形参 `app` 遮蔽了模块级 `app`，
+  等于把父应用注册到自身。
+- **代码图谱并发修改崩溃**（`src/rag/code_graph.py`）
+  `_resolve_all_edges` 直接迭代 `self.nodes.values()`，而图谱构建可能由
+  `asyncio.to_thread` 在后台线程添加节点，抛
+  `RuntimeError: dictionary changed size during iteration`。改为快照迭代。
+- **生成配置中的硬编码过期版本号**（`src/config/generator.py`）
+  生成的 `.clawd/config.toml` 注释写死 `Clawd Code v0.50.0+`。已移除该噪声。
+
+#### 🔧 修复（契约与一致性）
+
+- `AgentDefinition` 字段由 camelCase 改为 snake_case
+  （`reasoningEffort` / `modelClass` / `routingRole`），
+  恢复 `tests/contracts/` 契约并符合 PEP 8。
+- 枚举补全为 `AgentModelClass` / `AgentRoutingRole`，与同文件其余 `Agent*` 命名一致。
+- `src/workflow/verifier.py` 补全契约声明的 `TaskSize` / `EvidenceType` /
+  `Confidence` / `VerificationEvidence.as_text()`；枚举继承 `str`，不破坏既有字符串比较。
+- 版本号改为单一真相源：`pyproject.toml` 为唯一来源，`src.__version__` 自动读取。
+- 重写 `tests/core/test_config_merger.py`（原测试针对已废弃的 `ConfigMerger`
+  类与 `OMX_MARKER` 设计，导致 pytest 收集失败）。
+
+#### 🧪 新增测试
+
+- `tests/self_healing/test_atomic_patcher.py` +10：事务语义、unified diff 应用、
+  上下文不匹配拒绝、语法破坏拒绝、多 hunk。
+- `tests/brain/test_world_model.py` +2：`RAG_INDEX_UPDATED` 事件发布与零文件边界。
+- `tests/core/test_config_merger.py` 重写为 48 个用例，含**幂等性**回归。
+- `scripts/e2e_smoke.py`：对真实 LLM 端点的端到端冒烟测试
+  （配置 → 导入 → 对话 → 工具调用 → 推理内容）。
+
+#### 📝 说明
+
+- `pyproject.toml` 的 `fail_under` 仍为 60，与实际覆盖率存在差距，
+  按 `计划书/下一步改进指南.md` §6.1 的路线分阶段提升。
+
+---
+
 ### v0.46.0 (2026-04-08)
 
 #### 🧪 测试增强
@@ -24,7 +116,7 @@
   - `tests/utils/test_cache.py` - Cache 缓存策略测试（28 用例）
   - `tests/llm/test_cache.py` - LLMCache LLM 缓存测试（18 用例）
   - `tests/memory/test_manager.py` - MemoryManager 记忆管理测试（12 用例）
-  - `tests/session/test_session_manager.py` - SessionManager 会话管理测试（22 用例）
+  - ~~`tests/session/test_session_manager.py`~~ - 该文件实际不存在于仓库（v0.51.0 修正本条目）
 
 #### 📈 质量提升
 - 测试用例总数从 1416 增加至 1565+（+10%）

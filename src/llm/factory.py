@@ -269,7 +269,13 @@ def get_default_llm(
     return get_llm(
         provider=provider,
         model=model_name,
-        max_input_tokens=settings.context_window or 8192,
+        max_input_tokens=settings.max_context_tokens or 8192,
+        # 必须显式透传密钥与自定义端点。
+        # 否则 get_llm 会退回到空负载均衡器，api_base 为 None，
+        # litellm 将请求打到官方 api.openai.com —— 对使用自定义
+        # 端点（OpenRouter / NIM / 自建网关）的用户必然是 401。
+        api_key=settings.llm_api_key,
+        api_base=settings.llm_base_url,
         temperature=temperature,
         additional_headers=additional_headers,
     )
@@ -301,7 +307,9 @@ def get_vision_llm(
     return get_llm(
         provider=provider,
         model=target_model,
-        max_input_tokens=settings.context_window or 8192,
+        max_input_tokens=settings.max_context_tokens or 8192,
+        api_key=settings.llm_api_key,
+        api_base=settings.llm_base_url,
         temperature=temperature,
     )
 
@@ -379,6 +387,49 @@ class _LiteLLMCompatWrapper:
     def config(self) -> LLMConfig:
         return self._config
 
+    def _build_call_kwargs(self) -> dict[str, Any]:
+        """构建 litellm.completion() 的公共参数。
+
+        必须包含 api_key / api_base —— 这是使用自定义端点
+        （OpenRouter / NVIDIA NIM / 自建 OpenAI 兼容网关）的前提。
+        遗漏 api_base 会让 litellm 把请求打到官方 api.openai.com，
+        对自建网关用户表现为 401 而非"端点未配置"。
+
+        抽成独立方法是为了让 invoke/stream 共用同一份参数，
+        避免两处各自演化导致行为漂移。
+        """
+        kwargs: dict[str, Any] = {
+            "model": f"{self._config.model_provider}/{self._config.model_name}",
+            "temperature": self._config.temperature,
+        }
+        if self._config.api_key:
+            kwargs["api_key"] = self._config.api_key
+        if self._config.api_base:
+            kwargs["api_base"] = self._config.api_base
+        if self._extra_headers:
+            kwargs["extra_headers"] = self._extra_headers
+        if self._model_kwargs:
+            kwargs.update(self._model_kwargs)
+        return kwargs
+
+    def _apply_call_options(
+        self,
+        kwargs: dict[str, Any],
+        tools: list[dict] | None,
+        tool_choice: ToolChoiceOptions | None,
+        max_tokens: int | None,
+        timeout: int | None,
+    ) -> None:
+        """把单次调用的可选参数合并进 kwargs（原地修改）"""
+        if timeout:
+            kwargs["request_timeout"] = timeout
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if tools:
+            kwargs["tools"] = tools
+        if tool_choice:
+            kwargs["tool_choice"] = tool_choice.value
+
     def invoke(
         self,
         prompt: list[dict[str, Any]],
@@ -392,29 +443,14 @@ class _LiteLLMCompatWrapper:
     ) -> ModelResponse:
         """同步调用（通过 LiteLLM 单例）"""
         from src.core.exceptions import LLMProviderError
-        from src.llm.interfaces import Message, ModelResponse, Usage
+        from src.llm.interfaces import Message, ModelResponse, ToolCall, Usage
 
         litellm = get_litellm()
         timeout = timeout_override or self._timeout
 
-        kwargs: dict[str, Any] = {
-            "model": f"{self._config.model_provider}/{self._config.model_name}",
-            "messages": prompt,
-            "temperature": self._config.temperature,
-        }
-
-        if timeout:
-            kwargs["request_timeout"] = timeout
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if self._extra_headers:
-            kwargs["extra_headers"] = self._extra_headers
-        if self._model_kwargs:
-            kwargs.update(self._model_kwargs)
-        if tools:
-            kwargs["tools"] = tools
-        if tool_choice:
-            kwargs["tool_choice"] = tool_choice.value
+        kwargs = self._build_call_kwargs()
+        kwargs["messages"] = prompt
+        self._apply_call_options(kwargs, tools, tool_choice, max_tokens, timeout)
 
         try:
             response = litellm.completion(**kwargs)
@@ -427,10 +463,38 @@ class _LiteLLMCompatWrapper:
         if not choice:
             return ModelResponse()
 
-        message_data = choice.message.model_dump() if hasattr(choice.message, 'model_dump') else {}
+        raw_message = choice.message
+        message_data = raw_message.model_dump() if hasattr(raw_message, 'model_dump') else {}
+
+        # 工具调用必须被完整还原，否则 Agent 环路拿不到任何 tool_calls，
+        # 表现为"模型说了要调用工具但框架当作普通回复处理"。
+        # litellm 返回的是 OpenAI 嵌套结构（function.name / function.arguments），
+        # 而本项目的 ToolCall 是扁平结构（name / arguments），此处做映射。
+        tool_calls: list[ToolCall] | None = None
+        raw_tool_calls = message_data.get("tool_calls") or getattr(raw_message, "tool_calls", None)
+        if raw_tool_calls:
+            tool_calls = []
+            for tc in raw_tool_calls:
+                tc_data = tc if isinstance(tc, dict) else (
+                    tc.model_dump() if hasattr(tc, "model_dump") else {}
+                )
+                fn = tc_data.get("function") or {}
+                if isinstance(fn, dict):
+                    fn_name, fn_args = fn.get("name", ""), fn.get("arguments", "")
+                else:  # pragma: no cover - 防御非标准返回
+                    fn_name, fn_args = getattr(fn, "name", ""), getattr(fn, "arguments", "")
+                tool_calls.append(ToolCall(
+                    id=tc_data.get("id", ""),
+                    name=fn_name,
+                    arguments=fn_args or "{}",
+                ))
+
         message = Message(
             role=message_data.get("role", "assistant"),
             content=message_data.get("content"),
+            tool_calls=tool_calls,
+            finish_reason=choice.finish_reason if hasattr(choice, "finish_reason") else None,
+            reasoning_content=message_data.get("reasoning_content"),
         )
 
         usage = Usage(
@@ -459,30 +523,15 @@ class _LiteLLMCompatWrapper:
     ):
         """流式调用（通过 LiteLLM 单例）"""
         from src.core.exceptions import LLMProviderError
-        from src.llm.interfaces import Message, ModelResponseStream
+        from src.llm.interfaces import Message, ModelResponseStream, ToolCall
 
         litellm = get_litellm()
         timeout = timeout_override or self._timeout
 
-        kwargs: dict[str, Any] = {
-            "model": f"{self._config.model_provider}/{self._config.model_name}",
-            "messages": prompt,
-            "temperature": self._config.temperature,
-            "stream": True,
-        }
-
-        if timeout:
-            kwargs["request_timeout"] = timeout
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if self._extra_headers:
-            kwargs["extra_headers"] = self._extra_headers
-        if self._model_kwargs:
-            kwargs.update(self._model_kwargs)
-        if tools:
-            kwargs["tools"] = tools
-        if tool_choice:
-            kwargs["tool_choice"] = tool_choice.value
+        kwargs = self._build_call_kwargs()
+        kwargs["messages"] = prompt
+        kwargs["stream"] = True
+        self._apply_call_options(kwargs, tools, tool_choice, max_tokens, timeout)
 
         try:
             response_stream = litellm.completion(**kwargs)
@@ -493,12 +542,36 @@ class _LiteLLMCompatWrapper:
                 delta = chunk.choices[0].delta
                 delta_data = delta.model_dump() if hasattr(delta, 'model_dump') else {}
 
+                # 流式增量同样需要还原工具调用与推理内容，
+                # 否则流式路径下 Agent 无法触发工具、无法展示思维链。
+                delta_tool_calls: list[ToolCall] | None = None
+                raw_deltas = delta_data.get("tool_calls") or getattr(delta, "tool_calls", None)
+                if raw_deltas:
+                    delta_tool_calls = []
+                    for tc in raw_deltas:
+                        tc_data = tc if isinstance(tc, dict) else (
+                            tc.model_dump() if hasattr(tc, "model_dump") else {}
+                        )
+                        fn = tc_data.get("function") or {}
+                        if isinstance(fn, dict):
+                            fn_name, fn_args = fn.get("name") or "", fn.get("arguments") or ""
+                        else:  # pragma: no cover - 防御非标准返回
+                            fn_name = getattr(fn, "name", "") or ""
+                            fn_args = getattr(fn, "arguments", "") or ""
+                        delta_tool_calls.append(ToolCall(
+                            id=tc_data.get("id") or "",
+                            name=fn_name,
+                            arguments=fn_args,
+                        ))
+
                 yield ModelResponseStream(
                     id=chunk.id if hasattr(chunk, 'id') else "",
                     model=chunk.model if hasattr(chunk, 'model') else self._config.model_name,
                     delta=Message(
                         role=delta_data.get("role", "assistant"),
                         content=delta_data.get("content"),
+                        tool_calls=delta_tool_calls,
+                        reasoning_content=delta_data.get("reasoning_content"),
                     ),
                     finish_reason=chunk.choices[0].finish_reason if chunk.choices else None,
                 )

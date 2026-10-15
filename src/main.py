@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import contextlib
 import logging
 import os as _os
 import sys
@@ -53,6 +54,17 @@ def initialize() -> None:
     if _initialized:
         return
     _initialized = True
+
+    # 中文 Windows 的控制台默认编码是 GBK，任何 emoji / 特殊 CJK 字符
+    # 都会触发 UnicodeEncodeError（表现为满屏乱码 + 调用栈）。
+    # 这里在任何输出之前统一切到 UTF-8，errors='replace' 保证即使
+    # 终端不支持也不会崩溃。
+    for _stream in (sys.stdout, sys.stderr):
+        _reconfigure = getattr(_stream, 'reconfigure', None)
+        if callable(_reconfigure):
+            # 流可能已被 detach 或本身不是 TextIOWrapper —— 失败无需干预
+            with contextlib.suppress(ValueError, OSError):
+                _reconfigure(encoding='utf-8', errors='replace')
 
     # ClawGod v2: 尽早设置隐私保护环境变量（在 .env 加载之前）
     _os.environ.setdefault("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.45.0"
+version = "0.51.0"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -85,6 +85,18 @@ python_files = ["test_*.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 norecursedirs = ["node_modules", ".git", "__pycache__", "dist", ".venv", "venv"]
+# 注册自定义 mark，消除 PytestUnknownMarkWarning
+markers = [
+    "integration: 集成测试（跨模块，较慢）",
+    "performance: 性能基准测试（默认不参与常规运行）",
+    "slow: 慢速测试",
+    "e2e: 端到端测试（可能需要真实网络/凭证）",
+    "unit: 单元测试",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["src"]

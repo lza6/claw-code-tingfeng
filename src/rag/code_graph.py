@@ -252,15 +252,26 @@ class CodeGraph:
         await asyncio.to_thread(self.build, files=files, parallel=True)
 
     def _resolve_all_edges(self):
-        """解析所有文件间的依赖边 (优化版: 减少重复计算)"""
-        for node in self.nodes.values():
+        """解析所有文件间的依赖边 (优化版: 减少重复计算)
+
+        注意: 必须基于 `self.nodes` 的**快照**迭代。图谱构建可能由
+        `asyncio.to_thread` 在后台线程执行（见 `WorldModel.initialize`），
+        与主线程的解析路径并发；直接迭代原字典会抛
+        `RuntimeError: dictionary changed size during iteration`。
+
+        快照的代价是：解析期间新加入的节点本轮不参与边解析。
+        这是可接受的 —— 下一轮增量构建会补上，而崩溃是不可接受的。
+        """
+        for node in list(self.nodes.values()):
             node.resolved_imports.clear()
             for imp in node.imports:
                 target = self._resolve_import(imp, node.path)
                 if target:
                     node.resolved_imports.add(target)
-                    if target in self.nodes:
-                        self.nodes[target].imported_by.add(node.path)
+                    # 目标节点可能已被并发移除，取值前再确认一次
+                    target_node = self.nodes.get(target)
+                    if target_node is not None:
+                        target_node.imported_by.add(node.path)
 
     def _resolve_import(self, imp: str, from_path: str) -> str | None:
         """解析 import 到具体文件路径 (增加缓存层)"""

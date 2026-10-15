@@ -52,8 +52,18 @@ class LiteLLMSingleton:
         # 回调
         litellm.callbacks = []
 
-        # 雪花/追踪
-        litellm.turn_off_verbose_logging()
+        # 关闭端点的 verbose 日志
+        # 兼容性: litellm 在 1.6x 之后移除了 turn_off_verbose_logging()，
+        # 新版本提供 turn_off_message_logging()。这里做版本无关的降级调用，
+        # 因为 set_verbose=False 已能覆盖主要场景，缺失该方法不应导致启动失败。
+        for _fn_name in ("turn_off_verbose_logging", "turn_off_message_logging"):
+            _fn = getattr(litellm, _fn_name, None)
+            if callable(_fn):
+                try:
+                    _fn()
+                except Exception as exc:
+                    logger.debug("litellm.%s() 调用失败: %s", _fn_name, exc)
+                break
 
         # 自定义模型映射（如需要）
         litellm.custom_provider_map = []

@@ -36,16 +36,18 @@ def list_agents(
             agents = [a for a in agents if a.category == cat]
         except ValueError:
             console.print(f"[bold red]无效分类:[/bold red] {category}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
     if format == "json":
+        # JSON 键名保持 camelCase（"modelClass"）以兼容既有下游脚本，
+        # 而 Python 侧属性已统一为 snake_case。两者刻意不同，勿"顺手"统一。
         data = [
             {
                 "name": a.name,
                 "description": a.description,
                 "category": a.category,
                 "tools": a.tools,
-                "modelClass": a.modelClass,
+                "modelClass": a.model_class,
             }
             for a in sorted(agents, key=lambda x: x.name)
         ]
@@ -76,9 +78,9 @@ def show_agent(
     console.print(f"\n[bold cyan]Agent:[/bold cyan] {agent.name}")
     console.print(f"[bold]Description:[/bold] {agent.description}")
     console.print(f"[bold]Category:[/bold] {agent.category}")
-    console.print(f"[bold]Routing Role:[/bold] {agent.routingRole}")
-    console.print(f"[bold]Model Class:[/bold] {agent.modelClass}")
-    console.print(f"[bold]Reasoning Effort:[/bold] {agent.reasoningEffort}")
+    console.print(f"[bold]Routing Role:[/bold] {agent.routing_role}")
+    console.print(f"[bold]Model Class:[/bold] {agent.model_class}")
+    console.print(f"[bold]Reasoning Effort:[/bold] {agent.reasoning_effort}")
     console.print(f"[bold]Tools Access:[/bold] {agent.tools}")
     console.print(f"[bold]Posture:[/bold] {agent.posture}")
 
