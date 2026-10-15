@@ -86,3 +86,9 @@ vendor/
 coverage/
 .cache/
 tmp/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# codegraph / graft 本地索引缓存 — 可再生，不提交
+.codegraph/
