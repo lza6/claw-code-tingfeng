@@ -39,7 +39,23 @@
 | A-14 | `clawd setup` 端到端 | 在空目录运行 | 生成 3 个文件 | config.toml + AGENTS.md + catalog-manifest.json | ✅ |
 | A-15 | 改动文件静态检查 | `ruff check <changed files>` | 零新增违规 | 0 新增 | ✅ |
 | A-16 | HTML 报告测验交互 | Playwright + Chromium | 全场景正确 | 7/7 场景通过 | ✅ |
-| A-17 | 全量测试回归 | `pytest tests/` | 记录通过率 | 见 §5（进行中） | ⏳ |
+| A-17 | 全量测试回归 | `pytest tests/` | 记录通过率 | 39 failed / 2814 passed / 4 skipped（45min） | ✅ 已记录 |
+
+### A-17 失败归属分析（关键）
+
+全量 39 个失败中，**只有 1 个是本次改动引入的回归**，已修复；其余 38 个为既有失败。
+
+判定方法：**对照实验** —— 用 `git checkout 7ebd096 -- <file>` 还原改动前的实现，
+在同一环境重跑同一测试，对比是否仍失败。
+
+| 失败测试 | 归属 | 依据 |
+|:---|:---|:---|
+| `tests/llm/test_factory.py::TestLiteLLMCompatWrapper::test_invoke` | **本次引入** → 已修复 | 我给 `Message` 补 `finish_reason` 时未做类型防护，MagicMock 返回非字符串触发 pydantic 校验失败。已加 `_as_str`/`_as_int` 收敛并补 3 个回归用例 |
+| `tests/brain/test_world_model_complex.py`（3 例） | 既有 | 对照实验：还原 `code_graph.py` + `world_model.py` 到改动前后**同样失败** |
+| 其余 35 例（`runtime/`、`workflow/`、`core/test_platform`、`agent/`、`integration/`） | 既有 | 均不在本次改动范围内 |
+
+> **诚实说明**：38 个既有失败**未处理**。它们属于波次 3+ 的范围（需要先有测试
+> 才能安全修）。`workflow_status.md` 只记录事实，不把它们标成"已完成"。
 
 ---
 
