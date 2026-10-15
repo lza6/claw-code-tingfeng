@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawd Code v0.51.0 — 变更报告</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c2230;
+    --ink:#e6edf3; --ink-dim:#9198a1; --ink-faint:#6e7681;
+    --line:#2a313c; --line-soft:#21262d;
+    --crit:#f85149; --warn:#d29922; --ok:#3fb950; --info:#58a6ff;
+    --accent:#7c5cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC","Source Han Serif SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif;
+    --r:10px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#fbfaf8; --panel:#ffffff; --panel-2:#f4f2ee;
+      --ink:#1a1d21; --ink-dim:#5b6169; --ink-faint:#8b9199;
+      --line:#e2ded6; --line-soft:#ece8e1;
+      --crit:#c0392b; --warn:#9a6b00; --ok:#1f7a34; --info:#0b5fbf;
+      --accent:#5b3fd6;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.68;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px 120px}
+
+  /* ── 头部 ── */
+  header{
+    padding:72px 0 40px; border-bottom:1px solid var(--line);
+    margin-bottom:56px; position:relative;
+  }
+  header::before{
+    content:"";position:absolute;left:0;top:64px;width:56px;height:3px;
+    background:var(--accent);border-radius:2px;
+  }
+  .kicker{
+    font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:20px;font-weight:600;
+  }
+  h1{
+    font-family:var(--serif);font-size:clamp(3rem,7vw,4.6rem);line-height:1.02;
+    margin:0 0 20px;font-weight:600;letter-spacing:-.02em;
+  }
+  h1 .v{color:var(--ink-faint);font-weight:400}
+  .lede{
+    font-size:1.18rem;color:var(--ink-dim);max-width:62ch;margin:0;
+    font-family:var(--serif);
+  }
+
+  /* ── 章节 ── */
+  section{margin:0 0 72px;scroll-margin-top:24px}
+  h2{
+    font-family:var(--serif);font-size:2rem;margin:0 0 8px;font-weight:600;
+    letter-spacing:-.01em;
+  }
+  h2 .num{
+    font-family:var(--mono);font-size:.72rem;color:var(--accent);
+    display:block;letter-spacing:.12em;margin-bottom:10px;font-weight:600;
+  }
+  h3{font-size:1.12rem;margin:36px 0 10px;font-weight:650}
+  h4{font-size:.95rem;margin:24px 0 8px;font-weight:650;color:var(--ink-dim)}
+  p{margin:0 0 16px}
+  .sub{color:var(--ink-dim);margin-bottom:28px;max-width:66ch}
+
+  /* ── 统计条 ── */
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    border-radius:var(--r);overflow:hidden;margin:32px 0;
+  }
+  .stat{background:var(--panel);padding:20px 18px}
+  .stat b{
+    display:block;font-family:var(--mono);font-size:1.85rem;line-height:1.1;
+    font-weight:600;letter-spacing:-.02em;
+  }
+  .stat span{font-size:.78rem;color:var(--ink-faint);display:block;margin-top:6px}
+  .stat.good b{color:var(--ok)} .stat.bad b{color:var(--crit)}
+
+  /* ── 卡片 ── */
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:22px 24px;margin:18px 0;
+  }
+  .card.crit{border-left:3px solid var(--crit)}
+  .card.ok{border-left:3px solid var(--ok)}
+  .card.warn{border-left:3px solid var(--warn)}
+  .card h4{margin-top:0;color:var(--ink);font-size:1rem}
+  .card p:last-child{margin-bottom:0}
+
+  .badge{
+    display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:4px;letter-spacing:.06em;vertical-align:2px;
+    margin-right:8px;
+  }
+  .badge.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .badge.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .badge.info{background:rgba(88,166,255,.16);color:var(--info)}
+
+  /* ── 代码 ── */
+  code{
+    font-family:var(--mono);font-size:.855em;background:var(--panel-2);
+    padding:2px 6px;border-radius:4px;color:var(--ink);
+    border:1px solid var(--line-soft);
+  }
+  pre{
+    background:var(--panel-2);border:1px solid var(--line);
+    border-radius:var(--r);padding:16px 18px;overflow-x:auto;margin:14px 0;
+    font-size:.82rem;line-height:1.62;
+  }
+  pre code{background:none;padding:0;border:none;font-size:1em}
+  .c-del{color:var(--crit)} .c-add{color:var(--ok)} .c-dim{color:var(--ink-faint)}
+  .c-key{color:var(--accent)} .c-str{color:var(--warn)}
+
+  /* ── 表格 ── */
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.88rem}
+  th{
+    text-align:left;font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-faint);font-weight:600;
+    padding:0 12px 10px 0;border-bottom:1px solid var(--line);
+  }
+  td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  .mono{font-family:var(--mono);font-size:.84em}
+
+  /* ── 流程 ── */
+  .flow{margin:24px 0;padding-left:0;list-style:none}
+  .flow li{
+    position:relative;padding-left:34px;padding-bottom:20px;
+    border-left:2px solid var(--line-soft);margin-left:9px;
+  }
+  .flow li:last-child{border-left-color:transparent;padding-bottom:0}
+  .flow li::before{
+    content:"";position:absolute;left:-8px;top:6px;width:14px;height:14px;
+    border-radius:50%;background:var(--bg);border:2.5px solid var(--line);
+  }
+  .flow li.hit::before{border-color:var(--crit)}
+  .flow li.fix::before{border-color:var(--ok)}
+  .flow b{display:block;margin-bottom:2px}
+  .flow .err{
+    font-family:var(--mono);font-size:.78rem;color:var(--crit);
+    word-break:break-all;display:block;margin-top:4px;
+  }
+
+  /* ── 测验 ── */
+  .quiz{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);padding:30px 28px;margin-top:28px;
+  }
+  .q{padding:20px 0;border-bottom:1px solid var(--line-soft)}
+  .q:last-of-type{border-bottom:none;padding-bottom:6px}
+  .q > p{margin:0 0 14px;font-weight:600;font-size:.97rem}
+  .q .qn{
+    font-family:var(--mono);font-size:.78rem;color:var(--accent);
+    margin-right:8px;font-weight:700;
+  }
+  .opt{
+    display:block;padding:11px 15px;margin:7px 0;border-radius:8px;
+    border:1px solid var(--line);cursor:pointer;transition:.13s;
+    font-size:.9rem;line-height:1.5;background:var(--bg);
+  }
+  .opt:hover{border-color:var(--accent);background:var(--panel-2)}
+  .opt input{margin-right:11px;accent-color:var(--accent)}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.09)}
+  .opt.wrong{border-color:var(--crit);background:rgba(248,81,73,.09)}
+  .opt.locked{cursor:default}
+  .fb{
+    margin-top:9px;padding:11px 15px;border-radius:8px;font-size:.855rem;
+    display:none;line-height:1.6;
+  }
+  .fb.show{display:block}
+  .fb.right{background:rgba(63,185,80,.11);border:1px solid rgba(63,185,80,.32)}
+  .fb.wrong{background:rgba(248,81,73,.11);border:1px solid rgba(248,185,73,.32)}
+  .fb.wrong{border-color:rgba(248,81,73,.32)}
+  .verdict{
+    margin-top:26px;padding:22px;border-radius:var(--r);text-align:center;
+    font-weight:650;display:none;border:1px solid;
+  }
+  .verdict.show{display:block}
+  .verdict.pass{background:rgba(63,185,80,.1);border-color:var(--ok);color:var(--ok)}
+  .verdict.fail{background:rgba(248,81,73,.1);border-color:var(--crit);color:var(--crit)}
+  .verdict small{display:block;font-weight:400;color:var(--ink-dim);margin-top:8px;font-size:.83rem}
+  button.act{
+    font-family:var(--sans);font-size:.92rem;font-weight:650;
+    padding:12px 26px;border-radius:8px;border:1px solid var(--accent);
+    background:var(--accent);color:#fff;cursor:pointer;transition:.13s;
+    margin-top:22px;
+  }
+  button.act:hover{filter:brightness(1.12)}
+  button.act.ghost{background:transparent;color:var(--ink-dim);border-color:var(--line)}
+  button.act.ghost:hover{color:var(--ink);border-color:var(--accent)}
+  .scorebar{
+    height:6px;background:var(--line-soft);border-radius:3px;
+    overflow:hidden;margin:20px 0 8px;
+  }
+  .scorebar i{
+    display:block;height:100%;width:0;background:var(--accent);
+    transition:width .35s ease;border-radius:3px;
+  }
+
+  hr{border:none;border-top:1px solid var(--line);margin:56px 0}
+  .honest{
+    background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.3);
+    border-radius:var(--r);padding:22px 24px;
+  }
+  .honest h3{margin-top:0;color:var(--warn)}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--info)}
+  .tag{
+    font-family:var(--mono);font-size:.74rem;color:var(--ink-faint);
+    border:1px solid var(--line);padding:2px 7px;border-radius:4px;
+  }
+  @media (max-width:640px){
+    header{padding:48px 0 28px}
+    .wrap{padding:0 18px 80px}
+    section{margin-bottom:52px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">变更报告 · 2026-10-16</div>
+  <h1>Clawd Code <span class="v">v0.51.0</span></h1>
+  <p class="lede">一个"文档说能用、实际一跑就崩"的 AI 编程代理框架，是怎么被修回可运行的。</p>
+</header>
+
+<!-- ══════════ 1 上下文 ══════════ -->
+<section id="context">
+  <h2><span class="num">01</span>上下文：起点在哪里</h2>
+  <p class="sub">项目自称 v0.45–0.50、覆盖率约 50%、1414 个测试全绿。实测数字不是这样。</p>
+
+  <div class="stats">
+    <div class="stat bad"><b>19.5%</b><span>实测覆盖率（自报 ~50%）</span></div>
+    <div class="stat bad"><b>563</b><span>Ruff 违规</span></div>
+    <div class="stat bad"><b>213</b><span>不可达模块 / 46,519 行</span></div>
+    <div class="stat bad"><b>306s</b><span>测试收集耗时</span></div>
+  </div>
+
+  <p>更值得注意的不是这些数字，而是它们的成因。这个仓库的 <code>git log</code> 显示的不是一条演进轨迹，而是<strong>四次集成波次</strong>——Aider、GoalX、oh-my-codex、ClawGod 各自把源项目的目录结构搬进来，落盘、提交，然后声称完成。</p>
+
+  <p>缺的恰恰是最关键的一步：<strong>接线验证</strong>。没人确认过新代码能不能被运行时的可达路径碰到。当一段代码从未被 <code>import</code>、从未被测试执行过时，它就是化石——静态检查（ruff 的 <code>F821</code> 只查名称不查属性，mypy 未启用）看不见它，覆盖率报告也只是把它算作"未覆盖"而已。</p>
+
+  <div class="card warn">
+    <h4><span class="badge warn">根因</span>三者同源</h4>
+    <p style="margin-bottom:10px">把上面这些症状串起来，它们出自同一个上游：</p>
+    <pre style="margin:0"><code><span class="c-dim">缺少可达性契约</span>
+   │
+   ├─→ 移植代码不接线        → 213 个死模块
+   ├─→ 不接线就不进测试      → 覆盖率 19.5% → F821 静默存活
+   ├─→ 测试失败用 except 掩盖 → 255 处静默吞异常
+   └─→ 文档写"已完成"        → README 虚报覆盖率 2.5 倍</code></pre>
+  </div>
+</section>
+
+<!-- ══════════ 2 直觉 ══════════ -->
+<section id="insight">
+  <h2><span class="num">02</span>直觉：为什么必须先跑真实 E2E</h2>
+  <p class="sub">如果我只做静态审计，这 11 个缺陷里一个都发现不了。</p>
+
+  <p>最初的计划是"按优先级清单逐项修"。清单来自静态分析——那是错的起点。真正的问题只有在<strong>把一个真实请求打进去</strong>的时候才会一层层剥开。看起来像剥洋葱：每修一层，下一层的错误才露出来。</p>
+
+  <ol class="flow">
+    <li class="hit">
+      <b>接入真实端点，跑最小对话</b>
+      <span class="err">AttributeError: 'AgentSettings' object has no attribute 'context_window'</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">LLM 栈连第一个对象都构造不出来。<code>factory.py</code> 访问了一个不存在的字段——实际叫 <code>max_context_tokens</code>。</p>
+    </li>
+    <li class="hit">
+      <b>修完字段名，再跑</b>
+      <span class="err">module 'litellm' has no attribute 'turn_off_verbose_logging'</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">依赖版本升级删掉了这个 API，启动路径直接崩。</p>
+    </li>
+    <li class="hit">
+      <b>修完 API，再跑</b>
+      <span class="err">401 Incorrect API key ... platform.openai.com/account/api-keys</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">请求被打到了 <code>api.openai.com</code>，而不是配置里写的自建端点。根因：<code>_LiteLLMCompatWrapper</code> 构造 litellm 参数时漏传了 <code>api_key</code> 和 <code>api_base</code>。</p>
+    </li>
+    <li class="hit">
+      <b>修完透传，对话通过了</b>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">但工具调用步骤仍然失败：模型明明返回了 <code>tool_calls</code>，框架却当成普通文本。响应解析只取了 <code>role</code> 和 <code>content</code>。<strong>Agent 环路是断的。</strong></p>
+    </li>
+    <li class="fix">
+      <b>修完解析 → 5/5 全通过</b>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">对话 ✅ 工具调用 ✅ 推理内容 ✅</p>
+    </li>
+  </ol>
+
+  <div class="card">
+    <h4>第二个直觉：写"幂等性"测试，而不是"功能"测试</h4>
+    <p>给配置合并模块写测试时，我没有只测"能不能合并"，而是加了一条<strong>重复执行两次结果是否相同</strong>。它立刻失败了。</p>
+    <p style="margin-bottom:0"><code>merge_config</code> 无条件把顶层配置追加到字符串末尾。第一次侥幸正确；第二次起，<code>notify</code>、<code>model_reasoning_effort</code> 就落到了 <code>[agents]</code> 表的下面——在 TOML 里这等于把它们变成了 <code>agents.notify</code>。<strong>用户每启动一次应用，顶层配置就静默丢失一层。</strong></p>
+  </div>
+
+  <p>这条规律贯穿了整轮工作：<em>能暴露问题的不是"这个功能对不对"，而是"重复做会发生什么"、"失败时会不会静默"、"声明的东西真的存在吗"。</em></p>
+</section>
+
+<!-- ══════════ 3 做了什么 ══════════ -->
+<section id="changes">
+  <h2><span class="num">03</span>做了什么：11 个阻塞级缺陷</h2>
+  <p class="sub">全部经真实运行复现。下面按受损链路分组。</p>
+
+  <h3>3.1 LLM 栈——此前 100% 不可用</h3>
+  <table>
+    <tr><th style="width:34%">缺陷</th><th style="width:26%">文件</th><th>后果</th></tr>
+    <tr><td>访问不存在的 <code>settings.context_window</code></td><td class="mono">src/llm/factory.py</td><td>任何 LLM 创建调用都抛 <code>AttributeError</code></td></tr>
+    <tr><td><code>.env</code> 约定与配置模型字段不匹配</td><td class="mono">src/core/config/models.py</td><td>按文档配置的用户拿到 <code>api_key=None</code>、模型退回默认 <code>gpt-4</code></td></tr>
+    <tr><td><code>api_key</code>/<code>api_base</code> 未透传给 litellm</td><td class="mono">src/llm/factory.py</td><td>自建端点 / OpenRouter / NIM 用户必然 401</td></tr>
+    <tr><td>响应解析丢弃 <code>tool_calls</code></td><td class="mono">src/llm/factory.py</td><td>Agent 环路断裂，工具永不触发</td></tr>
+    <tr><td><code>litellm.turn_off_verbose_logging</code> 已被移除</td><td class="mono">src/llm/litellm_singleton/</td><td>启动即 <code>AttributeError</code></td></tr>
+  </table>
+
+  <p><strong>最短的那条修复</strong>是配置映射。文档写着 <code>OPENAI_API_KEY</code>，而配置模型用 <code>field_name.upper()</code> 推导环境变量名，只会去读 <code>LLM_API_KEY</code>。两者之间没有任何桥。修复方式是加一层别名解析：</p>
+
+  <pre><code><span class="c-key">_PROVIDER_ENV_ALIASES</span> = {
+    <span class="c-str">"llm_api_key"</span>: (<span class="c-str">"LLM_API_KEY"</span>, <span class="c-str">"OPENAI_API_KEY"</span>, <span class="c-str">"ANTHROPIC_API_KEY"</span>, ...),
+    <span class="c-str">"llm_model"</span>:   (<span class="c-str">"LLM_MODEL"</span>,   <span class="c-str">"OPENAI_MODEL"</span>,   <span class="c-str">"ANTHROPIC_MODEL"</span>, ...),
+    <span class="c-str">"llm_base_url"</span>: (<span class="c-str">"LLM_BASE_URL"</span>, <span class="c-str">"OPENAI_BASE_URL"</span>, ...),
+}
+
+<span class="c-dim">@model_validator(mode="before")</span>
+<span class="c-key">def</span> _resolve_provider_env_aliases(cls, data):
+    <span class="c-dim"># 只补齐"缺失"的键，不覆盖调用方显式提供的值</span>
+    ...</code></pre>
+
+  <p>关键是<strong>只补缺失、不覆盖</strong>——这样既有部署不会受影响，优先级仍然是「显式传参 &gt; 通用变量 &gt; 提供商专属变量 &gt; 默认值」。</p>
+
+  <h3>3.2 补丁引擎——Agent 每改一次文件就崩</h3>
+  <div class="card crit">
+    <h4><span class="badge crit">P0</span>两个方法从未被定义</h4>
+    <p><code>AtomicPatcher</code> 在 <code>apply_batch</code> 和 <code>apply_changes</code> 里调用了 <code>self.commit()</code> 与 <code>self.rollback()</code>——而这两个方法<strong>根本不存在</strong>。更严重的是，<code>src/agent/engine_loop.py</code> 在每次文件编辑成功之后都会调用 <code>commit()</code>，失败时调用 <code>rollback()</code>。</p>
+    <p style="margin-bottom:0">也就是说：<strong>Agent 每成功修改一次文件，就会抛一次 <code>AttributeError</code>。</strong></p>
+  </div>
+  <p>同类问题还有三处：被静默覆盖且引用未定义变量的重复 <code>apply_changes</code>；被 <code>apply_single_change</code> 引用却从未实现的 <code>_apply_diff_hunks</code>；自愈引擎调用而类上不存在的 <code>apply_patch</code>。</p>
+  <p>补齐后，测试从 <strong>6 个全失败</strong>变为 <strong>16 个全通过</strong>（新增 10 个回归用例覆盖事务语义、unified diff、上下文不匹配拒绝、语法破坏拒绝、多 hunk）。</p>
+
+  <h3>3.3 配置包——主入口崩溃</h3>
+  <pre><code><span class="c-del">- from src.core.config import get_settings</span>
+<span class="c-dim"># ImportError: cannot import name 'get_settings' from 'src.core.config'</span></code></pre>
+  <p><code>src/core/config/__init__.py</code> 只 re-export 了 <code>merger</code> 的内容，<code>AgentSettings</code>、<code>get_settings</code>、<code>load_settings</code> 全部拿不到——而 <code>src/agent/factory.py:70</code> 正是这样导入的。于是 <code>create_agent_engine()</code>（创建 Agent 的主入口）直接 <code>ImportError</code>，且这个异常不在外层 <code>except (KeyError, ValueError)</code> 的捕获范围内。</p>
+  <p>修复后实测：<code>create_agent_engine()</code> 正常返回 <code>AgentEngine</code> 实例。</p>
+
+  <h3>3.4 CLI——<code>clawd setup</code> 静默不做任何事</h3>
+  <table>
+    <tr><th style="width:38%">缺陷</th><th>后果</th></tr>
+    <tr><td>同步调用 <code>async def merge_config</code></td><td>拿到一个从未 await 的协程，配置文件根本没写到磁盘</td></tr>
+    <tr><td><code>app.add_typer(app, name="setup")</code></td><td>形参遮蔽模块级变量，把父应用注册到自身</td></tr>
+    <tr><td>模板路径少算一级目录</td><td>指向 <code>src/templates/</code>，实际在仓库根 <code>templates/</code></td></tr>
+    <tr><td>引用不存在的 <code>ensure_project_dirs</code></td><td>调用即 <code>ImportError</code></td></tr>
+  </table>
+  <p>修完后端到端验证：<code>.clawd/config.toml</code>、<code>AGENTS.md</code>、<code>.clawd/catalog-manifest.json</code> <strong>三个文件都真实生成</strong>（此前一个都没有）。</p>
+
+  <h3>3.5 平台与并发</h3>
+  <div class="card crit">
+    <h4><span class="badge crit">P0</span>Windows 中文环境启动即报编码错误</h4>
+    <pre style="margin:10px 0 0"><code>UnicodeEncodeError: 'gbk' codec can't encode character '⚠'
+  ...\src\utils\logger.py, line 57, in warn
+Message: '⚠️ 定价数据已过期 157 天！...'</code></pre>
+    <p style="margin:10px 0 0">控制台默认 GBK，日志里的 emoji 触发编码错误，logging 把整段堆栈打到 stderr。用户看到的是<strong>满屏乱码加调用栈</strong>，而不是他们真正关心的问题。</p>
+  </div>
+  <p>同时修掉的还有：<code>world_model.py</code> 引用未定义的 <code>indexed_count</code> 导致 <code>RAG_INDEX_UPDATED</code> 事件从未发布（<code>NameError</code> 被 <code>except: pass</code> 吞掉，已改为记录警告）；<code>code_graph._resolve_all_edges</code> 在后台线程添加节点时迭代原字典，抛 <code>RuntimeError: dictionary changed size during iteration</code>，改为快照迭代。</p>
+
+  <h3>3.6 契约与一致性</h3>
+  <ul>
+    <li><code>AgentDefinition</code> 字段从 camelCase（<code>reasoningEffort</code>）改回 snake_case——这是 TypeScript 源码的机械翻译残留，导致 5 个契约测试失败，也违反项目自己的 PEP 8 规则。</li>
+    <li>枚举补全为 <code>AgentModelClass</code> / <code>AgentRoutingRole</code>，与同文件其余 <code>Agent*</code> 命名一致。</li>
+    <li><code>workflow/verifier.py</code> 补全契约声明却从未实现的 <code>TaskSize</code> / <code>EvidenceType</code> / <code>Confidence</code> / <code>as_text()</code>。枚举继承 <code>str</code>，因此 <code>TaskSize.SMALL == "small"</code> 仍然成立，不构成破坏性变更。</li>
+    <li>版本号改为<strong>单一真相源</strong>：<code>pyproject.toml</code> 唯一，<code>src.__version__</code> 自动读取。此前三个文件里同时存在 0.45.0 / 0.46.0 / 0.50.0。</li>
+  </ul>
+
+  <h3>3.7 测试基建</h3>
+  <table>
+    <tr><th style="width:44%">项</th><th>修复前</th><th>修复后</th></tr>
+    <tr><td>测试收集</td><td class="mono">4 errors / 2769 用例</td><td class="mono" style="color:var(--ok)">0 errors / 2857 用例</td></tr>
+    <tr><td>收集耗时</td><td class="mono">306 秒</td><td class="mono" style="color:var(--ok)">126 秒</td></tr>
+    <tr><td><code>tests/conftest.py</code></td><td class="mono">不存在</td><td class="mono" style="color:var(--ok)">已新增</td></tr>
+    <tr><td>自定义 mark 注册</td><td class="mono">大量 UnknownMark 警告</td><td class="mono" style="color:var(--ok)">已注册</td></tr>
+  </table>
+  <p>收集失败的真实原因是 <strong>pytest 的 <code>import file mismatch</code></strong>：<code>tests/</code> 下存在同名文件（<code>test_engine.py</code> ×2、<code>test_types.py</code> ×2），而子目录缺少 <code>__init__.py</code>，pytest 用裸文件名做模块名导致冲突。补齐 14 个 <code>__init__.py</code> 即解决。</p>
+  <div class="card warn">
+    <h4><span class="badge warn">修正</span>我先前的一个推断是错的</h4>
+    <p style="margin-bottom:0">第一版审计文档把这两个收集失败推断为"测试间状态污染 / 收集顺序依赖"。<strong>那个判断是错的</strong>——它其实是确定性的模块名冲突。正确结论来自重新测量，而不是重新推理。</p>
+  </div>
+</section>
+
+<!-- ══════════ 4 验证 ══════════ -->
+<section id="evidence">
+  <h2><span class="num">04</span>验证：真实跑出来的数字</h2>
+  <p class="sub">下面每一条都来自实际执行的命令。<code>scripts/e2e_smoke.py</code> 是新增的真实端点冒烟测试，用项目自身的 LLM 栈而非裸 SDK。</p>
+
+  <h3>真实 E2E（在真实 LLM 端点上）</h3>
+  <pre><code><span class="c-dim">$ python scripts/e2e_smoke.py</span>
+
+  [<span class="c-add">PASS</span>] 0. 读取 .env 配置                    <span class="c-dim">9.35s</span>
+         <span class="c-dim">-&gt; base=https://...xyz/v1 model=step-5-preview key=***fc764d</span>
+  [<span class="c-add">PASS</span>] 1. 应用模块可导入                   <span class="c-dim">45.63s</span>
+         <span class="c-dim">-&gt; src.main 可导入，版本 0.51.0</span>
+  [<span class="c-add">PASS</span>] 2. 项目 LLM 栈真实对话              <span class="c-dim">11.00s</span>
+         <span class="c-dim">-&gt; content='PONG' tokens(prompt=17, completion=16)</span>
+  [<span class="c-add">PASS</span>] 3. 工具调用（function calling）     <span class="c-dim">3.81s</span>
+         <span class="c-dim">-&gt; tool=get_weather args={"city": "Berlin"}</span>
+  [<span class="c-add">PASS</span>] 4. 推理内容解析（reasoning_content）<span class="c-dim">21.94s</span>
+         <span class="c-dim">-&gt; answer='391' reasoning=有</span>
+
+  合计 5 步，通过 <span class="c-add">5</span>，失败 0</code></pre>
+
+  <p>第 3 步尤其关键：模型返回工具调用、且被框架<strong>正确还原成扁平的 <code>ToolCall(id, name, arguments)</code></strong>，说明 Agent 环路真的通了。这也是修复前唯一完全断裂的环节。</p>
+
+  <h3>测试</h3>
+  <table>
+    <tr><th style="width:46%">命令</th><th>修复前</th><th>修复后</th></tr>
+    <tr><td class="mono">pytest tests/self_healing/test_atomic_patcher.py</td><td class="mono" style="color:var(--crit)">6 failed</td><td class="mono" style="color:var(--ok)">16 passed</td></tr>
+    <tr><td class="mono">pytest tests/contracts/test_agent_registry_stability.py</td><td class="mono" style="color:var(--crit)">5 failed</td><td class="mono" style="color:var(--ok)">13 passed</td></tr>
+    <tr><td class="mono">pytest tests/core/test_config_merger.py</td><td class="mono" style="color:var(--crit)">收集失败</td><td class="mono" style="color:var(--ok)">48 passed</td></tr>
+    <tr><td class="mono">pytest tests/workflow/test_verifier.py</td><td class="mono" style="color:var(--crit)">收集失败</td><td class="mono" style="color:var(--ok)">11 passed</td></tr>
+    <tr><td class="mono">pytest tests/brain/test_world_model.py -k RagIndex</td><td class="mono">—</td><td class="mono" style="color:var(--ok)">2 passed</td></tr>
+    <tr><td class="mono">pytest tests/contracts/</td><td class="mono">—</td><td class="mono" style="color:var(--ok)">39 passed</td></tr>
+    <tr><td class="mono">pytest tests/ --collect-only</td><td class="mono" style="color:var(--crit)">4 errors / 306s</td><td class="mono" style="color:var(--ok)">0 errors / 126s</td></tr>
+  </table>
+
+  <h3>Windows 编码验收</h3>
+  <table>
+    <tr><th style="width:56%">检查</th><th>期望</th><th>实际</th></tr>
+    <tr><td class="mono">doctor 2&gt;&amp;1 | grep -c UnicodeEncodeError</td><td class="mono">0</td><td class="mono" style="color:var(--ok)">0</td></tr>
+    <tr><td class="mono">doctor 2&gt;&amp;1 | grep -c 工作目录</td><td class="mono">≥1</td><td class="mono" style="color:var(--ok)">1</td></tr>
+    <tr><td class="mono">doctor &gt; file 2&gt;&amp;1; echo $?</td><td class="mono">0</td><td class="mono" style="color:var(--ok)">0</td></tr>
+    <tr><td class="mono">PYTHONIOENCODING=gbk doctor | grep -c Unicode</td><td class="mono">0</td><td class="mono" style="color:var(--ok)">0</td></tr>
+  </table>
+
+  <h3>静态检查</h3>
+  <p>对本次改动的全部文件运行 <code>ruff check</code>：<strong>零新增违规</strong>。剩余 20 条均在未被本次修改波及的既有代码中。</p>
+</section>
+
+<!-- ══════════ 5 诚实的部分 ══════════ -->
+<section id="honest">
+  <h2><span class="num">05</span>没做的部分</h2>
+  <div class="honest">
+    <h3>这一轮只完成了"止血"，不是全部改造</h3>
+    <p>审计文档里有 8 个波次、200+ 项任务。这轮完成的是<strong>波次 1</strong>（P0 修复）+ 测试基建 + 文档同步 + 提交推送。明确<strong>未做</strong>的部分：</p>
+    <ul>
+      <li><strong>死代码收敛</strong>——213 个不可达模块（46,519 行）仍在。<code>src/notification/</code>、<code>src/notifications/</code>、<code>src/visual/</code>、<code>src/session_history/</code> 已人工确认为真死代码，但删除需要逐个人工复核，属波次 2。</li>
+      <li><strong>覆盖率</strong>——仍是 19.5%，<code>pyproject.toml</code> 里 <code>fail_under = 60</code> 与实际差距未消除。爬升路线在文档 §6.1。</li>
+      <li><strong>结构性重构</strong>——<code>exceptions.py</code> 里 16 个异常类各定义两遍（后者静默覆盖前者）等 <code>F811</code> 问题未处理。</li>
+      <li><strong>性能优化</strong>——收集耗时从 306s 降到 126s 是修 <code>__init__.py</code> 的副产品，不是系统性优化。</li>
+    </ul>
+    <p style="margin-bottom:0"><strong>覆盖率分母的陷阱</strong>：删死代码会让覆盖率<em>百分比</em>上升，但那是分母变小造成的假象。真正的指标是<em>已覆盖语句数</em>（当前 9,399），它只能涨不能跌。</p>
+  </div>
+</section>
+
+<!-- ══════════ 测验 ══════════ -->
+<section id="quiz">
+  <h2><span class="num">06</span>测验</h2>
+  <p class="sub">8 道题，全部答对方可"通过"。答错的题会给出解释——建议先读完上面各节再开始。</p>
+
+  <div class="quiz" id="quizBox">
+
+    <div class="q" data-q="1" data-correct="a">
+      <p><span class="qn">Q1</span>LLM 工厂原本访问 <code>settings.context_window</code>，为什么静态检查（ruff / mypy）没有发现？</p>
+      <label class="opt"><input type="radio" name="q1" value="a">因为 ruff 只检查名称（<code>F821</code>），不检查对象属性是否存在</label>
+      <label class="opt"><input type="radio" name="q1" value="b">因为 <code>context_window</code> 是动态属性，运行时才生成</label>
+      <label class="opt"><input type="radio" name="q1" value="c">因为该文件被排除了 lint 范围</label>
+      <label class="opt"><input type="radio" name="q1" value="d">因为 Python 允许访问不存在的属性</label>
+      <div class="fb" data-right="a"><b>答对了。</b> ruff 的 <code>F821</code> 只检测<em>未定义名称</em>，不检测<em>不存在的属性</em>。而 <code>mypy</code> 在本项目并未启用。这类"属性名漂移"只有真实执行才会暴露——这正是"必须先跑起来"的原因。</div>
+      <div class="fb" data-right="b"><b>不对。</b> <code>context_window</code> 在别处确实是个真实字段（<code>ModelInfo</code> 上有），但 <code>AgentSettings</code> 上从来没有。这不是动态属性问题，而是把两个不同类的字段名记混了。正确选项是 A。</div>
+      <div class="fb" data-right="c"><b>不对。</b> <code>src/llm/factory.py</code> 完全在 ruff 的检查范围内，本次修复后它报告"All checks passed"。问题不在范围，而在于 ruff 的属性检查能力边界。正确选项是 A。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 恰恰相反——Python 访问不存在的属性会<em>抛</em> <code>AttributeError</code>。这正是为什么这段代码一运行就崩。正确选项是 A。</div>
+    </div>
+
+    <div class="q" data-q="2" data-correct="b">
+      <p><span class="qn">Q2</span>文档写着 <code>OPENAI_API_KEY</code>，为什么按文档配置的用户拿不到 key？</p>
+      <label class="opt"><input type="radio" name="q2" value="a">因为 <code>.env</code> 文件没有被加载</label>
+      <label class="opt"><input type="radio" name="q2" value="b">因为 pydantic-settings 按 <code>field_name.upper()</code> 推导变量名，字段叫 <code>llm_api_key</code>，只会去读 <code>LLM_API_KEY</code></label>
+      <label class="opt"><input type="radio" name="q2" value="c">因为 <code>OPENAI_API_KEY</code> 被 .gitignore 忽略了</label>
+      <label class="opt"><input type="radio" name="q2" value="d">因为 key 格式校验失败被拒绝</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>.env</code> 确实被加载了（环境变量里能读到 <code>OPENAI_API_KEY</code>），但配置模型的字段名是通用的 <code>llm_api_key</code>，pydantic-settings 只会按 <code>LLM_API_KEY</code> 去找。两者之间没有任何映射——这就是"文档与实现各说各话"。修复是加一层 <code>_PROVIDER_ENV_ALIASES</code> 别名解析。</div>
+      <div class="fb" data-right="a"><b>不对。</b> <code>.env</code> 加载正常，实测环境变量中 <code>OPENAI_API_KEY</code> 存在（返回 True）。问题出在"环境变量名 → 配置字段名"的映射缺失。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> <code>.gitignore</code> 只影响版本控制，与运行时读取环境变量无关。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 校验根本没被触发到——值是 <code>None</code>，校验器只记录了一条 "未配置 LLM API 密钥" 警告后返回 <code>None</code>。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="3" data-correct="b">
+      <p><span class="qn">Q3</span><code>AtomicPatcher</code> 缺失 <code>commit()</code> / <code>rollback()</code> 为什么是阻塞级而不是普通缺陷？</p>
+      <label class="opt"><input type="radio" name="q3" value="a">因为这两个方法在文档里被承诺过</label>
+      <label class="opt"><input type="radio" name="q3" value="b">因为 <code>src/agent/engine_loop.py</code> 在每次文件编辑成功/失败后都会调用它们——等于每次改文件都崩溃</label>
+      <label class="opt"><input type="radio" name="q3" value="c">因为缺少回滚会导致数据丢失</label>
+      <label class="opt"><input type="radio" name="q3" value="d">因为覆盖率会因此偏低</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 关键不在"方法缺失"，而在"调用点存在"。<code>engine_loop.py</code> 的单工具执行路径上，成功调用 <code>commit()</code>、失败调用 <code>rollback()</code>——所以 Agent 每成功修改一个文件就抛一次 <code>AttributeError</code>。这是"移植了调用方但没移植被调用方"的典型。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 缺方法本身不构成阻塞——死代码里的空方法到处都是。让它成为 P0 的是<em>活的调用路径</em>。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 崩溃发生在写入之后，所以数据其实已经写进去了；真正的问题是流程中断。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 覆盖率是结果不是原因。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="4" data-correct="b">
+      <p><span class="qn">Q4</span><code>merge_config</code> 的什么问题被"幂等性测试"抓了出来？</p>
+      <label class="opt"><input type="radio" name="q4" value="a">它会删除用户手写的自定义配置段</label>
+      <label class="opt"><input type="radio" name="q4" value="b">它把顶层配置追加到字符串末尾，从第二次合并起 OMX 顶层键落到 <code>[agents]</code> 表之下，被 TOML 解析成 <code>agents.notify</code> 等子键</label>
+      <label class="opt"><input type="radio" name="q4" value="c">它会把同一个键写两遍</label>
+      <label class="opt"><input type="radio" name="q4" value="d">它不会创建备份文件</label>
+      <div class="fb" data-right="b"><b>答对了。</b> TOML 的语义是：表头之后出现的裸键值归属于该表。<code>merge_config</code> 无条件把顶层块追加到末尾——第一次侥幸正确（因为顶层区还在最前面），第二次起就沉到 <code>[agents]</code> 之下，<strong>顶层配置静默丢失，且每启动一次深一层</strong>。修复是改为插入到第一个表头之前。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 用户配置段是被保留的（这一点有单独的测试覆盖并通过）。问题是<em>OMX 自己的</em>顶层键跑错了位置。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 键没有重复——它们是被放到了错误的作用域里，语义完全变了。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> <code>merge_config_file</code> 的备份功能正常（有测试覆盖）。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="5" data-correct="b">
+      <p><span class="qn">Q5</span>为什么这轮修复必须用真实 LLM 端点跑 E2E，而不能只靠单元测试？</p>
+      <label class="opt"><input type="radio" name="q5" value="a">因为单元测试覆盖不了 LLM 的随机输出</label>
+      <label class="opt"><input type="radio" name="q5" value="b">因为 LLM 栈的 4 个缺陷是层层叠加的——修掉一层，下一层才暴露出来；任何单层测试都只能看到最外层</label>
+      <label class="opt"><input type="radio" name="q5" value="c">因为真实端点更快</label>
+      <label class="opt"><input type="radio" name="q5" value="d">因为项目里没有 LLM 的单元测试</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 实际顺序是：<code>AttributeError: context_window</code> → <code>litellm.turn_off_verbose_logging</code> → <code>401</code>（打到了官方端点）→ 空 <code>tool_calls</code>。四层缺陷串在一起，只有把一个真实请求完整打进去，剥掉一层才能看见下一层。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 这 4 个缺陷与随机性无关——它们每次都会发生。问题在于<em>叠加</em>，而不是不确定性。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 真实端点反而慢得多（单次调用 4–22 秒）。选它是因为它是唯一能穿透全部四层的路径。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 项目里有 LLM 相关测试，但它们没覆盖到真实的工厂构建路径——否则这些缺陷早就被发现了。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="6" data-correct="b">
+      <p><span class="qn">Q6</span>测试收集错误（4 → 0）的真实原因是什么？</p>
+      <label class="opt"><input type="radio" name="q6" value="a">测试之间的状态污染 / 收集顺序依赖</label>
+      <label class="opt"><input type="radio" name="q6" value="b">pytest 的 <code>import file mismatch</code>：<code>tests/</code> 下有同名文件而子目录缺 <code>__init__.py</code>，裸文件名做模块名导致冲突</label>
+      <label class="opt"><input type="radio" name="q6" value="c">两个测试文件引用了已被删除的类</label>
+      <label class="opt"><input type="radio" name="q6" value="d">Python 版本不兼容</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>test_engine.py</code> ×2、<code>test_types.py</code> ×2 存在于不同子目录，而多数子目录没有 <code>__init__.py</code>，pytest 就用裸文件名当模块名，于是第二个撞上第一个。补齐 14 个 <code>__init__.py</code> 后 0 errors。</div>
+      <div class="fb" data-right="a"><b>不对——这正是我第一版文档里写错的推断。</b> 当时以为是状态污染，但单独运行这两个文件都能正常收集、且报错信息明确写着 <code>imported module 'test_engine' has this __file__ attribute: ...\tests\runtime\test_engine.py</code>。这是确定性的模块名冲突。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 那确实是另外 2 个收集失败的原因（<code>ConfigMerger</code> / <code>TaskSize</code> 已不存在），但它们的报错是 <code>ImportError</code>。本题问的这两个报的是 <code>import file mismatch</code>。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 全程使用同一个 Python 3.10.9。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="7" data-correct="b">
+      <p><span class="qn">Q7</span>修复配置包导出后，为什么又发现了一个 <code>RuntimeError: dictionary changed size during iteration</code>？</p>
+      <label class="opt"><input type="radio" name="q7" value="a">因为 <code>ensure_project_dirs</code> 的实现有 bug</label>
+      <label class="opt"><input type="radio" name="q7" value="b">因为修好主入口后，<code>create_agent_engine()</code> 第一次真正跑到底，触发后台线程构建代码图谱，与主线程的边解析并发修改同一字典</label>
+      <label class="opt"><input type="radio" name="q7" value="c">因为 Python 的字典不支持迭代</label>
+      <label class="opt"><input type="radio" name="q7" value="d">因为缓存没有清理</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 这是"修好一层、暴露下一层"的又一次复现。图谱构建通过 <code>asyncio.to_thread</code> 在后台线程添加节点，而 <code>_resolve_all_edges</code> 在主线程迭代 <code>self.nodes.values()</code>。修复是快照迭代——代价是新节点本轮不参与边解析，下一轮增量构建补上，而崩溃是不可接受的。</div>
+      <div class="fb" data-right="a"><b>不对。</b> <code>ensure_project_dirs</code> 只做委托调用，是正常的。崩溃点在 <code>src/rag/code_graph.py</code>。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 字典完全支持迭代——只是不允许在迭代期间改变大小。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 与缓存无关。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="8" data-correct="b">
+      <p><span class="qn">Q8</span>删除 46,519 行死代码后，覆盖率百分比上升了——为什么这不能算作进展？</p>
+      <label class="opt"><input type="radio" name="q8" value="a">因为删掉的是本来就无关紧要的代码</label>
+      <label class="opt"><input type="radio" name="q8" value="b">因为覆盖率是「已覆盖 / 总语句」，删掉未覆盖代码只是缩小分母，掩盖了"真正被测的代码有多少"</label>
+      <label class="opt"><input type="radio" name="q8" value="c">因为删除代码会让 CI 失败</label>
+      <label class="opt"><input type="radio" name="q8" value="d">因为覆盖率工具算错了</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 所以真正的指标是<strong>已覆盖语句数</strong>（当前 9,399），它只能涨不能跌。两个数字一起看，才能防止"删代码刷百分比"。这是本轮把这条写进审计文档 §15.2 的原因。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 死代码里有大量真实功能（完整的通知系统、补丁引擎、可视化判决），并非无关紧要——它们只是没接线。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 删除让 CI 反而更可能通过（分母小了）。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 覆盖率计算是正确的，问题在于这个<em>比值</em>可以被分母操纵。正确选项是 B。</div>
+    </div>
+
+    <div class="scorebar"><i id="bar"></i></div>
+    <p style="font-size:.82rem;color:var(--ink-faint);margin:6px 0 0">已作答 <span id="answered">0</span> / 8 · 正确 <span id="correct">0</span></p>
+
+    <div class="verdict" id="verdict"></div>
+    <button class="act" id="checkBtn">提交答案</button>
+    <button class="act ghost" id="resetBtn" style="margin-left:10px">重做</button>
+  </div>
+</section>
+
+<hr>
+<p style="font-size:.82rem;color:var(--ink-faint);text-align:center;margin:0">
+  Clawd Code v0.51.0 变更报告 · 生成于 2026-10-16 ·
+  提交 <span class="tag">1c69c8f</span> <span class="tag">539ef8d</span>
+</p>
+
+</div>
+
+<script>
+(function(){
+  const quiz = document.getElementById('quizBox');
+  const qs = [...quiz.querySelectorAll('.q')];
+  const bar = document.getElementById('bar');
+  const answeredEl = document.getElementById('answered');
+  const correctEl = document.getElementById('correct');
+  const verdict = document.getElementById('verdict');
+  const checkBtn = document.getElementById('checkBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  // 正确答案由每个 .q 上的 data-correct 显式声明。
+  // 不采用"首个反馈块即正解"这类结构约定 —— 那会在重排 DOM 时静默算错分。
+  const RIGHT = {};
+  qs.forEach(q => { RIGHT[q.dataset.q] = q.dataset.correct; });
+
+  let locked = false;
+
+  function refresh(){
+    let answered = 0, correct = 0;
+    qs.forEach(q => {
+      const sel = q.querySelector('input:checked');
+      if (sel){
+        answered++;
+        if (sel.value === RIGHT[q.dataset.q]) correct++;
+      }
+    });
+    answeredEl.textContent = answered;
+    correctEl.textContent = correct;
+    bar.style.width = (correct / qs.length * 100) + '%';
+    return {answered, correct};
+  }
+
+  quiz.addEventListener('change', () => { if (!locked) refresh(); });
+
+  checkBtn.addEventListener('click', () => {
+    const {answered, correct} = refresh();
+    if (answered < qs.length){
+      verdict.className = 'verdict show fail';
+      verdict.innerHTML = '还有 ' + (qs.length - answered) + ' 题未作答' +
+        '<small>全部作答后才能提交。</small>';
+      return;
+    }
+    locked = true;
+
+    qs.forEach(q => {
+      const picked = q.querySelector('input:checked');
+      const opts = [...q.querySelectorAll('.opt')];
+      const rid = RIGHT[q.dataset.q];
+      opts.forEach(o => {
+        const inp = o.querySelector('input');
+        inp.disabled = true;
+        o.classList.add('locked');
+        if (inp.value === rid) o.classList.add('right');
+        else if (inp.checked) o.classList.add('wrong');
+      });
+      q.querySelectorAll('.fb').forEach(f => {
+        f.classList.remove('show');
+        if (f.dataset.right === rid) f.classList.add('show');
+      });
+    });
+
+    const pass = correct >= Math.ceil(qs.length * 0.875);   // 8 题至少 7 对
+    verdict.className = 'verdict show ' + (pass ? 'pass' : 'fail');
+    if (pass){
+      verdict.innerHTML = '✓ 通过 — ' + correct + ' / ' + qs.length +
+        '<small>对本次变更的理解达到要求。上面已标出每题的正解与解释。</small>';
+    } else {
+      verdict.innerHTML = '✗ 未通过 — ' + correct + ' / ' + qs.length +
+        '<small>需要至少 ' + Math.ceil(qs.length * 0.875) + ' 题正确。请阅读上方标红的解释，然后点"重做"。</small>';
+    }
+    bar.style.background = pass ? 'var(--ok)' : 'var(--crit)';
+    checkBtn.textContent = pass ? '已通过' : '重新提交';
+    if (!pass) locked = false;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    locked = false;
+    qs.forEach(q => {
+      q.querySelectorAll('input').forEach(i => { i.checked = false; i.disabled = false; });
+      q.querySelectorAll('.opt').forEach(o => o.classList.remove('right','wrong','locked'));
+      q.querySelectorAll('.fb').forEach(f => f.classList.remove('show'));
+    });
+    bar.style.width = '0';
+    bar.style.background = 'var(--accent)';
+    verdict.className = 'verdict';
+    checkBtn.textContent = '提交答案';
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>

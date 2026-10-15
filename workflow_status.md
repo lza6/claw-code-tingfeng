@@ -32,9 +32,14 @@
 | A-07 | 配置合并 | `pytest tests/core/test_config_merger.py` | 全绿 | 48 passed | ✅ |
 | A-08 | RAG 事件 | `pytest tests/brain/test_world_model.py -k RagIndex` | 全绿 | 2 passed | ✅ |
 | A-09 | verifier 契约 | `pytest tests/workflow/test_verifier.py` | 全绿 | 11 passed | ✅ |
-| A-10 | Windows 编码 | `python -m src.main doctor` | 无 UnicodeEncodeError | 0 次 | ✅ |
+| A-10 | Windows 编码 | `python -m src.main doctor` | 无 UnicodeEncodeError | 0 次（含强制 GBK） | ✅ |
 | A-11 | 版本一致性 | 4 处比对 | 完全一致 | 均 0.51.0 | ✅ |
-| A-12 | pytest 收集 | `pytest tests/ --collect-only` | 0 errors | 见 §4 | 待复验 |
+| A-12 | pytest 收集 | `pytest tests/ --collect-only` | 0 errors | 2857 collected, 0 errors, 126s | ✅ |
+| A-13 | Agent 主入口 | `create_agent_engine()` | 返回引擎实例 | `AgentEngine` | ✅ |
+| A-14 | `clawd setup` 端到端 | 在空目录运行 | 生成 3 个文件 | config.toml + AGENTS.md + catalog-manifest.json | ✅ |
+| A-15 | 改动文件静态检查 | `ruff check <changed files>` | 零新增违规 | 0 新增 | ✅ |
+| A-16 | HTML 报告测验交互 | Playwright + Chromium | 全场景正确 | 7/7 场景通过 | ✅ |
+| A-17 | 全量测试回归 | `pytest tests/` | 记录通过率 | 见 §5（进行中） | ⏳ |
 
 ---
 
