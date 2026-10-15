@@ -1,5 +1,23 @@
 # Clawd Code — AI Programming Agent Framework
 
+> ## ⚠️ 改动本项目之前，先读这三处
+>
+> 1. **`workflow_status.md`** — 上一轮改了什么、验证到哪一步、什么还没做
+> 2. **`skills/clawd-change-workflow/SKILL.md`** — 本项目的变更流程、已知陷阱、
+>    验收标准。**任何新增功能 / 修 bug / 进入陌生区域前必须加载**
+> 3. **`计划书/`** 下最新文档 — 当前计划与缺陷台账
+>
+> **然后做文档保鲜检查**：这些文档会过时。对读到的每条具体断言
+> （"X 尚未实现"、"文件在 Y"、"覆盖率约 N%"），用真实代码验证后再动手。
+> 判定规则与实例见上述 skill 的 Phase 1。
+>
+> **最短验证路径**（改动涉及 LLM / 工具 / 配置时）：
+> ```bash
+> python scripts/e2e_smoke.py          # 真实端点 E2E，退出码 0 才算通过
+> pytest tests/contracts/ -q           # 公共 API 契约
+> pytest tests/ --collect-only -q      # 期望 0 errors
+> ```
+
 ## Project Overview
 
 Clawd Code is a comprehensive AI-powered coding agent framework written in Python. It provides multi-agent collaboration, self-healing, codebase awareness (World Model), enterprise-grade RAG, and a full workflow engine.
@@ -56,7 +74,9 @@ Clawd Code is a comprehensive AI-powered coding agent framework written in Pytho
 
 - **Language:** Python 3.10+
 - **Package Manager:** pip / pyproject.toml
-- **Testing:** pytest (1414 test cases, ~50% coverage, target 60%)
+- **Testing:** pytest（2,857 收集用例；实测覆盖率 **19.5%**，目标 60% —— 见 `pyproject.toml` 的 `fail_under`）
+  > 注：覆盖率数字请以 `pytest --cov=src` 的实际输出为准。历史上此处长期
+  > 虚报为 "1414 用例 / ~50%"，与实测相差 2.5 倍。指标不要写死在文档里。
 - **Linting:** ruff
 - **Type Checking:** mypy (optional)
 - **Containerization:** Docker + docker-compose
@@ -164,6 +184,7 @@ python -m src.main workflow                # Workflow engine
 
 Skills are located in `skills/<name>/SKILL.md`. Each skill follows a consistent anatomy:
 
+**Project-specific（本仓库专用）:** **clawd-change-workflow** — 本项目的变更流程、文档保鲜检查、已知陷阱、验收标准。**进入本项目前必读。**
 **Define:** idea-refine, spec-driven-development
 **Meta:** using-agent-skills
 **Plan:** planning-and-task-breakdown

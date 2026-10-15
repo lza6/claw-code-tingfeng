@@ -1,17 +1,16 @@
 """LLM Factory 模块单元测试"""
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from src.llm.factory import (
     LlmProviderNames,
-    _build_provider_extra_headers,
     _build_model_kwargs,
-    _is_vision_model,
-    _is_reasoning_model,
+    _build_provider_extra_headers,
     _detect_provider_from_model,
-    get_llm,
-    get_default_llm,
-    get_vision_llm,
+    _is_reasoning_model,
+    _is_vision_model,
     _LiteLLMCompatWrapper,
+    get_llm,
 )
 from src.llm.interfaces import LLMConfig
 
