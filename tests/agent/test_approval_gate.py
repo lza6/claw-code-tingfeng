@@ -251,3 +251,43 @@ class TestConfigWiring:
         text = (Path.cwd() / ".env.example").read_text(encoding="utf-8")
         assert "APPROVAL_MODE" in text
         assert "plan" in text
+
+
+class TestSilentFalseSecurityIsDisclosed:
+    """DEFAULT / AUTO_EDIT 声明了审批语义，但本版本无法实施。
+
+    不说明的后果是**静默的虚假安全感** —— 用户读到
+    "DEFAULT: 编辑文件或执行 shell 需要审批" 会以为有保护。
+    这比明说"不支持"更危险。构造时必须一次性告警。
+    """
+
+    @pytest.mark.parametrize("mode", [ApprovalMode.DEFAULT, ApprovalMode.AUTO_EDIT])
+    def test_warns_when_mode_cannot_be_enforced(self, caplog, mode):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="agent.tool_manager"):
+            ToolManager({}, approval_mode=mode)
+
+        joined = " ".join(r.getMessage() for r in caplog.records)
+        assert "未实现交互式审批" in joined
+        assert mode.value in joined
+
+    def test_plan_mode_does_not_warn_about_unenforceable(self, caplog):
+        """PLAN 是被真正实施的，不该有这条告警"""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="agent.tool_manager"):
+            ToolManager({}, approval_mode=ApprovalMode.PLAN)
+
+        joined = " ".join(r.getMessage() for r in caplog.records)
+        assert "未实现交互式审批" not in joined
+
+    def test_yolo_does_not_warn(self, caplog):
+        """YOLO 的语义（全部自动批准）恰好就是当前实际行为，无需告警"""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="agent.tool_manager"):
+            ToolManager({}, approval_mode=ApprovalMode.YOLO)
+
+        joined = " ".join(r.getMessage() for r in caplog.records)
+        assert "未实现交互式审批" not in joined

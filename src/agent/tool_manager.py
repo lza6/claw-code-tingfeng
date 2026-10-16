@@ -43,6 +43,26 @@ class ToolManager:
         self.tools = tools
         self._heuristic_parser = HeuristicToolParser()
         self.approval_mode = approval_mode if approval_mode is not None else self._load_approval_mode()
+        self._warn_if_approval_unenforceable()
+
+    def _warn_if_approval_unenforceable(self) -> None:
+        """当配置声明的审批语义**无法被实施**时，一次性说明清楚。
+
+        `DEFAULT` / `AUTO_EDIT` 在 `ApprovalMode` 里声明了不同的审批语义，
+        但本版本**没有交互式审批设施**，它们之间实际上没有差别。
+
+        不说明的后果：用户读到 "DEFAULT: 编辑文件或执行 shell 需要审批"，
+        会以为有保护 —— 这是**静默的虚假安全感**，比明说不支持更危险。
+
+        只在构造时告警一次，避免每个工具调用都刷屏。
+        """
+        if self.approval_mode in (ApprovalMode.DEFAULT, ApprovalMode.AUTO_EDIT):
+            logger.warning(
+                "approval_mode=%s 声明%s，但本版本未实现交互式审批，"
+                "写/执行类工具**不会被拦截**。如需强制只读，请设为 plan。",
+                self.approval_mode.value,
+                "需要审批" if self.approval_mode == ApprovalMode.DEFAULT else "自动批准文件编辑",
+            )
 
     @staticmethod
     def _load_approval_mode() -> ApprovalMode:
@@ -56,7 +76,7 @@ class ToolManager:
 
             raw = AgentSettings().approval_mode
             return raw if isinstance(raw, ApprovalMode) else ApprovalMode(str(raw))
-        except Exception as e:  # noqa: BLE001 - 配置不可用时必须安全降级
+        except Exception as e:
             logger.warning(f"读取 approval_mode 失败，按 DEFAULT 处理: {e}")
             return ApprovalMode.DEFAULT
 

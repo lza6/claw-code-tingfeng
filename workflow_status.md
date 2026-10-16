@@ -3,11 +3,58 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.53.0**（本轮 +6 提交）
+> 当前版本：**v0.54.0**
 
 ---
 
-## 0. 本轮（v0.52.0 → v0.53.0）完成项
+## 0-A. 本轮（v0.53.0 → v0.54.0）完成项
+
+| ID | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| C-01 | **PLAN 模式门禁真正生效**（此前是装饰性控制） | ✅ | `tests/agent/test_approval_gate.py` 32 passed |
+| C-02 | **world_model 首次运行指纹永不保存**（真实 Bug） | ✅ | `tests/brain` 27 passed（原 3 失败全转通过） |
+| C-03 | world_model 调用不存在的 `get_imported_by` | ✅ | 两种图类型实测均通过 |
+| C-04 | 并发压测脚本 + 4 处真实并发风险验证 | ✅ | `scripts/stress_test.py` 200 并发 5/5 |
+| C-05 | 工具线程池规模可配置 | ✅ | `tests/agent/test_executor_config.py` 17 passed |
+| C-06 | 删除 4 组已核实的重复实现 | ✅ | ~2,556 行；**生产可达数 429 未变** |
+| C-07 | 死代码复核清单工具 | ✅ | `scripts/deadcode_inventory.py` |
+
+### 关键验证信号：删除前后「生产可达模块数」不变
+
+```
+删除前: 684 模块 / 429 生产可达 / 181 连测试都到不了
+删除后: 666 模块 / 429 生产可达 / 163 连测试都到不了
+                ^^^ 未变 = 删掉的确实都是不可达模块
+```
+
+### 一个被自己证伪的判据（教训）
+
+我写过"近名存活模块存在 → 判为可删的重复品"的启发式，实测**误报严重**：
+
+```
+hook_registry.async_executor  "对照" hook_registry
+    —— 后者是同一个包，前者是它的子模块
+workflow.worktree_isolation   "对照" cli.commands.workflow_commands
+    —— 仅仅因为名字里都含 "workflow"
+```
+
+**名称相似 ≠ 语义重复。自动化判据不能授权删除源码。**
+已将工具改为"只出复核清单、不判可删"。剩余 **163 个生产不加载模块
+（31,188 行）保持原样**，等人工按源码逐条复核。
+
+### 仍未闭合（诚实披露）
+
+| 项 | 状态 | 说明 |
+|:---|:---|:---|
+| `ApprovalMode` 的 DEFAULT/AUTO_EDIT/YOLO | ⚠️ 未拦截 | 仓库无交互式审批设施，属**新功能**非缺陷 |
+| `HeuristicToolParser` 对闭合标签失效 | ⚠️ 未修 | 主路径正常，不阻塞 |
+| `CircuitBreaker` 半开态限流 | ⚠️ 未修 | 已锁 xfail |
+| 剩余 163 个死模块 | ⚠️ 未删 | 需人工逐条复核，已出清单 |
+| 覆盖率 | ⚠️ ~20% | 本轮补了 49 个用例 |
+
+---
+
+## 0-B. 上一轮（v0.52.0 → v0.53.0）完成项
 
 | ID | 事项 | 状态 | 证据 |
 |:---|:---|:---|:---|
@@ -15,7 +62,7 @@
 | B-02 | `<think>` 标签崩溃修复 | ✅ | `tests/llm/test_providers_openai.py` 16 passed |
 | B-03 | **BashTool 在 Agent 环路 100% 失败** | ✅ | `tests/tools_runtime/test_bash_execution_paths.py` 11 passed |
 | B-04 | **`.env` 可被 Agent 读取（API Key 外泄）** | ✅ | `tests/test_security/test_sensitive_path_guard.py` 33 passed |
-| B-05 | 传递可达性分析工具 | ✅ | `scripts/reachability.py`：684 模块 / 429 生产可达 |
+| B-05 | 传递可达性分析工具 | ✅ | `scripts/reachability.py` |
 | B-06 | 删除 3 个真死包 | ✅ | 3,774 行 |
 | B-07 | 删除 3 个被同名包遮蔽的死文件 | ✅ | 384 行 |
 | B-08 | 熔断器补测试（原 0% 覆盖） | ✅ | 26 passed, 1 xfailed |

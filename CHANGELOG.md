@@ -9,6 +9,105 @@
 
 ## [未发布]
 
+### v0.54.0 (2026-10-17) — 门禁落地、并发压测、真死代码收敛
+
+#### 🔴 安全：PLAN 模式首次真正生效
+
+`ApprovalMode` 此前只在配置层被读写，**没有任何运行时消费者**。
+用户按文档把 `approval_mode` 设为 `plan`（"仅分析，不修改文件"），
+Agent **照样写盘** —— 一个"装饰性控制"。
+
+现在在 `ToolManager.execute_tool` / `execute_tools_parallel`（生产工具执行的
+唯一咽喉点）按类别拦截：read 放行，write / exec 拒绝。
+
+- 只实施 PLAN；DEFAULT / AUTO_EDIT / YOLO 不拦截 —— 因为**仓库里没有任何
+  交互式审批设施**，DEFAULT 语义中的"需要审批"无法落地，强行拦截会让
+  开箱即用的默认配置直接不可用。`.env.example` 已如实说明这一边界。
+- 一个集成陷阱：初版抛 `SecurityError`，但 `engine_loop._execute_single_tool`
+  只捕获 `ToolExecutionError`（二者是**兄弟类**）→ 异常穿透触发自愈引擎去
+  "修复"一个策略拒绝。改为新增 `ToolApprovalDeniedError` + 错误码 `E2009`，
+  使拒绝变成**模型可见的 ToolResult**。
+- 配置读取失败时退回 `DEFAULT` 而非 `YOLO` —— "读不到配置就放开全部管控"
+  是最危险的降级方向。
+
+#### 🔴 修复：world_model 的 4 个缺陷
+
+- **首次运行时指纹永不保存**（真实 Bug，静默降级）
+  `import json` 位于 `if fp_path.exists():` 内，Python 因此把 `json` 视为
+  **整个函数的局部变量** → 指纹文件不存在时抛 `UnboundLocalError`，被
+  `except` 吞成 warning。后果：**增量索引每次退化为全量重建**，
+  该模块的核心卖点长期失效。
+- `predict_relevant_files` 无条件调用 `get_imported_by()`，但只有
+  `CodeGraph` 有该方法；默认的 `DependencyGraph`（兼容层）只有
+  `get_upstream` → 图谱构建失败退回兼容层时抛 AttributeError。
+  改用两者都提供的 `impact_analysis()`，按各自返回结构读取。
+- `isinstance(x, CodeGraph)` 在测试把 `CodeGraph` 替换成 MagicMock 时抛
+  TypeError，使并行构建路径无法被 mock 覆盖。
+- `import asyncio` 在方法内 —— stdlib 导入本就有缓存，局部化无收益却
+  破坏 `patch("...world_model.asyncio.to_thread")`。
+
+#### 🗑️ 真死代码收敛（净删 ~2,600 行）
+
+本轮删除的都是**经人工核对确认同一 TS 源文件**的重复移植：
+
+| 删除 | 行数 | 存活侧（生产可达） |
+|:---|:---|:---|
+| `src/pipeline/` | 248 | `src/workflow/pipeline.py` |
+| `src/team/` | 1,065 | `src/workflow/team/` |
+| `src/subagents/` | 230 | `src/agent/swarm/subagent_tracker.py` |
+| `src/screens/hud/` | 1,013 | `src/cli/hud*.py` |
+
+**安全验证**：删除前后「生产入口可达模块数」均为 **429**（未变），
+证明删掉的确实都是不可达模块。模块总数 684 → 666。
+
+#### ⚠️ 一个被证伪的自动化判据（重要）
+
+我写过一个"近名存活模块存在 → 判为已取代的重复品"的启发式。实测**误报严重**：
+
+```
+src.core.hook_registry.async_executor  "对照" src.core.hook_registry
+    —— 后者是同一个包，前者是它的子模块，不是重复品
+src.workflow.worktree_isolation        "对照" src.cli.commands.workflow_commands
+    —— 仅仅因为名字里都含 "workflow"
+```
+
+**名称相似 ≠ 语义重复。基于名称的启发式不足以授权删除源码。**
+因此 `scripts/deadcode_inventory.py` 改为**只出复核清单、不判"可删"**。
+剩余 163 个生产不加载模块（31,188 行）保持原样，等人工按源码逐条复核。
+
+#### 🧪 新增：并发压测与深度自检
+
+`scripts/stress_test.py` 针对三处**真实存在并发风险**的基础设施施压。
+实测 200 并发、5/5 通过：
+
+```
+工具执行 200 并发      200 全部成功且结果无错配
+线程池未耗尽           5 轮 × 50 并发，每轮全成功
+审批门禁并发混合       拒绝=100 只读放行=100 YOLO放行=100 误拒=0
+熔断器 200 并发计数    计数无丢失，正确进入 OPEN
+熔断器并发渠道隔离     熔断 200 次 / 健康 200 次判定全部正确
+```
+
+**压测暴露的性能瓶颈**：工具线程池硬编码 10 → 200 个并发 bash 被压成
+20 波，吞吐仅 11 req/s。改为可用 `CLAWD_TOOL_EXECUTOR_MAX_WORKERS` 配置：
+
+```
+池=10 -> 200 并发 19.05s (11 req/s)
+池=64 -> 200 并发 12.40s (16 req/s)   延迟降 35%
+```
+
+诚实说明：**收益有限** —— 真正的瓶颈是 Windows 进程创建开销而非线程数。
+非法配置值（0 / 负数 / 非数字）一律回退默认，因为 `max_workers=0` 会让
+**全部**工具执行失败。
+
+#### 📚 新增测试
+
+- `tests/agent/test_approval_gate.py`（32 例）
+- `tests/agent/test_executor_config.py`（17 例）
+- `tests/brain/test_world_model_complex.py` 重写 2 例（原断言已废弃 API）
+
+---
+
 ### v0.53.0 (2026-10-16) — 盲点扫描与生产路径加固
 
 本轮由**多智能体并行审计**驱动：死代码可达性、测试失败归因、
