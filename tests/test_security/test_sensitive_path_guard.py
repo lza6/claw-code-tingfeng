@@ -24,11 +24,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from src.agent.tool_executor import execute_tool
 from src.tools_runtime.file_read_tool import FileReadTool
 from src.tools_runtime.path_utils import is_sensitive_path, resolve_path
-
 
 # ---------------------------------------------------------------------------
 # 单元层：is_sensitive_path
@@ -122,7 +120,7 @@ class TestViaToolExecutor:
         """即使以其它方式绕过，输出里也不得出现密钥模式"""
         try:
             result = await execute_tool(tools, "FileReadTool", {"file_path": ".env"})
-        except Exception:  # noqa: BLE001 - 拒绝是预期结果
+        except Exception:
             return
         assert "sk-" not in (result.output or ""), "API Key 出现在工具输出中"
         assert "API_KEY" not in (result.output or "")
