@@ -9,6 +9,85 @@
 
 ## [未发布]
 
+### v0.53.0 (2026-10-16) — 盲点扫描与生产路径加固
+
+本轮由**多智能体并行审计**驱动：死代码可达性、测试失败归因、
+安全盲点扫描三个方向独立进行，每条发现均由主线程亲自复现后才修复。
+
+#### 🔴 安全（生产环境真实风险）
+
+- **Agent 可读取 `.env`，API Key 明文进入 LLM 上下文**
+  `src/utils/path_security.py` 早已实现 `is_sensitive_file` 与
+  `FORBIDDEN_DIRS`，但**从未被任何工具接线**。实测
+  `execute_tool(tools, 'FileReadTool', {'file_path': '.env'})` → `success=True`，
+  输出含 `OPENAI_API_KEY=sk-***REDACTED***`，该内容随后被
+  `engine_loop` 原样拼进消息发给远端模型。
+  在 `path_utils.resolve_path()`（四个文件工具的唯一统一入口）接入判定，
+  一处改全部生效。`.env.example` 等模板显式豁免。
+  同时从 `TEXT_EXTENSIONS` 移除 `.env`。
+
+#### 🔴 阻塞级（生产路径不可用）
+
+- **BashTool 在 Agent 环路中 100% 失败 —— shell 能力实际不可用**
+  `BashTool.execute()` 裸调 `asyncio.get_event_loop()`，而生产路径把工具
+  丢进 `ThreadPoolExecutor` 工作线程执行（`tool_executor.py:170`）。工作
+  线程没有事件循环，Python 3.10 抛
+  `RuntimeError: There is no current event loop in thread ...`，
+  被吞成"执行失败"。**跑测试、git、构建、任何命令全部不可用。**
+  既有测试都在主线程直调（有自动循环），所以永远绿。
+  修复覆盖三种上下文：无循环线程用 `asyncio.run`、主线程用
+  `run_until_complete`、嵌套循环明确提示改用 `async_execute`。
+
+- **`<think>` 标签提取必崩**（`src/llm/providers/openai.py:128`）
+  写成 `content.split('', 1)` —— 分隔符是空字符串，任何含 `<think>` 的
+  响应都抛 `ValueError: empty separator`，被重试吞掉 5 次后整次调用失败。
+  改用 `ThinkTagParser.CLOSE_TAG` 常量。
+  **这是生产 LLM 路径上的缺陷**，与 v0.51.0 修的 `factory.py` 不是同一条路径。
+
+#### 🔍 架构澄清（修正 v0.51.0 的认知）
+
+传递可达性分析确认生产创建 LLM 的路径是
+`src/agent/engine.py:203 → create_llm_provider() → providers/*`，
+而 v0.51.0 修的 `src/llm/factory.py::get_default_llm()` **从生产入口不可达**。
+那批修复有效但保护错了路径，本轮补齐对真实生产路径的修复与测试。
+
+#### 🗑️ 删除真死代码（4,158 行）
+
+- `src/notifications/`（8 文件）、`src/visual/`、`src/session_history/`
+- **被同名包遮蔽的 3 个死文件**：Python 中包优先于同名模块，实测确认
+  `src/core/events.py`(343行)、`src/core/git/worktree.py`(9行)、
+  `src/llm/model_info.py`(32行) **永不执行**。
+  其中 `events.py` 与包里的 `events/core.py` 是两套事件总线实现 ——
+  改错文件会"改了没效果"，正是本项目反复出现的缺陷模式。
+
+> 修正：v0.51.0 曾称 `src/notification/` 也是死代码，**该判断有误** ——
+> 它被两个测试文件引用，有测试覆盖。
+
+#### 🛠️ 新增工具与测试
+
+- `scripts/reachability.py` —— 从入口做 BFS 传递可达性分析。
+  修掉一个关键 bug：相对导入的基准包对 `__init__.py` 多减一层，
+  导致整棵 `src.llm.*` 被误判不可达。自检：684 模块 / 429 生产可达。
+- `scripts/find_untested_live_code.py` —— 找出"生产在跑但零测试覆盖"的模块。
+- `scripts/e2e_production.py` —— **生产路径** E2E（8 步全通过）。
+- `tests/llm/test_providers_openai.py`（16 例）
+- `tests/llm/test_circuit_breaker.py`（26 例，熔断器此前 0% 覆盖）
+- `tests/tools_runtime/test_bash_execution_paths.py`（11 例）
+- `tests/test_security/test_sensitive_path_guard.py`（33 例）
+
+#### ⚠️ 已记录但未修的缺陷
+
+- **`ApprovalMode` 无运行时消费者**：用户把 `approval_mode` 设为 `plan`
+  （文档称"仅分析，不修改文件"）时，Agent 仍会写盘。属"装饰性控制"，
+  需单独设计门禁接入点。
+- `HeuristicToolParser` 只在"参数值后紧跟非 `<` 裸文本"时输出，
+  带 `</function>` 闭合标签的形态识别不了。主路径 `parse_tool_calls`
+  （系统提示词实际指示的 `<tool>{json}</tool>`）正常，不阻塞主流程。
+- `CircuitBreaker` 半开态的 `half_open_max_requests` 形同虚设
+  （`_half_open_requests` 只在 `record_success` 中递增）。已锁定为 xfail。
+
+---
+
 ### v0.52.0 (2026-10-16) — 波次 2/3：真死代码收敛 + 生产路径审计
 
 #### 🔴 修复（生产路径）

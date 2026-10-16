@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawd Code v0.53.0 — 盲点扫描与生产路径加固</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c2230;
+    --ink:#e6edf3; --ink-dim:#9198a1; --ink-faint:#6e7681;
+    --line:#2a313c; --line-soft:#21262d;
+    --crit:#f85149; --warn:#d29922; --ok:#3fb950; --info:#58a6ff;
+    --accent:#7c5cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC","Source Han Serif SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif;
+    --r:10px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#fbfaf8; --panel:#ffffff; --panel-2:#f4f2ee;
+      --ink:#1a1d21; --ink-dim:#5b6169; --ink-faint:#8b9199;
+      --line:#e2ded6; --line-soft:#ece8e1;
+      --crit:#c0392b; --warn:#9a6b00; --ok:#1f7a34; --info:#0b5fbf;
+      --accent:#5b3fd6;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:16px;line-height:1.68;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px 120px}
+
+  header{padding:72px 0 40px;border-bottom:1px solid var(--line);
+    margin-bottom:56px;position:relative}
+  header::before{content:"";position:absolute;left:0;top:64px;width:56px;height:3px;
+    background:var(--accent);border-radius:2px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:20px;font-weight:600}
+  h1{font-family:var(--serif);font-size:clamp(2.7rem,6.4vw,4.3rem);line-height:1.04;
+    margin:0 0 20px;font-weight:600;letter-spacing:-.02em}
+  h1 .v{color:var(--ink-faint);font-weight:400}
+  .lede{font-size:1.17rem;color:var(--ink-dim);max-width:62ch;margin:0;font-family:var(--serif)}
+
+  section{margin:0 0 72px;scroll-margin-top:24px}
+  h2{font-family:var(--serif);font-size:1.95rem;margin:0 0 8px;font-weight:600;letter-spacing:-.01em}
+  h2 .num{font-family:var(--mono);font-size:.72rem;color:var(--accent);
+    display:block;letter-spacing:.12em;margin-bottom:10px;font-weight:600}
+  h3{font-size:1.1rem;margin:36px 0 10px;font-weight:650}
+  h4{font-size:.95rem;margin:22px 0 8px;font-weight:650;color:var(--ink-dim)}
+  p{margin:0 0 16px}
+  .sub{color:var(--ink-dim);margin-bottom:28px;max-width:66ch}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    border-radius:var(--r);overflow:hidden;margin:32px 0}
+  .stat{background:var(--panel);padding:20px 18px}
+  .stat b{display:block;font-family:var(--mono);font-size:1.8rem;line-height:1.1;
+    font-weight:600;letter-spacing:-.02em}
+  .stat span{font-size:.78rem;color:var(--ink-faint);display:block;margin-top:6px}
+  .stat.good b{color:var(--ok)} .stat.bad b{color:var(--crit)} .stat.warn b{color:var(--warn)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:22px 24px;margin:18px 0}
+  .card.crit{border-left:3px solid var(--crit)}
+  .card.ok{border-left:3px solid var(--ok)}
+  .card.warn{border-left:3px solid var(--warn)}
+  .card h4{margin-top:0;color:var(--ink);font-size:1rem}
+  .card p:last-child{margin-bottom:0}
+
+  .badge{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:4px;letter-spacing:.06em;vertical-align:2px;margin-right:8px}
+  .badge.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .badge.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .badge.info{background:rgba(88,166,255,.16);color:var(--info)}
+
+  code{font-family:var(--mono);font-size:.855em;background:var(--panel-2);
+    padding:2px 6px;border-radius:4px;color:var(--ink);border:1px solid var(--line-soft)}
+  pre{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:.82rem;line-height:1.62}
+  pre code{background:none;padding:0;border:none;font-size:1em}
+  .c-del{color:var(--crit)} .c-add{color:var(--ok)} .c-dim{color:var(--ink-faint)}
+  .c-key{color:var(--accent)} .c-str{color:var(--warn)}
+
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.88rem}
+  th{text-align:left;font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-faint);font-weight:600;
+    padding:0 12px 10px 0;border-bottom:1px solid var(--line)}
+  td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  .mono{font-family:var(--mono);font-size:.84em}
+
+  .flow{margin:24px 0;padding-left:0;list-style:none}
+  .flow li{position:relative;padding-left:34px;padding-bottom:20px;
+    border-left:2px solid var(--line-soft);margin-left:9px}
+  .flow li:last-child{border-left-color:transparent;padding-bottom:0}
+  .flow li::before{content:"";position:absolute;left:-8px;top:6px;width:14px;height:14px;
+    border-radius:50%;background:var(--bg);border:2.5px solid var(--line)}
+  .flow li.hit::before{border-color:var(--crit)}
+  .flow li.fix::before{border-color:var(--ok)}
+  .flow b{display:block;margin-bottom:2px}
+  .flow .err{font-family:var(--mono);font-size:.78rem;color:var(--crit);
+    word-break:break-all;display:block;margin-top:4px}
+
+  .quiz{background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);padding:30px 28px;margin-top:28px}
+  .q{padding:20px 0;border-bottom:1px solid var(--line-soft)}
+  .q:last-of-type{border-bottom:none;padding-bottom:6px}
+  .q > p{margin:0 0 14px;font-weight:600;font-size:.97rem}
+  .q .qn{font-family:var(--mono);font-size:.78rem;color:var(--accent);
+    margin-right:8px;font-weight:700}
+  .opt{display:block;padding:11px 15px;margin:7px 0;border-radius:8px;
+    border:1px solid var(--line);cursor:pointer;transition:.13s;
+    font-size:.9rem;line-height:1.5;background:var(--bg)}
+  .opt:hover{border-color:var(--accent);background:var(--panel-2)}
+  .opt input{margin-right:11px;accent-color:var(--accent)}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.09)}
+  .opt.wrong{border-color:var(--crit);background:rgba(248,81,73,.09)}
+  .opt.locked{cursor:default}
+  .fb{margin-top:9px;padding:11px 15px;border-radius:8px;font-size:.855rem;
+    display:none;line-height:1.6}
+  .fb.show{display:block}
+  .fb.right{background:rgba(63,185,80,.11);border:1px solid rgba(63,185,80,.32)}
+  .fb.wrong{background:rgba(248,81,73,.11);border:1px solid rgba(248,81,73,.32)}
+  .verdict{margin-top:26px;padding:22px;border-radius:var(--r);text-align:center;
+    font-weight:650;display:none;border:1px solid}
+  .verdict.show{display:block}
+  .verdict.pass{background:rgba(63,185,80,.1);border-color:var(--ok);color:var(--ok)}
+  .verdict.fail{background:rgba(248,81,73,.1);border-color:var(--crit);color:var(--crit)}
+  .verdict small{display:block;font-weight:400;color:var(--ink-dim);margin-top:8px;font-size:.83rem}
+  button.act{font-family:var(--sans);font-size:.92rem;font-weight:650;
+    padding:12px 26px;border-radius:8px;border:1px solid var(--accent);
+    background:var(--accent);color:#fff;cursor:pointer;transition:.13s;margin-top:22px}
+  button.act:hover{filter:brightness(1.12)}
+  button.act.ghost{background:transparent;color:var(--ink-dim);border-color:var(--line)}
+  button.act.ghost:hover{color:var(--ink);border-color:var(--accent)}
+  .scorebar{height:6px;background:var(--line-soft);border-radius:3px;
+    overflow:hidden;margin:20px 0 8px}
+  .scorebar i{display:block;height:100%;width:0;background:var(--accent);
+    transition:width .35s ease;border-radius:3px}
+
+  hr{border:none;border-top:1px solid var(--line);margin:56px 0}
+  .honest{background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.3);
+    border-radius:var(--r);padding:22px 24px}
+  .honest h3{margin-top:0;color:var(--warn)}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--info)}
+  .tag{font-family:var(--mono);font-size:.74rem;color:var(--ink-faint);
+    border:1px solid var(--line);padding:2px 7px;border-radius:4px}
+  @media (max-width:640px){
+    header{padding:48px 0 28px}
+    .wrap{padding:0 18px 80px}
+    section{margin-bottom:52px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">变更报告 · 2026-10-16 · 第 3 轮</div>
+  <h1>盲点扫描与<br>生产路径加固 <span class="v">v0.53.0</span></h1>
+  <p class="lede">上一轮修了 11 个阻塞缺陷。这一轮的问题是：<em>我修的是生产真正执行的那条路径吗？</em></p>
+</header>
+
+<!-- ══════════ 1 起点 ══════════ -->
+<section id="start">
+  <h2><span class="num">01</span>起点：一个令人不安的怀疑</h2>
+  <p class="sub">v0.51.0 修好了 LLM 栈，真实 E2E 5/5 通过。但有个问题一直没回答：那些修复，保护的是生产环境实际跑的代码吗？</p>
+
+  <p>要回答它，我需要一个能判定"这段代码会不会被执行"的工具。此前的做法都很粗糙：</p>
+
+  <table>
+    <tr><th style="width:30%">判据</th><th>问题</th></tr>
+    <tr><td class="mono">import 前缀匹配</td><td><code>src.llm</code> 被引用 ≠ <code>src.llm.circuit_breaker</code> 被引用。误报 213 个</td></tr>
+    <tr><td class="mono">谁 import 了这个模块</td><td><code>file_processor</code> 被 <code>connectors.py</code> 导入，但 <code>connectors.py</code> 自己无人引用 —— 依然误判为"活的"</td></tr>
+  </table>
+
+  <p>正确判据是<strong>从入口点做 BFS 传递可达性</strong>。我写了 <code>scripts/reachability.py</code>，过程中它自己先崩了一次——因为我算错了相对导入的基准包：</p>
+
+  <pre><code><span class="c-dim"># Python (PEP 328)：`from . import x` 里的 `.` 指向当前模块所属的包</span>
+<span class="c-dim">#   普通模块 a/b/c.py      → 所属包 = a.b</span>
+<span class="c-dim">#   包       a/b/__init__.py → 所属包 = a.b 自身（不是 a）</span>
+<span class="c-key">非包</span>: base = parts[: len - level]
+<span class="c-key">包  </span>: base = parts[: len - level <span class="c-add">+ 1</span>]   <span class="c-dim">← 我最初漏了这 +1</span></code></pre>
+
+  <p>漏了 <code>+1</code> 的后果是：<strong>每个 <code>__init__.py</code> 里的相对导入都少解析一层</strong>，`src/llm/__init__.py` 的 `from .factory import ...` 被算成不存在的 `src.factory` —— 整棵 <code>src.llm.*</code> 被误判为"生产不可达"。修掉后生产可达模块从 275 涨到 429。</p>
+
+  <div class="stats">
+    <div class="stat"><b>684</b><span>src 模块总数</span></div>
+    <div class="stat good"><b>429</b><span>生产入口可达</span></div>
+    <div class="stat warn"><b>255</b><span>生产不加载</span></div>
+    <div class="stat bad"><b>181</b><span>连测试都到不了</span></div>
+  </div>
+
+  <div class="card crit">
+    <h4><span class="badge crit">最关键的一条</span>我上一轮修错了路径</h4>
+    <p>可达性分析给出一个不舒服的答案：</p>
+    <pre style="margin:12px 0 0"><code><span class="c-add">生产入口</span> → src/agent/engine.py:203
+             → create_llm_provider()
+               → src/llm/providers/*                       <span class="c-add">← 生产真正走的</span>
+
+<span class="c-del">v0.51.0 修复的</span> src/llm/factory.py::get_default_llm()  <span class="c-del">← 从生产入口不可达</span></code></pre>
+    <p style="margin:12px 0 0">那批修复本身有效（我写了自己的 E2E 覆盖它），但它保护的不是生产实际执行的代码。<strong>而真正的生产路径上，藏着一个更严重的缺陷。</strong></p>
+  </div>
+</section>
+
+<!-- ══════════ 2 剥洋葱 ══════════ -->
+<section id="onion">
+  <h2><span class="num">02</span>剥洋葱：生产路径上的四个缺陷</h2>
+  <p class="sub">一旦把 E2E 对准真正的生产路径（<code>create_llm_provider</code> → <code>chat</code>/<code>chat_stream</code>），问题就一个接一个冒出来。</p>
+
+  <ol class="flow">
+    <li class="hit">
+      <b>第一个：<code>content.split('', 1)</code></b>
+      <span class="err">ValueError: empty separator</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">
+        <code>src/llm/providers/openai.py:128</code> 里分隔符是<strong>空字符串</strong>——这是编辑操作截断留下的残骸。触发条件是"响应含 <code>&lt;think&gt;</code>"，也就是<strong>任何推理模型的思考输出</strong>。异常被重试逻辑吞掉 5 次后整次调用失败。</p>
+    </li>
+    <li class="hit">
+      <b>第二个：<code>BashTool</code> 在 Agent 环路中 100% 失败</b>
+      <span class="err">RuntimeError: There is no current event loop in thread 'ThreadPoolExecutor-0_0'</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">
+        <code>execute()</code> 裸调 <code>asyncio.get_event_loop()</code>，而生产把工具丢进<strong>工作线程</strong>执行（<code>tool_executor.py:170</code>）。工作线程没有事件循环，异常被吞成"执行失败"。<strong>跑测试、git、构建、任何命令全部不可用。</strong></p>
+    </li>
+    <li class="hit">
+      <b>第三个：<code>.env</code> 可以被 Agent 读取</b>
+      <span class="err">output 明文含 "OPENAI_API_KEY=sk-***REDACTED***"</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">
+        防护代码在 <code>src/utils/path_security.py</code> 里<strong>早就写好了</strong>，但从未被任何工具接线。读到的内容随后被原样拼进消息，发给远端 LLM。</p>
+    </li>
+    <li class="hit">
+      <b>第四个：<code>SwarmEngine</code> 构造必然崩溃</b>
+      <span class="err">ImportError: cannot import name 'create_model_manager'</span>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">
+        该函数在整个仓库中<strong>从未定义</strong>。而调用方用 <code>except (ImportError, Exception): return None</code> 吞掉它——于是 swarm 自愈路径<strong>在线上一直静默失效</strong>。</p>
+    </li>
+    <li class="fix">
+      <b>修完 → 生产路径 E2E 8/8 通过</b>
+      <p style="margin:6px 0 0;color:var(--ink-dim);font-size:.87rem">含真实对话、真实流式、<code>&lt;think&gt;</code> 提取回归、工具解析、错误传播。</p>
+    </li>
+  </ol>
+
+  <div class="card">
+    <h4>为什么既有测试全绿，缺陷却还在？</h4>
+    <p><code>tests/test_manual_god_mode.py</code> 在<strong>主线程直调</strong> <code>BashTool.execute()</code>。主线程有自动创建的事件循环，所以那条路径永远通过。</p>
+    <p style="margin-bottom:0">同样地，<code>FileReadTool</code> 的测试会检查"能不能读到某个文件"，但不会检查"能不能读到 <code>.env</code>"。<strong>缺陷不在测试覆盖的路径上，而在大家默认不会去走的调用上下文里。</strong>测试本身写得没错，只是测的不是生产实际走的那条路。</p>
+  </div>
+</section>
+
+<!-- ══════════ 3 做了什么 ══════════ -->
+<section id="changes">
+  <h2><span class="num">03</span>做了什么</h2>
+  <p class="sub">7 个提交。净删 2,377 行。每一条都经真实复现后才修。</p>
+
+  <h3>3.1 安全：停止泄露密钥</h3>
+  <p>最有效的一处修复是"接线"——防护逻辑已经存在，只是没人调用它。改在<strong>四个文件工具的唯一统一入口</strong> <code>path_utils.resolve_path()</code>：</p>
+  <pre><code><span class="c-key">def</span> resolve_path(file_path, base_path):
+    resolved = path.resolve()
+    <span class="c-key">if</span> <span class="c-key">not</span> resolved.is_relative_to(base_path.resolve()):
+        <span class="c-key">return</span> <span class="c-key">None</span>              <span class="c-dim"># 原有的穿越防护</span>
+    <span class="c-add">if is_sensitive_path(resolved):</span>
+    <span class="c-add">    return None              # ← 新增：敏感文件/目录</span>
+    <span class="c-key">return</span> resolved</code></pre>
+  <p>关键取舍：<code>.env.example</code> 这类模板<strong>显式豁免</strong>。它不含真实凭据，且是引导新用户配置环境的必需材料——拦掉它只会让人按文档配不起来。</p>
+
+  <h3>3.2 shell 能力恢复</h3>
+  <p><code>execute()</code> 现在覆盖三种调用上下文，缺一即该上下文下 BashTool 全废：</p>
+  <table>
+    <tr><th style="width:34%">上下文</th><th>处理</th></tr>
+    <tr><td>无事件循环的线程</td><td class="mono">asyncio.run()</td></tr>
+    <tr><td>主线程无运行中循环</td><td class="mono">run_until_complete()</td></tr>
+    <tr><td>已有运行中的循环</td><td class="mono">明确提示改用 async_execute</td></tr>
+  </table>
+  <p>顺带在工具描述里<strong>如实声明能力边界</strong>：实现走 <code>shlex.split</code> + 参数列表（无 shell），管道 <code>|</code>、重定向、命令串联天然不可用。不声明的后果是模型写 <code>ls | wc -l</code>，然后拿到一句 <code>ls: cannot access '|'</code> 的困惑报错。</p>
+
+  <h3>3.3 删除被"遮蔽"的死代码</h3>
+  <div class="card warn">
+    <h4><span class="badge warn">安静但危险</span>同名包优先于模块</h4>
+    <p>仓库里有 3 处 <code>.py</code> 文件与同名目录并存。实测确认 Python <strong>永远加载目录</strong>：</p>
+    <pre style="margin:10px 0"><code>src.core.events       → src/core/events/__init__.py
+src.core.git.worktree → src/core/git/worktree/__init__.py
+src.llm.model_info    → src/llm/model_info/__init__.py</code></pre>
+    <p style="margin-bottom:0">那 3 个 <code>.py</code> 文件（384 行）<strong>永不执行</strong>。危害不只是浪费空间：<code>src/core/events.py</code> 与包里的 <code>events/core.py</code> 是<strong>两套事件总线实现</strong>，而所有调用方拿到的都是包里那份——读代码的人会先看到排在目录前面的 <code>events.py</code>，改完后"改了没效果"。这正是本项目反复出现的缺陷模式。</p>
+  </div>
+
+  <h3>3.4 三个被静默吞掉的实现缺陷</h3>
+  <table>
+    <tr><th style="width:26%">缺陷</th><th>为什么测试看不出</th></tr>
+    <tr>
+      <td><code>create_model_manager</code> 从未定义</td>
+      <td>调用方 <code>except (ImportError, Exception): return None</code> 吞掉 → swarm 自愈线上静默失效</td>
+    </tr>
+    <tr>
+      <td><code>except TimeoutError</code> 是死分支</td>
+      <td>Python 3.10 中 <code>asyncio.TimeoutError is TimeoutError</code> → <strong>False</strong>（实测）。超时落到通用 except，错误码从 <code>E2003</code> 退化成 <code>E2002</code>，超时时间从消息消失</td>
+    </tr>
+    <tr>
+      <td>共识规划失败拖垮整个任务分解</td>
+      <td>该调用位于 try 块<strong>之外</strong>，而 <code>consensus_planning</code> 默认开启 → 任何 LLM 侧错误都绕过既有的降级契约</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ══════════ 4 验证 ══════════ -->
+<section id="evidence">
+  <h2><span class="num">04</span>验证</h2>
+  <p class="sub">下面每一条都来自实际执行的命令。</p>
+
+  <h3>生产路径 E2E（真实端点）</h3>
+  <pre><code><span class="c-dim">$ python scripts/e2e_production.py</span>
+
+  [<span class="c-add">PASS</span>] 1. create_llm_provider() 构造成功
+         <span class="c-dim">-&gt; OpenAIProvider model=step-5-preview</span>
+  [<span class="c-add">PASS</span>] 2. 生产路径真实对话 (chat)
+         <span class="c-dim">-&gt; content='PONG' tokens=45</span>
+  [<span class="c-add">PASS</span>] 3. 生产路径真实流式 (chat_stream)
+         <span class="c-dim">-&gt; text='1, 2, 3, 4, 5' thinking_chunks=14</span>
+  [<span class="c-add">PASS</span>] 4. &lt;think&gt; 标签提取（回归）
+         <span class="c-dim">-&gt; content='答案是 391' thinking='先算 17*23=391'</span>
+  [<span class="c-add">PASS</span>] 6. 工具解析（主路径 + 启发式）
+  [<span class="c-add">PASS</span>] 7. 上游失败不被静默吞掉
+
+  合计 8 步，通过 <span class="c-add">8</span>，失败 0</code></pre>
+
+  <h3>新增测试</h3>
+  <table>
+    <tr><th style="width:52%">文件</th><th>结果</th></tr>
+    <tr><td class="mono">tests/llm/test_providers_openai.py</td><td class="mono" style="color:var(--ok)">16 passed</td></tr>
+    <tr><td class="mono">tests/llm/test_circuit_breaker.py</td><td class="mono" style="color:var(--ok)">26 passed, 1 xfailed</td></tr>
+    <tr><td class="mono">tests/tools_runtime/test_bash_execution_paths.py</td><td class="mono" style="color:var(--ok)">11 passed</td></tr>
+    <tr><td class="mono">tests/test_security/test_sensitive_path_guard.py</td><td class="mono" style="color:var(--ok)">33 passed</td></tr>
+    <tr><td class="mono">tests/agent/* + integration</td><td class="mono" style="color:var(--ok)">32 passed</td></tr>
+    <tr><td class="mono">tests/core tests/llm tests/agent tests/contracts … 回归</td><td class="mono" style="color:var(--ok)">1524 passed</td></tr>
+  </table>
+
+  <h3>安全修复前后对照</h3>
+  <table>
+    <tr><th style="width:56%">操作</th><th>修复前</th><th>修复后</th></tr>
+    <tr><td class="mono">读 .env</td><td class="mono" style="color:var(--crit)">success, 含 sk-…</td><td class="mono" style="color:var(--ok)">已拒绝</td></tr>
+    <tr><td class="mono">读 .clawd/config.toml</td><td class="mono" style="color:var(--crit)">可读</td><td class="mono" style="color:var(--ok)">已拒绝</td></tr>
+    <tr><td class="mono">读 .env.example</td><td class="mono">可读</td><td class="mono" style="color:var(--ok)">可读（豁免）</td></tr>
+    <tr><td class="mono">读 src/main.py</td><td class="mono">可读</td><td class="mono" style="color:var(--ok)">可读（未误伤）</td></tr>
+    <tr><td class="mono">Agent 中调 bash</td><td class="mono" style="color:var(--crit)">success=False</td><td class="mono" style="color:var(--ok)">success=True</td></tr>
+  </table>
+
+  <h3>代码量变化</h3>
+  <pre><code>30 files changed, <span class="c-add">1811 insertions(+)</span>, <span class="c-del">4188 deletions(-)</span>
+净减少 2,377 行</code></pre>
+</section>
+
+<!-- ══════════ 5 诚实 ══════════ -->
+<section id="honest">
+  <h2><span class="num">05</span>没做完的部分</h2>
+  <div class="honest">
+    <h3>三条已确认但未修的缺陷</h3>
+    <ul>
+      <li><strong><code>ApprovalMode</code> 仍无运行时消费者</strong>——用户按文档把 <code>approval_mode</code> 设为 <code>plan</code>（"仅分析，不修改文件"），Agent 仍会写盘。<strong>已实测确认</strong>。这是一个"装饰性控制"：用户以为锁了，其实没有。修它需要设计门禁的接入点（在 <code>execute_tool</code> 单点加判定），属于行为变更，我没有在安全修复里顺手一起改。</li>
+      <li><strong><code>HeuristicToolParser</code> 对带闭合标签的输出失效</strong>——实测 6 种真实形态全部识别不了。它在 <code>ToolManager.parse_tool_calls</code> 里作为主解析器的兜底，主路径工作正常，所以不阻塞。该解析器此前<strong>无任何测试</strong>。</li>
+      <li><strong><code>CircuitBreaker</code> 半开态限流形同虚设</strong>——<code>_half_open_requests</code> 只在 <code>record_success()</code> 中递增，失败路径与"请求发起"路径都不计数。已锁定为 <code>xfail</code>。</li>
+    </ul>
+
+    <h3>还有 33 个既有测试失败</h3>
+    <p>其中 6 个是实现缺陷（本轮修了 3 个），其余是测试针对已废弃 API。它们**不阻塞生产路径**，但也不该长期留着。<code>test_sleep_basic</code> 是计时精度问题，属环境噪声。</p>
+
+    <h3>覆盖率仍未达标</h3>
+    <p>本轮补了 4 个测试文件、86 个用例，但全局覆盖率仍在 20% 上下。真正的爬升要靠下一轮系统性地给核心链路补测试。</p>
+  </div>
+</section>
+
+<!-- ══════════ 测验 ══════════ -->
+<section id="quiz">
+  <h2><span class="num">06</span>测验</h2>
+  <p class="sub">8 道题。答对至少 7 题才算通过。每题都有解释，答错时请读一遍再重做。</p>
+
+  <div class="quiz" id="quizBox">
+
+    <div class="q" data-q="1" data-correct="c">
+      <p><span class="qn">Q1</span>为什么"谁 import 了这个模块"不足以判断它是否可达？</p>
+      <label class="opt"><input type="radio" name="q1" value="a">因为 Python 的 import 会被缓存</label>
+      <label class="opt"><input type="radio" name="q1" value="b">因为相对导入无法被静态解析</label>
+      <label class="opt"><input type="radio" name="q1" value="c">因为导入者自身可能不可达 —— 可达性必须从入口点传递计算</label>
+      <label class="opt"><input type="radio" name="q1" value="d">因为测试文件也会 import 模块</label>
+      <div class="fb" data-right="c"><b>答对了。</b> <code>file_processor</code> 被 <code>connectors.py</code> 导入，看起来"有人用"；但 <code>connectors.py</code> 自己无人引用。只做一跳判断就会把它误判为活的。必须从入口点做 BFS，逐跳传递。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 模块缓存影响的是运行时行为，与静态可达性判定无关。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 相对导入<em>可以</em>被静态解析——只是需要正确处理 PEP 328 的基准包规则（本次就在这上面栽过）。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 测试引用确实会让模块"活着"，但那属于"仅测试可达"，与"生产可达"是两个不同的集合。问题的关键在于<em>导入者自身是否可达</em>。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="2" data-correct="b">
+      <p><span class="qn">Q2</span><code>__init__.py</code> 里的相对导入，基准包应该怎么算？</p>
+      <label class="opt"><input type="radio" name="q2" value="a">和非包模块一样：<code>parts[: len - level]</code></label>
+      <label class="opt"><input type="radio" name="q2" value="b">包自己就是基准：<code>parts[: len - level + 1]</code></label>
+      <label class="opt"><input type="radio" name="q2" value="c">永远用 <code>parts[:1]</code></label>
+      <label class="opt"><input type="radio" name="q2" value="d">不需要处理，运行时自动解析</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>from . import x</code> 里的 <code>.</code> 指向<strong>当前模块所属的包</strong>。普通模块 <code>a/b/c.py</code> 所属包是 <code>a.b</code>；包 <code>a/b/__init__.py</code> 所属包是 <code>a.b</code> 自身——所以后者要少减一层（即 <code>+1</code>）。漏了这 <code>+1</code>，整棵 <code>src.llm.*</code> 被误判为不可达。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 这正是我最初写错的地方。两者减的层数不同，因为包的"所属包"是它自己。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 这样多层嵌套的相对导入会全部解析错。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 运行时确实会解析，但静态分析工具必须自己实现这套规则才能判定可达性——这正是本次踩的坑。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="3" data-correct="b">
+      <p><span class="qn">Q3</span>为什么 v0.51.0 修好 LLM 栈后，生产路径上还藏着更严重的缺陷？</p>
+      <label class="opt"><input type="radio" name="q3" value="a">因为修复引入了新 bug</label>
+      <label class="opt"><input type="radio" name="q3" value="b">因为修的是 <code>src/llm/factory.py</code>，而生产走的是 <code>create_llm_provider()</code> → <code>providers/*</code></label>
+      <label class="opt"><input type="radio" name="q3" value="c">因为测试覆盖不足</label>
+      <label class="opt"><input type="radio" name="q3" value="d">因为依赖版本升级</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 可达性分析显示 <code>src/llm/factory.py::get_default_llm()</code> 从生产入口<strong>不可达</strong>。那批修复有效（有自己的 E2E 覆盖），但保护的是另一条路径。真实生产路径 <code>providers/openai.py</code> 里藏着 <code>split('', 1)</code> 这个必崩缺陷。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 那是两套并存的实现，不是同一处代码被改坏。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 当时确实有 <code>e2e_smoke.py</code> 覆盖了 <code>factory.py</code> 那条路——测试写得没问题，只是<em>测的不是生产走的路</em>。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 依赖版本是另一个独立问题（<code>turn_off_verbose_logging</code> 被移除）。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="4" data-correct="c">
+      <p><span class="qn">Q4</span><code>content.split('', 1)</code> 的触发条件是什么？</p>
+      <label class="opt"><input type="radio" name="q4" value="a">响应为空时</label>
+      <label class="opt"><input type="radio" name="q4" value="b">响应超长时</label>
+      <label class="opt"><input type="radio" name="q4" value="c">响应内容含 <code>&lt;think&gt;</code> 时 —— 也就是任何推理模型的思考输出</label>
+      <label class="opt"><input type="radio" name="q4" value="d">只在流式模式下</label>
+      <div class="fb" data-right="c"><b>答对了。</b> 空字符串分隔符在任何输入下都抛 <code>ValueError: empty separator</code>，但代码里那个分支只在 <code>'&lt;think&gt;' in content</code> 时才走到。所以触发条件是推理模型的思考输出——对本项目配置的 <code>step-5-preview</code> 是完全正常的场景。异常被重试吞掉 5 次后整次调用失败。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 空响应会在更早的地方返回，走不到这一行。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 长度无关，这个分支只看是否含 <code>&lt;think&gt;</code>。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 这在<em>非流式</em>的 <code>chat()</code> 里，流式走的是另一条路径（那条用 <code>ThinkTagParser</code>，没有这个缺陷）。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="5" data-correct="b">
+      <p><span class="qn">Q5</span>为什么 <code>BashTool</code> 的缺陷在既有测试全绿的情况下依然存在？</p>
+      <label class="opt"><input type="radio" name="q5" value="a">因为那个缺陷只在 Windows 上出现</label>
+      <label class="opt"><input type="radio" name="q5" value="b">因为测试在主线程直调，而生产在 ThreadPoolExecutor 工作线程执行 —— 后者没有事件循环</label>
+      <label class="opt"><input type="radio" name="q5" value="c">因为测试被标记为 skip</label>
+      <label class="opt"><input type="radio" name="q5" value="d">因为 BashTool 没有测试</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>tests/test_manual_god_mode.py</code> 在主线程直调 <code>execute()</code>，主线程<strong>有</strong>自动创建的事件循环，所以永远通过。生产路径经 <code>execute_tool</code> 把工具丢进工作线程，那里没有循环 → <code>RuntimeError</code>。测对了，只是没测生产那条路。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 这在任何平台上都会发生——是事件循环语义问题，不是平台差异。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 那些测试确实在跑，而且真的通过了。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 有测试——只是写得不对。本次新增的 <code>test_bash_execution_paths.py</code> 专门覆盖生产路径与三种执行上下文。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="6" data-correct="b">
+      <p><span class="qn">Q6</span><code>src/utils/path_security.py</code> 早就实现了敏感文件防护。为什么 <code>.env</code> 还能被读？</p>
+      <label class="opt"><input type="radio" name="q6" value="a">因为防护逻辑有 bug</label>
+      <label class="opt"><input type="radio" name="q6" value="b">因为没有任何工具调用它 —— 防护代码从未接线</label>
+      <label class="opt"><input type="radio" name="q6" value="c">因为 <code>.env</code> 被显式加入了白名单</label>
+      <label class="opt"><input type="radio" name="q6" value="d">因为路径校验被跳过</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 该模块只被测试引用，<code>src/</code> 下没有任何调用方。真正生效的 <code>path_utils.resolve_path()</code> 只检查路径穿越，不看文件敏感性。修复就是"接线"——在那一个统一入口接上判定，四个文件工具同时获得防护。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 防护逻辑本身正确（本次直接复用了它的判定规则）。问题在于它是死代码。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> <code>.env</code> 不在豁免名单里；反而 <code>path_utils.TEXT_EXTENSIONS</code> 曾把它列为"可读文本扩展名"——那是<em>另一个</em>独立问题，本次一并移除。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 路径校验在正常运行，只是它检查的是"是否越出工作目录"，而 <code>.env</code> 就在目录内。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="7" data-correct="c">
+      <p><span class="qn">Q7</span>为什么 <code>src/core/events.py</code>（343 行）永远不会被执行？</p>
+      <label class="opt"><input type="radio" name="q7" value="a">因为它引用了不存在的符号</label>
+      <label class="opt"><input type="radio" name="q7" value="b">因为没有测试导入它</label>
+      <label class="opt"><input type="radio" name="q7" value="c">因为存在同名的 <code>events/</code> 包，且 Python 中包优先于同名模块</label>
+      <label class="opt"><input type="radio" name="q7" value="d">因为它被 <code>.gitignore</code> 排除</label>
+      <div class="fb" data-right="c"><b>答对了。</b> 实测 <code>src.core.events</code> 加载的是 <code>events/__init__.py</code>。更危险的是 <code>events.py</code> 与包里的 <code>events/core.py</code> 是<strong>两套事件总线实现</strong>——读代码的人会先看到排在目录前的 <code>events.py</code>，改完后"改了没效果"。这是本项目反复出现的缺陷模式。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 那个文件语法完整、可以正常解析——它只是永远不会被加载。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 即使有测试导入 <code>src.core.events</code>，加载的也是包而非那个文件。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 它一直在版本库里被正常跟踪。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="8" data-correct="b">
+      <p><span class="qn">Q8</span><code>except TimeoutError</code> 为什么捕获不到 <code>asyncio.wait_for</code> 的超时？</p>
+      <label class="opt"><input type="radio" name="q8" value="a">因为 <code>wait_for</code> 不抛异常，返回 None</label>
+      <label class="opt"><input type="radio" name="q8" value="b">因为 Python 3.10 中 <code>asyncio.TimeoutError is TimeoutError</code> 为 False</label>
+      <label class="opt"><input type="radio" name="q8" value="c">因为超时发生在另一个线程</label>
+      <label class="opt"><input type="radio" name="q8" value="d">因为 <code>except</code> 顺序写反了</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 实测确认 <code>asyncio.TimeoutError is TimeoutError</code> → <strong>False</strong>。所以那个分支永不触发，超时落到通用 <code>except</code>：错误码从 <code>E2003</code>（TOOL_TIMEOUT）退化成 <code>E2002</code>（TOOL_EXECUTION_FAILED），超时时间从消息消失，而 <code>ToolTimeoutError</code> 成了无调用方的死类。修法是同时捕获两者。</div>
+      <div class="fb" data-right="a"><b>不对。</b> <code>wait_for</code> 超时确实抛异常。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 与线程无关——是异常类层级的差异。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> <code>TimeoutError</code> 分支排在通用 <code>except Exception</code> 之前，顺序是对的；问题是它的<em>类型匹配不上</em>。正确选项是 B。</div>
+    </div>
+
+    <div class="scorebar"><i id="bar"></i></div>
+    <p style="font-size:.82rem;color:var(--ink-faint);margin:6px 0 0">已作答 <span id="answered">0</span> / 8 · 正确 <span id="correct">0</span></p>
+
+    <div class="verdict" id="verdict"></div>
+    <button class="act" id="checkBtn">提交答案</button>
+    <button class="act ghost" id="resetBtn" style="margin-left:10px">重做</button>
+  </div>
+</section>
+
+<hr>
+<p style="font-size:.82rem;color:var(--ink-faint);text-align:center;margin:0">
+  Clawd Code v0.53.0 变更报告 · 2026-10-16 ·
+  7 commits · 净删 2,377 行 · <span class="tag">ba94792…HEAD</span>
+</p>
+
+</div>
+
+<script>
+(function(){
+  const quiz = document.getElementById('quizBox');
+  const qs = [...quiz.querySelectorAll('.q')];
+  const bar = document.getElementById('bar');
+  const answeredEl = document.getElementById('answered');
+  const correctEl = document.getElementById('correct');
+  const verdict = document.getElementById('verdict');
+  const checkBtn = document.getElementById('checkBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // 正确答案由每个 .q 上的 data-correct 显式声明，不依赖 DOM 顺序。
+  const RIGHT = {};
+  qs.forEach(q => { RIGHT[q.dataset.q] = q.dataset.correct; });
+
+  const PASS_THRESHOLD = Math.ceil(qs.length * 0.875);   // 8 题至少 7 对
+  let locked = false;
+
+  function refresh(){
+    let answered = 0, correct = 0;
+    qs.forEach(q => {
+      const sel = q.querySelector('input:checked');
+      if (sel){
+        answered++;
+        if (sel.value === RIGHT[q.dataset.q]) correct++;
+      }
+    });
+    answeredEl.textContent = answered;
+    correctEl.textContent = correct;
+    bar.style.width = (correct / qs.length * 100) + '%';
+    return {answered, correct};
+  }
+
+  quiz.addEventListener('change', () => { if (!locked) refresh(); });
+
+  checkBtn.addEventListener('click', () => {
+    const {answered, correct} = refresh();
+    if (answered < qs.length){
+      verdict.className = 'verdict show fail';
+      verdict.innerHTML = '还有 ' + (qs.length - answered) + ' 题未作答' +
+        '<small>全部作答后才能提交。</small>';
+      return;
+    }
+    locked = true;
+
+    qs.forEach(q => {
+      const rid = RIGHT[q.dataset.q];
+      q.querySelectorAll('.opt').forEach(o => {
+        const inp = o.querySelector('input');
+        inp.disabled = true;
+        o.classList.add('locked');
+        if (inp.value === rid) o.classList.add('right');
+        else if (inp.checked) o.classList.add('wrong');
+      });
+      q.querySelectorAll('.fb').forEach(f => {
+        f.classList.remove('show');
+        if (f.dataset.right === rid) f.classList.add('show');
+      });
+    });
+
+    const pass = correct >= PASS_THRESHOLD;
+    verdict.className = 'verdict show ' + (pass ? 'pass' : 'fail');
+    verdict.innerHTML = (pass ? '✓ 通过 — ' : '✗ 未通过 — ') + correct + ' / ' + qs.length +
+      (pass
+        ? '<small>对本次变更的理解达到要求。上面已标出每题正解与解释。</small>'
+        : '<small>需要至少 ' + PASS_THRESHOLD + ' 题正确。请读上方标红的解释，然后点"重做"。</small>');
+    bar.style.background = pass ? 'var(--ok)' : 'var(--crit)';
+    checkBtn.textContent = pass ? '已通过' : '重新提交';
+    if (!pass) locked = false;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    locked = false;
+    qs.forEach(q => {
+      q.querySelectorAll('input').forEach(i => { i.checked = false; i.disabled = false; });
+      q.querySelectorAll('.opt').forEach(o => o.classList.remove('right','wrong','locked'));
+      q.querySelectorAll('.fb').forEach(f => f.classList.remove('show'));
+    });
+    bar.style.width = '0';
+    bar.style.background = 'var(--accent)';
+    verdict.className = 'verdict';
+    checkBtn.textContent = '提交答案';
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>

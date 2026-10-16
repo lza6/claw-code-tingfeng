@@ -3,7 +3,47 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.51.0**
+> 当前版本：**v0.53.0**（本轮 +6 提交）
+
+---
+
+## 0. 本轮（v0.52.0 → v0.53.0）完成项
+
+| ID | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| B-01 | 生产路径 E2E 建立 | ✅ | `scripts/e2e_production.py` 8/8 通过 |
+| B-02 | `<think>` 标签崩溃修复 | ✅ | `tests/llm/test_providers_openai.py` 16 passed |
+| B-03 | **BashTool 在 Agent 环路 100% 失败** | ✅ | `tests/tools_runtime/test_bash_execution_paths.py` 11 passed |
+| B-04 | **`.env` 可被 Agent 读取（API Key 外泄）** | ✅ | `tests/test_security/test_sensitive_path_guard.py` 33 passed |
+| B-05 | 传递可达性分析工具 | ✅ | `scripts/reachability.py`：684 模块 / 429 生产可达 |
+| B-06 | 删除 3 个真死包 | ✅ | 3,774 行 |
+| B-07 | 删除 3 个被同名包遮蔽的死文件 | ✅ | 384 行 |
+| B-08 | 熔断器补测试（原 0% 覆盖） | ✅ | 26 passed, 1 xfailed |
+| B-09 | 零覆盖活代码识别工具 | ✅ | `scripts/find_untested_live_code.py` |
+
+### 关键发现：生产 LLM 路径与 v0.51.0 修复的不是同一条
+
+传递可达性分析（`scripts/reachability.py`）显示：
+
+```
+生产入口 → src/agent/engine.py:203 → create_llm_provider() → providers/*
+v0.51.0 修的 src/llm/factory.py::get_default_llm()  ← 从生产入口不可达
+```
+
+v0.51.0 那批修复本身有效（且被 `e2e_smoke.py` 覆盖），但它保护的**不是**
+生产实际执行的代码。本轮已补齐对真实生产路径的测试与修复。
+
+### 多智能体审计的三项结论与主线程复核
+
+| 子代理 | 报告要点 | 主线程复核结果 |
+|:---|:---|:---|
+| blindspot | 1 BLOCKER + 3 HIGH + 13 MEDIUM | B1（BashTool）**已复现并修复**；H2（.env）**已复现并修复**；H1（ApprovalMode 无消费者）**已复现，记录未修**；H3（`max_buffer` 非法参数）待验证 |
+| testfail | 38 个失败：A 实现缺陷 6 / B 测试过时 32 | 待逐项处理 |
+| deadcode | 称原 213 清单"方向两个都错"，实际 176 不可达 | 其指出 3 个脚本缺陷中，**缺陷 1（`__init__.py` 相对导入）我早已修复**；缺陷 2/3（传递可达性、同名遮蔽）我的分析器已覆盖传递可达性。**但它指出的"同名包遮蔽"是真实问题，已修复** |
+
+> 子代理报告基于它重跑时的**旧版脚本**，未看到我已修的 `__init__.py` 缺陷。
+> 其"176 不可达"与我的"255 生产不可达"量级一致，差异在于它把
+> "仅测试可达"计入了可达。
 
 ---
 
