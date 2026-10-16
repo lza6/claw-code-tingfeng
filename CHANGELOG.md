@@ -9,6 +9,68 @@
 
 ## [未发布]
 
+### v0.52.0 (2026-10-16) — 波次 2/3：真死代码收敛 + 生产路径审计
+
+#### 🔴 修复（生产路径）
+
+- **`<think>` 标签提取必崩**（`src/llm/providers/openai.py:128`）
+  写成 `content.split('', 1)` —— 分隔符是**空字符串**，任何含 `<think>`
+  的响应都抛 `ValueError: empty separator`，被重试逻辑吞掉 5 次后整次调用失败。
+  改为使用 `ThinkTagParser.CLOSE_TAG` 常量，避免再次被编辑操作截断成空串。
+  **这是生产 LLM 路径上的缺陷** —— 与 v0.51.0 修的 `factory.py` 不是同一条路径。
+
+#### 🔍 关键架构澄清（修正 v0.51.0 的认知）
+
+用传递可达性分析确认：**生产创建 LLM 的路径是**
+
+```
+src/agent/engine.py:203
+  -> src/llm/providers/__init__.py::create_llm_provider()
+    -> OpenAICompatibleProvider.chat() / .chat_stream()
+```
+
+而 v0.51.0 修复的 `src/llm/factory.py::get_default_llm()` **从生产入口不可达**。
+那批修复本身是有效的（且 `scripts/e2e_smoke.py` 覆盖），但它保护的不是生产路径。
+本次补齐了对**真实生产路径**的修复与测试。
+
+#### 🗑️ 删除真死代码
+
+- `src/notifications/`（8 文件）
+- `src/visual/`（2 文件）
+- `src/session_history/`（1 文件）
+- 合计 **3,774 行**
+
+> 修正：v0.51.0 曾称 `src/notification/` 也是死代码，**该判断有误** ——
+> 它被两个测试文件引用，有测试覆盖。已用可达性分析复核。
+
+#### 🛠️ 新增分析工具
+
+- `scripts/reachability.py` —— 从入口点做 BFS 传递可达性分析。
+  修掉了一个关键 bug：相对导入的基准包对 `__init__.py` 多减一层，
+  导致整棵 `src.llm.*` 被误判不可达。自检：684 模块 / 429 生产可达。
+- `scripts/find_untested_live_code.py` —— 找出"生产在跑但零测试覆盖"的模块。
+- `scripts/e2e_production.py` —— **生产路径** E2E（区别于 `e2e_smoke.py`）。
+
+#### 🧪 新增测试
+
+- `tests/llm/test_providers_openai.py`（16 例）—— 生产 LLM 提供商路径：
+  `<think>` 提取回归、重试与错误传播、消息编解码、流式
+- `tests/llm/test_circuit_breaker.py`（26 例）—— 熔断器完整状态机
+  （此前 0% 覆盖率），并锁定一个已确认缺陷为 xfail
+
+#### ⚠️ 发现的已知缺陷（未修，已记录）
+
+- `HeuristicToolParser`（`src/llm/parsers.py`）的状态机**只在参数值后紧跟
+  不以 `<` 开头的裸文本时才输出**。任何带 `</function>` 闭合标签的输出
+  都识别不了。主路径 `parse_tool_calls`（系统提示词实际指示的
+  `<tool>{json}</tool>` 格式）工作正常，因此该兜底失效不阻塞主流程。
+  该解析器此前无任何测试。
+- `CircuitBreaker` 半开态的 `half_open_max_requests` 形同虚设 ——
+  `_half_open_requests` 只在 `record_success()` 中递增，失败路径与
+  "请求发起"路径都不计数，因此并发探测不受限。
+
+---
+
 ### v0.51.0 (2026-10-16)
 
 本次为**止血版本**：修复了一批"项目声称可用、实际运行即崩"的缺陷。

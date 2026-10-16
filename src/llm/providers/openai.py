@@ -123,11 +123,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 thinking = ""
                 if hasattr(choice.message, 'reasoning_content') and choice.message.reasoning_content:
                     thinking = choice.message.reasoning_content
-                elif '<think>' in content:
-                    # 启发式提取
-                    parts = content.split('', 1)
+                elif ThinkTagParser.OPEN_TAG in content:
+                    # 启发式提取：把 <think>...</think> 拆成 thinking + content
+                    #
+                    # 注意: 此处曾是 `content.split('', 1)` —— 分隔符是**空字符串**，
+                    # 任何含 <think> 的响应都会抛 `ValueError: empty separator`，
+                    # 被下面的重试逻辑吞掉 5 次后整体失败。改用常量，
+                    # 避免再次被编辑操作截断成空串。
+                    parts = content.split(ThinkTagParser.CLOSE_TAG, 1)
                     if len(parts) > 1:
-                        thinking = parts[0].replace('<think>', '').strip()
+                        thinking = parts[0].replace(ThinkTagParser.OPEN_TAG, '').strip()
                         content = parts[1].strip()
 
                 return LLMResponse(
