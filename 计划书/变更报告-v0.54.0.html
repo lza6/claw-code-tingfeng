@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawd Code v0.54.0 — 门禁落地、并发压测、死代码收敛</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c2230;
+    --ink:#e6edf3; --ink-dim:#9198a1; --ink-faint:#6e7681;
+    --line:#2a313c; --line-soft:#21262d;
+    --crit:#f85149; --warn:#d29922; --ok:#3fb950; --info:#58a6ff;
+    --accent:#7c5cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC","Source Han Serif SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif;
+    --r:10px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#fbfaf8; --panel:#ffffff; --panel-2:#f4f2ee;
+      --ink:#1a1d21; --ink-dim:#5b6169; --ink-faint:#8b9199;
+      --line:#e2ded6; --line-soft:#ece8e1;
+      --crit:#c0392b; --warn:#9a6b00; --ok:#1f7a34; --info:#0b5fbf;
+      --accent:#5b3fd6;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:16px;line-height:1.68;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px 120px}
+
+  header{padding:72px 0 40px;border-bottom:1px solid var(--line);
+    margin-bottom:56px;position:relative}
+  header::before{content:"";position:absolute;left:0;top:64px;width:56px;height:3px;
+    background:var(--accent);border-radius:2px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:20px;font-weight:600}
+  h1{font-family:var(--serif);font-size:clamp(2.6rem,6.2vw,4.2rem);line-height:1.04;
+    margin:0 0 20px;font-weight:600;letter-spacing:-.02em}
+  h1 .v{color:var(--ink-faint);font-weight:400}
+  .lede{font-size:1.17rem;color:var(--ink-dim);max-width:62ch;margin:0;font-family:var(--serif)}
+
+  section{margin:0 0 72px;scroll-margin-top:24px}
+  h2{font-family:var(--serif);font-size:1.95rem;margin:0 0 8px;font-weight:600;letter-spacing:-.01em}
+  h2 .num{font-family:var(--mono);font-size:.72rem;color:var(--accent);
+    display:block;letter-spacing:.12em;margin-bottom:10px;font-weight:600}
+  h3{font-size:1.1rem;margin:36px 0 10px;font-weight:650}
+  h4{font-size:.95rem;margin:22px 0 8px;font-weight:650;color:var(--ink-dim)}
+  p{margin:0 0 16px}
+  .sub{color:var(--ink-dim);margin-bottom:28px;max-width:66ch}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    border-radius:var(--r);overflow:hidden;margin:32px 0}
+  .stat{background:var(--panel);padding:20px 18px}
+  .stat b{display:block;font-family:var(--mono);font-size:1.8rem;line-height:1.1;
+    font-weight:600;letter-spacing:-.02em}
+  .stat span{font-size:.78rem;color:var(--ink-faint);display:block;margin-top:6px}
+  .stat.good b{color:var(--ok)} .stat.bad b{color:var(--crit)} .stat.warn b{color:var(--warn)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:22px 24px;margin:18px 0}
+  .card.crit{border-left:3px solid var(--crit)}
+  .card.ok{border-left:3px solid var(--ok)}
+  .card.warn{border-left:3px solid var(--warn)}
+  .card h4{margin-top:0;color:var(--ink);font-size:1rem}
+  .card p:last-child{margin-bottom:0}
+
+  .badge{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:4px;letter-spacing:.06em;vertical-align:2px;margin-right:8px}
+  .badge.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .badge.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .badge.info{background:rgba(88,166,255,.16);color:var(--info)}
+
+  code{font-family:var(--mono);font-size:.855em;background:var(--panel-2);
+    padding:2px 6px;border-radius:4px;color:var(--ink);border:1px solid var(--line-soft)}
+  pre{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:.82rem;line-height:1.62}
+  pre code{background:none;padding:0;border:none;font-size:1em}
+  .c-del{color:var(--crit)} .c-add{color:var(--ok)} .c-dim{color:var(--ink-faint)}
+  .c-key{color:var(--accent)} .c-str{color:var(--warn)}
+
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.88rem}
+  th{text-align:left;font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-faint);font-weight:600;
+    padding:0 12px 10px 0;border-bottom:1px solid var(--line)}
+  td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  .mono{font-family:var(--mono);font-size:.84em}
+
+  .flow{margin:24px 0;padding-left:0;list-style:none}
+  .flow li{position:relative;padding-left:34px;padding-bottom:20px;
+    border-left:2px solid var(--line-soft);margin-left:9px}
+  .flow li:last-child{border-left-color:transparent;padding-bottom:0}
+  .flow li::before{content:"";position:absolute;left:-8px;top:6px;width:14px;height:14px;
+    border-radius:50%;background:var(--bg);border:2.5px solid var(--line)}
+  .flow li.hit::before{border-color:var(--crit)}
+  .flow li.fix::before{border-color:var(--ok)}
+  .flow li.think::before{border-color:var(--warn)}
+  .flow b{display:block;margin-bottom:2px}
+  .flow .err{font-family:var(--mono);font-size:.78rem;color:var(--crit);
+    word-break:break-all;display:block;margin-top:4px}
+
+  .quiz{background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);padding:30px 28px;margin-top:28px}
+  .q{padding:20px 0;border-bottom:1px solid var(--line-soft)}
+  .q:last-of-type{border-bottom:none;padding-bottom:6px}
+  .q > p{margin:0 0 14px;font-weight:600;font-size:.97rem}
+  .q .qn{font-family:var(--mono);font-size:.78rem;color:var(--accent);
+    margin-right:8px;font-weight:700}
+  .opt{display:block;padding:11px 15px;margin:7px 0;border-radius:8px;
+    border:1px solid var(--line);cursor:pointer;transition:.13s;
+    font-size:.9rem;line-height:1.5;background:var(--bg)}
+  .opt:hover{border-color:var(--accent);background:var(--panel-2)}
+  .opt input{margin-right:11px;accent-color:var(--accent)}
+  .opt.right{border-color:var(--ok);background:rgba(63,185,80,.09)}
+  .opt.wrong{border-color:var(--crit);background:rgba(248,81,73,.09)}
+  .opt.locked{cursor:default}
+  .fb{margin-top:9px;padding:11px 15px;border-radius:8px;font-size:.855rem;
+    display:none;line-height:1.6}
+  .fb.show{display:block}
+  .fb.right{background:rgba(63,185,80,.11);border:1px solid rgba(63,185,80,.32)}
+  .fb.wrong{background:rgba(248,81,73,.11);border:1px solid rgba(248,81,73,.32)}
+  .verdict{margin-top:26px;padding:22px;border-radius:var(--r);text-align:center;
+    font-weight:650;display:none;border:1px solid}
+  .verdict.show{display:block}
+  .verdict.pass{background:rgba(63,185,80,.1);border-color:var(--ok);color:var(--ok)}
+  .verdict.fail{background:rgba(248,81,73,.1);border-color:var(--crit);color:var(--crit)}
+  .verdict small{display:block;font-weight:400;color:var(--ink-dim);margin-top:8px;font-size:.83rem}
+  button.act{font-family:var(--sans);font-size:.92rem;font-weight:650;
+    padding:12px 26px;border-radius:8px;border:1px solid var(--accent);
+    background:var(--accent);color:#fff;cursor:pointer;transition:.13s;margin-top:22px}
+  button.act:hover{filter:brightness(1.12)}
+  button.act.ghost{background:transparent;color:var(--ink-dim);border-color:var(--line)}
+  button.act.ghost:hover{color:var(--ink);border-color:var(--accent)}
+  .scorebar{height:6px;background:var(--line-soft);border-radius:3px;
+    overflow:hidden;margin:20px 0 8px}
+  .scorebar i{display:block;height:100%;width:0;background:var(--accent);
+    transition:width .35s ease;border-radius:3px}
+
+  hr{border:none;border-top:1px solid var(--line);margin:56px 0}
+  .honest{background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.3);
+    border-radius:var(--r);padding:22px 24px}
+  .honest h3{margin-top:0;color:var(--warn)}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--info)}
+  .tag{font-family:var(--mono);font-size:.74rem;color:var(--ink-faint);
+    border:1px solid var(--line);padding:2px 7px;border-radius:4px}
+  @media (max-width:640px){
+    header{padding:48px 0 28px}
+    .wrap{padding:0 18px 80px}
+    section{margin-bottom:52px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">变更报告 · 2026-10-17 · 第 4 轮</div>
+  <h1>门禁落地、并发压测、<br>与一个被自己证伪的判据 <span class="v">v0.54.0</span></h1>
+  <p class="lede">上一轮我修好了生产路径、堵住了密钥泄露。这一轮要处理三件遗留：<em>形同虚设的审批门禁、从未被压测过的并发路径、以及一次失败的自动化删除尝试</em>。</p>
+</header>
+
+<!-- ══════════ 1 起点 ══════════ -->
+<section id="start">
+  <h2><span class="num">01</span>起点：三件遗留</h2>
+  <p class="sub">上一轮的终局报告我列了三处"仅部分闭环"。这一轮逐一处理。</p>
+
+  <table>
+    <tr><th style="width:34%">遗留项</th><th>性质</th></tr>
+    <tr>
+      <td><code>ApprovalMode</code> 无运行时消费者</td>
+      <td>用户设成 <code>plan</code>（"不修改文件"）时，Agent 照写 —— <strong>装饰性控制</strong></td>
+    </tr>
+    <tr>
+      <td>并发路径从未被压测</td>
+      <td>工具线程池、熔断器状态机、门禁读的实例状态——都有并发风险但没验证过</td>
+    </tr>
+    <tr>
+      <td>163 个死模块未处理</td>
+      <td>上一轮的自动化判据不可靠，卡住了</td>
+    </tr>
+  </table>
+
+  <div class="stats">
+    <div class="stat good"><b>8/8</b><span>生产路径 E2E</span></div>
+    <div class="stat good"><b>5/5</b><span>200 并发压测</span></div>
+    <div class="stat good"><b>2,812</b><span>净删除行数</span></div>
+    <div class="stat warn"><b>163</b><span>死模块待人工复核</span></div>
+  </div>
+</section>
+
+<!-- ══════════ 2 三个直觉 ══════════ -->
+<section id="insight">
+  <h2><span class="num">02</span>三个值得记下的时刻</h2>
+  <p class="sub">这一轮的收获不在于改了多少行，而在于三处"如果不多想一步就会做错"的地方。</p>
+
+  <h3>直觉一：Python 的变量作用域会让一个 `import` 毁掉整个功能</h3>
+
+  <div class="card crit">
+    <h4><span class="badge crit">最隐蔽</span>首次运行时指纹永不保存</h4>
+    <pre style="margin:12px 0 0"><code><span class="c-dim"># src/brain/world_model.py（修复前）</span>
+<span class="c-key">if</span> fp_path.exists():
+    <span class="c-key">try</span>:
+        <span class="c-add">import json</span>          <span class="c-dim">← 局部导入</span>
+        fingerprints = json.loads(...)
+    <span class="c-key">except</span> Exception <span class="c-key">as</span> e:
+        logger.warning(...)
+
+<span class="c-dim"># ... 200 行之后 ...</span>
+fp_path.write_text(<span class="c-del">json.dumps(new_fingerprints)</span>, ...)   <span class="c-del">← UnboundLocalError</span></code></pre>
+    <p style="margin:12px 0 0">Python 在<strong>编译期</strong>就把 <code>json</code> 判定为整个函数的局部变量——因为函数体里存在 <code>import json</code> 这一赋值。于是当指纹文件<strong>不存在</strong>（即<strong>首次运行</strong>）时，那个分支不执行，<code>json</code> 从未绑定，后面这行直接抛 <code>UnboundLocalError</code>。</p>
+  </div>
+
+  <p>这个异常被外层 <code>except</code> 吞成一条 warning。后果是：</p>
+  <p><strong>首次运行的指纹基线永远不被保存 → 增量索引每次退化为全量重建。</strong>而这个模块的文档、类名、方法名全都在讲"基于语义指纹的增量索引"——它的核心卖点，从第一次运行起就没有生效过。</p>
+
+  <p class="sub" style="margin-top:20px">我是怎么发现的：重写一个**过时的测试**时，发现它断言的是已废弃的 API。为了让新断言能跑，我创建了真实的文件让增量路径真的执行——然后它就炸了。</p>
+
+  <h3>直觉二：抛错类型选错，会把"策略拒绝"送进自愈引擎</h3>
+
+  <div class="card warn">
+    <h4><span class="badge warn">集成陷阱</span>异常层级决定谁来处理</h4>
+    <p>审批门禁的第一版实现抛 <code>SecurityError</code>。看起来语义正确——这是安全策略拒绝。</p>
+    <p>但 <code>engine_loop._execute_single_tool</code> 只捕获 <code>ToolExecutionError</code>：</p>
+    <pre style="margin:10px 0"><code><span class="c-key">except</span> ToolExecutionError <span class="c-key">as</span> e:
+    result = ToolResult(success=False, output=<span class="c-str">''</span>, error=str(e))
+
+<span class="c-key">class</span> SecurityError(ClawdError): ...          <span class="c-del">← 兄弟类，不被捕获</span>
+<span class="c-key">class</span> ToolExecutionError(ClawdError): ...</code></pre>
+    <p style="margin-bottom:0">于是异常穿透出去，触发<strong>自愈引擎去"修复"一个策略拒绝</strong>——而策略拒绝不是缺陷，模型应当看到它并调整策略。改成 <code>ToolApprovalDeniedError(ToolExecutionError)</code> + 新错误码 <code>E2009</code> 后，拒绝变成模型可见的 <code>ToolResult</code>。</p>
+  </div>
+
+  <h3>直觉三：自动化判据不能授权删除源码</h3>
+
+  <p>为了清理 163 个死模块，我写了个启发式：<em>"存在近名存活模块 → 判为已取代的重复品，可删"</em>。它报出"142 个可删 / 28,806 行"。</p>
+
+  <p>抽查第一条就发现误报：</p>
+
+  <pre><code><span class="c-del">src.core.hook_registry.async_executor</span>  "对照"  src.core.hook_registry
+     └─ 后者是<strong>同一个包</strong>，前者是它的子模块。不是重复品。
+
+<span class="c-del">src.workflow.worktree_isolation</span>        "对照"  src.cli.commands.workflow_commands
+     └─ 仅仅因为名字里都含 "workflow"。</code></pre>
+
+  <p>再查一例更危险的：<code>src/hooks/</code> 与 <code>src/core/hook_registry/</code> 名字极像，但读源码后确认它们是<strong>互补关系</strong>——前者是要注册进后者的具体 hook 实现。如果按名字删，会砍掉一整个未接线的功能子系统。</p>
+
+  <div class="card crit">
+    <h4><span class="badge crit">结论</span>名称相似 ≠ 语义重复</h4>
+    <p style="margin-bottom:0"><strong>基于名称的启发式不足以授权删除源码。</strong>我把工具改成"只出复核清单、不判可删"，并把这条教训写进了 <code>CHANGELOG</code> 与跨会话记忆——因为下一次、下一个人都会想走这条捷径。</p>
+  </div>
+</section>
+
+<!-- ══════════ 3 做了什么 ══════════ -->
+<section id="changes">
+  <h2><span class="num">03</span>做了什么</h2>
+  <p class="sub">5 个提交。33 个文件，+1,283 / −2,812。</p>
+
+  <h3>3.1 审批门禁：PLAN 首次真正生效</h3>
+
+  <p>在 <code>ToolManager.execute_tool</code> 与 <code>execute_tools_parallel</code>（生产工具执行的唯一咽喉点）按类别拦截：</p>
+
+  <table>
+    <tr><th style="width:36%">工具类别</th><th>PLAN 模式下</th></tr>
+    <tr><td class="mono">read (FileRead/Glob/Grep/HotFiles)</td><td style="color:var(--ok)">放行</td></tr>
+    <tr><td class="mono">write (FileEdit/Write/Patch)</td><td style="color:var(--crit)">拒绝 E2009</td></tr>
+    <tr><td class="mono">exec (Bash/Shell/Command)</td><td style="color:var(--crit)">拒绝 E2009</td></tr>
+  </table>
+
+  <p><strong>刻意的范围收窄</strong>：只实施 PLAN。<code>DEFAULT</code> / <code>AUTO_EDIT</code> / <code>YOLO</code> 不拦截——因为仓库里<strong>没有任何交互式审批设施</strong>，DEFAULT 语义中的"需要审批"无法落地，强行拦截会让开箱即用的默认配置直接不可用。</p>
+
+  <div class="card warn">
+    <h4><span class="badge warn">诚实性</span>把"声明了但做不到"说出来</h4>
+    <p style="margin-bottom:0">不说明的后果比不支持更糟：用户读到 <code>DEFAULT: 编辑文件或执行 shell 需要审批</code> 会以为有保护。<strong>静默的虚假安全感</strong>比明说"不支持"更危险。现在 ToolManager 构造时一次性告警，明确告知该模式不会拦截，并给出出路（如需强制只读请设 <code>plan</code>）。PLAN 与 YOLO 不告警——前者是真实施了的，后者的语义恰好就是当前实际行为。</p>
+  </div>
+
+  <p>另有一处安全降级方向被刻意锁死：配置读取失败时退回 <code>DEFAULT</code> 而非 <code>YOLO</code>——<em>"读不到配置就放开全部管控"是最危险的降级方向</em>。</p>
+
+  <h3>3.2 并发压测：200 并发，5/5</h3>
+
+  <p>用户要求"方便极端以及高并发的话要对该功能或该模块进行压测"。我选了三处<strong>真实存在并发风险</strong>的基础设施：</p>
+
+  <pre><code><span class="c-dim">$ python scripts/stress_test.py --n 200</span>
+
+  [<span class="c-add">PASS</span>] 工具执行 200 并发      200 全部成功且结果无错配
+  [<span class="c-add">PASS</span>] 线程池未耗尽           5 轮 × 50 并发，每轮全成功
+  [<span class="c-add">PASS</span>] 审批门禁并发混合        拒绝=100 只读放行=100 YOLO放行=100 误拒=<span class="c-add">0</span>
+  [<span class="c-add">PASS</span>] 熔断器 200 并发计数     计数无丢失，正确进入 OPEN
+  [<span class="c-add">PASS</span>] 熔断器并发渠道隔离      熔断 200 / 健康 200 判定全部正确</code></pre>
+
+  <p>每条都验证一个具体的失败模式：<em>池耗尽死锁、结果错配、门禁漏判/误判、并发计数丢失、渠道串扰</em>。不是"跑一下看看能不能过"。</p>
+
+  <h3>3.3 压测暴露的性能瓶颈</h3>
+
+  <p>压测顺手量出一个数据：<strong>200 个并发 bash 调用耗时 19.05s，吞吐仅 11 req/s</strong>。定位到 <code>_BOUNDED_EXECUTOR_MAX_WORKERS = 10</code> 硬编码——200 个请求被压成 20 波。</p>
+
+  <pre><code>池=10 -> 200 并发 19.05s (<span class="c-dim">11 req/s</span>)
+池=64 -> 200 并发 12.40s (<span class="c-dim">16 req/s</span>)   <span class="c-add">延迟降 35%</span></code></pre>
+
+  <p>改为可用 <code>CLAWD_TOOL_EXECUTOR_MAX_WORKERS</code> 配置，默认值保持 10 不变。<strong>诚实说明：收益有限</strong>——真正的瓶颈是 Windows 进程创建开销而非线程数，调大池只能缓解排队。</p>
+
+  <p>非法配置值（0 / 负数 / 非数字 / 超大）一律回退默认并告警。理由：<code>max_workers=0</code> 会让 <code>ThreadPoolExecutor</code> 直接抛 <code>ValueError</code>，进而让<strong>全部</strong>工具执行失败——这种低级配置错误不该导致整个 agent 不可用。</p>
+
+  <h3>3.4 死代码：删了 4 组，验证了安全性</h3>
+
+  <p>删除的都是<strong>同一 TypeScript 源文件</strong>的两个移植版本中被遗弃的那一个：</p>
+
+  <table>
+    <tr><th style="width:28%">删除</th><th style="width:12%">行数</th><th>存活侧（生产可达）</th><th style="width:26%">共同来源</th></tr>
+    <tr><td class="mono">src/pipeline/</td><td class="mono">248</td><td class="mono">src/workflow/pipeline.py</td><td class="mono">Pipeline</td></tr>
+    <tr><td class="mono">src/team/</td><td class="mono">1,065</td><td class="mono">src/workflow/team/</td><td class="mono">team/phase-controller.ts</td></tr>
+    <tr><td class="mono">src/subagents/</td><td class="mono">230</td><td class="mono">src/agent/swarm/subagent_tracker.py</td><td class="mono">subagents/tracker.ts</td></tr>
+    <tr><td class="mono">src/screens/hud/</td><td class="mono">1,013</td><td class="mono">src/cli/hud*.py</td><td class="mono">hud/render.ts</td></tr>
+  </table>
+
+  <div class="card ok">
+    <h4><span class="badge ok">安全验证</span>一条不变量</h4>
+    <p>删除前后对比「从生产入口可达的模块数」——若该数字<strong>不变</strong>，说明删掉的确实都是不可达模块：</p>
+    <pre style="margin:10px 0 0"><code>删除前: 684 模块 / <span class="c-add">429</span> 生产可达 / 181 连测试都到不了
+删除后: 666 模块 / <span class="c-add">429</span> 生产可达 / 163 连测试都到不了
+                <span class="c-dim">^^^ 未变 = 安全</span></code></pre>
+  </div>
+</section>
+
+<!-- ══════════ 4 验证 ══════════ -->
+<section id="evidence">
+  <h2><span class="num">04</span>验证</h2>
+
+  <h3>生产路径 E2E（真实端点）</h3>
+  <pre><code><span class="c-dim">$ python scripts/e2e_production.py</span>
+  ... 8 步，通过 <span class="c-add">8</span>，失败 0</code></pre>
+
+  <h3>测试</h3>
+  <table>
+    <tr><th style="width:52%">文件</th><th>结果</th></tr>
+    <tr><td class="mono">tests/agent/test_approval_gate.py</td><td class="mono" style="color:var(--ok)">36 passed</td></tr>
+    <tr><td class="mono">tests/agent/test_executor_config.py</td><td class="mono" style="color:var(--ok)">17 passed</td></tr>
+    <tr><td class="mono">tests/brain/</td><td class="mono" style="color:var(--ok)">27 passed（原 3 失败转通过）</td></tr>
+    <tr><td class="mono">定向回归 workflow/agent/contracts/cli</td><td class="mono" style="color:var(--ok)">仅 5 个既有失败，无新增</td></tr>
+  </table>
+
+  <h3>版本一致性</h3>
+  <table>
+    <tr><th style="width:40%">位置</th><th>值</th></tr>
+    <tr><td class="mono">pyproject.toml</td><td class="mono">0.54.0</td></tr>
+    <tr><td class="mono">src.__version__</td><td class="mono">0.54.0（自动读取）</td></tr>
+    <tr><td class="mono">README.md</td><td class="mono">v0.54.0</td></tr>
+  </table>
+</section>
+
+<!-- ══════════ 5 诚实 ══════════ -->
+<section id="honest">
+  <h2><span class="num">05</span>没做完的部分</h2>
+  <div class="honest">
+    <h3>三件明确未完成</h3>
+    <ul>
+      <li><strong>163 个死模块仍在。</strong>我只删了 4 组（2,556 行）能确认为"同一 TS 源重复移植"的。剩下 31,188 行需要<strong>逐条读源码</strong>判断——这是人力活，自动化判据已被证明不可靠。</li>
+      <li><strong>审批门禁只做了一半。</strong><code>DEFAULT</code>/<code>AUTO_EDIT</code>/<code>YOLO</code> 之间目前没有差别。补齐需要实现交互式审批提示，那是<strong>新功能</strong>而非缺陷修复，且改动面涉及引擎主循环。我做的是加启动告警（诚实披露），不是完成它。</li>
+      <li><strong>覆盖率仍约 20%。</strong>本轮的 53 个新用例集中在审批门禁、线程池配置、world_model 三处，没有系统性爬升。</li>
+    </ul>
+
+    <h3>三个已知但未修的缺陷</h3>
+    <ul>
+      <li><code>HeuristicToolParser</code> 对带 <code>&lt;/function&gt;</code> 闭合标签的输出失效（实测 6 种真实形态全识别不了）。主路径 <code>parse_tool_calls</code> 正常，所以不阻塞——但它是静默失效的兜底。</li>
+      <li><code>CircuitBreaker</code> 半开态的 <code>half_open_max_requests</code> 形同虚设：<code>_half_open_requests</code> 只在 <code>record_success</code> 中递增，失败路径与"请求发起"路径都不计数。已锁定为 <code>xfail</code>。</li>
+      <li><code>src/core/exceptions.py</code> 有 10 组重复的异常类定义（后者静默覆盖前者）。改动需要先确认哪一份生效，风险不小，未做。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════ 测验 ══════════ -->
+<section id="quiz">
+  <h2><span class="num">06</span>测验</h2>
+  <p class="sub">8 道题，覆盖本轮的三处关键判断。答对至少 7 题才算通过。答错时请读一遍解释再重做。</p>
+
+  <div class="quiz" id="quizBox">
+
+    <div class="q" data-q="1" data-correct="c">
+      <p><span class="qn">Q1</span><code>import json</code> 放在 <code>if fp_path.exists():</code> 里，为什么会让<strong>首次运行</strong>崩溃？</p>
+      <label class="opt"><input type="radio" name="q1" value="a">因为第一次运行时 json 模块还没安装</label>
+      <label class="opt"><input type="radio" name="q1" value="b">因为 <code>if</code> 块里的 import 只在块内可见，后面看不到</label>
+      <label class="opt"><input type="radio" name="q1" value="c">Python 在编译期就把 <code>json</code> 判定为整个函数的局部变量；首次运行时该分支不执行，<code>json</code> 从未绑定，函数后面用它就抛 <code>UnboundLocalError</code></label>
+      <label class="opt"><input type="radio" name="q1" value="d">因为首次运行时文件系统还没准备好</label>
+      <div class="fb" data-right="c"><b>答对了。</b> 关键在 Python 的作用域规则：函数体内<strong>任何位置</strong>的赋值（包括 <code>import</code>）都会让该名字成为<strong>整个函数</strong>的局部变量，而不是"块内局部"。所以首次运行时那个分支不执行 → <code>json</code> 未绑定 → 200 行后的 <code>json.dumps(...)</code> 抛 <code>UnboundLocalError</code>。</div>
+      <div class="fb" data-right="a"><b>不对。</b> <code>json</code> 是 Python 标准库，永远可用。问题不在模块是否存在，而在这个名字有没有被绑定。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> Python 的 <code>if</code> 块<em>不</em>创建新的作用域——这正是问题的根源。名字的可见范围是整个函数，但<strong>绑定时机</strong>取决于分支是否执行。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 与文件系统无关（虽然触发条件是"文件不存在"，但失败原因是变量未绑定）。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="2" data-correct="b">
+      <p><span class="qn">Q2</span>为什么审批门禁第一版抛 <code>SecurityError</code> 是错的？</p>
+      <label class="opt"><input type="radio" name="q2" value="a">因为 <code>SecurityError</code> 不存在</label>
+      <label class="opt"><input type="radio" name="q2" value="b">因为 Agent 环路只捕获 <code>ToolExecutionError</code>，而 <code>SecurityError</code> 是它的兄弟类 —— 异常会穿透出去触发自愈引擎去"修复"一个策略拒绝</label>
+      <label class="opt"><input type="radio" name="q2" value="c">因为 <code>SecurityError</code> 不能让程序退出</label>
+      <label class="opt"><input type="radio" name="q2" value="d">因为错误码不够明确</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>engine_loop._execute_single_tool</code> 的 <code>except ToolExecutionError</code> 会把异常转成 <code>ToolResult(success=False, ...)</code> —— 这正是我们想要的（模型能看到并调整策略）。但 <code>SecurityError</code> 与 <code>ToolExecutionError</code> 都直接继承 <code>ClawdError</code>，是兄弟关系，不被捕获。改成 <code>ToolApprovalDeniedError(ToolExecutionError)</code> 后行为才正确。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 它存在且语义上确实像"安全拒绝"——这正是它看起来对、实际错的原因。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 问题不是程序要不要退出，而是这个异常该由谁处理。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 错误码（E2009）是后来加的改进，但不是第一版错误的原因。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="3" data-correct="a">
+      <p><span class="qn">Q3</span>删除死代码时，哪条验证最能证明操作安全？</p>
+      <label class="opt"><input type="radio" name="q3" value="a">删除前后对比「从生产入口可达的模块数」—— 若该数字不变，说明删掉的确实都是不可达的</label>
+      <label class="opt"><input type="radio" name="q3" value="b">运行应用能启动</label>
+      <label class="opt"><input type="radio" name="q3" value="c">全量测试通过率没有下降</label>
+      <label class="opt"><input type="radio" name="q3" value="d">被删模块的文件名没有出现在任何 grep 结果中</label>
+      <div class="fb" data-right="a"><b>答对了。</b> 这是一条<strong>不变量</strong>：可达模块数只可能因为删掉了可达模块而下降。它衡量的是"我删的东西在不在可达集里"，而不是"删完之后应用还能不能跑"——后者可能因为删掉的是冷路径而误判为安全。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 启动只覆盖很小一部分代码路径。删掉一个只在错误处理或某个子命令里用到的模块，应用照样启动。正确选项是 A。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 覆盖率只有约 20%，大部分被删代码本来就没有测试覆盖——"通过率没降"几乎必然成立，证明力很弱。正确选项是 A。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 动态加载（<code>importlib</code>、注册表、配置里的字符串引用）不会被 grep 直接命中，这条判据有系统性盲区。正确选项是 A。</div>
+    </div>
+
+    <div class="q" data-q="4" data-correct="c">
+      <p><span class="qn">Q4</span>为什么"存在近名存活模块"不能作为删除依据？</p>
+      <label class="opt"><input type="radio" name="q4" value="a">因为 grep 可能匹配到注释里的内容</label>
+      <label class="opt"><input type="radio" name="q4" value="b">因为存活模块也可能过时</label>
+      <label class="opt"><input type="radio" name="q4" value="c">因为名称相似 ≠ 语义重复 —— 母子模块会被误匹配，无关模块可能仅因共享一个词而"配对"</label>
+      <label class="opt"><input type="radio" name="q4" value="d">因为文件路径在不同平台不一样</label>
+      <div class="fb" data-right="c"><b>答对了。</b> 实测两个反例：<code>hook_registry.async_executor</code> 的"对照"<code>hook_registry</code> 其实是<strong>它自己的父包</strong>；<code>workflow.worktree_isolation</code> 的"对照"<code>cli.commands.workflow_commands</code> 纯粹因为名字里都有 "workflow"。更危险的是 <code>src/hooks/</code> 与 <code>src/core/hook_registry/</code>——名字极像但读源码后确认是<strong>互补关系</strong>，按名字删会砍掉一整个未接线子系统。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 即使排除注释匹配，母子模块和共享词的问题依然存在。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 这与存活模块是否过时无关——问题出在"配对"这个动作本身不可靠。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 路径差异是工程细节，不是判据失效的根本原因。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="5" data-correct="b">
+      <p><span class="qn">Q5</span>为什么 <code>DEFAULT</code> 模式不实施"需要审批"？</p>
+      <label class="opt"><input type="radio" name="q5" value="a">因为实现太难了</label>
+      <label class="opt"><input type="radio" name="q5" value="b">因为仓库里没有任何交互式审批设施 —— 强行拦截会让开箱即用的默认配置直接不可用</label>
+      <label class="opt"><input type="radio" name="q5" value="c">因为 DEFAULT 本来就不需要审批</label>
+      <label class="opt"><input type="radio" name="q5" value="d">因为用户不希望被打断</label>
+      <div class="fb" data-right="b"><b>答对了。</b> <code>DEFAULT</code> 是<strong>默认值</strong>。"需要审批"意味着每次写文件/跑命令都要等用户确认，而项目里没有任何弹出确认的机制。若强行拦截，所有用户一开箱就发现 agent 什么也做不了——这比不拦截更糟。所以选择"不拦截 + 启动告警说明边界"，把决定权交给用户（要强制只读请用 <code>plan</code>）。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 技术上可以实现，但那属于<strong>新功能开发</strong>（要改引擎主循环、要设计交互协议），不是本次缺陷修复的范围。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 它的文档语义明确写着"编辑文件或执行 shell 需要审批"。这正是"声明了但做不到"的问题所在。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 没有证据表明用户的偏好；决定因素是"机制不存在"。正确选项是 B。</div>
+    </div>
+
+    <div class="q" data-q="6" data-correct="c">
+      <p><span class="qn">Q6</span>压测发现线程池从 10 调到 64 只带来 35% 提升。这说明什么？</p>
+      <label class="opt"><input type="radio" name="q6" value="a">说明线程池配置不重要</label>
+      <label class="opt"><input type="radio" name="q6" value="b">说明 64 还是太小，应该调到 256</label>
+      <label class="opt"><input type="radio" name="q6" value="c">说明真正的瓶颈在别处 —— 在本例中是 Windows 进程创建开销，调大池只能缓解排队，不能消除成本</label>
+      <label class="opt"><input type="radio" name="q6" value="d">说明压测方法有问题</label>
+      <div class="fb" data-right="c"><b>答对了。</b> 这是性能工作中最重要的判断：当增大并发度只带来次线性收益时，瓶颈已经不在并发度上。200 个 <code>echo</code> 命令里的成本主要是进程创建，而进程创建是串行于 CPU/内核的开销，再加线程也只是换一批人排队。把这一点如实写进报告，比宣称"优化了 35%"更有价值。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 35% 是真实收益，不该忽视；问题是要看清收益的<em>上限来自哪里</em>。正确选项是 C。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 调到 256 也不会消除进程创建成本，还会加剧上下文切换。代码里本就设了 256 的上限保护。正确选项是 C。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 压测方法正常（200 并发、结果校验、重复 5 轮）。它恰恰<em>成功地</em>揭示了瓶颈所在。正确选项是 C。</div>
+    </div>
+
+    <div class="q" data-q="7" data-correct="a">
+      <p><span class="qn">Q7</span>为什么线程池大小配错（如设为 0）要"回退到默认"而不是直接报错？</p>
+      <label class="opt"><input type="radio" name="q7" value="a">因为 <code>max_workers=0</code> 会让 ThreadPoolExecutor 抛 ValueError，进而让<strong>全部</strong>工具执行失败 —— 一个低级配置错误不该导致整个 agent 不可用</label>
+      <label class="opt"><input type="radio" name="q7" value="b">因为报错信息不好写</label>
+      <label class="opt"><input type="radio" name="q7" value="c">因为用户不会看报错</label>
+      <label class="opt"><input type="radio" name="q7" value="d">因为默认值总是最好的</label>
+      <div class="fb" data-right="a"><b>答对了。</b> 这是<strong>故障半径</strong>的判断：一个拼错的配置值，其影响面被限制在"线程数用默认值"而不是"整个 agent 瘫掉"。所以选择降级 + 告警。同一条原则的另一面是：配置读取失败时退回 <code>DEFAULT</code> 而不是 <code>YOLO</code>——降级方向必须指向<strong>更安全</strong>的一侧。</div>
+      <div class="fb" data-right="b"><b>不对。</b> 报错信息很容易写。决定因素是"失败影响面"。正确选项是 A。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 告警照样会输出（用 <code>warn()</code> 记录），只是不中断流程。正确选项是 A。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 默认值只是"安全"，不总是"最优"——批量场景下确实该调大。正确选项是 A。</div>
+    </div>
+
+    <div class="q" data-q="8" data-correct="b">
+      <p><span class="qn">Q8</span>本轮的 5 项压测各验证一个具体的失败模式。下面哪一项<strong>不在</strong>其中？</p>
+      <label class="opt"><input type="radio" name="q8" value="a">线程池耗尽导致后续请求饿死</label>
+      <label class="opt"><input type="radio" name="q8" value="b">网络分区下的 LLM 供应商切换</label>
+      <label class="opt"><input type="radio" name="q8" value="c">并发下审批门禁漏判或误判</label>
+      <label class="opt"><input type="radio" name="q8" value="d">熔断器在并发失败下计数丢失</label>
+      <div class="fb" data-right="b"><b>答对了。</b> 本轮压测覆盖的是：工具执行结果错配、线程池耗尽、门禁并发正确性、熔断器计数完整性、渠道隔离。**网络分区下的供应商切换没有测** —— 那属于 LLM 层的故障转移，本轮的压力测试集中在工具执行与熔断器两处基础设施。诚实标注测试范围，和标注未测范围同样重要。</div>
+      <div class="fb" data-right="a"><b>不对。</b> 这项<em>在</em>测试范围内，对应「线程池未耗尽（5 轮）」——连跑 5 轮确认池不会泄漏导致后续请求饿死。正确选项是 B。</div>
+      <div class="fb" data-right="c"><b>不对。</b> 这项<em>在</em>测试范围内，对应「审批门禁并发混合」——统计拒绝/放行/误拒的次数。正确选项是 B。</div>
+      <div class="fb" data-right="d"><b>不对。</b> 这项<em>在</em>测试范围内，对应「熔断器 200 并发计数」——200 个线程同时打失败，验证计数无丢失。正确选项是 B。</div>
+    </div>
+
+    <div class="scorebar"><i id="bar"></i></div>
+    <p style="font-size:.82rem;color:var(--ink-faint);margin:6px 0 0">已作答 <span id="answered">0</span> / 8 · 正确 <span id="correct">0</span></p>
+
+    <div class="verdict" id="verdict"></div>
+    <button class="act" id="checkBtn">提交答案</button>
+    <button class="act ghost" id="resetBtn" style="margin-left:10px">重做</button>
+  </div>
+</section>
+
+<hr>
+<p style="font-size:.82rem;color:var(--ink-faint);text-align:center;margin:0">
+  Clawd Code v0.54.0 变更报告 · 2026-10-17 ·
+  5 commits · +1,283 / −2,812 ·
+  <span class="tag">v0.51.0</span> <span class="tag">v0.53.0</span> <span class="tag">v0.54.0</span>
+</p>
+
+</div>
+
+<script>
+(function(){
+  const quiz = document.getElementById('quizBox');
+  const qs = [...quiz.querySelectorAll('.q')];
+  const bar = document.getElementById('bar');
+  const answeredEl = document.getElementById('answered');
+  const correctEl = document.getElementById('correct');
+  const verdict = document.getElementById('verdict');
+  const checkBtn = document.getElementById('checkBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // 正确答案由每个 .q 上的 data-correct 显式声明，不依赖 DOM 顺序。
+  const RIGHT = {};
+  qs.forEach(q => { RIGHT[q.dataset.q] = q.dataset.correct; });
+
+  const PASS_THRESHOLD = Math.ceil(qs.length * 0.875);   // 8 题至少 7 对
+  let locked = false;
+
+  function refresh(){
+    let answered = 0, correct = 0;
+    qs.forEach(q => {
+      const sel = q.querySelector('input:checked');
+      if (sel){
+        answered++;
+        if (sel.value === RIGHT[q.dataset.q]) correct++;
+      }
+    });
+    answeredEl.textContent = answered;
+    correctEl.textContent = correct;
+    bar.style.width = (correct / qs.length * 100) + '%';
+    return {answered, correct};
+  }
+
+  quiz.addEventListener('change', () => { if (!locked) refresh(); });
+
+  checkBtn.addEventListener('click', () => {
+    const {answered, correct} = refresh();
+    if (answered < qs.length){
+      verdict.className = 'verdict show fail';
+      verdict.innerHTML = '还有 ' + (qs.length - answered) + ' 题未作答' +
+        '<small>全部作答后才能提交。</small>';
+      return;
+    }
+    locked = true;
+
+    qs.forEach(q => {
+      const rid = RIGHT[q.dataset.q];
+      q.querySelectorAll('.opt').forEach(o => {
+        const inp = o.querySelector('input');
+        inp.disabled = true;
+        o.classList.add('locked');
+        if (inp.value === rid) o.classList.add('right');
+        else if (inp.checked) o.classList.add('wrong');
+      });
+      q.querySelectorAll('.fb').forEach(f => {
+        f.classList.remove('show');
+        if (f.dataset.right === rid) f.classList.add('show');
+      });
+    });
+
+    const pass = correct >= PASS_THRESHOLD;
+    verdict.className = 'verdict show ' + (pass ? 'pass' : 'fail');
+    verdict.innerHTML = (pass ? '✓ 通过 — ' : '✗ 未通过 — ') + correct + ' / ' + qs.length +
+      (pass
+        ? '<small>对本次变更的理解达到要求。上面已标出每题正解与解释。</small>'
+        : '<small>需要至少 ' + PASS_THRESHOLD + ' 题正确。请读上方标红的解释，然后点"重做"。</small>');
+    bar.style.background = pass ? 'var(--ok)' : 'var(--crit)';
+    checkBtn.textContent = pass ? '已通过' : '重新提交';
+    if (!pass) locked = false;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    locked = false;
+    qs.forEach(q => {
+      q.querySelectorAll('input').forEach(i => { i.checked = false; i.disabled = false; });
+      q.querySelectorAll('.opt').forEach(o => o.classList.remove('right','wrong','locked'));
+      q.querySelectorAll('.fb').forEach(f => f.classList.remove('show'));
+    });
+    bar.style.width = '0';
+    bar.style.background = 'var(--accent)';
+    verdict.className = 'verdict';
+    checkBtn.textContent = '提交答案';
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>
