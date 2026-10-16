@@ -203,20 +203,55 @@ async def execute_tool(
 
 # 有界线程池（全局单例，防止高并发时耗尽系统资源）
 _BOUNDED_EXECUTOR: ThreadPoolExecutor | None = None
-_BOUNDED_EXECUTOR_MAX_WORKERS = 10  # 最大工作线程数
 _EXECUTOR_LOCK = asyncio.Lock()
+
+# 默认最大工作线程数。
+# 10 对 CLI 场景够用（单轮通常只并发 1-5 个工具），但批量/服务化场景会成瓶颈：
+# 实测 200 个并发 bash 调用被压成 20 波，吞吐仅 9 req/s。
+# 因此开放为环境变量，默认值保持不变（不改变既有行为）。
+_DEFAULT_EXECUTOR_MAX_WORKERS = 10
+_EXECUTOR_MAX_WORKERS_ENV = 'CLAWD_TOOL_EXECUTOR_MAX_WORKERS'
+
+
+def _resolve_max_workers() -> int:
+    """解析工作线程数：环境变量 > 默认值。
+
+    非法值（非数字 / ≤0 / 过大）一律回退到默认并告警 —— 线程池大小配错
+    会让**全部**工具执行失败（max_workers=0 直接抛 ValueError），
+    这种低级配置错误不应导致整个 agent 不可用。
+    """
+    raw = os.environ.get(_EXECUTOR_MAX_WORKERS_ENV)
+    if not raw:
+        return _DEFAULT_EXECUTOR_MAX_WORKERS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        warn(
+            f'{_EXECUTOR_MAX_WORKERS_ENV}={raw!r} 不是整数，'
+            f'回退到默认 {_DEFAULT_EXECUTOR_MAX_WORKERS}'
+        )
+        return _DEFAULT_EXECUTOR_MAX_WORKERS
+    if value <= 0:
+        warn(
+            f'{_EXECUTOR_MAX_WORKERS_ENV}={value} 必须为正数，'
+            f'回退到默认 {_DEFAULT_EXECUTOR_MAX_WORKERS}'
+        )
+        return _DEFAULT_EXECUTOR_MAX_WORKERS
+    # 上限保护：线程数超过这个量级只会加剧上下文切换，不会提升吞吐
+    return min(value, 256)
 
 
 async def _get_bounded_executor() -> ThreadPoolExecutor:
     """获取有界线程池（全局单例，异步安全初始化）
 
     防止高并发时无限制创建线程导致系统资源耗尽。
+    规模可用 `CLAWD_TOOL_EXECUTOR_MAX_WORKERS` 调整（默认 10）。
     """
     global _BOUNDED_EXECUTOR
     if _BOUNDED_EXECUTOR is None:
         async with _EXECUTOR_LOCK:
             if _BOUNDED_EXECUTOR is None:
-                _BOUNDED_EXECUTOR = ThreadPoolExecutor(max_workers=_BOUNDED_EXECUTOR_MAX_WORKERS)
+                _BOUNDED_EXECUTOR = ThreadPoolExecutor(max_workers=_resolve_max_workers())
     return _BOUNDED_EXECUTOR
 
 
