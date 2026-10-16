@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import bash_constants
 from .base import BaseTool, ParameterSchema, ToolResult
 from .bash_constants import (
-    _ALLOWED_WORKDIRS,
     DANGEROUS_PATTERNS_UNIX,
     DANGEROUS_PATTERNS_WINDOWS,
 )
@@ -346,11 +346,21 @@ class BashTool(BaseTool):
             )
 
     def _is_safe_path(self, path: Path) -> bool:
-        """检查路径是否在允许范围内"""
-        if not _ALLOWED_WORKDIRS:
+        """检查路径是否在允许范围内。
+
+        必须**通过模块属性动态读取** `_ALLOWED_WORKDIRS`，不能值导入。
+
+        原因：`set_allowed_workdirs()` 是用 `global ... = [...]` **重新绑定**
+        模块全局，而不是原地修改列表。若这里写成
+        `from .bash_constants import _ALLOWED_WORKDIRS`，本模块会一直持有
+        绑定时的那个旧列表对象 —— 调用 `set_allowed_workdirs()` 完全没有
+        效果，白名单永远锁死在进程启动时的 cwd。
+        """
+        allowed = bash_constants._ALLOWED_WORKDIRS
+        if not allowed:
             return True  # 无限制
         resolved = path.resolve()
-        return any(resolved.is_relative_to(allowed) for allowed in _ALLOWED_WORKDIRS)
+        return any(resolved.is_relative_to(w) for w in allowed)
 
     def __del__(self) -> None:
         """确保资源释放"""

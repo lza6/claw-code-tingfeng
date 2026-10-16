@@ -100,6 +100,46 @@ class ReplSession:
         # 更新 command registry 的 engine 引用
         command_registry.refresh_engine(self.engine)
 
+        # 挂载交互式审批确认 —— 使 approval_mode 的 default / auto-edit
+        # 语义真正生效（此前它们与 yolo 无差别，见 CHANGELOG v0.54.0）。
+        # 只在交互式 REPL 挂载；脚本 / CI 不挂载，行为保持不变。
+        try:
+            self.engine.tool_manager.set_confirm_callback(self._confirm_tool_execution)
+        except Exception as e:
+            self._safe_print(f"{dim(f'[警告] 审批确认挂载失败: {e}')}")
+
+    def _confirm_tool_execution(
+        self,
+        tool_name: str,
+        tool_kind: str,
+        tool_args: dict[str, Any],
+    ) -> bool:
+        """交互式审批：向用户展示将要执行的操作并请求确认。
+
+        返回 True 表示放行。任何异常都按**拒绝**处理 —— 审批环节出错时
+        保守一方应当是"不执行"，而不是"放行"。
+        """
+        kind_label = {'write': '修改文件', 'exec': '执行命令'}.get(tool_kind, tool_kind)
+        # 参数摘要：截断以免刷屏
+        summary = ", ".join(f"{k}={str(v)[:60]}" for k, v in list(tool_args.items())[:3])
+        try:
+            self._safe_print(
+                f"\n{bold_green('需要审批')} · {kind_label} · {tool_name}\n"
+                f"  {dim(summary)}"
+            )
+            answer = input("  允许执行？[y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            self._safe_print(dim("  （无输入，按拒绝处理）"))
+            return False
+        except Exception as e:
+            self._safe_print(dim(f"  （审批提示失败: {e}，按拒绝处理）"))
+            return False
+        allowed = answer in ('y', 'yes')
+        self._safe_print(
+            green("  已允许") if allowed else dim("  已拒绝")
+        )
+        return allowed
+
     def _post_task_hook(self, session: Any) -> None:
         """任务完成后自动执行：内存检查 + 进化审查。"""
         if session is None:

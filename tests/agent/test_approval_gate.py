@@ -269,7 +269,7 @@ class TestSilentFalseSecurityIsDisclosed:
             ToolManager({}, approval_mode=mode)
 
         joined = " ".join(r.getMessage() for r in caplog.records)
-        assert "未实现交互式审批" in joined
+        assert "未提供交互式确认回调" in joined
         assert mode.value in joined
 
     def test_plan_mode_does_not_warn_about_unenforceable(self, caplog):
@@ -280,7 +280,7 @@ class TestSilentFalseSecurityIsDisclosed:
             ToolManager({}, approval_mode=ApprovalMode.PLAN)
 
         joined = " ".join(r.getMessage() for r in caplog.records)
-        assert "未实现交互式审批" not in joined
+        assert "未提供交互式确认回调" not in joined
 
     def test_yolo_does_not_warn(self, caplog):
         """YOLO 的语义（全部自动批准）恰好就是当前实际行为，无需告警"""
@@ -290,4 +290,126 @@ class TestSilentFalseSecurityIsDisclosed:
             ToolManager({}, approval_mode=ApprovalMode.YOLO)
 
         joined = " ".join(r.getMessage() for r in caplog.records)
-        assert "未实现交互式审批" not in joined
+        assert "未提供交互式确认回调" not in joined
+
+
+# ---------------------------------------------------------------------------
+# 四种模式的完整语义矩阵（v0.54.0 补齐交互式审批后）
+# ---------------------------------------------------------------------------
+
+
+class TestFullModeMatrix:
+    """`ApprovalMode` 文档声明了四种语义，这里逐格验证。
+
+    | 模式 | read | write | exec |
+    |:---|:---|:---|:---|
+    | plan       | 放行 | 拒绝 | 拒绝 |
+    | default    | 放行 | 询问 | 询问 |
+    | auto-edit  | 放行 | 放行 | 询问 |
+    | yolo       | 放行 | 放行 | 放行 |
+
+    "询问"的含义：有 `confirm_callback` 时按回调结果决定；无回调时放行
+    （非交互场景不能因为没人应答就卡死，也不能因此改变既有行为）。
+    """
+
+    def _outcome(self, workdir, mode, cb, tool, args) -> str:
+        # 只读用例需要一个真实存在的文件，否则会因"文件不存在"抛
+        # ToolInvalidArgsError 而非走到审批判定，测不到我们想测的东西。
+        (Path(workdir) / "README.md").write_text("probe", encoding="utf-8")
+        # BashTool 默认只允许进程 cwd；tmp_path 在别处，需显式放行。
+        # 这条调用本身也是 `set_allowed_workdirs` 的回归验证 —— 修复前它
+        # 完全无效（值导入 vs 重新绑定），见 bash_executor._is_safe_path。
+        from src.tools_runtime.bash_constants import set_allowed_workdirs
+
+        set_allowed_workdirs([Path(workdir)])
+        m = ToolManager(
+            {
+                "FileReadTool": FileReadTool(base_path=workdir),
+                "FileEditTool": FileEditTool(base_path=workdir),
+                "BashTool": BashTool(workdir=workdir),
+            },
+            approval_mode=mode,
+            confirm_callback=cb,
+        )
+        try:
+            asyncio.run(m.execute_tool(tool, args))
+            return "allow"
+        except ToolApprovalDeniedError:
+            return "deny"
+
+    def _row(self, workdir, mode, cb) -> tuple[str, str, str]:
+        x = workdir / "_probe.py"
+        return (
+            self._outcome(workdir, mode, cb, "FileReadTool", {"file_path": "README.md"}),
+            self._outcome(workdir, mode, cb, "FileEditTool", {"file_path": str(x), "content": "v=1"}),
+            self._outcome(workdir, mode, cb, "BashTool", {"command": "echo hi"}),
+        )
+
+    def test_plan_is_read_only_regardless_of_callback(self, tmp_path):
+        for cb in (None, lambda *a: True, lambda *a: False):
+            assert self._row(tmp_path, ApprovalMode.PLAN, cb) == ("allow", "deny", "deny")
+
+    def test_yolo_allows_everything(self, tmp_path):
+        for cb in (None, lambda *a: True, lambda *a: False):
+            assert self._row(tmp_path, ApprovalMode.YOLO, cb) == ("allow", "allow", "allow")
+
+    def test_default_without_callback_preserves_legacy_behaviour(self, tmp_path):
+        """非交互场景（脚本/CI）行为必须与修复前一致 —— 否则会破坏自动化"""
+        assert self._row(tmp_path, ApprovalMode.DEFAULT, None) == ("allow", "allow", "allow")
+
+    def test_default_asks_for_both_write_and_exec(self, tmp_path):
+        assert self._row(tmp_path, ApprovalMode.DEFAULT, lambda *a: True) == ("allow", "allow", "allow")
+        assert self._row(tmp_path, ApprovalMode.DEFAULT, lambda *a: False) == ("allow", "deny", "deny")
+
+    def test_auto_edit_auto_approves_write_but_asks_for_exec(self, tmp_path):
+        """auto-edit 的语义是"自动批准文件编辑"，但 shell 仍需审批"""
+        assert self._row(tmp_path, ApprovalMode.AUTO_EDIT, lambda *a: False) == ("allow", "allow", "deny")
+        assert self._row(tmp_path, ApprovalMode.AUTO_EDIT, lambda *a: True) == ("allow", "allow", "allow")
+
+    def test_read_never_asks(self, tmp_path):
+        """只读工具不该打断用户 —— 否则每个文件读都要确认，无法使用"""
+        asked = []
+
+        def spy(name, kind, args):
+            asked.append(name)
+            return True
+
+        self._outcome(tmp_path, ApprovalMode.DEFAULT, spy, "FileReadTool", {"file_path": "README.md"})
+        assert asked == [], f"只读工具不应触发审批，实际触发了: {asked}"
+
+    def test_callback_receives_tool_name_kind_and_args(self, tmp_path):
+        seen = []
+
+        def spy(name, kind, args):
+            seen.append((name, kind, args))
+            return True
+
+        self._outcome(tmp_path, ApprovalMode.DEFAULT, spy, "BashTool", {"command": "echo probe"})
+        assert len(seen) == 1
+        name, kind, args = seen[0]
+        assert name == "BashTool"
+        assert kind == "exec"
+        assert args == {"command": "echo probe"}
+
+    def test_set_confirm_callback_enables_approval_after_construction(self, tmp_path):
+        """REPL 是在引擎构造之后才挂载回调的，这条路径必须可用"""
+        from src.tools_runtime.bash_constants import set_allowed_workdirs
+
+        set_allowed_workdirs([Path(tmp_path)])
+        m = ToolManager(
+            {"BashTool": BashTool(workdir=tmp_path)},
+            approval_mode=ApprovalMode.DEFAULT,
+        )
+        # 挂载前：放行
+        r1 = asyncio.run(m.execute_tool("BashTool", {"command": "echo a"}))
+        assert r1.success is True
+
+        # 挂载后：拒绝生效
+        m.set_confirm_callback(lambda *a: False)
+        with pytest.raises(ToolApprovalDeniedError):
+            asyncio.run(m.execute_tool("BashTool", {"command": "echo b"}))
+
+        # 卸载后：恢复放行
+        m.set_confirm_callback(None)
+        r3 = asyncio.run(m.execute_tool("BashTool", {"command": "echo c"}))
+        assert r3.success is True

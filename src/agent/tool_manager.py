@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from ..core.approval_mode import ApprovalMode
@@ -39,26 +40,38 @@ class ToolManager:
         self,
         tools: dict[str, BaseTool],
         approval_mode: ApprovalMode | None = None,
+        confirm_callback: Callable[[str, str, dict[str, Any]], bool] | None = None,
     ) -> None:
+        """
+        Args:
+            tools: 工具池
+            approval_mode: 审批模式；None 表示从配置读取
+            confirm_callback: 交互式确认回调 `(tool_name, kind, tool_args) -> bool`。
+                提供时 `DEFAULT` / `AUTO_EDIT` 会在写/执行类工具上向用户提问；
+                未提供时这两者不做拦截（保证脚本 / CI 等非交互场景行为不变）。
+        """
         self.tools = tools
         self._heuristic_parser = HeuristicToolParser()
         self.approval_mode = approval_mode if approval_mode is not None else self._load_approval_mode()
+        self._confirm_callback = confirm_callback
         self._warn_if_approval_unenforceable()
 
     def _warn_if_approval_unenforceable(self) -> None:
         """当配置声明的审批语义**无法被实施**时，一次性说明清楚。
 
-        `DEFAULT` / `AUTO_EDIT` 在 `ApprovalMode` 里声明了不同的审批语义，
-        但本版本**没有交互式审批设施**，它们之间实际上没有差别。
+        本版本只在**提供了交互式确认回调**时才能实施 `DEFAULT` / `AUTO_EDIT`
+        的审批语义。未提供回调（脚本、CI、库调用）时这两者与 `YOLO` 无差别。
 
         不说明的后果：用户读到 "DEFAULT: 编辑文件或执行 shell 需要审批"，
         会以为有保护 —— 这是**静默的虚假安全感**，比明说不支持更危险。
 
         只在构造时告警一次，避免每个工具调用都刷屏。
         """
+        if self._confirm_callback is not None:
+            return
         if self.approval_mode in (ApprovalMode.DEFAULT, ApprovalMode.AUTO_EDIT):
             logger.warning(
-                "approval_mode=%s 声明%s，但本版本未实现交互式审批，"
+                "approval_mode=%s 声明%s，但当前未提供交互式确认回调，"
                 "写/执行类工具**不会被拦截**。如需强制只读，请设为 plan。",
                 self.approval_mode.value,
                 "需要审批" if self.approval_mode == ApprovalMode.DEFAULT else "自动批准文件编辑",
@@ -80,33 +93,61 @@ class ToolManager:
             logger.warning(f"读取 approval_mode 失败，按 DEFAULT 处理: {e}")
             return ApprovalMode.DEFAULT
 
-    def _enforce_approval(self, tool_name: str) -> None:
-        """按审批模式拦截工具调用。
+    def _enforce_approval(self, tool_name: str, tool_args: dict[str, Any] | None = None) -> None:
+        """按审批模式决定是否放行工具调用。
 
-        当前实现范围（重要，勿误读）:
-            本函数**只实施 PLAN 模式的硬性只读门禁**。PLAN 的文档语义是
-            "仅分析，不修改文件"，判定结果是明确的"拒绝"，因此无需交互 UI。
+        完整实施 `ApprovalMode` 的文档语义：
 
-        DEFAULT / AUTO_EDIT / YOLO 不做拦截 —— 因为本仓库**没有任何交互式
-        审批设施**（全仓库搜不到 approval 请求/回调），DEFAULT 语义中的
-        "需要审批"无法落地。强行拦截会让开箱即用的默认配置直接不可用。
-        补齐交互式审批属于**新功能**，不在本次缺陷修复范围内。
+        | 模式 | read | write | exec |
+        |:---|:---|:---|:---|
+        | plan       | 放行 | 拒绝 | 拒绝 |
+        | default    | 放行 | 询问 | 询问 |
+        | auto-edit  | 放行 | 放行 | 询问 |
+        | yolo       | 放行 | 放行 | 放行 |
+
+        "询问"依赖 `confirm_callback`。**未提供回调时按放行处理** ——
+        脚本 / CI / 库调用等非交互场景不能因为没人应答就卡死，也不能
+        因此改变既有行为。构造时会对此告警一次（见
+        `_warn_if_approval_unenforceable`）。
 
         修复的缺陷：此前 approval_mode 只在配置层被读写，
         **没有任何运行时消费者** —— 用户设成 plan 后 Agent 照样写盘。
         """
-        if self.approval_mode != ApprovalMode.PLAN:
-            return
-
         kind = classify_tool(tool_name)
         if kind == 'read':
             return
 
-        raise ToolApprovalDeniedError(
-            tool_name=tool_name,
-            tool_kind=kind,
-            approval_mode=self.approval_mode.value,
-        )
+        mode = self.approval_mode
+
+        if mode == ApprovalMode.PLAN:
+            # 仅分析，不修改文件 —— 硬性拒绝，无需询问
+            raise ToolApprovalDeniedError(tool_name, kind, mode.value)
+
+        if mode == ApprovalMode.YOLO:
+            return
+
+        if mode == ApprovalMode.AUTO_EDIT and kind == 'write':
+            return
+
+        # 剩余情形：DEFAULT 的 write/exec，AUTO_EDIT 的 exec —— 需要审批
+        if self._confirm_callback is None:
+            return  # 非交互场景：放行（既有行为不变）
+
+        if self._confirm_callback(tool_name, kind, tool_args or {}):
+            return
+
+        raise ToolApprovalDeniedError(tool_name, kind, mode.value)
+
+    def set_confirm_callback(
+        self,
+        callback: Callable[[str, str, dict[str, Any]], bool] | None,
+    ) -> None:
+        """挂载/卸载交互式确认回调。
+
+        交互式前端（REPL）在初始化后调用此方法，使 `DEFAULT` / `AUTO_EDIT`
+        的审批语义真正生效。非交互场景不调用，行为保持不变。
+        """
+        self._confirm_callback = callback
 
     def add_tool(self, name: str, tool: BaseTool) -> None:
         self.tools[name] = tool
@@ -131,12 +172,12 @@ class ToolManager:
         return []
 
     async def execute_tool(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
-        self._enforce_approval(tool_name)
+        self._enforce_approval(tool_name, tool_args)
         return await execute_tool(self.tools, tool_name, tool_args)
 
     async def execute_tools_parallel(self, tool_calls: list[tuple[str, dict[str, Any]]]) -> list[Any]:
         # 并行路径同样要过门禁：它的调用方是 engine_loop 的并行分支，
         # 绕过这里等于门禁只挡住了一半请求。
-        for tool_name, _args in tool_calls:
-            self._enforce_approval(tool_name)
+        for tool_name, args in tool_calls:
+            self._enforce_approval(tool_name, args)
         return await execute_tools_parallel(self.tools, tool_calls)
