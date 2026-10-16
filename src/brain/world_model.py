@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import ast
+import asyncio
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -171,7 +173,10 @@ class RepositoryWorldModel:
         fp_path = self.root_dir / ".clawd" / "brain" / "fingerprints.json"
         if fp_path.exists():
             try:
-                import json
+                # json 在模块级导入。曾经这里是 `import json` —— 那会让 json
+                # 成为**整个函数的局部变量**，于是当指纹文件不存在（首次运行）
+                # 时，后面第 231 行的 `json.dumps(...)` 抛 UnboundLocalError。
+                # 后果：首次运行时指纹永不被保存，增量索引每次都退化为全量重建。
                 fingerprints = json.loads(fp_path.read_text(encoding='utf-8'))
             except Exception as e:
                 # 指纹损坏不应阻断初始化，但需可见：否则会静默退化为全量索引
@@ -182,10 +187,22 @@ class RepositoryWorldModel:
         # 2. 构建代码图谱 (并行 AST 分析)
         try:
             from ..rag.code_graph import CodeGraph
-            if not isinstance(self.dependency_graph, CodeGraph):
+
+            # isinstance 要求第二个参数是**类型**。测试常把 CodeGraph 替换成
+            # MagicMock，此时 isinstance 会抛 TypeError，使整条并行构建路径
+            # 无法被 mock 覆盖。这里容忍该情形并按"尚未构建"处理。
+            try:
+                already_code_graph = isinstance(self.dependency_graph, CodeGraph)
+            except TypeError:
+                already_code_graph = False
+
+            if not already_code_graph:
                 self.dependency_graph = CodeGraph(self.root_dir)
 
-            import asyncio
+            # 注意: asyncio 在模块级导入，不要收回方法内 ——
+            # 局部导入对 stdlib 没有性能收益（import 本身有缓存），
+            # 却让 `patch("src.brain.world_model.asyncio.to_thread")` 这类
+            # 测试无法定位目标（属性不存在于模块上）。
             await asyncio.to_thread(self.dependency_graph.build, parallel=True)
             logger.info(f"代码图谱索引完成: {len(self.dependency_graph.nodes)} 个文件")
         except Exception as e:
@@ -265,9 +282,22 @@ class RepositoryWorldModel:
 
         predictions = set()
 
-        # 1. 依赖关系预测 (直接上下游)
-        predictions.update(self.dependency_graph.get_imported_by(rel_path))
-        predictions.update(self.dependency_graph.get_downstream(rel_path))
+        # 1. 依赖关系预测 (上下游文件)
+        #
+        # 注意: 这里曾直接调 `get_imported_by()` —— 但**只有 CodeGraph 有该方法**，
+        # 默认的 DependencyGraph（兼容层）只有 get_upstream。当代码图谱构建失败、
+        # 退回兼容层时，这一行就抛 AttributeError。
+        #
+        # 两种图都提供 impact_analysis()，但返回字段不同：
+        #   DependencyGraph -> direct_upstream / direct_downstream
+        #   CodeGraph       -> impacted_files（传递闭包内的上游文件）
+        # 故按优先级读取，两种实现都能工作。
+        impact = self.dependency_graph.impact_analysis(rel_path)
+        predictions.update(impact.get('direct_upstream') or impact.get('impacted_files') or [])
+        predictions.update(
+            impact.get('direct_downstream')
+            or self.dependency_graph.get_downstream(rel_path)
+        )
 
         # 2. 语义关联文件
         if hasattr(self.text_indexer, 'search'):
