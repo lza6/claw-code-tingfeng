@@ -31,7 +31,15 @@ class BashTool(BaseTool):
     """
 
     name = 'BashTool'
-    description = '执行安全的 shell 命令（禁止危险操作）'
+    # 描述里如实声明不支持管道/重定向/命令串联 —— 实现走 shlex.split +
+    # 参数列表执行（无 shell），因此这些 shell 特性天然不可用。
+    # 不声明的后果：模型会自然地写 `ls | wc -l`，然后拿到一句
+    # "ls: cannot access '|'" 的困惑报错，白白浪费迭代。
+    description = (
+        '执行单个 shell 命令（禁止危险操作）。'
+        '注意：命令以参数列表方式执行，不支持管道符 |、重定向 > <、'
+        '以及 && / || / ; 等命令串联；如需处理输出请分多次调用。'
+    )
 
     parameter_schemas: tuple[ParameterSchema, ...] = (
         ParameterSchema(
@@ -223,13 +231,45 @@ class BashTool(BaseTool):
         return True, ''
 
     def execute(self, **kwargs) -> ToolResult:
-        """执行工具 (通过桥接到异步方法)"""
+        """执行工具（同步入口，桥接到 async_execute）
+
+        桥接必须覆盖三种上下文，缺一即 BashTool 在该上下文 100% 失败：
+
+        1. **无事件循环的线程**（生产主路径）——
+           `execute_tool()` 通过 `ThreadPoolExecutor` 跑同步工具，
+           工作线程里没有事件循环，`asyncio.get_event_loop()` 直接抛
+           `RuntimeError: There is no current event loop in thread ...`。
+           早期这里裸调用 get_event_loop，导致 Agent 的**每一次**
+           bash 调用都失败，且被外层 except 吞成一句"执行失败"。
+        2. **主线程且无运行中循环**（脚本 / 既有测试）——
+           正常 run_until_complete。
+        3. **已有运行中的循环**（被 async 代码同步调用）——
+           不能再 run_until_complete，直接报错要求改用 async 入口。
+
+        同仓库另外 4 处 sync/async 桥接（experience_bank / git/commit /
+        text_indexer / code_graph）都做了同类兜底，这里补齐一致行为。
+        """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 嵌套事件循环风险，在非异步上下文中通常不会发生
-                return ToolResult(success=False, output='', error='请使用异步方法 async_execute', exit_code=1)
-            return loop.run_until_complete(self.async_execute(**kwargs))
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # 情形 1：当前线程根本没有事件循环
+                loop = None
+
+            if loop is not None and loop.is_running():
+                # 情形 3：嵌套事件循环
+                return ToolResult(
+                    success=False,
+                    output='',
+                    error='请使用异步方法 async_execute',
+                    exit_code=1,
+                )
+
+            if loop is not None:
+                return loop.run_until_complete(self.async_execute(**kwargs))
+
+            # 情形 1 续：新建一次性循环执行
+            return asyncio.run(self.async_execute(**kwargs))
         except Exception as e:
             return ToolResult(success=False, output='', error=f'执行失败: {e}', exit_code=1)
 
