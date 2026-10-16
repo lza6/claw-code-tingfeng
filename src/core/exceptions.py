@@ -45,6 +45,7 @@ class ErrorCode(str, Enum):
     TOOL_CAPSULE_ISOLATION_FAILED = 'E2006'  # 工具胶囊隔离失败
     TOOL_OBSERVABILITY_HOOK_ERROR = 'E2007'  # 工具监控钩子错误
     TOOL_PARALLEL_LIMIT_EXCEEDED = 'E2008'   # 并行工具数超限
+    TOOL_APPROVAL_DENIED = 'E2009'           # 审批模式拒绝该工具
 
     # 安全
     SECURITY_COMMAND_INJECTION = 'E3001'
@@ -290,6 +291,35 @@ class ToolTimeoutError(ToolExecutionError):
             code=ErrorCode.TOOL_TIMEOUT,
             details={'tool_name': tool_name, 'timeout': timeout},
             recoverable=True,
+        )
+
+
+class ToolApprovalDeniedError(ToolExecutionError):
+    """审批模式拒绝了该工具调用。
+
+    刻意继承 ToolExecutionError 而非 SecurityError：Agent 环路
+    (`engine_loop._execute_single_tool`) 只捕获 ToolExecutionError 并把它
+    转成 `ToolResult(success=False, error=...)`。若抛 SecurityError（兄弟类），
+    异常会穿透出去触发自愈引擎去"修复"一个**策略拒绝** —— 那是错误行为：
+    策略拒绝不是缺陷，模型应当看到它并调整策略。
+
+    `recoverable=False`：重试不会改变结果。
+    """
+
+    def __init__(self, tool_name: str, tool_kind: str, approval_mode: str) -> None:
+        super().__init__(
+            message=(
+                f'审批模式为 {approval_mode}（仅分析，不修改文件），拒绝执行 '
+                f'{tool_kind} 类工具 {tool_name}。如需修改文件或执行命令，'
+                f'请将 approval_mode 改为 default / auto-edit / yolo。'
+            ),
+            code=ErrorCode.TOOL_APPROVAL_DENIED,
+            details={
+                'tool_name': tool_name,
+                'tool_kind': tool_kind,
+                'approval_mode': approval_mode,
+            },
+            recoverable=False,
         )
 
 
