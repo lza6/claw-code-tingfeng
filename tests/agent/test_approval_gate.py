@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from src.agent.tool_manager import ToolManager, classify_tool
@@ -413,3 +414,59 @@ class TestFullModeMatrix:
         m.set_confirm_callback(None)
         r3 = asyncio.run(m.execute_tool("BashTool", {"command": "echo c"}))
         assert r3.success is True
+
+
+# ---------------------------------------------------------------------------
+# 交互式确认：用户应答的判定 + 异常安全性
+# ---------------------------------------------------------------------------
+
+
+class TestInteractiveConfirmPrompt:
+    """验证 REPL 的确认提示本身。
+
+    这条路径只做"用户说了什么 → 是否放行"的判定，不涉及工具执行。
+    重点是**异常安全性**：审批环节出任何问题时，保守的一方必须是
+    "不执行"，而不是"放行"。
+    """
+
+    def _session(self):
+        from src.cli.repl_session import ReplSession
+
+        # 不跑 __init__（会初始化引擎），只借用方法
+        s = ReplSession.__new__(ReplSession)
+        s._safe_print = lambda *a, **k: None  # 静音输出
+        return s
+
+    @pytest.mark.parametrize("typed,expected", [
+        ("y", True),
+        ("Y", True),
+        ("yes", True),
+        ("YES", True),
+        ("n", False),
+        ("no", False),
+        ("", False),
+        ("whatever", False),
+        ("yeah sure", False),
+    ])
+    def test_user_answer_mapping(self, typed, expected):
+        s = self._session()
+        with patch("builtins.input", return_value=typed):
+            assert s._confirm_tool_execution("BashTool", "exec", {"command": "x"}) is expected
+
+    def test_eof_is_denied(self):
+        """管道关闭 / 无 stdin 时不能默认放行"""
+        s = self._session()
+        with patch("builtins.input", side_effect=EOFError):
+            assert s._confirm_tool_execution("BashTool", "exec", {"command": "x"}) is False
+
+    def test_keyboard_interrupt_is_denied(self):
+        """用户按 Ctrl+C 想中断 —— 应当理解为"不要执行" """
+        s = self._session()
+        with patch("builtins.input", side_effect=KeyboardInterrupt):
+            assert s._confirm_tool_execution("BashTool", "exec", {"command": "x"}) is False
+
+    def test_unexpected_error_is_denied(self):
+        """提示环节自身出错时也不能放行"""
+        s = self._session()
+        with patch("builtins.input", side_effect=OSError("tty gone")):
+            assert s._confirm_tool_execution("BashTool", "exec", {"command": "x"}) is False
