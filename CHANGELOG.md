@@ -9,6 +9,72 @@
 
 ## [未发布]
 
+### v0.55.0 (2026-10-17) — 死代码复核、伪验证诚实化
+
+#### 🔴 发现：验证阶段是假的
+
+生产管道 `src/workflow/pipeline.py` 的验证阶段有 **4 处桩**，其中：
+
+```python
+# TODO: 集成 Ralph 循环逻辑
+artifacts = {
+    "verification_result": "passed",   # ← 硬编码
+    "iterations": 3,                   # ← 也是假的
+}
+```
+
+**它从不运行任何测试、不做任何检查，直接返回"通过"。**
+
+更关键的是：未接线侧 `src/workflow/stages/ralph_verify_stage.py` 虽然循环结构
+更完整（有 `while ... and not approved`），但它的 `_verify_implementation`
+**同样是桩**：
+
+```python
+# TODO: 实现真正的验证逻辑
+return {"approved": True,  # 简化为总是通过
+        "evidence": {"tests_passed": True}}
+```
+
+**两者都是桩。** 把它接上去等于用一个更精致的"永远通过"替换一个简陋的
+"永远通过"，不解决问题。（子代理最初的判断是"未接线侧是真实实现"，
+主线程读源码后更正了这一结论。）
+
+**本次修复**：把三处桩的伪造值改为**诚实值**（`plan_implemented: False`、
+`execution_completed: False`、`verification_result: "not_implemented"`、
+`verified: False`），使"未实现"不再伪装成"已通过"。
+消费方检查为 0（已验证），因此零行为风险。
+
+**仍待立项**：让验证阶段真正调用测试执行器；在此之前，任何依赖该阶段结果
+做自动化放行决策的逻辑都不可信。
+
+#### 🗑️ 死代码复核与收敛
+
+由三个并行子代理逐模块读源码复核 163 个"生产不加载"模块（31,188 行），
+删除 20 个经确认被取代的模块：
+
+```
+src/session/ src/openclaw/ src/mcp/code_intel.py src/mcp/state_paths.py
+src/brain/repomap.py src/brain/file_watcher.py src/brain/special_files.py
+src/self_healing/doctor.py src/self_healing/session_manager.py
+src/server/mcp.py src/runtime/bridge.py src/runtime/mailbox.py
+src/utils/paths.py src/rag/context_index.py src/rag/lang_engine.py
+src/cli/report.py src/cli/onboarding.py src/cli/hud_authority.py
+src/cli/tui/models.py src/cli/tui/animations.py
+```
+
+**安全验证**：删除前后「从生产入口可达的模块数」均为 **429（未变）**。
+
+**为什么不继续删**：剩余模块多属"未接线功能"（如 swarm 专家类、
+team 状态层、workflow worktree 护栏），删除等于砍能力，需产品决策。
+完整清单与判定见 `计划书/死代码复核报告.md`。
+
+#### 📚 新增文档
+
+- `计划书/死代码复核报告.md` —— 复核方法、本轮删除、待决策清单、
+  以及"验证阶段是假的"这一更正的完整记录
+
+---
+
 ### v0.54.0 (2026-10-17) — 门禁落地、并发压测、真死代码收敛
 
 #### 🔴 安全：PLAN 模式首次真正生效

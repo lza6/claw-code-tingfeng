@@ -491,12 +491,16 @@ def create_ralplan_stage() -> PipelineStage:
             self._logger.info("Running RALPLAN consensus planning")
 
             # TODO: 实现三方博弈规划逻辑
-            # 暂时返回模拟数据
+            #
+            # ⚠️ 当前是**占位实现**，不产出任何真实计划。artifacts 里的字符串
+            # 是占位符而非产物 —— 消费方必须检查 `plan_implemented`，
+            # 不要把 "generated implementation plan" 当作真实计划使用。
             artifacts = {
-                "plan": "generated implementation plan",
-                "prd": "product requirements document",
-                "test_spec": "test specification",
-                "planning_completed": True,
+                "plan": "<未实现>",
+                "prd": "<未实现>",
+                "test_spec": "<未实现>",
+                "plan_implemented": False,
+                "planning_completed": False,
             }
 
             return StageResult(
@@ -542,12 +546,16 @@ def create_team_exec_stage(
             )
 
             # TODO: 集成 Swarm 执行器
-            # 暂时返回模拟数据
+            #
+            # ⚠️ 当前是**占位实现**，没有真正启动任何 worker。
+            # `execution_completed=False` 是刻意设置的诚实值 —— 消费方
+            # 不要读 `execution_result` 的字符串把它当作执行结论。
             artifacts = {
-                "execution_result": "team execution completed",
+                "execution_result": "<未实现>",
                 "worker_count": self.worker_count,
                 "agent_type": self.agent_type,
-                "execution_completed": True,
+                "execution_implemented": False,
+                "execution_completed": False,
             }
 
             return StageResult(
@@ -585,12 +593,20 @@ def create_ralph_verify_stage(
             )
 
             # TODO: 集成 Ralph 循环逻辑
-            # 暂时返回模拟数据
+            #
+            # 🔴 这里曾返回硬编码的 `"verification_result": "passed"` ——
+            # 一个**从不运行任何测试、不做任何检查、却永远报告"通过"**的验证阶段。
+            # 这比缺少功能更糟：它谎称功能存在。
+            #
+            # 现已改为诚实值。**在真正的验证逻辑落地之前，任何依赖本阶段
+            # 结果做自动化放行决策的逻辑都是不可信的。**
             artifacts = {
-                "verification_result": "passed",
-                "iterations": 3,
+                "verification_result": "not_implemented",
+                "verified": False,
+                "iterations": 0,
                 "max_iterations": self.max_iterations,
-                "verification_completed": True,
+                "verification_completed": False,
+                "note": "本阶段尚未实现真实验证；verified=False 表示未经验证，不代表通过",
             }
 
             return StageResult(
