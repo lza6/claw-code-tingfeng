@@ -25,6 +25,7 @@ from ..core.exceptions import (
     ToolExecutionError,
     ToolInvalidArgsError,
     ToolNotFoundError,
+    ToolTimeoutError,
 )
 from ..tools_runtime.base import BaseTool, ToolResult
 from ..utils import debug, error, warn
@@ -176,16 +177,17 @@ async def execute_tool(
         return result
     except (ToolNotFoundError, ToolExecutionError):
         raise
-    except TimeoutError as e:
+    except (TimeoutError, asyncio.TimeoutError) as e:
+        # Python 3.10 中 asyncio.wait_for 抛的是 asyncio.TimeoutError，
+        # 而它 **不是** 内建 TimeoutError 的子类
+        # （`asyncio.TimeoutError is TimeoutError` → False，实测确认）。
+        # 只写 `except TimeoutError` 会让这个分支永远不触发，
+        # 超时被下面的通用 except 吃掉，错误码退化为 TOOL_EXECUTION_FAILED
+        # 而非 TOOL_TIMEOUT，超时时间也从消息里消失。
         elapsed = time.monotonic() - start_time
-        raise ToolExecutionError(
-            message=f'工具 {tool_name} 执行超时 ({timeout}s)',
-            details={
-                'tool_name': tool_name,
-                'timeout': timeout,
-                'elapsed': round(elapsed, 2),
-            },
-        ) from e
+        exc = ToolTimeoutError(tool_name, timeout)
+        exc.details['elapsed'] = round(elapsed, 2)
+        raise exc from e
     except Exception as e:
         elapsed = time.monotonic() - start_time
         error(f'工具 {tool_name} 执行异常: {e} (耗时: {elapsed:.2f}s)')

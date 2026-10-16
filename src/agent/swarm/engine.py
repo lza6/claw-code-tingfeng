@@ -104,10 +104,17 @@ class SwarmEngine:
         self.ltm = EnterpriseLTM()
 
         # [汲取 OMX] 初始化意图澄清和脱水器
+        # 注意: 这里曾写 `from ..factory import create_model_manager`，
+        # 但该函数在整个仓库中**从未定义**（src/agent/factory.py 的 __all__
+        # 只有 create_agent_engine / get_agent_prompt）。构造 SwarmEngine 时
+        # 即抛 ImportError，而调用方（workflow/healable_executor.py:297）
+        # 用 `except (ImportError, Exception): return None` 吞掉 ——
+        # 于是 swarm 自愈路径在线上一直静默失效，只有测试看得见。
+        # ClarifyGate 需要的是 ModelManager，正确工厂是 get_model_manager()。
+        from ...llm.model_manager import get_model_manager
         from ...self_healing.cleaner import SlopCleaner
         from ...workflow.clarify import ClarifyGate
-        from ..factory import create_model_manager
-        self.clarify_gate = ClarifyGate(create_model_manager())
+        self.clarify_gate = ClarifyGate(get_model_manager())
         self.slop_cleaner = SlopCleaner()
 
         # GoalX 基础设施集成

@@ -179,8 +179,17 @@ class OrchestratorAgent(BaseAgent):
 3. 识别出潜在的“架构异味”并提出规避方案。
 
 请输出详细的架构建议。"""
-            consensus_response = await engine.run(consensus_prompt)
-            consensus_context = f"\n[架构共识博弈结果]:\n{consensus_response.final_result}\n"
+            try:
+                consensus_response = await engine.run(consensus_prompt)
+                consensus_context = f"\n[架构共识博弈结果]:\n{consensus_response.final_result}\n"
+            except Exception as e:
+                # 共识规划是**增强**而非必需：它失败不应让整个任务分解崩掉。
+                # 此前这段调用位于下方 try 块之外，任何 LLM 侧错误
+                # （超时 / 鉴权 / 限流）都会绕过既有的降级契约
+                # （`raw_response='任务分解失败，降级为单任务'`），
+                # 使 decompose_task 直接抛异常。
+                self.logger.warning(f"共识规划失败，跳过该增强步骤: {e}")
+                consensus_context = ""
 
         # 注入架构级上下文 (如有)
         arch_context = consensus_context
