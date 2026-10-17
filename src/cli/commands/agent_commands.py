@@ -13,7 +13,10 @@ from rich.console import Console
 from rich.table import Table
 
 from ...agent.definitions import AGENT_DEFINITIONS, get_agent
-from ...agent.keyword_registry import get_registered_keywords
+from ...agent.keyword_registry import (
+    KEYWORD_TRIGGER_DEFINITIONS,
+    get_all_keywords,
+)
 
 app = typer.Typer(help="Agent 管理和执行命令")
 console = Console()
@@ -88,22 +91,54 @@ def show_agent(
 @app.command("keywords")
 def list_keywords():
     """列出所有已注册的关键词及其触发的技能"""
-    from ...agent.intent_router import KEYWORD_TO_SKILL
+    # 原实现从 intent_router 导入 `KEYWORD_TO_SKILL` —— 该符号从未存在，
+    # 导致本模块导入即失败、整个 agent 命令组静默消失。
+    # 真实的词→技能映射在 KEYWORD_TRIGGER_DEFINITIONS（keyword_registry）。
+    triggers = sorted(
+        KEYWORD_TRIGGER_DEFINITIONS,
+        key=lambda t: (-t.priority, t.keyword),
+    )
 
     table = Table(title="技能关键词映射", show_header=True, header_style="bold magenta")
     table.add_column("Keyword", style="cyan")
     table.add_column("Skill", style="green")
-    table.add_column("Primary", style="yellow")
+    table.add_column("Priority", justify="right")
+    table.add_column("需明确意图", justify="center")
 
-    registry = get_registered_keywords()
-    for kw, skill in sorted(registry.items()):
-        is_primary = "✓" if KEYWORD_TO_SKILL.get(kw.lower()) == skill else ""
-        table.add_row(kw, skill, is_primary)
+    for t in triggers:
+        table.add_row(
+            t.keyword,
+            t.skill,
+            str(t.priority),
+            "是" if t.requires_intent else "",
+        )
 
     console.print(table)
+    console.print(f"[dim]共 {len(triggers)} 个关键词[/dim]")
 
 
-def register_agent_commands(app: typer.Typer) -> None:
-    """注册所有 agent 相关命令"""
-    app.add_typer(app, name="agent")
-    # 子命令已在定义时添加，这里只需确保模块被导入
+@app.command("intent")
+def classify_intent_cmd(
+    text: str = typer.Argument(..., help="要分类的用户输入"),
+):
+    """对一段输入做意图分类（DELIVER/EXPLORE/EVOLVE/IMPLEMENT/DEBATE）"""
+    from ...agent.intent_router import classify_intent_ranked, get_primary_intent
+
+    primary = get_primary_intent(text)
+    ranked = classify_intent_ranked(text)
+
+    console.print(f"[bold cyan]主要意图:[/bold cyan] {primary}")
+    if ranked:
+        console.print("\n[bold]排序结果:[/bold]")
+        for intent, score in ranked:
+            console.print(f"  {intent:10} {score:.2f}")
+
+
+def register_agent_commands(parent_app: typer.Typer) -> None:
+    """把 agent 子命令树挂到父 app 上。
+
+    注意: 形参不能叫 `app`。若写成 `app.add_typer(app, name="agent")`，
+    在参数遮蔽模块级 `app` 的情况下等于把父应用注册到它自己身上，
+    形成自引用。同类缺陷见 setup_commands.register_setup_commands。
+    """
+    parent_app.add_typer(app, name="agent")

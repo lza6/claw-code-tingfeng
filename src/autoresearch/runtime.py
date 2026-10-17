@@ -1,10 +1,12 @@
 """Autoresearch runtime for running self-improving experiments."""
+from __future__ import annotations
+
 import json
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from src.autoresearch.contracts import (
     AutoresearchError,
@@ -14,9 +16,13 @@ from src.autoresearch.contracts import (
     parse_evaluator_result,
 )
 
-AutoresearchCandidateStatus = "candidate" | "noop" | "abort" | "interrupted"
-AutoresearchDecisionStatus = "baseline" | "keep" | "discard" | "ambiguous" | "noop" | "abort" | "interrupted" | "error"
-AutoresearchRunStatus = "running" | "stopped" | "completed" | "failed"
+# 同 contracts.py：字面量联合必须用 Literal，写成 `"a" | "b"` 是字符串按位或，
+# 导入即抛 TypeError。
+AutoresearchCandidateStatus = Literal["candidate", "noop", "abort", "interrupted"]
+AutoresearchDecisionStatus = Literal[
+    "baseline", "keep", "discard", "ambiguous", "noop", "abort", "interrupted", "error"
+]
+AutoresearchRunStatus = Literal["running", "stopped", "completed", "failed"]
 
 
 def now_iso() -> str:

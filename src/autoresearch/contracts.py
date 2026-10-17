@@ -1,9 +1,16 @@
 """Autoresearch contracts for mission and sandbox definitions."""
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-AutoresearchKeepPolicy = "score_improvement" | "pass_only"
+# 字面量联合类型必须用 Literal 表达。
+# 原先写成 `"score_improvement" | "pass_only"` —— 这是对**字符串对象**做
+# 按位或运算，在运行期必然抛 TypeError（不是类型注解，模块导入即崩）。
+# 这类错误在 py3.10 下无法靠 `from __future__ import annotations` 规避，
+# 因为它是赋值语句的右值，不是注解。
+AutoresearchKeepPolicy = Literal["score_improvement", "pass_only"]
 
 
 class AutoresearchError(Exception):

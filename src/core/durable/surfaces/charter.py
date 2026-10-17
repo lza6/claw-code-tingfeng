@@ -16,10 +16,10 @@ from ..surface import Surface
 @dataclass
 class RunIdentity:
     """Identity information for the current run"""
-    run_id: str
-    project_id: str
-    project_root: str
-    run_name: str
+    run_id: str = ""
+    project_id: str = ""
+    project_root: str = ""
+    run_name: str = ""
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -38,9 +38,17 @@ class CharterBoundary:
 class Charter(Surface):
     """
     Project Charter defines the core goals, identity and constraints for a run.
+
+    注意：`Surface` 基类的字段（version / updated_at / metadata）**全部带默认值**，
+    因此子类不能再声明无默认值的字段 —— dataclass 会抛
+    `TypeError: non-default argument 'identity' follows default argument`，
+    模块导入即崩。`identity` / `objective` 必须给默认值。
+
+    不这么做的替代方案是给基类字段加 `kw_only=True`，但那会改变所有已有
+    子类的构造签名，牵连面更大。
     """
-    identity: RunIdentity
-    objective: str
+    identity: RunIdentity = field(default_factory=RunIdentity)
+    objective: str = ""
     boundary: CharterBoundary = field(default_factory=CharterBoundary)
     context_refs: list[str] = field(default_factory=list)
 

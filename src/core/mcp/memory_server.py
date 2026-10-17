@@ -17,7 +17,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src.memory.enterprise_ltm import EnterpriseLongTermMemory
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -75,10 +74,13 @@ class MemoryServer:
         (self.memory_dir / "relations").mkdir(exist_ok=True)
         (self.memory_dir / "index").mkdir(exist_ok=True)
 
-        # 集成 EnterpriseLTM
-        self.ltm = EnterpriseLongTermMemory(
-            db_path=self.memory_dir / "ltm.db"
-        )
+    # 说明：本服务曾尝试集成 `src.memory.enterprise_ltm`，但两者数据模型不同 ——
+    # EnterpriseLTM 存的是**代码实现模式**（ImplementationPattern / 热力图 /
+    # 会话成败），本服务存的是**知识图谱三要素**（entity / observation /
+    # relation）。原先调用的 store_entity / store_observation / store_relation
+    # 在该类中从未存在，且类名也已更名，导致模块导入即失败。
+    # 不存在能诚实地把前者映射到后者的方式，故移除该集成；
+    # 本服务自身的 JSON 文件持久化即为完整实现路径。
 
     # ==================== Entity 操作 ====================
 
@@ -86,7 +88,6 @@ class MemoryServer:
         """创建实体"""
         path = self.memory_dir / "entities" / f"{entity.id}.json"
         path.write_text(json.dumps(entity.__dict__, indent=2, ensure_ascii=False))
-        self.ltm.store_entity(entity.id, entity.__dict__)
         logger.info(f"Created entity: {entity.id}")
         return entity.id
 
@@ -157,9 +158,6 @@ class MemoryServer:
         path = self.memory_dir / "observations" / f"{obs_id}.json"
         path.write_text(json.dumps(obs.__dict__, indent=2, ensure_ascii=False))
 
-        # 索引到 LTM
-        self.ltm.store_observation(entity_id, content, metadata)
-
         logger.info(f"Added observation {obs_id} to entity {entity_id}")
         return obs_id
 
@@ -198,7 +196,6 @@ class MemoryServer:
             / f"{from_id}_{relation_type}_{to_id}.json"
         )
         path.write_text(json.dumps(rel, indent=2, ensure_ascii=False))
-        self.ltm.store_relation(from_id, to_id, relation_type)
         return True
 
     def get_related_entities(self, entity_id: str) -> list[tuple[str, str]]:
@@ -212,12 +209,43 @@ class MemoryServer:
             relations.append((data["from_id"], data["relation_type"]))
         return relations
 
-    # ==================== 语义搜索 ====================
+    # ==================== 检索 ====================
 
     def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        """语义搜索记忆"""
-        # 使用 LTM 的嵌入搜索
-        return self.ltm.search(query, limit=limit)
+        """按关键词检索实体与观测。
+
+        原先委派给 `self.ltm.search()` —— 该方法在 EnterpriseLTM 中从未存在。
+        现改为在本服务自己的 JSON 存储上做子串匹配：这是**实现降级而非语义等价**，
+        与原先声称的"语义搜索"不同（无嵌入、无相似度）。命名如实反映现状。
+
+        匹配范围：实体的 id/name/description + 观测的 content。
+        """
+        needle = query.strip().lower()
+        if not needle:
+            return []
+
+        hits: list[dict[str, Any]] = []
+
+        for p in (self.memory_dir / "entities").glob("*.json"):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            haystack = " ".join(
+                str(data.get(k, "")) for k in ("id", "name", "description")
+            ).lower()
+            if needle in haystack:
+                hits.append({"kind": "entity", "score": 1.0, **data})
+
+        for p in (self.memory_dir / "observations").glob("*.json"):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if needle in str(data.get("content", "")).lower():
+                hits.append({"kind": "observation", "score": 1.0, **data})
+
+        return hits[:limit]
 
     # ==================== 统计 ====================
 

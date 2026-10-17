@@ -13,11 +13,13 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from ...workflow.pipeline_orchestrator import (
-    can_resume_pipeline,
+from ...workflow.pipeline import (
     create_ralph_verify_stage,
     create_ralplan_stage,
     create_team_exec_stage,
+)
+from ...workflow.pipeline_orchestrator import (
+    can_resume_pipeline,
     read_pipeline_state,
 )
 
@@ -355,6 +357,10 @@ def autopilot_run(
     asyncio.run(run_pipeline())
 
 
-def register_workflow_commands(app: typer.Typer) -> None:
-    """注册所有 workflow 命令"""
-    app.add_typer(app, name="workflow")
+def register_workflow_commands(parent_app: typer.Typer) -> None:
+    """把 workflow 子命令树挂到父 app 上。
+
+    形参不能改名回 `app`：那会造成 `app.add_typer(app, ...)` 自引用。
+    详见 setup_commands.register_setup_commands 的同类说明。
+    """
+    parent_app.add_typer(app, name="workflow")

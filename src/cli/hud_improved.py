@@ -10,15 +10,15 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
-from ...core.notifications.dispatcher import NotificationDispatcher, NotificationLevel
-from ...utils.logger import get_logger
+from ..core.notifications.dispatcher import NotificationDispatcher, NotificationLevel
+from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 

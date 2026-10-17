@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from ..linter_tree_sitter import TreeSitterParser
-from .base import BaseCoder, EditResult, MatchType
+from src.tools_runtime.code_edit.base_coder import BaseCoder, EditResult, MatchType
+from src.tools_runtime.linter_tree_sitter import _get_ts_parser
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,12 @@ class TreeSitterPatchEngine(BaseCoder):
 
     def __init__(self, language: str = "python") -> None:
         self.language = language
-        self.parser = TreeSitterParser(language=language)
+        # 原先导入的是不存在的 `TreeSitterParser` 类，模块导入即失败。
+        # 本仓库真实存在的是 `linter_tree_sitter._get_ts_parser(lang)`，
+        # 返回 parser 或 None（tree_sitter_languages 未安装时）。
+        # None 是合法状态：本类的 apply() 目前以字符串精确匹配实现，
+        # 并不依赖 parser；保留该属性是为后续接入真正的 AST 匹配。
+        self.parser = _get_ts_parser(language)
 
     def apply(
         self,

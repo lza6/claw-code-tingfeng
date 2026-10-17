@@ -114,6 +114,10 @@ def generate_manifest(
     console.print("对应的 oh-my-codex 实现: src/catalog/reader.ts")
 
 
-def register_catalog_commands(app: typer.Typer) -> None:
-    """注册 catalog 命令"""
-    app.add_typer(app, name="catalog")
+def register_catalog_commands(parent_app: typer.Typer) -> None:
+    """把 catalog 子命令树挂到父 app 上。
+
+    形参不能改名回 `app`：那会造成 `app.add_typer(app, ...)` 自引用。
+    详见 setup_commands.register_setup_commands 的同类说明。
+    """
+    parent_app.add_typer(app, name="catalog")

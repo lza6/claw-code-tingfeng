@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import logging
 import os
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from rich.panel import Panel
 from .. import __version__
 from ..core.exceptions import ClawdError
 from ..main import _register_shutdown_hooks, initialize
+
+logger = logging.getLogger(__name__)
 
 # 初始化 Typer
 app = typer.Typer(
@@ -307,39 +311,86 @@ def config(
 
 # ========== 注册子命令模块（oh-my-codex 风格） ==========
 
-def _register_command_modules():
-    """注册模块化命令 - 借鉴 oh-my-codex 的 CLI 组织方式"""
-    # Agent 命令
-    try:
-        from .commands.agent_commands import register_agent_commands
-        register_agent_commands(app)
-    except ImportError:
-        pass
+#: 命令组清单：(组名, 模块, 注册函数)。
+#:
+#: 模块必须写成**模块对象**而不是字符串，且用显式 `from ... import` 获取：
+#: 静态可达性工具（scripts/reachability.py）靠 AST 里的 import 语句建图，
+#: 若改用 `importlib.import_module("字符串")`，这 4 个模块会在图中消失，
+#: 被误判为"生产不可达" —— 实测可达数会从 429 掉到 416。
+#: 运行时用字符串拼模块名虽然更"动态"，但会让项目自带的死代码分析工具失灵。
+_COMMAND_MODULES: tuple[tuple[str, object, str], ...] = ()
 
-    # Catalog 命令
-    try:
-        from .commands.catalog_commands import register_catalog_commands
-        register_catalog_commands(app)
-    except ImportError:
-        pass
 
-    # Workflow 命令
-    try:
-        from .commands.workflow_commands import register_workflow_commands
-        register_workflow_commands(app)
-    except ImportError:
-        pass
+def _load_command_modules() -> tuple[tuple[str, object, str], ...]:
+    """导入各命令组模块。导入失败不在这里处理，交给注册函数统一报告。"""
+    from .commands import (
+        agent_commands,
+        catalog_commands,
+        setup_commands,
+        workflow_commands,
+    )
 
-    # Setup 命令
+    return (
+        ("agent", agent_commands, "register_agent_commands"),
+        ("catalog", catalog_commands, "register_catalog_commands"),
+        ("workflow", workflow_commands, "register_workflow_commands"),
+        ("setup", setup_commands, "register_setup_commands"),
+    )
+
+
+def _register_command_modules() -> list[str]:
+    """注册模块化命令组，并**让失败可见**。
+
+    这里原先是 `try: ... except ImportError: pass`，本意是"可选模块缺失时
+    优雅降级"，实际把三类硬错误吞成了静默失败：
+
+    - `agent_commands` 引用已改名的 `get_registered_keywords`
+    - `workflow_commands` 从错误模块导入三个 stage 工厂
+    - `hud_improved` 相对导入层数越界
+
+    后果是 `agent` 与 `workflow` 两个命令组（7 个命令）**整体从 CLI 消失**，
+    而启动时毫无提示。降级本身是合理需求，但"降级"必须可观测 ——
+    因此失败时写日志，并返回失败清单供测试断言。
+
+    注意整批导入是**一起**失败的：命令组模块间没有相互依赖，但共用
+    `_load_command_modules` 这一个导入点。任一模块导入炸掉，其余组也拿不到。
+    这是有意的 —— 让问题在测试里一次性暴露，而不是逐个组慢慢发现。
+
+    Returns:
+        注册失败的组名列表（空列表 = 全部成功）。
+    """
+    failed: list[str] = []
+
     try:
-        from .commands.setup_commands import register_setup_commands
-        register_setup_commands(app)
-    except ImportError:
-        pass
+        groups = _load_command_modules()
+    except Exception as exc:  # noqa: BLE001 - 降级要宽，但必须可见
+        logger.warning(
+            "命令组模块导入失败，相关命令在本进程中不可用: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return [name for name, _m, _f in _COMMAND_MODULES]
+
+    for group_name, mod, func_name in groups:
+        try:
+            register = getattr(mod, func_name)
+            register(app)
+        except Exception as exc:  # noqa: BLE001
+            failed.append(group_name)
+            # ImportError 之外也一并接住：`field` 未定义这类 NameError
+            # 同样会让整组命令消失，只接 ImportError 会漏掉一半情况。
+            logger.warning(
+                "命令组 '%s' 注册失败，其命令在本进程中不可用: %s: %s",
+                group_name,
+                type(exc).__name__,
+                exc,
+            )
+
+    return failed
 
 
 # 注册模块化命令
-_register_command_modules()
+_REGISTRATION_FAILURES = _register_command_modules()
 
 
 def main():

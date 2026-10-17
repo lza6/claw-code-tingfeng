@@ -9,6 +9,129 @@
 
 ## [未发布]
 
+### v0.56.0 (2026-10-17) — 导入期缺陷清剿：7 个 CLI 命令从"静默消失"到可见
+
+#### 🔴 主缺陷：两个命令组整体从 CLI 消失，启动无任何提示
+
+`src/cli/entrypoint.py` 的 `_register_command_modules()` 用
+`try: ... except ImportError: pass` 包裹四处注册。本意是"可选模块缺失时优雅降级"，
+实际把**硬错误**吞成了静默失败：
+
+| 模块 | 断裂点 | 后果 |
+|:---|:---|:---|
+| `agent_commands.py:16` | 导入 `get_registered_keywords`（该函数不存在，现名 `get_all_keywords`） | `clawd agent` 整组不可用 |
+| `workflow_commands.py:18` | 从 `pipeline_orchestrator` 导入三个 stage 工厂（它们定义在 `workflow.pipeline`） | `clawd workflow` 整组不可用 |
+| `hud_improved.py:20` | `from ...core` 但模块深度只有 2 层 → 越过顶层包 | `clawd hud` 不可用 |
+
+**7 个命令**（agent list/show/keywords、workflow ralph/ralplan/team/autopilot）
+因此从未被注册，而 `clawd --help` 看不出任何异常。
+
+实测确认（修复前）：
+
+```
+$ clawd agent --help
+main.py: error: argument command: invalid choice: 'agent'
+已注册组: ['catalog', 'setup']        ← agent / workflow 完全缺席
+```
+
+#### 隐藏的第四类缺陷：自引用注册
+
+`setup_commands.py` 早已修过 `app.add_typer(app, name="setup")` 这个自引用
+（形参遮蔽了模块级 `app`，等于把父应用注册到自己身上），并留了警告注释。
+但 **`agent` / `workflow` / `catalog` 三个模块没有同步**，全部沿用错误写法。
+
+#### 修复
+
+1. **让降级可观测** —— `except ImportError: pass` 改为 `except Exception` +
+   `logger.warning`，并返回失败组名清单供测试断言。只接 `ImportError`
+   会漏掉 `NameError`（`field` 未定义）这类同样致命的错误。
+2. **修正三个断链**，命令体按真实 API 重写（不是简单改名）。
+3. **四个 register 函数**统一改为 `parent_app.add_typer(app, ...)`。
+4. **新增 `clawd agent intent <text>`** —— 暴露 `intent_router` 的真实意图分类能力。
+
+#### 导入期全库扫描：16 → 1 → 0
+
+新增 `scripts/import_sweep.py`，逐个 import 全部 639 个模块，
+区分「项目内代码缺陷」与「第三方依赖缺失」（后者是环境问题，不计入缺陷）：
+
+```
+修复前： IMPORT-OK 617 / IMPORT-FAIL 16 / DEP-MISSING 6
+修复后： IMPORT-OK 632 / IMPORT-FAIL  1 / DEP-MISSING 6
+清零后： IMPORT-OK 638 / IMPORT-FAIL  0
+```
+
+16 个缺陷的根因分布（多数在**生产不可达**模块，非 P0）：
+
+| 根因 | 模块数 | 处置 |
+|:---|:---|:---|
+| 相对导入层数算错 | 5（`team/state/*`） | 修 `locks.py:22` 一处，连带解除 5 个 |
+| 字符串按位或冒充字面量联合 | 3（`autoresearch/*`） | 改用 `Literal` + `from __future__ import annotations` |
+| 类名/函数名与真实实现不符 | 4 | 按真实 API 重写消费者 |
+| dataclass 字段顺序违反继承规则 | 1（`charter.py`） | 给子类字段补默认值 |
+| 引用了从未存在的模块 | 2（`coder_agent`、`core.mcp.code_intel_server`） | 删除孤儿 / 移除坏配置项 |
+| 残壳包指向不存在的文件 | 1（`core/auth`） | 改为转发真实实现 `core/auth_module` |
+
+#### ⚠️ `coder_agent.py` 的处置说明
+
+它 `from .consensus import SemanticValidator, Vote, VoteType`，而
+`src/agent/swarm/consensus.py` **在 git 全历史中从未存在过** ——
+该模块从写下的第一天起就无法导入。核实：`CoderAgent` 零消费者、
+`swarm/__init__.py` 未导出。
+
+**选择删除而非补造 `consensus.py`**：补造一个"能导入但验证永远通过"的桩，
+正是本项目 v0.55.0 刚刚清理掉的那类伪实现。若将来需要 swarm 的 Coder 专家，
+应连同真实共识机制一起立项。
+
+#### 修复"生成的 MCP 配置指向坏模块"
+
+`src/core/config/generator.py` 的 `DEFAULT_MCP_SERVERS` 有 5 条，
+其中 **2 条必然启动失败**：
+
+- `clawd-memory` → `src.core.mcp.memory_server`：导入 `EnterpriseLongTermMemory`
+  （类已更名 `EnterpriseLTM`），且调用的 `store_entity/store_observation/
+  store_relation/search` 在该类中**从未存在**——两者数据模型不同
+  （代码实现模式 vs 知识图谱三要素），无诚实映射方式。
+  → 移除臆测的集成，`search()` 改为在本服务自己的 JSON 存储上做关键词检索。
+- `clawd-code-intel` → `src.core.mcp.code_intel_server`：该文件不存在。
+  → 移除该条配置。
+
+修复后 4 条配置**全部可导入**（实测）。
+
+#### 测试隔离缺陷
+
+`tests/agent/test_approval_gate.py` 调用 `set_allowed_workdirs([tmp_path])`，
+该函数用 `global ... = [...]` **重新绑定进程级模块属性**且不恢复。
+后果是**同进程后续所有测试**都撞上"工作目录不在允许范围内"：
+
+```
+pytest tests/agent tests/tools_runtime tests/cli   → 6 failed（看似无关的 bash 用例）
+pytest tests/tools_runtime/test_bash_execution_paths.py（单独） → 11 passed
+```
+
+已加 `autouse` fixture 在每个用例前后快照/恢复该全局。
+
+#### 验证
+
+| 项目 | 结果 |
+|:---|:---|
+| CLI 命令注册回归（新增 15 用例） | **15 passed** |
+| `tests/agent + tools_runtime + cli` 合并 | **754 passed / 0 failed** |
+| 生产路径 E2E（真实端点） | **8/8** |
+| 并发压测 | **5/5** |
+| 导入全库扫描 | **0 缺陷**（638/638 可导入） |
+| 可达性不变量 | **429 → 429**（未变） |
+
+#### 一处自我更正
+
+初版修复把命令组模块清单写成字符串 + `importlib.import_module()`。
+运行时正确，但 `scripts/reachability.py` 靠 AST 里的 import 语句建图，
+这 4 个模块因此在图中消失，可达数从 429 掉到 416。
+已改回显式 `from .commands import (...)`（保留失败可见的 `try/except`）。
+
+> **教训：替换导入方式前，先确认项目自身的静态分析工具依赖什么形式。**
+
+---
+
 ### v0.55.0 (2026-10-17) — 死代码复核、伪验证诚实化
 
 #### 🔴 发现：验证阶段是假的

@@ -91,12 +91,12 @@ DEFAULT_MCP_SERVERS = {
         args=["-m", "src.core.mcp.team_server"],
         description="团队协调服务器",
     ),
-    "clawd-code-intel": MCPConfig(
-        name="clawd-code-intel",
-        command="python",
-        args=["-m", "src.core.mcp.code_intel_server"],
-        description="代码智能服务器 (符号/依赖)",
-    ),
+    # 注意：这里原先还有一条 "clawd-code-intel"，指向
+    # `src.core.mcp.code_intel_server` —— 该文件从未存在（真实实现在
+    # `src.mcp.code_intel`，且该模块已被删除，能力由
+    # tools_runtime.ast_grep_tool / symbol_find_tool 覆盖）。
+    # 生成一条指向不存在模块的配置，等于给用户一个必然启动失败的 MCP 服务器，
+    # 故移除。若将来要恢复代码智能服务器，需先落地真实模块再登记。
 }
 
 

@@ -43,6 +43,31 @@ def workdir() -> Path:
     return Path.cwd()
 
 
+@pytest.fixture(autouse=True)
+def _restore_allowed_workdirs():
+    """隔离 `bash_constants._ALLOWED_WORKDIRS` 这个进程级全局。
+
+    `set_allowed_workdirs()` 是 `global ... = [...]` 重新绑定模块属性，
+    作用域是整个进程。本文件有多处会把它改成 `tmp_path`，
+    若不恢复，**后续同进程运行的所有测试**（不只本文件）都会把
+    "工作目录不在允许范围内"，表现为大批看似无关的失败。
+
+    实测：`pytest tests/agent tests/tools_runtime tests/cli` 一起跑时，
+    `tests/tools_runtime/test_bash_execution_paths.py` 有 6 个用例因此变红；
+    单独跑该文件则 11 passed。这就是跨文件状态泄漏。
+
+    只回滚"被测试改动过"并不划算（要逐个用例登记），直接在每个用例
+    前后快照/恢复最稳。
+    """
+    from src.tools_runtime import bash_constants
+
+    saved = bash_constants._ALLOWED_WORKDIRS
+    try:
+        yield
+    finally:
+        bash_constants._ALLOWED_WORKDIRS = saved
+
+
 def _manager(workdir: Path, mode: ApprovalMode) -> ToolManager:
     return ToolManager(
         {
