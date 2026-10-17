@@ -14,7 +14,7 @@
 | D-01 | `ruff --select F821` 清零 | ✅ | 40 → 0（All checks passed） |
 | D-02 | `ruff --select F811` 清零 | ✅ | 19 → 0 |
 | D-03 | 全库导入缺陷清零 | ✅ | `scripts/import_sweep.py`：638 模块，0 缺陷 |
-| D-04 | 全量测试转绿 | ✅ | **3050 passed / 0 failed**（v0.57.0 时 3033，原 2999/31） |
+| D-04 | 全量测试转绿 | ✅ | **3051 passed / 0 failed**（v0.57.0 时 3033，原 2999/31） |
 | D-05 | `ReadinessSnapshot.ready` 字段与 classmethod 冲突 | ✅ | 实测字段现为 bool；`RuntimeSnapshot.ready()` 语义正确 |
 | D-06 | `_deserialize_result` 枚举还原 + `skipped_reason` | ✅ | 往返测试通过 |
 | D-07 | `_deserialize_event` 迭代字段字典崩溃 | ✅ | 持久化恢复测试通过 |
@@ -45,7 +45,7 @@
 ### 验证命令与真实结果
 
 ```
-pytest tests/ -q                          → 3050 passed, 0 failed
+pytest tests/ -q                          → 3051 passed, 0 failed
 pytest tests/contracts -q                 → 39 passed
 ruff check src/ --select F821             → All checks passed!
 ruff check src/ --select F811             → All checks passed!

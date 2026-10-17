@@ -123,7 +123,7 @@ PLAN 会拒绝一切 write/exec），构造后还原；门禁未生效时显式�
 #### 验证
 
 ```
-pytest tests/ -q --tb=no                                → 3050 passed / 0 failed
+pytest tests/ -q --tb=no                                → 3051 passed / 0 failed
 pytest tests/cli tests/workflow tests/core -q           → 1080 passed
 pytest tests/workflow/test_pipeline_orchestrator.py -q  → 30 passed
 pytest tests/cli/test_workflow_commands_wiring.py -q    → 4 passed

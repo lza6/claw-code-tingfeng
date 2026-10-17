@@ -18,8 +18,8 @@ class TruncationResult(TypedDict):
 def _estimate_token_count(text: str) -> int:
     """估算 token 数，仅用于提示文案。
 
-    优先使用 `src.utils.token_counter.estimate_tokens`（准确）；
-    若其依赖（tiktoken）不可用，降级为字符数/4 的粗估。
+    优先使用 `src.utils.token_counter.estimate_tokens`；
+    若该模块导入失败，降级为字符数/4 的粗估。
     **绝不因估算失败而影响截断主流程。**
     """
     try:

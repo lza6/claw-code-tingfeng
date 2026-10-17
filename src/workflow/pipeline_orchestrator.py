@@ -178,8 +178,8 @@ class PipelineState:
         self.stage_results = stage_results or {}
         self.artifacts = artifacts or {}
         self._cwd = cwd
-        # 完整阶段名列表。`can_resume` 需要它来判断"是否还有未执行的阶段"。
-        # 不提供时退化为已记录结果的键（信息更少，但不会伪造）。
+        # 完整阶段名列表。`can_resume` 需要它判断"是否还有未执行的阶段"。
+        # 未提供时为空列表：不猜测、不伪造，`can_resume` 按"无法判断=不可恢复"处理。
         self.stage_names = list(stage_names) if stage_names is not None else []
 
     def save(self, state_file: str | None = None) -> None:

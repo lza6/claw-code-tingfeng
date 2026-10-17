@@ -450,12 +450,12 @@ const QUESTIONS = [
     stem: "全量测试、静态检查与可达性在交付时的真实状态是什么？",
     options: [
       "2999 passed / 31 failed，F821 仍有 40 个",
-      "3050 passed / 0 failed，F821/F811 均为 0，导入缺陷 0，生产可达 429（与基线一致）",
+      "3051 passed / 0 failed，F821/F811 均为 0，导入缺陷 0，生产可达 429（与基线一致）",
       "全部跳过，只验证了 --help",
       "仅契约测试通过"
     ],
     answer: 1,
-    why: "交付基线：`pytest tests/ -q` → 3050 passed / 0 failed；`ruff --select F821,F811` → All checks passed；`import_sweep` → 0 缺陷（639 模块）；`reachability` → 429 生产可达，与改动前一致（不变量守住）。"
+    why: "交付基线：`pytest tests/ -q` → 3051 passed / 0 failed；`ruff --select F821,F811` → All checks passed；`import_sweep` → 0 缺陷（639 模块）；`reachability` → 429 生产可达，与改动前一致（不变量守住）。"
   },
   {
     stem: "全量测试通过、`--help` 能列出命令，就说明这些命令可用吗？",
