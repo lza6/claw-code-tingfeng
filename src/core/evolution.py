@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..utils import debug, warn
+from ..utils.logger import debug, warn
 from .project_context import ProjectContext
 
 

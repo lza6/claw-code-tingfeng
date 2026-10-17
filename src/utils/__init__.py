@@ -12,6 +12,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+# 循环导入破环：`get_logger` 必须在加载任何会反向导入 `src.core` 的子模块**之前**
+# 绑定到本包命名空间。
+#
+# 链条：src.utils → diff_utils → src.core.__init__ → core.telemetry
+#       → tracing_utils → src.rag.__init__ → rag.text_indexer
+#       → `from ..utils import get_logger`（此时 utils 尚未完成初始化）
+#
+# 这里只提前绑定 `get_logger` 一个名字；完整导出仍在下方（`.debug` 之后），
+# 以免 `utils.debug` 被 `.debug` 子模块覆盖成模块对象
+# （那会导致 `TypeError: 'module' object is not callable`）。
+from .logger import get_logger
+
 # Aider integration module exports
 from . import deprecated_args, diff_utils, file_patterns, image_utils, urls
 
@@ -25,6 +37,11 @@ from .deprecated_args import (
 )
 from .env_loader import get_env, get_env_bool, get_env_int, load_env
 from .io_adapter import CommandCompletionException, InputOutput, get_completions
+# 注意：本行必须排在上面 `from .debug import ...` 之后。
+# 导入 `.debug` 子模块会把包属性 `utils.debug` 绑定成**模块对象**；
+# 随后这一行再把它覆盖成 logger 里的 `debug()` 函数（历史行为）。
+# 顺序颠倒会让 `utils.debug` 变成模块，调用时报
+# `TypeError: 'module' object is not callable`。
 from .logger import ClawdLogger, LogLevel, debug, error, get_logger, info, sanitize_for_log, warn
 from .onboarding import detect_api_keys, select_default_model, try_select_default_model
 from .run_cmd import is_windows_powershell, run_cmd, run_cmd_check_output, run_cmd_subprocess

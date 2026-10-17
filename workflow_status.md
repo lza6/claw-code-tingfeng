@@ -29,6 +29,9 @@
 | D-16 | `--dimension/-d` 写入运行时配置后无人读取 | ✅ | 引擎解析 → 注入执行器提示词 → 挂到 `WorkflowTask.dimensions`；6 项回归测试 |
 | D-17 | RAG 增量扫描比串行还慢（线程池开销） | ✅ | 缓存命中走同步快路径；`test_rag_pressure.py` 转绿 |
 | D-18 | README 两条不存在的命令示例 | ✅ | 改为实跑验证过的 `run` / `workflow autopilot` |
+| D-19 | 导入期加载 litellm（单次 ~34s）导致 CLI 启动几十秒 | ✅ | 四处惰性化；`import src` 6.8→1.6s，`import src.main` 50.9→~8s |
+| D-20 | `src.utils ↔ src.core` 循环导入（被急切导入顺序掩盖） | ✅ | 调整 `utils/__init__` 定序；`CodeGraph.build` 子进程不再抛 `BrokenProcessPool` |
+| D-21 | `_register_command_modules` 失败分支返回空清单（断言会假通过） | ✅ | 返回真实组名 + 新增失败路径回归用例 |
 
 ### 验证命令与真实结果
 

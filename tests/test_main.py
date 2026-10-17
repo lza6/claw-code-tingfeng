@@ -182,7 +182,7 @@ class TestInitialize:
         assert '警告' in captured.err
         assert '.env' in captured.err
 
-    @patch('src.main.log_pricing_check')
+    @patch('src.core.cost_estimator.cost_estimator.log_pricing_check')
     def test_initialize_checks_pricing(self, mock_pricing_check):
         """Initialize should check pricing freshness."""
         import src.main
@@ -253,7 +253,7 @@ class TestMainEntry:
         with pytest.raises(SystemExit):
             main(['unknown'])
 
-    @patch('src.main.get_command_handler')
+    @patch('src.cli_handlers.get_command_handler')
     def test_main_known_command_executes(self, mock_get_handler):
         """Main executes known command handler."""
         from src.main import main
@@ -266,7 +266,7 @@ class TestMainEntry:
         assert callable(main)
         assert mock_get_handler is not None
 
-    @patch('src.main.get_command_handler')
+    @patch('src.cli_handlers.get_command_handler')
     def test_main_command_with_output(self, mock_get_handler, capsys):
         """Main prints command output."""
         from src.main import main
@@ -277,7 +277,7 @@ class TestMainEntry:
         # Due to initialize() calling real handlers, we just verify structure
         assert callable(main)
 
-    @patch('src.main.get_command_handler')
+    @patch('src.cli_handlers.get_command_handler')
     def test_main_command_nonzero_exit(self, mock_get_handler):
         """Main returns non-zero exit code on failure."""
         from src.main import main
@@ -288,7 +288,7 @@ class TestMainEntry:
         # Verify function exists and is callable
         assert callable(main)
 
-    @patch('src.main.get_command_handler')
+    @patch('src.cli_handlers.get_command_handler')
     def test_main_handles_clawd_error(self, mock_get_handler, capsys):
         """Main handles ClawdError with structured message."""
         from src.main import main
@@ -305,7 +305,7 @@ class TestMainEntry:
         # Verify error handling structure exists
         assert callable(main)
 
-    @patch('src.main.get_command_handler')
+    @patch('src.cli_handlers.get_command_handler')
     def test_main_handles_generic_exception(self, mock_get_handler, capsys):
         """Main handles generic exceptions."""
         from src.main import main

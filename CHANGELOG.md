@@ -130,6 +130,69 @@ CLI 一直支持 `-d creative --dimension adversarial`，实现是
 `README.md` / `CHANGELOG.md` / `CONTRIBUTING.md` / `ARCHITECTURE.md` /
 `AGENTS.md` / `CLAUDE.md` / `workflow_status.md`。
 
+#### 启动耗时：消除导入期重依赖
+
+`litellm` 实测**导入本身约 34 秒**（连带 openai / httpx / pydantic 的大量子模块）。
+它原本在 `src/llm/litellm_singleton/__init__.py` 顶层导入，而导入链是：
+
+```
+src.main → src.cli_handlers → src.workflow.cli_handler → src.workflow
+  → src.workflow.experience_bank → src.core.experience_bank
+  → src.memory.enterprise_ltm → src.llm.litellm_singleton → litellm
+```
+
+结果是 **`clawd --version` 也要先等几十秒**。四处改为惰性：
+
+| 文件 | 改法 |
+|:---|:---|
+| `src/llm/litellm_singleton/__init__.py` | 顶层不 import litellm；PEP 562 `__getattr__` 保留 `from ... import completion` 兼容 |
+| `src/__init__.py` | `CostEstimator` / `Event` / `ClawdError` 等改为按需导入；`__version__` 仍即时 |
+| `src/agent/__init__.py` | 整个 Agent 栈改为按需导入 |
+| `src/main.py` | `cli_handlers` 与 `cost_estimator` 移入实际使用点 |
+
+实测（本机，数字受磁盘/杀软波动影响）：
+
+```
+import src             6.8s → 1.6s
+import src.main       50.9s → ~8s
+```
+
+> `import src.cli.entrypoint` 仍有 ~20s：剩余成本来自
+> `src.workflow`（experience_bank → llm）与 `src.core.__init__` 的急切再导出。
+> 继续优化需要把 `src/core/__init__.py`（约 60 个再导出）与
+> `src/llm/__init__.py` 一并惰性化 —— 属独立工程，不在本轮硬做。
+
+#### 顺带修复：一个被掩盖的循环导入（P0）
+
+`src/__init__` 惰性化后暴露：
+
+```
+src.utils.__init__ → diff_utils → src.core.patch.diff_engine
+  → src.core.__init__ → args_parser → from ..utils import get_logger
+  → ImportError: partially initialized module 'src.utils'
+```
+
+此前它被 `src/__init__` 的急切导入顺序掩盖。受影响的是**以
+`from src.utils import ...` 作为进程第一个导入**的任何调用方
+（包括 `CodeGraph.build` 的 `ProcessPoolExecutor` 子进程 ——
+实测会抛 `BrokenProcessPool`）。
+
+修复（两步，缺一不可）：
+
+1. **在 `src/utils/__init__.py` 中提前绑定 `get_logger`**（只绑这一个名字，
+   放在 `from . import deprecated_args, diff_utils, ...` 之前），破掉环。
+   **不能**把整行 `from .logger import ... debug ...` 提前 ——
+   随后导入 `.debug` 子模块会把包属性 `utils.debug` 覆盖成**模块对象**，
+   调用时报 `TypeError: 'module' object is not callable`（第一版修复踩了这个坑，
+   全量测试 56 红）。完整导出仍保留在 `.debug` 之后。
+2. `src/core/args_parser.py` / `evolution.py` / `memory_guard.py`
+   改为直接从 `..utils.logger` 导入，减少对包级 `__init__` 的依赖。
+
+配套更新 `tests/test_main.py` 的 patch 目标：
+`src.main.get_command_handler` → `src.cli_handlers.get_command_handler`，
+`src.main.log_pricing_check` → `src.core.cost_estimator.cost_estimator.log_pricing_check`
+（实现已改为在函数内导入，patch 必须指向**提供者模块**）。
+
 #### 验证
 
 | 命令 | 结果 |

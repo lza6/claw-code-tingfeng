@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ..utils import debug, warn
+from ..utils.logger import debug, warn
 
 
 @dataclass

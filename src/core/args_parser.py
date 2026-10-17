@@ -19,7 +19,7 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Any
 
-from ..utils import get_logger
+from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 

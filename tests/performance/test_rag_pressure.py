@@ -74,14 +74,40 @@ async def test_unified_scanner_performance():
         # 这里设置一个宽松的阈值供 CI 环境参考
         # assert scan_duration < 10.0
 
-        # 2. 增量扫描 (预期极快)
-        print(f"[Performance] Starting incremental scan (no changes)...")
-        start_inc = time.perf_counter()
-        results_inc = await scanner.scan_directory("src/**/*.py")
-        inc_duration = time.perf_counter() - start_inc
-        print(f"[Performance] Incremental scan took {inc_duration:.2f}s")
+        # 2. 增量扫描（无变更）
+        #
+        # 这里**不用墙钟比值**做断言。原先写的是
+        #     assert inc_duration < scan_duration * 0.2
+        # 在 CI / 满载机器上会因为系统负载与磁盘缓存波动而随机失败
+        # （本机全量跑时红、单独跑时绿，实测复现过）。
+        #
+        # 增量扫描真正要保证的语义是：**未变更的文件不得被重新解析**。
+        # 这可以用解析器调用次数直接、确定性地验证。
+        parse_calls = {"n": 0}
+        _real_extract = extractor.extract
 
-        assert inc_duration < scan_duration * 0.2
+        def _counting_extract(*args, **kwargs):
+            parse_calls["n"] += 1
+            return _real_extract(*args, **kwargs)
+
+        extractor.extract = _counting_extract  # type: ignore[method-assign]
+        try:
+            print("[Performance] Starting incremental scan (no changes)...")
+            start_inc = time.perf_counter()
+            results_inc = await scanner.scan_directory("src/**/*.py")
+            inc_duration = time.perf_counter() - start_inc
+        finally:
+            extractor.extract = _real_extract  # type: ignore[method-assign]
+
+        print(f"[Performance] Incremental scan took {inc_duration:.2f}s, "
+              f"re-parsed files: {parse_calls['n']}")
+
+        assert len(results_inc) == len(results), "增量扫描返回的文件集应与全量一致"
+        assert parse_calls["n"] == 0, (
+            f"增量扫描不应重新解析未变更文件，实际解析了 {parse_calls['n']} 个"
+        )
+        # 时间只做宽松上界（防止实现退化到 O(全量解析)），不参与精确比值判定
+        assert inc_duration < max(scan_duration, 1.0) * 2
 
         # 3. RepoMap 生成性能
         repo_map = RepoMap(token_budget=4000, root_dir=root)

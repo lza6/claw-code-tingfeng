@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 from . import __version__
-from .core.cost_estimator.cost_estimator import log_pricing_check
 
 _initialized = False
 logger = logging.getLogger(__name__)
@@ -93,7 +92,11 @@ def initialize() -> None:
             print(f'[警告] 文件日志启用失败: {e}', file=sys.stderr)
 
     # 检查定价数据新鲜度
+    # 惰性导入：`cost_estimator` 会拉起 `src.core` 的整条初始化，
+    # 此前放在模块顶层，导致 `clawd --version` 也要付这份成本。
     try:
+        from .core.cost_estimator.cost_estimator import log_pricing_check
+
         log_pricing_check()
     except Exception as e:
         print(f'[警告] 定价数据检查失败: {e}', file=sys.stderr)
@@ -101,8 +104,12 @@ def initialize() -> None:
     # 延迟加载重型模块 (后台线程)
     _load_slow_imports()
 
-from .cli_handlers import get_command_handler
 from .core.exceptions import ClawdError
+
+# 注意：`cli_handlers` 不能在模块顶层 import。
+# 它会连带拉起 `src.workflow` / `src.memory` / `src.llm` 整条重依赖链，
+# 使得 `clawd --version`（Typer 入口只借用本模块的 initialize/shutdown hook）
+# 也要等十几秒。真正的分发点 `main()` 内部再按需导入。
 
 # 命令分组定义（用于帮助文本组织）
 COMMAND_GROUPS: dict[str, list[str]] = {
@@ -286,6 +293,9 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             print("\n[*] 正在停止优化引擎...")
         return 0
+
+    # 按需导入：只有真正要分发命令时才拉起 cli_handlers 的重依赖链。
+    from .cli_handlers import get_command_handler
 
     handler = get_command_handler(args.command)
     if handler is None:
