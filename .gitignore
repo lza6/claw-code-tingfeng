@@ -92,3 +92,6 @@ tmp/
 
 # codegraph / graft 本地索引缓存 — 可再生，不提交
 .codegraph/
+
+# 运行时产物（BudgetGuard 的 InterventionLogger 等会写入）
+/latest/
