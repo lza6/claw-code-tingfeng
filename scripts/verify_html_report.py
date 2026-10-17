@@ -45,12 +45,13 @@ def verify(html_path: Path) -> int:
 
         questions = page.locator(".q")
         n = questions.count()
-        print(f"[1] 渲染题目数: {n}")
-        if n != 8:
-            failures.append(f"题目数应为 8，实际 {n}")
-
-        # 读取页面内嵌的正确答案，避免脚本与页面答案漂移
         answers = page.evaluate("QUESTIONS.map(q => q.answer)")
+        print(f"[1] 渲染题目数: {n}（页面定义 {len(answers)} 题）")
+        if n != len(answers):
+            failures.append(f"渲染题数 {n} 与定义数 {len(answers)} 不一致")
+        if n == 0:
+            failures.append("页面没有任何题目")
+
         print(f"[2] 页面内答案索引: {answers}")
 
         # --- 路径 A：全对 ---
@@ -63,14 +64,14 @@ def verify(html_path: Path) -> int:
         print(f"[3] 全对判定: score={score} verdict={verdict[:32]!r}")
         if "通过" not in verdict or "未通过" in verdict:
             failures.append(f"全对时应判定通过，实际: {verdict}")
-        if score.strip() != "8":
-            failures.append(f"全对时得分应为 8，实际 {score}")
+        if score.strip() != str(n):
+            failures.append(f"全对时得分应为 {n}，实际 {score}")
 
         # 每题都应有解释且可见
         explained = page.locator(".explain.show").count()
         print(f"[4] 已显示解释的题目数: {explained}")
-        if explained != 8:
-            failures.append(f"应有 8 条解释，实际 {explained}")
+        if explained != n:
+            failures.append(f"应有 {n} 条解释，实际 {explained}")
 
         # --- 路径 B：故意错一题 ---
         page.click("#reset")
@@ -86,8 +87,8 @@ def verify(html_path: Path) -> int:
         print(f"[5] 错一题判定: score={score2} verdict={verdict2[:32]!r}")
         if "未通过" not in verdict2:
             failures.append(f"错一题时应判定未通过，实际: {verdict2}")
-        if score2.strip() != "7":
-            failures.append(f"错一题时得分应为 7，实际 {score2}")
+        if score2.strip() != str(n - 1):
+            failures.append(f"错一题时得分应为 {n-1}，实际 {score2}")
 
         # 错误项应被标红，正确项应被标绿
         wrong_marked = page.locator(".opt.wrong").count()
@@ -95,8 +96,8 @@ def verify(html_path: Path) -> int:
         print(f"[6] 标记: wrong={wrong_marked} correct={correct_marked}")
         if wrong_marked != 1:
             failures.append(f"应有 1 个错误选项被标红，实际 {wrong_marked}")
-        if correct_marked != 8:
-            failures.append(f"应有 8 个正确选项被标绿，实际 {correct_marked}")
+        if correct_marked != n:
+            failures.append(f"应有 {n} 个正确选项被标绿，实际 {correct_marked}")
 
         browser.close()
 

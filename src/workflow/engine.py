@@ -162,6 +162,10 @@ class WorkflowEngine:
             from ..core.config.dimensions import resolve_dimension_specs
             from ..core.config.runtime import get_runtime_config
 
+            # 先清空：同一 engine 第二次 run() 且本次未配置维度时，
+            # 不得沿用上一轮解析结果。
+            self._resolved_dimensions = []
+
             specs = get_runtime_config("dimensions", []) or []
             if isinstance(specs, str):
                 specs = [s.strip() for s in specs.split(",") if s.strip()]
@@ -318,6 +322,9 @@ class WorkflowEngine:
         _run_dir = str(self.workdir / ".clawd" / "runs" / run_id)
         self.budget_guard.run_dir = _run_dir
         self.budget_guard.intervention_logger = InterventionLogger(_run_dir)
+        # 复用实例会保留上一轮的成本/计时/耗尽标记，必须显式复位
+        # （只清运行期计数，保留 config 与调用方注入的替身）。
+        self.budget_guard.reset_for_run()
         self.liveness_monitor = LivenessMonitor(
             str(self.workdir / ".clawd" / "runs" / run_id), self.resource_monitor
         )

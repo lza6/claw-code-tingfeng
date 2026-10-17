@@ -50,6 +50,7 @@ PIPELINE_STAGE_RESULTS_KEY = "pipeline_stage_results"
 PIPELINE_MAX_ITERATIONS_KEY = "pipeline_max_ralph_iterations"
 PIPELINE_WORKER_COUNT_KEY = "pipeline_worker_count"
 PIPELINE_AGENT_TYPE_KEY = "pipeline_agent_type"
+PIPELINE_ARTIFACTS_KEY = "pipeline_artifacts"
 
 
 # ========== PipelineModeStateExtension（状态扩展）==========
@@ -99,9 +100,16 @@ def _serialize_result(result: StageResult) -> dict[str, Any]:
     """序列化 StageResult 为 JSON 可序列化格式"""
     # 确保 status 是字符串而非枚举
     status_value = result.status.value if hasattr(result.status, 'value') else str(result.status)
+    # artifacts 可能含 Path / dataclass 等非 JSON 原生对象（例如某个阶段
+    # 把 `ctx.cwd` 放进了 artifacts）。直接塞给 json.dumps 会让整个状态写入失败，
+    # 且失败会被上层吞掉 —— 状态静默丢失。这里先做一次 JSON 归一化。
+    try:
+        safe_artifacts = json.loads(json.dumps(result.artifacts, default=str))
+    except (TypeError, ValueError):
+        safe_artifacts = {}
     return {
         "status": status_value,
-        "artifacts": result.artifacts,
+        "artifacts": safe_artifacts,
         "duration_ms": result.duration_ms,
         "error": result.error,
         "skipped_reason": result.skipped_reason,
@@ -205,8 +213,14 @@ class PipelineState:
             PIPELINE_MAX_ITERATIONS_KEY: 10,
             PIPELINE_WORKER_COUNT_KEY: 2,
             PIPELINE_AGENT_TYPE_KEY: "executor",
+            # artifacts 必须持久化：此前 save/load 都不带它，
+            # 导致 `load → 修改 → save` 静默丢失所有阶段产物。
+            PIPELINE_ARTIFACTS_KEY: self.artifacts,
         }
-        state_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        state_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
 
     @classmethod
     def load(cls, state_file: str) -> PipelineState | None:
@@ -245,7 +259,12 @@ class PipelineState:
             pipeline_name=name,
             current_stage_index=data.get(PIPELINE_STAGE_INDEX_KEY, 0),
             stage_results=stage_results,
+            artifacts=data.get(PIPELINE_ARTIFACTS_KEY, {}) or {},
             cwd=cwd,
+            # 必须把阶段名读回来：can_resume 依赖它判断"是否还有未执行阶段"。
+            # 漏掉这行会让 save 写出的 pipeline_stages 在 load 后丢失，
+            # 于是任何 load → save 之后 can_resume 重新恒为 False。
+            stage_names=list(data.get(PIPELINE_STAGES_KEY, []) or []),
         )
 
     @classmethod
@@ -373,42 +392,51 @@ class PipelineOrchestrator:
         cwd = self._cwd or os.getcwd()
         stage_names = [s.name for s in self.config.stages]
 
-        # 1. 初始化 pipeline mode state
+        # 1. **先**读取可恢复状态，再初始化状态文件。
+        #
+        # 顺序至关重要：`start_mode()` 会整份覆盖模式状态。原实现先
+        # `start_mode()`（写入 index=0）再 `can_resume()`，于是永远读到刚写进去的
+        # index=0 —— 断点续跑从未真正发生（实测两轮运行 s1 被执行两次）。
+        resume_index = 0
+        existing_results: dict[str, StageResult] = {}
+        if self.can_resume():
+            ext = self.read_pipeline_state()
+            if ext:
+                resume_index = max(0, min(ext.pipeline_stage_index, len(stage_names)))
+                existing_results = {
+                    name: _deserialize_result(data)
+                    for name, data in ext.pipeline_stage_results.items()
+                }
+                self._last_stage_name = stage_names[resume_index - 1] if resume_index > 0 else None
+                if resume_index > 0:
+                    logger.info(f"检测到可恢复的 pipeline，从阶段 {resume_index} 继续执行")
+
+        # 2. 初始化（或续写）pipeline mode state
+        stage_results_serialized: dict[str, dict[str, Any]] = {
+            name: _serialize_result(r) for name, r in existing_results.items()
+        }
         self._mode_manager.start_mode(
             mode=MODES_MODE_NAME,
             task=self.config.task,
             metadata={
                 PIPELINE_NAME_KEY: self.config.name,
                 PIPELINE_STAGES_KEY: stage_names,
-                PIPELINE_STAGE_INDEX_KEY: 0,
-                PIPELINE_STAGE_RESULTS_KEY: {},
+                PIPELINE_STAGE_INDEX_KEY: resume_index,
+                PIPELINE_STAGE_RESULTS_KEY: stage_results_serialized,
                 PIPELINE_MAX_ITERATIONS_KEY: self.config.max_ralph_iterations,
                 PIPELINE_WORKER_COUNT_KEY: self.config.worker_count,
                 PIPELINE_AGENT_TYPE_KEY: self.config.agent_type,
                 "active": True,
-                "current_phase": f"stage:{stage_names[0]}" if stage_names else "initialized",
+                "current_phase": (
+                    f"stage:{stage_names[resume_index]}"
+                    if resume_index < len(stage_names)
+                    else "complete"
+                ),
             },
         )
 
-        # 2. 检查恢复状态
-        resume_index = 0
-        existing_results: dict[str, StageResult] = {}
-        if self.can_resume():
-            ext = self.read_pipeline_state()
-            if ext:
-                resume_index = ext.pipeline_stage_index
-                existing_results = {
-                    name: _deserialize_result(data)
-                    for name, data in ext.pipeline_stage_results.items()
-                }
-                self._last_stage_name = stage_names[resume_index - 1] if resume_index > 0 else None
-                logger.info(f"检测到可恢复的 pipeline，从阶段 {resume_index} 继续执行")
-
         current_results = existing_results.copy()
         self._current_index = resume_index
-        stage_results_serialized: dict[str, dict[str, Any]] = {
-            name: _serialize_result(r) for name, r in current_results.items()
-        }
 
         # 3. 顺序执行阶段
         for i in range(resume_index, len(self.config.stages)):
@@ -473,12 +501,15 @@ class PipelineOrchestrator:
             self._current_index = i + 1
             self._last_stage_name = stage.name
 
-            # 持久化状态
-            # 索引语义 = "下一个待执行阶段的序号"。阶段 i 完成后应为 i+1；
-            # 原先写的是 i，导致完成后仍指向刚跑过的阶段（恢复时重复执行）。
+            # 持久化状态。
+            # 索引语义 = "下次恢复时应从第几个阶段开始"：
+            #   - 成功/跳过 → i+1（下一个）
+            #   - 失败      → i  （重试失败的这一个）
+            # 原实现失败时也写 i+1，恢复会跳过失败阶段，与"从失败处继续"相反。
+            next_index = i if result.status == StageStatus.FAILED else i + 1
             self._update_mode_state(
-                current_phase=f"stage:{stage.name}:{result.status}",
-                pipeline_stage_index=i + 1,
+                current_phase=f"stage:{stage.name}:{result.status.value}",
+                pipeline_stage_index=next_index,
                 pipeline_stage_results=stage_results_serialized,
             )
 
@@ -548,10 +579,33 @@ class PipelineOrchestrator:
         failed_stage: str | None = None,
         error: str | None = None,
     ) -> PipelineResult:
-        """完成 pipeline：更新状态并返回结果"""
+        """完成 pipeline：更新状态并返回结果。
+
+        ## 状态语义（决定"能不能续跑"）
+
+        | 结局 | active | current_phase | 可续跑 |
+        |:---|:---|:---|:---|
+        | completed | False | `complete` | 否 |
+        | failed    | **True** | `stage:<name>:failed` | **是**（重试失败阶段） |
+        | cancelled | True | `cancelled` | 是 |
+
+        原实现一律 `active: False` + `current_phase: "failed"`，
+        而 `can_resume()` 排除 `"failed"` —— 结果**失败后永远无法续跑**，
+        与类 docstring 和 CLI 提示里的"从上次中断处恢复"直接矛盾。
+        """
+        if status == "completed":
+            active = False
+            phase = "complete"
+        elif status == "failed":
+            active = True
+            phase = f"stage:{failed_stage}:failed" if failed_stage else "failed"
+        else:  # cancelled 等
+            active = True
+            phase = status
+
         self._mode_manager.update_state(MODES_MODE_NAME, {
-            "active": False,
-            "current_phase": "complete" if status == "completed" else status,
+            "active": active,
+            "current_phase": phase,
             "completed_at": datetime.now().isoformat(),
             PIPELINE_STAGE_RESULTS_KEY: {
                 name: _serialize_result(r) for name, r in results.items()
@@ -581,15 +635,18 @@ class PipelineOrchestrator:
 
         条件：
         1. ModeState 存在
-        2. active == True
-        3. current_phase 不是 complete 或 failed
+        2. active == True（失败/取消后仍为 True，见 `_complete_pipeline`）
+        3. current_phase 不是 `complete`
+
+        注意：**失败是可恢复的**。原实现排除 `"failed"`，导致失败后
+        `can_resume()` 恒为 False —— 断点续跑实际上从未生效。
         """
         state = self._mode_manager.read_state(MODES_MODE_NAME)
         if not state:
             return False
         return (
             state.metadata.get("active") is True
-            and state.current_phase not in ("complete", "failed")
+            and state.current_phase != "complete"
         )
 
     def read_pipeline_state(self) -> PipelineModeStateExtension | None:
@@ -663,7 +720,9 @@ def create_pipeline(
         )
 
     config = PipelineConfig(name=name, task=task, stages=normalized, **kwargs)
-    return PipelineOrchestrator(config)
+    # 状态目录必须与阶段工作目录一致：否则阶段在 config.cwd 执行，
+    # 而 ModeStateManager 仍把状态写进进程 cwd（实测的"半修复"）。
+    return PipelineOrchestrator(config, cwd=config.cwd or ".")
 
 
 def create_autopilot_pipeline_config(

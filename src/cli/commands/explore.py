@@ -125,23 +125,46 @@ class ExploreMode:
         )
 
     def _create_readonly_engine(self) -> AgentEngine:
-        """创建只读模式的 AgentEngine (过滤工具)"""
+        """创建只读模式的 AgentEngine。
+
+        ## 为什么不用"过滤工具列表"
+
+        原实现导入 `src.tools_runtime.tool_manager.create_readonly_tool_manager`
+        —— 该模块与函数**都不存在**（真实的是 `src.agent.tool_manager.ToolManager`）。
+        而且 `AgentEngine.__init__` 根本不接受 `tool_manager` 参数，
+        它内部自己 `ToolManager(self.tools)`。所以那条路即使补上符号也走不通。
+
+        真正的只读保证来自审批门禁：`ApprovalMode.PLAN` 会拒绝一切
+        write / exec 类工具（这是 v0.54.0 实测过的硬化点）。`ToolManager`
+        在构造时从 `AgentSettings` 读取 `approval_mode`，因此这里在
+        **构造期间**临时把 `APPROVAL_MODE=plan` 注入环境，构造完立刻还原，
+        不影响进程内其它代码。
+        """
+        import os
+
         from src.agent.engine import AgentEngine
-        from src.tools_runtime.tool_manager import create_readonly_tool_manager
 
-        # 使用工具管理器过滤器
-        tool_manager = create_readonly_tool_manager(
-            allowed_tools=self.READ_ONLY_TOOLS,
-            disallowed_tools=self.WRITE_TOOLS,
-        )
+        previous = os.environ.get("APPROVAL_MODE")
+        os.environ["APPROVAL_MODE"] = "plan"
+        try:
+            engine = AgentEngine(
+                workdir=self.workdir,
+                world_model=self.world_model,
+                intent="explore",
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("APPROVAL_MODE", None)
+            else:
+                os.environ["APPROVAL_MODE"] = previous
 
-        engine = AgentEngine(
-            workdir=self.workdir,
-            tool_manager=tool_manager,
-            world_model=self.world_model,
-        )
+        if getattr(engine.tool_manager, "approval_mode", None) is None or \
+                getattr(engine.tool_manager.approval_mode, "value", "") != "plan":
+            # 不静默：若门禁没生效，明确说明本次并非只读
+            console.print(
+                "[bold yellow]⚠ 未能启用只读审批模式，本次探索可能修改文件[/bold yellow]"
+            )
 
-        # 标记为探索模式
         set_config("mode", "explore")
         set_config("readonly", True)
 

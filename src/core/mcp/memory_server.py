@@ -6,7 +6,7 @@
 设计:
     - 支持实体 (Entity) 和观察 (Observation) 存储
     - 支持关系图谱 (Knowledge Graph)
-    - 语义搜索 (通过 TextIndexer)
+    - 关键词检索（子串匹配；**不是**语义/向量搜索，score 恒为 1.0）
     - LTM 持久化到 .clawd/memory/
 """
 from __future__ import annotations
@@ -312,7 +312,7 @@ MEMORY_SERVER_TOOLS = {
     },
     "search_memory": {
         "name": "search_memory",
-        "description": "Semantic search memory",
+        "description": "Keyword search memory (substring match, not semantic)",
         "inputSchema": {
             "type": "object",
             "properties": {

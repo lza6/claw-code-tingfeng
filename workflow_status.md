@@ -14,7 +14,7 @@
 | D-01 | `ruff --select F821` 清零 | ✅ | 40 → 0（All checks passed） |
 | D-02 | `ruff --select F811` 清零 | ✅ | 19 → 0 |
 | D-03 | 全库导入缺陷清零 | ✅ | `scripts/import_sweep.py`：638 模块，0 缺陷 |
-| D-04 | 全量测试转绿 | ✅ | **3042 passed / 0 failed**（v0.57.0 时 3033，原 2999/31） |
+| D-04 | 全量测试转绿 | ✅ | **3050 passed / 0 failed**（v0.57.0 时 3033，原 2999/31） |
 | D-05 | `ReadinessSnapshot.ready` 字段与 classmethod 冲突 | ✅ | 实测字段现为 bool；`RuntimeSnapshot.ready()` 语义正确 |
 | D-06 | `_deserialize_result` 枚举还原 + `skipped_reason` | ✅ | 往返测试通过 |
 | D-07 | `_deserialize_event` 迭代字段字典崩溃 | ✅ | 持久化恢复测试通过 |
@@ -34,11 +34,18 @@
 | D-21 | `_register_command_modules` 失败分支返回空清单（断言会假通过） | ✅ | 返回真实组名 + 新增失败路径回归用例 |
 | D-22 | 惰性导出导致静态可达数下降（429→427） | ✅ | 两个 `__init__` 加 `TYPE_CHECKING` 锚点；恢复 429 |
 | D-23 | RAG 性能测试依赖墙钟比值，满载时随机红 | ✅ | 改为统计解析调用次数，断言增量重解析 = 0 |
+| D-24 | `workflow` 四个命令体引用幽灵 API（`SwarmOrchestrator`/`RalphLedger`/`RalplanWorkflow`/自模块导入） | ✅ | 按真实 API 重写；新增 wiring 测试 4 用例 |
+| D-25 | `explore` 导入不存在的 `create_readonly_tool_manager`，且 `AgentEngine` 不接受 `tool_manager` | ✅ | 改为构造期注入 `APPROVAL_MODE=plan`（真实只读门禁） |
+| D-26 | `catalog` 的 `internal_required` 参数不存在 + `get_counts()` 缺失 | ✅ | 修参数、补 `CatalogCounts/get_counts`；list/reload 实测正常 |
+| D-27 | 断点续跑三处叠加失效（先写后读 / failed 不可恢复 / 失败索引 +1） | ✅ | 先读后写、failed 保持 active、失败索引保持 i；resume 测试通过 |
+| D-28 | `PipelineState` 往返丢 `stage_names`/`artifacts`；artifacts 非 JSON 时状态静默丢失 | ✅ | 双向持久化 + JSON 归一化；新增往返用例 |
+| D-29 | 复用 `BudgetGuard` 跨轮泄漏预算状态 | ✅ | 新增 `reset_for_run()` 并在 run() 调用；回归测试 |
+| D-30 | `_resolved_dimensions` 跨轮残留；`create_pipeline(cwd)` 状态目录不一致 | ✅ | 每次解析前清空；cwd 传给编排器 |
 
 ### 验证命令与真实结果
 
 ```
-pytest tests/ -q                          → 3042 passed, 0 failed
+pytest tests/ -q                          → 3050 passed, 0 failed
 pytest tests/contracts -q                 → 39 passed
 ruff check src/ --select F821             → All checks passed!
 ruff check src/ --select F811             → All checks passed!

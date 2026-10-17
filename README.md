@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.57.1 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.57.2 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -199,7 +199,7 @@ python scripts/e2e_smoke.py
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3042 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
+| 测试用例 | **3050 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
 | 覆盖率 | **~20%** | 仍低于 `pyproject.toml` 的 `fail_under`，是已知缺口 |
 | Ruff `F821`（未定义名称） | **0** | 本轮从 40 清零 |

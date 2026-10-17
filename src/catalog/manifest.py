@@ -54,6 +54,19 @@ class AgentDefinition:
     canonical: str | None = None
 
 
+@dataclass(frozen=True)
+class CatalogCounts:
+    """清单统计（`catalog reload` 使用）。
+
+    此前 `catalog_commands.catalog_reload()` 调用 `manifest.get_counts()`，
+    但该方法从未存在 —— 命令每次执行都 AttributeError。这里补上真实实现。
+    """
+    skill_count: int
+    active_skill_count: int
+    agent_count: int
+    active_agent_count: int
+
+
 @dataclass
 class CatalogManifest:
     """清单清单"""
@@ -61,6 +74,17 @@ class CatalogManifest:
     catalog_version: str = "2026.02.28.1"
     skills: list[SkillDefinition] = field(default_factory=list)
     agents: list[AgentDefinition] = field(default_factory=list)
+
+    def get_counts(self) -> CatalogCounts:
+        """统计技能与 Agent 数量（总数 / 活跃数）。"""
+        return CatalogCounts(
+            skill_count=len(self.skills),
+            active_skill_count=sum(
+                1 for s in self.skills if s.status == SkillStatus.ACTIVE
+            ),
+            agent_count=len(self.agents),
+            active_agent_count=sum(1 for a in self.agents if a.status == "active"),
+        )
 
     @classmethod
     def from_omx(cls) -> "CatalogManifest":
@@ -108,7 +132,7 @@ class CatalogManifest:
             SkillDefinition("configure-slack", SkillCategory.UTILITY, SkillStatus.MERGED, canonical="configure-notifications", core=False),
             SkillDefinition("configure-openclaw", SkillCategory.UTILITY, SkillStatus.MERGED, canonical="configure-notifications", core=False),
             SkillDefinition("ralph-init", SkillCategory.UTILITY, SkillStatus.MERGED, canonical="plan"),
-            SkillDefinition("worker", SkillCategory.UTILITY, SkillStatus.INTERNAL, internal_required=True),
+            SkillDefinition("worker", SkillCategory.UTILITY, SkillStatus.INTERNAL),
         ]
 
         agents = [

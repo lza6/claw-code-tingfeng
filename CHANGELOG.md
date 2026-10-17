@@ -9,6 +9,93 @@
 
 ## [未发布]
 
+### v0.57.2 (2026-10-18) — 独立审查发现的 5 个阻塞项
+
+v0.57.0/0.57.1 的独立审查线程回传了结论（REQUEST_CHANGES）。以下问题
+**全部经复现确认**，均已修复。
+
+#### 1. `workflow` 组四个命令"注册成功但运行即崩"
+
+`--help` 能显示只说明 Typer 注册成功，**函数体**引用的是不存在的符号：
+
+| 命令 | 原引用 | 真实 API |
+|:---|:---|:---|
+| `ralph` | `SwarmOrchestrator.execute_task()`、`RalphLedger` | `SwarmEngine.run()`、`RalphProgressLedger` |
+| `team` | `SwarmOrchestrator.coordinate_task()` | `SwarmEngine.run()` |
+| `ralplan` | `RalplanWorkflow.execute()` | `RalplanEngine.run()` |
+| `autopilot` | `from .workflow_commands import create_autopilot_pipeline_config`（**从自身模块导入从未定义的名字**） | `workflow.pipeline_orchestrator.create_autopilot_pipeline_config` |
+
+四个命令体全部重写为真实 API。`ralph` 的 `--verify` 不再假装"已验证通过"——
+本项目的验证阶段仍是桩，命令会明确打印这一点。
+
+新增 `tests/cli/test_workflow_commands_wiring.py`（4 用例）：
+用替身驱动命令体，断言"不抛 ImportError/AttributeError、退出码正确、产物落盘"。
+
+#### 2. `explore` 的只读引擎构建必然失败
+
+原实现导入 `src.tools_runtime.tool_manager.create_readonly_tool_manager`
+—— 模块与函数**都不存在**；且 `AgentEngine.__init__` 根本不接受 `tool_manager`
+（内部自建）。改为：构造期间临时注入 `APPROVAL_MODE=plan`（真实只读门禁，
+PLAN 会拒绝一切 write/exec），构造后还原；门禁未生效时显式告警。
+
+#### 3. `catalog list/reload` 运行即崩
+
+- `src/catalog/manifest.py:111` 给 `SkillDefinition` 传了不存在的
+  `internal_required=True` → `TypeError`，`get_catalog()` 整体失败。
+- `catalog_commands` 调用 `CatalogManifest.get_counts()`，该方法从未存在
+  → `AttributeError`。
+
+修复：去掉多余参数（状态已是 `INTERNAL`）；补齐 `CatalogCounts` +
+`get_counts()`。实测 `catalog list` 正常、`catalog reload` 输出
+"技能数 39（活跃 23）/ Agent 数 30（活跃 18）"。
+
+#### 4. 断点续跑从未生效（三处叠加）
+
+1. `run()` 先 `start_mode()`（写 index=0）再 `can_resume()` → 永远读到 0。
+2. `_complete_pipeline("failed")` 写 `active=False` + phase `"failed"`，
+   而 `can_resume()` 排除 `"failed"` → 失败后永不可恢复。
+3. 失败阶段写 `index=i+1` → 恢复会跳过失败阶段。
+
+修复：先读状态再初始化；失败时 `active=True`、phase=`stage:<name>:failed`；
+失败阶段保持 `index=i`（重试该阶段）。恢复测试实测：
+`calls s1=1, s2=2, s3=1`（s1 不重跑、s2 重试）。
+
+#### 5. `PipelineState` 往返丢字段
+
+`save` 写 `pipeline_stages` 但 `load` 不读回 → `load→save` 后 `can_resume`
+由 True 变 False；`artifacts` 则两边都不处理。已补：
+`stage_names`、`artifacts` 双向持久化；artifacts 做 JSON 归一化
+（阶段把 `ctx.cwd` 放进 artifacts 时不再让整份状态写入失败）。
+
+#### 同时修复（审查的非阻塞项）
+
+- **`BudgetGuard` 跨轮状态泄漏**：复用实例后，第二次 `run()` 继承上轮
+  `accumulated_cost/is_exhausted/start_time`。新增 `reset_for_run()` 并在
+  `run()` 中调用（保留 config 与注入的替身）。附回归测试。
+- `_resolved_dimensions` 在本次未配置维度时未清空 → 同一 engine 二次运行沿用旧维度。
+- `create_pipeline(cwd=...)` 只影响阶段、不影响状态目录 → 对齐。
+- `memory_server` 模块 docstring 与 MCP 工具描述仍称"语义搜索"，
+  实际是子串匹配（score 恒 1.0）→ 如实改为关键词检索。
+- `types.py` 去重后残留 4 个孤立 `@dataclass` 装饰器 → 清理。
+- 测试文件未使用的 import → 清理。
+
+#### 验证
+
+```
+pytest tests/ -q --tb=no                                → 3050 passed / 0 failed
+pytest tests/cli tests/workflow tests/core -q           → 1080 passed
+pytest tests/workflow/test_pipeline_orchestrator.py -q  → 30 passed
+pytest tests/cli/test_workflow_commands_wiring.py -q    → 4 passed
+ruff --select F821,F811                                 → All checks passed
+scripts/import_sweep.py                                 → 0 缺陷（639 模块）
+scripts/reachability.py                                 → 429（与基线一致）
+python -m src catalog list / reload                     → 正常（39 技能 / 30 Agent）
+python -m src agent keywords                            → 11 个关键词
+scripts/verify_html_report.py                           → 10 题全部通过（真实浏览器）
+```
+
+---
+
 ### v0.57.1 (2026-10-18) — 启动耗时与循环导入
 
 v0.57.0 发布后继续追查可用性时发现的两个问题。

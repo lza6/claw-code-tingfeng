@@ -41,15 +41,39 @@ def ralph_run(
     """
     持久化完成循环：反复执行直到任务完成。
 
-    对应 oh-my-codex $ralph skill。
-    基于 Ralph Ledger 追踪进度，循环执行 + 验证。
+    ## 实现说明（v0.57.2 重写）
+
+    原实现引用 `SwarmOrchestrator.execute_task()` 与 `RalphLedger` ——
+    两者都不存在（`git log -S` 全历史为空），命令**一运行就 ImportError**。
+    现改为使用真实存在的 API：
+
+    - 执行：`SwarmEngine(config, workdir, intent).run(goal)`
+    - 进度记录：`RalphProgressLedger`（纯数据结构，序列化为 JSON）
+
+    `--verify`：本项目的验证阶段目前是**桩**（返回 `not_implemented`），
+    因此这里不会假装"已验证通过"，只以 `SwarmResult.success` 作为完成信号，
+    并在启用 `--verify` 时明确说明这一点。
     """
-    from ...agent.definitions import get_agent
-    from ...agent.swarm.orchestrator import SwarmOrchestrator
-    from ...workflow.ralph_ledger import RalphLedger
+    import json
+
+    from ...agent.swarm.config import SwarmConfig
+    from ...agent.swarm.engine import SwarmEngine
+    from ...workflow.ralph_ledger import RalphProgressLedger
 
     workdir = Path.cwd()
-    ledger = RalphLedger(workdir)
+    ledger_dir = workdir / ".clawd" / "ralph"
+    ledger_dir.mkdir(parents=True, exist_ok=True)
+    ledger_file = ledger_dir / "ledger.json"
+
+    if ledger_file.exists():
+        try:
+            ledger = RalphProgressLedger.from_dict(
+                json.loads(ledger_file.read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError, TypeError):
+            ledger = RalphProgressLedger(source=goal, strategy=f"agent:{agent}")
+    else:
+        ledger = RalphProgressLedger(source=goal, strategy=f"agent:{agent}")
 
     console.print(Panel(
         f"[bold cyan]RALPH 完成循环[/bold cyan]\n"
@@ -59,79 +83,61 @@ def ralph_run(
         border_style="cyan"
     ))
 
-    # 恢复检查
     if recover or can_resume_pipeline(str(workdir)):
         state = read_pipeline_state(str(workdir))
         if state:
             console.print(f"[green]检测到可恢复状态: 阶段 {state.pipeline_stage_index}[/green]")
 
-    async def run_ralph_loop():
-        orchestrator = SwarmOrchestrator()
-        current_iter = ledger.current_iteration or 0
+    if verify:
+        console.print(
+            "[yellow]注意：验证阶段当前为未实现状态（返回 not_implemented），"
+            "本次以执行成功与否作为完成信号。[/yellow]"
+        )
 
-        while current_iter < iterations:
-            current_iter += 1
-            ledger.start_iteration(current_iter)
+    def _persist() -> None:
+        ledger_file.write_text(
+            json.dumps(ledger.to_dict(), ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
 
+    async def run_ralph_loop() -> bool:
+        for current_iter in range(1, iterations + 1):
             console.print(f"\n[bold]迭代 {current_iter}/{iterations}[/bold]")
-
             try:
-                # 使用指定 agent 执行
-                result = await orchestrator.execute_task(
-                    task_description=goal,
-                    agent_name=agent,
-                    context={
-                        "iteration": current_iter,
-                        "ledger": ledger,
-                        "recover": recover and current_iter == 1,
-                    },
+                engine = SwarmEngine(
+                    config=SwarmConfig(fallback_to_single_agent=True),
+                    workdir=workdir,
+                    intent="implement",
                 )
+                result = await engine.run(goal)
+                ledger.entries.append({
+                    "iteration": current_iter,
+                    "success": bool(result.success),
+                    "elapsed_seconds": getattr(result, "elapsed_seconds", None),
+                    "summary": (getattr(result, "final_result", "") or "")[:800],
+                    "errors": list(getattr(result, "errors", []) or [])[:5],
+                })
+                _persist()
 
-                ledger.record_iteration_result(
-                    iteration=current_iter,
-                    success=result.get("success", False),
-                    artifacts=result.get("artifacts", {}),
-                )
-
-                # 验证
-                if verify:
-                    verifier = get_agent("verifier")
-                    verify_result = await verifier.verify(
-                        task=goal,
-                        artifacts=result.get("artifacts", {}),
-                    )
-
-                    if verify_result.get("complete", False):
-                        console.print("[bold green]✓ 任务完成并通过验证[/bold green]")
-                        ledger.mark_complete()
-                        ledger.finalize(success=True)
-                        return True
-                    else:
-                        reason = verify_result.get("reason", "验证未通过")
-                        console.print(f"[yellow]⚠ {reason}[/yellow]")
-                        ledger.record_verification_failure(reason)
-                else:
-                    if result.get("success", False):
-                        console.print("[green]✓ 执行成功[/green]")
-                        ledger.mark_complete()
-                        ledger.finalize(success=True)
-                        return True
-
-            except Exception as e:
+                if result.success:
+                    console.print("[bold green]✓ 任务完成[/bold green]")
+                    console.print((result.final_result or "")[:2000])
+                    return True
+                console.print("[yellow]本轮未完成，继续下一轮[/yellow]")
+            except Exception as e:  # noqa: BLE001 - 单轮失败不应终止整个循环
                 console.print(f"[red]✗ 迭代失败: {e}[/red]")
-                ledger.record_error(current_iter, str(e))
-
-            ledger.finalize_iteration()
+                ledger.entries.append({
+                    "iteration": current_iter,
+                    "success": False,
+                    "error": f"{type(e).__name__}: {e}",
+                })
+                _persist()
 
         console.print("[yellow]达到最大迭代上限[/yellow]")
         return False
 
     success = asyncio.run(run_ralph_loop())
-
-    # 显示摘要
-    summary = ledger.get_summary()
-    console.print("\n" + summary)
-
+    console.print(f"\n进度账本: {ledger_file}")
     raise typer.Exit(0 if success else 1)
 
 
@@ -148,15 +154,11 @@ def ralplan_run(
     """
     共识规划：Planner + Architect + Critic 三方博弈生成计划。
 
-    对应 oh-my-codex $ralplan skill。
-
-    产出物：
-    - PRD (产品需求文档)
-    - 架构设计文档
-    - 实施计划
-    - 测试策略
+    产物写入 `--output`（默认 `<cwd>/.clawd/plans/ralplan.json`）。
     """
-    from ...workflow.ralplan import RalplanWorkflow
+    import json
+
+    from ...workflow.ralplan import RalplanEngine
 
     workdir = Path.cwd()
     output_dir = Path(output) if output else workdir / ".clawd" / "plans"
@@ -171,25 +173,42 @@ def ralplan_run(
         border_style="cyan"
     ))
 
-    async def run_planning():
-        workflow = RalplanWorkflow(
-            workdir=workdir,
-            output_dir=output_dir,
-            max_iterations=max_iterations,
-            enable_architect=not no_architect,
-            enable_critic=not no_critic,
+    if no_architect or no_critic:
+        console.print(
+            "[yellow]注意：RalplanEngine 未提供单独关闭 Architect/Critic 的开关，"
+            "本轮仍执行完整三方流程；如需精简请调整 --max-iterations。[/yellow]"
         )
-        result = await workflow.execute(task)
 
-        if result.success:
-            console.print("[bold green]✓ 规划完成[/bold green]")
-            for key, path in result.paths.items():
-                if path:
-                    console.print(f"  [cyan]{key}:[/cyan] {path}")
-        else:
-            console.print(f"[bold red]✗ 规划失败:[/bold red] {result.error}")
+    async def run_planning() -> int:
+        engine = RalplanEngine(workdir=workdir, max_rounds=max_iterations)
+        plan = await engine.run(task)
 
-    asyncio.run(run_planning())
+        payload = {
+            "goal": plan.goal,
+            "objective": plan.objective,
+            "chosen_option": plan.chosen_option,
+            "confidence": plan.confidence,
+            "tasks": plan.tasks,
+            "prd": plan.prd,
+            "architecture": plan.architecture,
+            "risks": plan.risks,
+            "mitigations": plan.mitigations,
+            "version": plan.version,
+            "created_at": plan.created_at,
+        }
+        out_path = output_dir / "ralplan.json"
+        out_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+
+        console.print("[bold green]✓ 规划完成[/bold green]")
+        console.print(f"  置信度: {plan.confidence}")
+        console.print(f"  任务数: {len(plan.tasks) if plan.tasks else 0}")
+        console.print(f"  输出: {out_path}")
+        return 0
+
+    raise typer.Exit(asyncio.run(run_planning()))
 
 
 # ========== TEAM 团队执行 ==========
@@ -214,9 +233,6 @@ def team_run(
     - 并行/顺序: 任务调度策略
     - 自动分解: 使用 planner 将大任务分解为子任务
     """
-    from ...agent.swarm.orchestrator import SwarmOrchestrator
-    from ...agent.swarm.subagent_tracker import SubagentTracker
-
     workdir = Path.cwd()
 
     console.print(Panel(
@@ -229,40 +245,54 @@ def team_run(
         border_style="cyan"
     ))
 
-    async def run_team():
-        orchestrator = SwarmOrchestrator()
+    async def run_team() -> int:
+        # 真实入口是 SwarmEngine（多 agent 编排），不是不存在的 SwarmOrchestrator。
+        from ...agent.swarm.config import SwarmConfig
+        from ...agent.swarm.engine import SwarmEngine
+        from ...agent.swarm.subagent_tracker import SubagentTracker
 
-        if decompose:
-            console.print("[dim]分解任务...[/dim]")
-            subtasks = await orchestrator.decompose_task(goal)
-            console.print(f"  分解为 {len(subtasks)} 个子任务")
-
+        # 会话追踪：把本次团队执行登记为一个线程，便于事后查看摘要。
+        tracker = SubagentTracker(str(workdir / ".clawd" / "subagents"))
         if session:
-            tracker = SubagentTracker(workdir)
-            tracker.resume(session)
-            console.print(f"[green]恢复会话: {session}[/green]")
+            tracker.set_session_id(session)
+            console.print(f"[green]会话: {session}[/green]")
+        tracker.register_thread("swarm-main", kind="orchestrator")
 
-        result = await orchestrator.coordinate_task(
-            task=goal,
-            worker_count=workers,
-            agent_type=agent_type,
-            parallel=parallel,
+        # --no-parallel 映射为单 worker；Swarm 本身总会做任务分解，
+        # `--no-decompose` 无法关闭（下面如实提示，而不是静默忽略）。
+        effective_workers = workers if parallel else 1
+        if not decompose:
+            console.print(
+                "[yellow]注意：SwarmEngine 总会先分解任务，--no-decompose 无法关闭。[/yellow]"
+            )
+
+        cfg = SwarmConfig(
+            max_workers=effective_workers,
+            fallback_to_single_agent=True,
+            enable_auditor=True,
+            enable_reviewer=True,
         )
+        engine = SwarmEngine(config=cfg, workdir=workdir, intent=agent_type)
+
+        console.print("[dim]启动 Swarm 协作...[/dim]")
+        try:
+            result = await engine.run(goal)
+        finally:
+            tracker.mark_thread_completed("swarm-main")
+
+        summary = tracker.get_summary()
+        console.print(f"[dim]会话线程: {summary.total_threads} 个[/dim]")
 
         if result.success:
             console.print("[bold green]✓ 团队执行完成[/bold green]")
-            console.print(f"  完成: {len(result.completed)}/{result.total}")
-            console.print(f"  总耗时: {result.duration_ms / 1000:.1f}s")
-        else:
-            console.print(f"[bold red]✗ 执行失败:[/bold red] {result.error}")
-            if result.failed_tasks:
-                console.print(f"  失败任务: {result.failed_tasks}")
+            console.print(f"  耗时: {getattr(result, 'elapsed_seconds', 0):.1f}s")
+            console.print((result.final_result or "")[:2000])
+            return 0
 
-        # 保存会话
-        if result.session_id:
-            console.print(f"  会话 ID: {result.session_id}")
+        console.print(f"[bold red]✗ 执行失败:[/bold red] {'; '.join(result.errors or [])}")
+        return 1
 
-    asyncio.run(run_team())
+    raise typer.Exit(asyncio.run(run_team()))
 
 
 # ========== AUTOPILOT 全自动管道 ==========
@@ -283,7 +313,10 @@ def autopilot_run(
 
     一站式完成从规划到实现到验证的完整流程。
     """
-    from ...workflow.pipeline import PipelineOrchestrator
+    from ...workflow.pipeline_orchestrator import (
+        PipelineOrchestrator,
+        create_autopilot_pipeline_config,
+    )
 
     workdir = Path.cwd()
 
@@ -297,8 +330,9 @@ def autopilot_run(
     ))
 
     # 构建 pipeline 阶段
-    from .workflow_commands import create_autopilot_pipeline_config
-
+    # 原实现 `from .workflow_commands import create_autopilot_pipeline_config`
+    # 是从**自身模块**导入一个本地从未定义的名字 —— 必然 ImportError。
+    # 真实定义在 workflow.pipeline_orchestrator（见文件顶部导入）。
     stages = []
     if not no_plan:
         stages.append(create_ralplan_stage())

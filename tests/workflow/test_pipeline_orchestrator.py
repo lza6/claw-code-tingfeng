@@ -90,6 +90,33 @@ class TestPipelineState:
         assert loaded.current_stage_index == 2
         assert loaded.stage_results["stage1"].status == StageStatus.SUCCESS
         assert loaded.stage_results["stage1"].artifacts == {"a": 1}
+        # artifacts 必须往返（原实现 save/load 都不带它，会静默丢失）
+        assert loaded.artifacts == {"global": "data"}
+        # 阶段名必须往返：can_resume 依赖它
+        assert loaded.stage_names == ["stage1", "stage2", "stage3"]
+
+    def test_load_then_save_keeps_resumable(self, temp_workspace):
+        """`load → save` 后 can_resume 不得由 True 变 False。
+
+        这是"只修了写出侧、没修读入侧"的回归探针：load 若不恢复
+        stage_names，再 save 会把 pipeline_stages 写成 []，续跑能力丢失。
+        """
+        state_file = temp_workspace / "resumable.json"
+        PipelineState(
+            pipeline_name="p",
+            current_stage_index=1,
+            stage_results={"s0": _ok()},
+            stage_names=["s0", "s1"],
+        ).save(str(state_file))
+        assert PipelineState.can_resume(str(state_file)) is True
+
+        loaded = PipelineState.load(str(state_file))
+        assert loaded is not None
+        loaded.save(str(state_file))
+
+        assert PipelineState.can_resume(str(state_file)) is True, (
+            "load→save 之后失去了续跑能力"
+        )
 
     def test_load_missing_file_returns_none(self, temp_workspace):
         assert PipelineState.load(str(temp_workspace / "nope.json")) is None
@@ -430,6 +457,73 @@ class TestPipelineOrchestrator:
         assert result.failed_stage == "fail1"
         assert "succeed" not in result.stage_results
         assert "fail2" not in result.stage_results
+
+    @pytest.mark.asyncio
+    async def test_resume_after_failure(self, temp_workspace):
+        """失败后第二次运行必须从**失败的那一个阶段**继续。
+
+        这是旧测试文件里 `test_resume_after_failure` 的等价实现。
+        重写时曾遗漏该场景，而它恰好暴露了两个真实缺陷：
+
+        1. `run()` 先 `start_mode()`（写 index=0）再 `can_resume()`，
+           永远读到 0 → 从头重跑；
+        2. `_complete_pipeline("failed")` 写 `active=False` + phase `"failed"`，
+           而 `can_resume()` 排除 `"failed"` → 失败后永不可恢复。
+        """
+        calls = {"s1": 0, "s2": 0, "s3": 0}
+
+        async def s1(ctx):
+            calls["s1"] += 1
+            return _ok({"s1": calls["s1"]})
+
+        async def s2(ctx):
+            calls["s2"] += 1
+            if calls["s2"] == 1:
+                raise ValueError("first attempt fails")
+            return _ok({"s2": calls["s2"]})
+
+        async def s3(ctx):
+            calls["s3"] += 1
+            return _ok({"s3": calls["s3"]})
+
+        cfg = PipelineConfig(
+            name="resume_test",
+            task="test task",
+            stages=[
+                StageAdapter("s1", s1),
+                StageAdapter("s2", s2),
+                StageAdapter("s3", s3),
+            ],
+        )
+
+        first = await PipelineOrchestrator(cfg, cwd=str(temp_workspace)).run()
+        assert first.status == "failed"
+        assert first.failed_stage == "s2"
+        assert calls == {"s1": 1, "s2": 1, "s3": 0}
+
+        second = await PipelineOrchestrator(cfg, cwd=str(temp_workspace)).run()
+        assert second.status == "completed"
+        # s1 已完成 → 不得重跑；s2 失败 → 必须重试；s3 首次执行
+        assert calls["s1"] == 1, "恢复时重跑了已完成的阶段"
+        assert calls["s2"] == 2, "失败阶段未被重试"
+        assert calls["s3"] == 1
+
+    @pytest.mark.asyncio
+    async def test_completed_pipeline_is_not_resumed(self, temp_workspace):
+        """已完成的 pipeline 不得被当作可恢复状态。"""
+        calls = {"n": 0}
+
+        async def only(ctx):
+            calls["n"] += 1
+            return _ok()
+
+        cfg = PipelineConfig(
+            name="done_test", task="t", stages=[StageAdapter("only", only)]
+        )
+        await PipelineOrchestrator(cfg, cwd=str(temp_workspace)).run()
+        await PipelineOrchestrator(cfg, cwd=str(temp_workspace)).run()
+        # 第二次是全新运行（因为第一次已完成），所以执行两次
+        assert calls["n"] == 2
 
     @pytest.mark.asyncio
     async def test_custom_cwd_and_session_id(self, temp_workspace):

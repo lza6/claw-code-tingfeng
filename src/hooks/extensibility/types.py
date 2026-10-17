@@ -209,18 +209,6 @@ class HookDispatchResult:
 
 
 @dataclass
-
-
-@dataclass
-
-
-@dataclass
-
-
-@dataclass
-
-
-@dataclass
 class HookDispatchOptions:
     """钩子调度选项"""
     cwd: str | None = None

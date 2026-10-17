@@ -252,6 +252,24 @@ class BudgetGuard:
 
         return True, "ready to execute"
 
+    def reset_for_run(self) -> None:
+        """为新一轮运行重置运行期计数（保留 config / run_dir / 已订阅回调）。
+
+        ## 为什么需要它
+
+        `WorkflowEngine.run()` 会**复用**同一个 guard（为了不丢弃调用方注入的
+        配置或替身）。但 `start()` 在 `start_time` 非空时是空操作，且
+        `check()` 一旦 `is_exhausted` 为真立即返回 True。若不复位，
+        同一个 engine 第二次 `run()` 会继承上一轮的成本/计时，并直接判定耗尽。
+
+        只重置"本轮运行产生"的字段，不动配置与外部订阅。
+        """
+        self.start_time = None
+        self.accumulated_cost = 0.0
+        self.accumulated_tokens = 0
+        self.is_exhausted = False
+        self.exhaustion_reason = ""
+
     def start(self):
         """开始计时并订阅预算事件"""
         if self.start_time is None:

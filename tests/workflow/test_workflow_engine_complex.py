@@ -1,13 +1,10 @@
 """src/workflow/engine.py 的复杂任务转换逻辑测试 - 恢复、拓扑执行、合同、辩论"""
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.core.exceptions import ClawdError
 from src.workflow.engine import WorkflowEngine
 from src.workflow.models import (
     WorkflowIntent,

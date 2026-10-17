@@ -284,7 +284,31 @@ try:
     第一版修复把整行 logger 导入提前，结果 <code>.debug</code> 子模块把
     <code>utils.debug</code> 覆盖成了<strong>模块对象</strong>，调用时报
     <code>TypeError: 'module' object is not callable</code>，全量测试 56 红。
-    最终改为“只提前绑定 <code>get_logger</code>”，完整导出仍保持在 <code>.debug</code> 之后。
+  <h3>3.8 v0.57.2：独立审查抓到的 5 个阻塞项</h3>
+  <p>
+    独立审查线程最终回传了 <strong>REQUEST_CHANGES</strong>，其中 5 条经复现确认。最刺眼的一条：
+  </p>
+  <blockquote>
+    <strong>“注册成功”不等于“命令可用”。</strong>
+    <code>clawd workflow --help</code> 能列出 ralph / ralplan / team / autopilot，
+    但四个命令<strong>一执行就 ImportError</strong> —— 函数体引用了
+    <code>SwarmOrchestrator</code>、<code>RalphLedger</code>、<code>RalplanWorkflow</code>
+    等从未存在的符号；<code>autopilot</code> 甚至是从<strong>自身模块</strong>导入一个本地没有的名字。
+  </blockquote>
+  <table>
+    <thead><tr><th>问题</th><th>真实后果</th></tr></thead>
+    <tbody>
+      <tr><td>4 个 workflow 命令体引用幽灵 API</td><td>命令全部运行即崩</td></tr>
+      <tr><td><code>explore</code> 导入不存在的 <code>create_readonly_tool_manager</code></td><td>只读引擎构建失败</td></tr>
+      <tr><td><code>catalog</code> 构造参数 <code>internal_required</code> 不存在 + <code>get_counts()</code> 不存在</td><td>list / reload 崩</td></tr>
+      <tr><td>断点续跑三处叠加：先写状态再读、失败后不可恢复、失败索引 +1</td><td>“从上次中断处恢复”<strong>从未生效</strong></td></tr>
+      <tr><td><code>PipelineState.load</code> 不读回 <code>stage_names</code> / <code>artifacts</code></td><td><code>load→save</code> 后 <code>can_resume</code> 由真变假，产物静默丢失</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">
+    对应新增回归：<code>tests/cli/test_workflow_commands_wiring.py</code>（替身驱动命令体）、
+    <code>test_resume_after_failure</code>（断言 s1 不重跑、s2 重试）、
+    <code>test_load_then_save_keeps_resumable</code>、BudgetGuard 复位用例。
   </p>
 </section>
 
@@ -423,15 +447,37 @@ const QUESTIONS = [
     why: "运行时行为完全正确，但项目自带的静态分析工具看不见这些模块，会把它们误判为“生产不可达”。教训：替换导入方式前，先确认项目自身的分析工具依赖什么形式。"
   },
   {
-    stem: "本轮全量测试的真实结果是什么？",
+    stem: "全量测试、静态检查与可达性在交付时的真实状态是什么？",
     options: [
-      "2999 passed / 31 failed",
-      "3033 passed / 0 failed",
-      "全部跳过",
+      "2999 passed / 31 failed，F821 仍有 40 个",
+      "3050 passed / 0 failed，F821/F811 均为 0，导入缺陷 0，生产可达 429（与基线一致）",
+      "全部跳过，只验证了 --help",
       "仅契约测试通过"
     ],
     answer: 1,
-    why: "31 个失败中，24 个（runtime 8 + pipeline 18 + workflow 1，去重后为 27）来自对接了不存在 API 的测试文件；修复实现缺陷后全部转绿。最后 4 个来自 test_platform 的测试自身缺陷（OSError 关键字参数 + 默认参数绑定），也已修复。"
+    why: "交付基线：`pytest tests/ -q` → 3050 passed / 0 failed；`ruff --select F821,F811` → All checks passed；`import_sweep` → 0 缺陷（639 模块）；`reachability` → 429 生产可达，与改动前一致（不变量守住）。"
+  },
+  {
+    stem: "全量测试通过、`--help` 能列出命令，就说明这些命令可用吗？",
+    options: [
+      "是，注册成功且测试全绿就够了",
+      "不是。`--help` 只证明 Typer 注册成功；命令体仍可能引用不存在的符号，一执行就 ImportError（本期四个 workflow 命令正是如此）",
+      "是，只要有测试覆盖就不会崩",
+      "只有 Windows 上需要额外验证"
+    ],
+    answer: 1,
+    why: "注册、帮助文本、单测覆盖都不是执行验证。本期新增的 wiring 测试用替身驱动命令体，断言'不抛 ImportError/AttributeError、退出码正确、产物落盘'——这才是可用性证据。"
+  },
+  {
+    stem: "要让「失败后从断点续跑」真正生效，需要同时修正哪几处？",
+    options: [
+      "只需要把失败阶段的索引写成 i+1",
+      "先读恢复状态再写状态（否则永远读到 index=0）、失败后仍标记为可恢复、失败阶段索引保持 i（重试而非跳过）",
+      "只需要在 CLI 里加 --recover 参数",
+      "只需要给 PipelineState 加 stage_names 字段"
+    ],
+    answer: 1,
+    why: "三处叠加才导致续跑从未发生：`run()` 先 `start_mode()` 覆盖状态再 `can_resume()`；`_complete_pipeline('failed')` 写 active=False 且 phase='failed' 被 `can_resume` 排除；失败阶段写 i+1 会跳过失败阶段。缺任何一处，续跑仍是坏的。"
   }
 ];
 
