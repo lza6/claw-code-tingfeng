@@ -256,6 +256,36 @@ try:
     结论：并行只在“工作量大到能摊薄调度开销”时才划算。
     缓存命中是 O(1) 的 stat，不需要线程池。
   </p>
+
+  <h3>3.7 v0.57.1 补充：启动耗时与一个被掩盖的循环导入</h3>
+  <p>
+    发布后继续追可用性，发现 <code>litellm</code> 在<strong>导入期</strong>就被加载（单次约 34 秒），
+    而它在一条很深的依赖链末端：
+  </p>
+<pre>src.main → cli_handlers → workflow → experience_bank
+  → enterprise_ltm → litellm_singleton → litellm</pre>
+  <p>
+    于是 <code>clawd --version</code> 也要等几十秒。四处改为惰性导入后：
+  </p>
+  <table>
+    <thead><tr><th>命令</th><th>之前</th><th>之后</th></tr></thead>
+    <tbody>
+      <tr><td><code>import src</code></td><td>6.8s</td><td><strong>1.6s</strong></td></tr>
+      <tr><td><code>import src.main</code></td><td>50.9s</td><td><strong>~8s</strong></td></tr>
+    </tbody>
+  </table>
+  <blockquote>
+    <strong>更重要的发现：</strong>惰性化把一个被导入顺序掩盖的<strong>循环导入</strong>暴露了出来
+    —— <code>src.utils → src.core → src.rag → src.utils</code>。
+    受影响的是以 <code>from src.utils import ...</code> 作为进程第一个导入的任何调用方，
+    包括 <code>CodeGraph.build</code> 的进程池子进程（实测抛 <code>BrokenProcessPool</code>）。
+  </blockquote>
+  <p>
+    第一版修复把整行 logger 导入提前，结果 <code>.debug</code> 子模块把
+    <code>utils.debug</code> 覆盖成了<strong>模块对象</strong>，调用时报
+    <code>TypeError: 'module' object is not callable</code>，全量测试 56 红。
+    最终改为“只提前绑定 <code>get_logger</code>”，完整导出仍保持在 <code>.debug</code> 之后。
+  </p>
 </section>
 
 <section>

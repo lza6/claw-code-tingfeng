@@ -42,7 +42,7 @@ from .io_adapter import CommandCompletionException, InputOutput, get_completions
 # 随后这一行再把它覆盖成 logger 里的 `debug()` 函数（历史行为）。
 # 顺序颠倒会让 `utils.debug` 变成模块，调用时报
 # `TypeError: 'module' object is not callable`。
-from .logger import ClawdLogger, LogLevel, debug, error, get_logger, info, sanitize_for_log, warn
+from .logger import ClawdLogger, LogLevel, debug, error, info, sanitize_for_log, warn
 from .onboarding import detect_api_keys, select_default_model, try_select_default_model
 from .run_cmd import is_windows_powershell, run_cmd, run_cmd_check_output, run_cmd_subprocess
 from .scrape import Scraper, is_playwright_available, scrape

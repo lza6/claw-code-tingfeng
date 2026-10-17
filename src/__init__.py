@@ -14,7 +14,22 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# 静态可达性锚点：运行时**不导入**（TYPE_CHECKING 恒为 False），
+# 但 `scripts/reachability.py` 靠 AST 里的 import 语句建图 ——
+# 只有 `_LAZY_EXPORTS` 字典而没有任何 import 语句时，这些模块会被误判为
+# "生产不可达"（实测可达数从 429 掉到 427）。
+if TYPE_CHECKING:  # pragma: no cover
+    from .core.cost_estimator import CostEstimator
+    from .core.events import Event, EventBus, EventType, get_event_bus
+    from .core.exceptions import ClawdError, ErrorCode
+    from .core.session_store import (
+        StoredSession,
+        list_sessions,
+        load_session,
+        save_session,
+    )
 
 #: 名字 → (子模块, 属性名)
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {

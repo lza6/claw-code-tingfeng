@@ -19,7 +19,20 @@ v0.45.0 新增（从 Aider 移植）:
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# 静态可达性锚点：运行时**不导入**（TYPE_CHECKING 恒为 False），
+# 但 `scripts/reachability.py` 靠 AST 里的 import 语句建图。
+# 仅有 `_LAZY_EXPORTS` 字典而无 import 语句时，这些模块会被误判为
+# "生产不可达"。
+if TYPE_CHECKING:  # pragma: no cover
+    from .agent_stream import AgentStreamMixin
+    from .chat_chunks import ChatChunks
+    from .engine import AgentEngine
+    from .engine_session_data import AgentSession, AgentStep
+    from .factory import create_agent_engine
+    from .message_truncator import MessageTruncator
+    from .tool_executor import check_tool_call_loop, execute_tool, parse_tool_calls
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "AgentStreamMixin": (".agent_stream", "AgentStreamMixin"),
