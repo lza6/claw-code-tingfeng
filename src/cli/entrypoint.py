@@ -323,6 +323,12 @@ def config(
 #: 若改用 `importlib.import_module("字符串")`，这 4 个模块会在图中消失，
 #: 被误判为"生产不可达" —— 实测可达数会从 429 掉到 416。
 #: 运行时用字符串拼模块名虽然更"动态"，但会让项目自带的死代码分析工具失灵。
+#:
+#: 组名单独存一份常量：整体导入失败时**必须**能报出失败的组名，
+#: 不能返回空清单——否则 `failures == []` 的断言会在全军覆没时假通过。
+_COMMAND_GROUP_NAMES: tuple[str, ...] = ("agent", "catalog", "workflow", "setup")
+
+#: 兼容旧名（历史测试引用过）。
 _COMMAND_MODULES: tuple[tuple[str, object, str], ...] = ()
 
 
@@ -380,7 +386,9 @@ def _register_command_modules() -> list[str]:
             type(exc).__name__,
             exc,
         )
-        return [name for name, _m, _f in _COMMAND_MODULES]
+        # 必须返回**真实组名**，不能返回空列表：
+        # 否则失败清单为空，`failures == []` 的回归断言会在全军覆没时假通过。
+        return list(_COMMAND_GROUP_NAMES)
 
     for group_name, mod, func_name in groups:
         if group_name in _REGISTERED_GROUPS:

@@ -137,6 +137,24 @@ class TestNoSilentImportSwallow:
         failures = entry._register_command_modules()
         assert failures == [], f"以下命令组注册失败: {failures}"
 
+    def test_import_failure_is_reported_not_silent(self, monkeypatch):
+        """整体导入失败时，必须报出失败的组名。
+
+        反例（本次修复前的写法）：失败分支返回空列表，
+        于是 `failures == []` 在最坏情况下也成立 —— 断言被自己的实现骗过。
+        """
+        entry = importlib.import_module("src.cli.entrypoint")
+
+        def boom():
+            raise ImportError("simulated total failure")
+
+        monkeypatch.setattr(entry, "_load_command_modules", boom)
+        monkeypatch.setattr(entry, "_REGISTERED_GROUPS", set())
+
+        failures = entry._register_command_modules()
+        assert failures, "整体导入失败却返回空失败清单 —— 回归断言会假通过"
+        assert set(failures) == set(entry._COMMAND_GROUP_NAMES)
+
     def test_all_declared_groups_present_in_app(self):
         """清单里声明的每个组都必须真的出现在 app 上"""
         entry = importlib.import_module("src.cli.entrypoint")
