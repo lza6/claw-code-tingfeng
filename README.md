@@ -199,7 +199,7 @@ python scripts/e2e_smoke.py
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3041 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
+| 测试用例 | **3042 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
 | 覆盖率 | **~20%** | 仍低于 `pyproject.toml` 的 `fail_under`，是已知缺口 |
 | Ruff `F821`（未定义名称） | **0** | 本轮从 40 清零 |
