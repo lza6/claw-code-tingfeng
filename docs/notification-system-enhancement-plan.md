@@ -1,5 +1,21 @@
 # 通知系统增强实施计划
 
+> ## ⚠️ 状态：**未实施**（截至 v0.57.0，2026-10-17 核验）
+>
+> 实测 `src/core/notifications/` 目录下**只有 `dispatcher.py`**。
+> 本计划要求的 5 个模块全部不存在：
+>
+> | 计划模块 | 状态 |
+> |:---|:---|
+> | `session_registry.py` | ❌ 不存在 |
+> | `template_engine.py` | ❌ 不存在 |
+> | `idle_cooldown.py` | ❌ 不存在 |
+> | `temp_contract.py` | ❌ 不存在 |
+> | `reply_listener.py` | ❌ 不存在 |
+>
+> 保留本文作为**待排期**的能力清单，不是"已完成"记录。
+> 下次若决定实施，先确认上游 `oh-my-codex` 的对应实现是否仍可参考。
+
 ## 概述
 
 将 oh-my-codex-main 的通知系统优秀特性迁移到 claw-code-tingfeng 项目。

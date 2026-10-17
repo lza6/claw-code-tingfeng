@@ -9,6 +9,143 @@
 
 ## [未发布]
 
+### v0.57.0 (2026-10-17) — 静态缺陷清零、重复定义收敛、测试基线转绿
+
+本轮把《下一步改进指南》里 v0.51 段的硬指标真正跑通，并修掉了一批
+"只有跑测试才会暴露"的真实缺陷。
+
+#### 硬指标（验收命令实跑）
+
+| 指标 | 之前 | 现在 |
+|:---|:---|:---|
+| `ruff --select F821`（未定义名称） | **40 errors** | **All checks passed** |
+| `ruff --select F811`（重复定义） | **19 errors** | **All checks passed** |
+| 全库导入扫描 | 16 个模块导入即崩 | **0 个** |
+| 全量测试 | 2999 passed / **31 failed** | **3033 passed / 0 failed** |
+| 契约测试 | 39 passed | 39 passed |
+
+#### 40 个未定义名称：多数是真实运行期 NameError
+
+不是"注解写错"那么简单。逐类说明：
+
+| 位置 | 问题 | 后果 |
+|:---|:---|:---|
+| `cli/commands/workflow_commands.py:328` | `Progress/SpinnerColumn/TextColumn` 未导入 | `clawd workflow autopilot` 运行即崩 |
+| `cli/commands/catalog_commands.py:99` | `catalog` 未定义（应为 `new_catalog`） | `catalog reload` 崩 |
+| `cli/config_enhancer.py:80` | `toil` 拼写错误 | 工具探测永远为假 |
+| `core/quality_gate.py:314` | `console` 未定义 | 质量门 CLI 崩 |
+| `utils/truncation.py:49` | `estimate_tokens` 未导入 | 大输出截断路径崩 |
+| `tools_runtime/sandbox/docker.py:154` | `subprocess` 未导入 | Docker 沙箱关闭时崩 |
+| `workflow/team/state/dispatch_lock.py:136` | `ClawdError/ErrorCode` 未导入 | 分发锁失败路径崩 |
+| 其余（`Any` / `Path` / `ClassVar` / `Dict` / `Optional` / `T` / `Literal`） | 注解符号未导入 | 静态检查失败，`get_type_hints` 崩 |
+
+`autoresearch` 的 `"a" | "b"` 写法一并改为 `Literal[...]`（字符串按位或，导入即 TypeError）。
+
+#### 19 个重复定义：删除前一份，保留运行时生效的后一份
+
+- `src/core/exceptions.py`：13 个异常类**逐字重复**（AST 比对确认 IDENTICAL），删除整段 150 行
+- `src/hooks/extensibility/types.py`：4 个 dataclass 完全重复
+- `src/templates/manifest.py`：`TemplateLoader` 重复
+- `src/core/config/settings.py`：`load_settings` 先导入后被包装函数覆盖（有意为之，改为别名导入）
+- `src/runtime/engine.py`：`derive_readiness` 重复定义
+- `src/hooks/extensibility/loader.py`：`HookPluginDescriptor` 与 `types.py` 各定义一份
+  —— **两个同名类，`isinstance` 互不为真**。统一到 `types`。
+
+#### 四个"测试从未通过"背后的真实缺陷
+
+`tests/workflow/test_pipeline_orchestrator.py` 从初始提交起就没绿过
+（引用 `StageStatus.COMPLETED`、`PipelineConfig(state_file=...)` 等不存在的 API）。
+追查后发现实现侧确实有 5 个真问题：
+
+1. **`ReadinessSnapshot.ready` 字段被同名 classmethod 覆盖**
+   实测 `ReadinessSnapshot().ready` 是 `<bound method>`，`if snap.ready:` 恒为真，
+   `RuntimeSnapshot.ready()` 恒返回真。→ classmethod 改名 `all_ready()`。
+2. **`_deserialize_result` 不把 status 字符串还原成枚举**
+   恢复出来的失败阶段 `== StageStatus.FAILED` 恒为 False，断点续跑会当成正常。
+   同时丢失 `skipped_reason`。
+3. **`_deserialize_event` 遍历 dataclass 字段字典用 `f.name`**
+   `'str' object has no attribute 'name'` —— 持久化恢复必崩。
+4. **`PipelineState.save(state_file)` 完全忽略参数**
+   调用方传入路径后文件不会出现在那里。`can_resume()` 也因阶段列表永远存空而恒为 False。
+5. **`PipelineConfig.cwd` 从未生效**；`create_pipeline()` 不接受裸函数；
+   `stage.can_skip` 未做存在性判断。
+
+另有两个：
+6. **`BudgetGuard` 在 `run()` 里被整个替换** → 外部注入的预算策略被静默丢弃。
+7. **`spawn_platform_command_sync(spawn_fn=subprocess.run)` 是定义时绑定**
+   → 全局 monkeypatch 无效，测试实际启动了真实子进程。
+
+#### 工程基建
+
+新增 `scripts/import_sweep.py`：逐个 import 全部模块，区分「项目内代码缺陷」
+与「第三方依赖缺失」，补上 `reachability.py` 的盲区（**可达 ≠ 可导入**）。
+
+新增 `scripts/verify_html_report.py`：用真实浏览器验证交付的报告与测验
+（答对全部 → 判定通过；错一题 → 判定未通过；选项标色正确）。
+
+#### CLI 调用闭环
+
+| 问题 | 后果 | 修复 |
+|:---|:---|:---|
+| 顶层命令 `workflow` 与同名**命令组**共存 | 组遮蔽命令，`clawd workflow "目标"` 把目标当子命令解析，永远跑不到 5 阶段引擎 | 顶层命令改名 **`run`** |
+| 命令组注册**不幂等**（模块导入 + `main()` 各注册一次） | `registered_groups` 出现重复项（实测 8 项 / 4 个名字） | 加 `_REGISTERED_GROUPS` 护栏 |
+| `python -m src.main` 与 `clawd` 是**两套不同 CLI** | 同一个 `workflow` 在两个入口下语义不同 | 新增 `src/__main__.py`，`python -m src` 与 `clawd` 完全一致；`src.main` 标记为历史入口 |
+| README 有两条**不存在的命令**示例（`workflow run --goal`、`budget status`） | 用户照抄即失败 | 改为实跑验证过的命令，并逐条验证 |
+
+#### `--dimension/-d` 断链
+
+CLI 一直支持 `-d creative --dimension adversarial`，实现是
+`set_config("dimensions", [...])`。但**全仓库没有任何代码读取这个键** ——
+参数被接受、被存储、然后被遗忘。
+
+现在：`WorkflowEngine.run()` 解析运行时配置 → 生成维度引导文本 →
+注入 `HealableExecutor` 的提示词（Swarm 与常规策略两条路径），
+并挂到 `WorkflowTask.dimensions` 随状态持久化。
+
+顺带确认：`src/workflow/dimensions.py`（英文内置库）**生产不可达**，
+真正有效的是 `src/core/config/dimensions.py`（中文内置库）。接线使用后者。
+
+#### RAG 增量扫描性能
+
+`UnifiedScanner.scan_directory` 原对**每个**文件都 `run_in_executor`。
+增量扫描时 1000 个文件全部缓存命中，但 1000 次线程池调度 + 1000 个 coroutine
+的开销远大于工作本身：
+
+```
+全量扫描        13.20s
+纯串行缓存命中   0.73s
+原增量扫描       2.20s   ← 比串行还慢
+```
+
+改为"缓存命中走同步快路径，只把未命中交给线程池"，
+增量扫描降到 ~0.7s，`tests/performance/test_rag_pressure.py` 转绿。
+
+#### 文档清理
+
+删除 16 个来自早期 AI 会话的陈旧报告（`FINAL_SUMMARY.md`、`INTEGRATION_*.md`、
+`QUICK_REFERENCE.md` 等）。它们互相引用、互称"已完成"，但与仓库真实状态不符
+（例如声称覆盖率 ~50%，实测 ~20%）。git 历史仍可追溯。
+
+仓库根目录现在只保留：
+`README.md` / `CHANGELOG.md` / `CONTRIBUTING.md` / `ARCHITECTURE.md` /
+`AGENTS.md` / `CLAUDE.md` / `workflow_status.md`。
+
+#### 验证
+
+| 命令 | 结果 |
+|:---|:---|
+| `pytest tests/ -q` | **3035 passed / 0 failed** |
+| `pytest tests/contracts -q` | 39 passed |
+| `ruff check src/ --select F821` | All checks passed |
+| `ruff check src/ --select F811` | All checks passed |
+| `python scripts/import_sweep.py` | 0 缺陷（638 模块） |
+| `python scripts/reachability.py` | 429 生产可达（未变） |
+| `python -m src --version` | `Clawd Code v0.57.0` |
+| `python scripts/e2e_production.py` | 8/8 |
+| `python scripts/verify_html_report.py` | 6 项断言全过（真实浏览器） |
+
+---
+
 ### v0.56.0 (2026-10-17) — 导入期缺陷清剿：7 个 CLI 命令从"静默消失"到可见
 
 #### 🔴 主缺陷：两个命令组整体从 CLI 消失，启动无任何提示

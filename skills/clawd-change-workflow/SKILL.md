@@ -7,15 +7,36 @@ description: Guides safe changes to the Clawd Code codebase by reading the doc/m
 
 ## Overview
 
-这个仓库的真实约束不是"代码难写"，而是**代码量远超测试覆盖**（截止 v0.51.0：
-147K 行源码，覆盖率 19.5%）。这意味着：
+这个仓库的真实约束不是"代码难写"，而是**代码量远超测试覆盖**（截止 v0.57.0：
+约 147K 行源码，覆盖率约 20%）。这意味着：
 
 - 静态检查抓不住大部分真实缺陷。`ruff` 的 `F821` 只检查**名称**是否存在，
   不检查**对象属性**是否存在；`mypy` 未启用。
 - 因此"看起来对"的代码经常在第一次真实运行时崩溃。
+- **可达 ≠ 可导入**：v0.57.0 实测有 16 个模块静态可达、但 `import` 即崩。
 
-本 skill 的用途是把 v0.51.0 那轮修复中付出代价换来的经验固化成流程，
+本 skill 的用途是把历轮修复中付出代价换来的经验固化成流程，
 让下一次变更是**可复用**的，而不是重新踩一遍。
+
+---
+
+## 三个必须先跑的分析工具
+
+| 工具 | 回答的问题 | 命令 |
+|:---|:---|:---|
+| `scripts/reachability.py` | 从生产入口**能否走到**某模块 | `python scripts/reachability.py --prod --list` |
+| `scripts/import_sweep.py` | 走到了**会不会 import 就炸** | `python scripts/import_sweep.py` |
+| `ruff --select F821,F811` | 有没有未定义名称 / 重复定义 | `python -m ruff check src/ --select F821,F811` |
+
+**三者必须一起用**。只跑任何一个都会漏掉另外两类缺陷：
+- 只跑可达性 → 漏掉"能走到但导入即崩"
+- 只跑导入扫描 → 漏掉"根本走不到、但读起来像能用"的模块
+- 只跑 ruff → 漏掉运行时属性/类型错误
+
+> ⚠️ **改导入形式前先想清楚**：`reachability.py` 靠 **AST 里的 import 语句**建图。
+> 把 `from .commands import X` 改成 `importlib.import_module("字符串")`
+> 会让模块从图中消失，生产可达数凭空下降。v0.57.0 踩过这个坑
+> （429 → 416），不得不改回显式导入。
 
 ---
 
@@ -188,6 +209,20 @@ pytest tests/contracts/ -q
 pytest tests/ --collect-only -q 2>&1 | tail -2      # 期望 "0 errors"
 ```
 
+### 第 5 层：导入完整性（改导入 / 删模块 / 改包结构后必跑）
+
+```bash
+python scripts/import_sweep.py
+# 期望：IMPORT-FAIL 0；DEP-MISSING 只应包含环境未装的第三方包
+```
+
+### 第 6 层：交付物验证（产出 HTML / 报告 / 交互页面时）
+
+```bash
+python scripts/verify_html_report.py 计划书/变更报告-v0.57.0.html
+# 真实浏览器驱动：答对全部题 → 判定通过；错一题 → 判定未通过
+```
+
 ---
 
 ## Phase 5：收尾
@@ -203,6 +238,12 @@ pytest tests/ --collect-only -q 2>&1 | tail -2      # 期望 "0 errors"
 
 | 陷阱 | 症状 | 预防 |
 |:---|:---|:---|
+| **dataclass 字段被同名 classmethod 覆盖** | 字段值是 `<bound method>`，`if x.flag:` 恒为真 | 字段与 classmethod **禁止同名**；`ruff F811` 能抓到 |
+| **签名默认值里绑定模块属性** | `def f(spawn=subprocess.run)` → monkeypatch 无效，测试跑真实子进程 | 默认写 `None`，函数体内再解析 |
+| **`__dataclass_fields__` 是 dict** | `for f in cls.__dataclass_fields__: f.name` → `'str' has no attribute 'name'` | 用 `.values()` 或直接迭代键 |
+| **参数被接受但被忽略** | `save(path)` 里从不使用 `path`，文件写到别处 | 每个参数都要在函数体里被真正使用；否则删掉参数 |
+| **字符串当字面量联合** | `"a" \| "b"` 是字符串按位或 → `TypeError` | 用 `Literal["a","b"]` |
+| **同名类在两个模块各定义一份** | `isinstance` 互不为真，序列化/反序列化失配 | 唯一定义，另一处 import |
 | 属性名漂移 | `AttributeError: ... has no attribute 'X'` | 改配置/数据模型时，用 `grep` 核对全部属性访问 |
 | 环境变量约定与字段名不匹配 | 按文档配置却拿不到值 | 文档约定与代码字段名不一致时，**加别名解析**而非改文档 |
 | 同名字段/方法定义两次 | 后者静默覆盖前者，改第一个没效果 | `ruff --select F811` |
@@ -212,6 +253,7 @@ pytest tests/ --collect-only -q 2>&1 | tail -2      # 期望 "0 errors"
 | 并发迭代原字典 | `RuntimeError: dictionary changed size` | 后台线程会改的容器，迭代时取快照 `list(d)` |
 | 同步调用 async 函数 | 只得到协程，`RuntimeWarning`，功能静默失效 | 看 `inspect.iscoroutinefunction()` |
 | Windows 控制台 GBK | `UnicodeEncodeError` + 满屏乱码 | 输出前 `reconfigure(encoding='utf-8', errors='replace')` |
+| **测试文件从初始提交起就没通过** | 没人把它当信号，缺陷长期隐藏 | 见到长期红的文件，先查它引用的 API 是否真实存在 |
 
 ---
 
@@ -251,10 +293,13 @@ pytest tests/ --collect-only -q 2>&1 | tail -2      # 期望 "0 errors"
 [ ] 1. scripts/e2e_smoke.py 退出码 0（改动涉及 LLM / 工具 / 配置路径时）
 [ ] 2. 对应模块的回归探针全绿
 [ ] 3. pytest tests/ --collect-only 为 0 errors（新增测试文件时）
-[ ] 4. 改动文件 ruff 无新增违规
+[ ] 4. ruff --select F821,F811 无新增违规
 [ ] 5. 未增加 except: pass
 [ ] 6. CHANGELOG.md 与 workflow_status.md 已同步
 [ ] 7. 每条"已完成"的断言都有实际命令输出支撑
+[ ] 8. 改导入 / 删模块后：scripts/import_sweep.py 的 IMPORT-FAIL 仍为 0
+[ ] 9. 删代码后：scripts/reachability.py 的生产可达数**unchanged**
+[ ] 10. 产出交互页面时：scripts/verify_html_report.py 真实浏览器通过
 ```
 
 **第 7 条是硬门槛。** 拿不出输出的，一律按"未完成"处理。

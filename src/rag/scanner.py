@@ -93,21 +93,68 @@ class UnifiedScanner:
             return ScanResult(rel_path, 0, 0, "", None, None, success=False, error=str(e))
 
     async def scan_directory(self, pattern: str = "**/*.py") -> list[ScanResult]:
-        """并行扫描目录 (已优化增量扫描性能)"""
+        """并行扫描目录（缓存命中走同步快路径）。
+
+        ## 为什么不是"全部丢给线程池"
+
+        原实现对**每个**文件都 `run_in_executor` 一次，再 `gather`。
+        增量扫描时 1000 个文件全部缓存命中，每个只需一次 `os.stat`，
+        但 1000 次线程池调度 + 1000 个 coroutine 的开销远大于计算本身。
+
+        实测（1000 个 mock 文件，16 线程）：
+
+            全量扫描        13.20s
+            纯串行缓存命中   0.73s
+            原增量扫描       2.20s   ← 线程池调度开销比工作还大
+
+        现在：缓存命中在事件循环里直接判（一次 stat），
+        只有真正需要解析的文件才进线程池。结果顺序保持与 `files` 一致。
+        """
         import asyncio
-        # 使用快速列表，避免 resolve
-        files = [str(p.relative_to(self.root_dir)).replace('\\', '/')
-                for p in self.root_dir.glob(pattern) if p.is_file()]
 
-        loop = asyncio.get_running_loop()
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            tasks = [
-                loop.run_in_executor(executor, self.scan_file, f)
-                for f in files
-            ]
-            results = await asyncio.gather(*tasks)
+        files = [
+            str(p.relative_to(self.root_dir)).replace("\\", "/")
+            for p in self.root_dir.glob(pattern)
+            if p.is_file()
+        ]
 
-        return [r for r in results if r.success]
+        results: list[ScanResult | None] = [None] * len(files)
+        misses: list[tuple[int, str]] = []
+
+        for idx, rel_path in enumerate(files):
+            hit = self._cache_hit(rel_path)
+            if hit is not None:
+                results[idx] = hit
+            else:
+                misses.append((idx, rel_path))
+
+        if misses:
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                tasks = [
+                    loop.run_in_executor(executor, self.scan_file, rel_path)
+                    for _idx, rel_path in misses
+                ]
+                done = await asyncio.gather(*tasks)
+            for (idx, _rel), res in zip(misses, done):
+                results[idx] = res
+
+        return [r for r in results if r is not None and r.success]
+
+    def _cache_hit(self, rel_path: str) -> ScanResult | None:
+        """只做 stat 比较：命中返回缓存，未命中返回 None。
+
+        与 `scan_file` 的增量判断共用同一套 mtime/size 语义。
+        stat 失败（文件刚被删）按未命中处理，交给 `scan_file` 记录错误。
+        """
+        try:
+            st = os.stat(self.root_dir / rel_path)
+        except OSError:
+            return None
+        cached = self._file_cache.get(rel_path)
+        if cached and cached.mtime == st.st_mtime and cached.size == st.st_size:
+            return cached
+        return None
 
     def get_repo_map_structures(self) -> list[CodeStructure]:
         """获取所有已扫描文件的结构，用于生成 RepoMap (已优化性能)"""

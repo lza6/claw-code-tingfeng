@@ -109,12 +109,28 @@ def _serialize_result(result: StageResult) -> dict[str, Any]:
 
 
 def _deserialize_result(data: dict[str, Any]) -> StageResult:
-    """从 JSON 反序列化为 StageResult"""
+    """从 JSON 反序列化为 StageResult。
+
+    `status` 必须还原成 `StageStatus` 枚举。之前直接把 JSON 里的字符串塞回去，
+    导致恢复出来的结果 `status == StageStatus.FAILED` 恒为 False ——
+    断点续跑会把上次失败的阶段当成"正常"，并丢掉 `skipped_reason`。
+    """
+    raw_status = data.get("status", StageStatus.FAILED)
+    if isinstance(raw_status, StageStatus):
+        status = raw_status
+    else:
+        try:
+            status = StageStatus(raw_status)
+        except ValueError:
+            # 未知状态按失败处理：宁可重跑，也不要静默当成成功
+            status = StageStatus.FAILED
+
     return StageResult(
-        status=data.get("status", StageStatus.FAILED),
+        status=status,
         artifacts=data.get("artifacts", {}),
         duration_ms=data.get("duration_ms", 0),
         error=data.get("error"),
+        skipped_reason=data.get("skipped_reason"),
     )
 
 
@@ -147,27 +163,40 @@ class PipelineState:
         stage_results: dict[str, StageResult] | None = None,
         artifacts: dict[str, Any] | None = None,
         cwd: str = ".",
+        stage_names: list[str] | None = None,
     ):
         self.pipeline_name = pipeline_name
         self.current_stage_index = current_stage_index
         self.stage_results = stage_results or {}
         self.artifacts = artifacts or {}
         self._cwd = cwd
+        # 完整阶段名列表。`can_resume` 需要它来判断"是否还有未执行的阶段"。
+        # 不提供时退化为已记录结果的键（信息更少，但不会伪造）。
+        self.stage_names = list(stage_names) if stage_names is not None else []
 
     def save(self, state_file: str | None = None) -> None:
         """
         保存 pipeline 状态到磁盘。
 
         Args:
-            state_file: 兼容性参数，实际路径由 pipeline_name 和 cwd 决定
+            state_file: 显式输出路径。**提供时优先使用**；未提供时写入
+                `<cwd>/.clawd/pipeline/<pipeline_name>.json`。
+
+        说明：早先此参数被完全忽略（docstring 称"兼容性参数"），
+        调用方传入路径后文件并不会出现在那里 —— 这是"接受参数但不生效"
+        的典型伪契约，已修正为真正生效。
         """
-        state_dir = Path(self._cwd) / ".clawd" / "pipeline"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        state_path = state_dir / f"{self.pipeline_name}.json"
+        if state_file:
+            state_path = Path(state_file)
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            state_dir = Path(self._cwd) / ".clawd" / "pipeline"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            state_path = state_dir / f"{self.pipeline_name}.json"
 
         payload = {
             PIPELINE_NAME_KEY: self.pipeline_name,
-            PIPELINE_STAGES_KEY: [],
+            PIPELINE_STAGES_KEY: self.stage_names,
             PIPELINE_STAGE_INDEX_KEY: self.current_stage_index,
             PIPELINE_STAGE_RESULTS_KEY: {
                 name: _serialize_result(result)
@@ -398,7 +427,11 @@ class PipelineOrchestrator:
                 self.config.on_stage_transition(self._last_stage_name, stage.name)
 
             # 检查跳过
-            if stage.can_skip and stage.can_skip(ctx):
+            # 注意：`can_skip` 是**可选**协议成员。直接 `stage.can_skip` 会让
+            # 任何只实现 name/run 的合法阶段（如文档示例里的简单类）
+            # 抛 AttributeError。用 getattr 做存在性检查。
+            can_skip = getattr(stage, "can_skip", None)
+            if can_skip and can_skip(ctx):
                 skipped_result = StageResult(
                     status=StageStatus.SKIPPED,
                     artifacts={},
@@ -410,7 +443,7 @@ class PipelineOrchestrator:
                 self._last_stage_name = stage.name
                 self._update_mode_state(
                     current_phase=f"stage:{stage.name}:skipped",
-                    pipeline_stage_index=i,
+                    pipeline_stage_index=i + 1,
                     pipeline_stage_results=stage_results_serialized,
                 )
                 continue
@@ -441,9 +474,11 @@ class PipelineOrchestrator:
             self._last_stage_name = stage.name
 
             # 持久化状态
+            # 索引语义 = "下一个待执行阶段的序号"。阶段 i 完成后应为 i+1；
+            # 原先写的是 i，导致完成后仍指向刚跑过的阶段（恢复时重复执行）。
             self._update_mode_state(
                 current_phase=f"stage:{stage.name}:{result.status}",
-                pipeline_stage_index=i,
+                pipeline_stage_index=i + 1,
                 pipeline_stage_results=stage_results_serialized,
             )
 
@@ -481,7 +516,10 @@ class PipelineOrchestrator:
             task=self.config.task,
             artifacts={k: r.artifacts for k, r in results.items()},
             previous_stage_result=previous_result,
-            cwd=self._cwd or os.getcwd(),
+            # 优先级：config.cwd > 构造器 cwd > 进程 cwd。
+            # 此前只读 `self._cwd`，导致 `PipelineConfig(cwd=...)` **完全无效** ——
+            # 调用方设了自定义工作目录，阶段拿到的仍是 "."。
+            cwd=Path(self.config.cwd or self._cwd or os.getcwd()),
             session_id=self.config.session_id,
         )
 
@@ -600,8 +638,31 @@ def create_pipeline(
             cwd="/path/to/project",
         )
         result = await pipeline.run()
+
+    裸可调用对象（`async def stage(ctx)` 或 `def stage(ctx)`）会被自动
+    包装成 `StageAdapter`，名称取函数名。这样调用方不必手写适配器：
+
+        create_pipeline(name="p", task="t", stages=[stage1, stage2])
+
+    此前直接把这些函数塞进 `PipelineConfig.stages`，随后 `_validate_config`
+    访问 `s.name` 就会抛 `AttributeError: 'function' object has no attribute
+    'name'` —— 一个"看起来支持、实际必崩"的入口。
     """
-    config = PipelineConfig(name=name, task=task, stages=stages, **kwargs)
+    normalized: list[PipelineStage] = []
+    for idx, stage in enumerate(stages):
+        if hasattr(stage, "name") and hasattr(stage, "run"):
+            normalized.append(stage)
+            continue
+        if callable(stage):
+            normalized.append(
+                StageAdapter(getattr(stage, "__name__", None) or f"stage{idx + 1}", stage)
+            )
+            continue
+        raise TypeError(
+            f"stages[{idx}] 既不是 PipelineStage 也不是可调用对象: {stage!r}"
+        )
+
+    config = PipelineConfig(name=name, task=task, stages=normalized, **kwargs)
     return PipelineOrchestrator(config)
 
 

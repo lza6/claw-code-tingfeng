@@ -32,6 +32,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 R = TypeVar("R")
+T = TypeVar("T")
 KT = TypeVar("KT")  # Key type
 VT = TypeVar("VT")  # Value type
 _T = TypeVar("_T")  # Default type

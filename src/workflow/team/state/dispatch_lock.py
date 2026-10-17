@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from ....core.exceptions import ClawdError, ErrorCode
+
 
 @dataclass
 class DispatchLock:

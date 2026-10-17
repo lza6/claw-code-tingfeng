@@ -14,6 +14,21 @@ class TruncationResult(TypedDict):
     content: str
     output_file: str | None
 
+
+def _estimate_token_count(text: str) -> int:
+    """估算 token 数，仅用于提示文案。
+
+    优先使用 `src.utils.token_counter.estimate_tokens`（准确）；
+    若其依赖（tiktoken）不可用，降级为字符数/4 的粗估。
+    **绝不因估算失败而影响截断主流程。**
+    """
+    try:
+        from src.utils.token_counter import estimate_tokens
+
+        return estimate_tokens(text)
+    except Exception:
+        return max(1, len(text) // 4)
+
 def find_structural_split(content: str, target_line: int, window: int = 10) -> int:
     """Attempt to find a clean split point (e.g. between functions) near the target line."""
     lines = content.splitlines()
@@ -45,8 +60,12 @@ def truncate_and_save_to_file(
     """
     lines = content.splitlines()
 
-    # Check if truncation is needed (Token-aware threshold)
-    token_count = estimate_tokens(content)
+    # 判定按字符数 + 行数。
+    # `token_count` 仅用于输出提示文案（"~N tokens"），**不参与判定**。
+    # 原先它引用了一个从未导入的 `estimate_tokens` → 一旦走到这里就 NameError。
+    # 现改为惰性导入真实实现，缺失时降级为字符数/4 的粗估；
+    # 这样既不再崩，也不把 tiktoken 变成本模块的硬依赖。
+    token_count = _estimate_token_count(content)
     if len(content) <= threshold and len(lines) <= max_lines:
         return {"content": content, "output_file": None}
 

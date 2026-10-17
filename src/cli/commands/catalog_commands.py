@@ -96,7 +96,7 @@ def catalog_show(name: str = typer.Argument(..., help="技能或Agent名称")):
 def catalog_reload():
     """重新加载清单（从模板文件）"""
     new_catalog = reload_catalog()
-    counts = catalog.get_counts()
+    counts = new_catalog.get_counts()
     console.print("[bold green]清单已重新加载[/bold green]")
     console.print(f"  技能数: {counts.skill_count} (活跃: {counts.active_skill_count})")
     console.print(f"  Agent数: {counts.agent_count} (活跃: {counts.active_agent_count})")

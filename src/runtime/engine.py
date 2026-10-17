@@ -318,6 +318,19 @@ class DispatchLog:
             or r.status not in terminal_statuses
         ]
 
+    # ---- 查询辅助 -------------------------------------------------------
+    # 这三个查询此前只存在于测试的预期里，实现中从未提供
+    # （git 全历史搜索 `def get_pending` 等均无结果）。
+    # 补上它们是按测试表达的契约实现，而不是为了让测试变绿而放宽断言。
+
+    def get_pending(self) -> list[DispatchRecord]:
+        """返回所有仍处于 PENDING 的记录"""
+        return [r for r in self._records if r.status == DispatchStatus.PENDING]
+
+    def get_notified(self) -> list[DispatchRecord]:
+        """返回所有已通知但尚未交付的记录"""
+        return [r for r in self._records if r.status == DispatchStatus.NOTIFIED]
+
 
 # =============================================================================
 # Mailbox (消息邮箱)
@@ -352,6 +365,10 @@ class MailboxRecord:
     created_at: str
     notified_at: str | None = None
     delivered_at: str | None = None
+
+    def is_delivered(self) -> bool:
+        """消息是否已投递"""
+        return self.delivered_at is not None
 
 
 class MailboxLog:
@@ -410,6 +427,23 @@ class MailboxLog:
     def records(self) -> list[MailboxRecord]:
         """获取所有记录"""
         return list(self._records)
+
+    # ---- 查询辅助 -------------------------------------------------------
+    # 同上：这些方法此前只出现在测试期望中。
+    def get_message(self, message_id: str) -> MailboxRecord:
+        """按 ID 取一条消息；不存在时抛 MailboxNotFoundError"""
+        return self._find_mut(message_id)
+
+    def get_undelivered(self) -> list[MailboxRecord]:
+        """返回所有尚未投递的消息"""
+        return [r for r in self._records if r.delivered_at is None]
+
+    def get_pending_for(self, worker: str) -> list[MailboxRecord]:
+        """返回指定 worker 尚未投递的消息（按创建顺序）"""
+        return [
+            r for r in self._records
+            if r.to_worker == worker and r.delivered_at is None
+        ]
 
     def _find_mut(self, message_id: str) -> MailboxRecord:
         """查找记录"""
@@ -498,6 +532,21 @@ class BacklogSnapshot:
             f"delivered={self.delivered} failed={self.failed}"
         )
 
+    def total_active(self) -> int:
+        """仍在流转中的数量（pending + notified）"""
+        return self.pending + self.notified
+
+    def completion_rate(self) -> float:
+        """已进入终态的比例（delivered + failed）/ 总数。
+
+        总数 = pending + notified + delivered + failed。
+        总数为 0 时返回 0.0（避免 ZeroDivisionError）。
+        """
+        total = self.pending + self.notified + self.delivered + self.failed
+        if total == 0:
+            return 0.0
+        return (self.delivered + self.failed) / total
+
 
 @dataclass
 class ReplaySnapshot:
@@ -523,7 +572,16 @@ class ReadinessSnapshot:
     reasons: list[str] = field(default_factory=list)
 
     @classmethod
-    def ready(cls) -> ReadinessSnapshot:
+    def all_ready(cls) -> ReadinessSnapshot:
+        """构造"完全就绪"的快照。
+
+        注意：本方法原名为 `ready`，与 dataclass 字段 `ready: bool` **同名**。
+        类体执行时 classmethod 覆盖了字段的默认值，导致 `@dataclass` 把
+        这个绑定方法当成 `ready` 的默认值 —— 实测：
+        `ReadinessSnapshot().ready` 是 `<bound method ...>`，
+        `if snap.ready:` 恒为真，`RuntimeSnapshot.ready()` 也就恒返回真。
+        改名后字段恢复为真正的 bool。
+        """
         return cls(ready=True, reasons=[])
 
     @classmethod
@@ -811,7 +869,7 @@ def derive_readiness(
         for reason in reasons[1:]:
             snap.add_reason(reason)
         return snap
-    return ReadinessSnapshot.ready()
+    return ReadinessSnapshot.all_ready()
 
 
 # =============================================================================
@@ -1147,34 +1205,12 @@ def _deserialize_event(data: dict[str, Any]) -> RuntimeEvent:
         # 未知事件类型，返回基类占位
         return RuntimeEvent()  # type: ignore[return-value]
 
-    field_names = {f.name for f in getattr(cls, "__dataclass_fields__", [])}
+    # `__dataclass_fields__` 是 dict[name, Field]；直接迭代得到的是**字符串键**，
+    # `f.name` 会抛 AttributeError: 'str' object has no attribute 'name'。
+    # 这是持久化恢复路径上的真实崩溃点（事件数 >0 时必现）。
+    field_names = set(getattr(cls, "__dataclass_fields__", {}))
     init_args = {k: v for k, v in data.items() if k in field_names}
     return cls(**init_args)  # type: ignore[arg-type]
-
-
-def derive_readiness(
-    authority: AuthorityLease,
-    dispatch: DispatchLog,
-    replay: ReplayState,
-) -> ReadinessSnapshot:
-    """计算系统就绪状态"""
-    reasons: list[str] = []
-
-    if not authority.is_held():
-        reasons.append("authority lease not acquired")
-    elif authority.is_stale():
-        stale_detail = authority._stale_reason or "unknown"
-        reasons.append(f"authority lease is stale: {stale_detail}")
-
-    if replay.pending_events > 0:
-        reasons.append(f"replay has {replay.pending_events} pending events")
-
-    if reasons:
-        snap = ReadinessSnapshot.blocked(reasons[0])
-        for reason in reasons[1:]:
-            snap.add_reason(reason)
-        return snap
-    return ReadinessSnapshot.ready()
 
 
 # =============================================================================

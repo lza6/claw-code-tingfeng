@@ -31,7 +31,6 @@ from .enums import (
 from .models import (
     AgentSettings,
     get_settings,
-    load_settings,
     reload_settings,
     reset_settings,
 )

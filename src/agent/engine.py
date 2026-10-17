@@ -178,17 +178,28 @@ class AgentEngine:
         self._init_components(rag_index=rag_index, world_model=world_model, enable_events=enable_events, event_bus=event_bus)
 
     def _init_config_systems(self) -> None:
-        """初始化配置系统"""
+        """初始化配置系统。
+
+        这两步失败时工作流仍可运行（使用默认值），但**必须留下痕迹**：
+        此前是 `except Exception: pass`，用户把配置写错时既没有报错也没有提示，
+        只会看到"配置没生效"这种无从排查的现象。
+        """
         try:
             from ..utils.provider_manager import provider_manager
             provider_manager.initialize(workdir=self.workdir)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - 配置系统不可用时可降级
+            self.logger.warning(
+                "provider_manager 初始化失败，将使用默认 provider 配置: %s: %s",
+                type(e).__name__, e,
+            )
         try:
             from ..utils.features import features
             features.initialize(workdir=self.workdir)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning(
+                "features 初始化失败，将使用默认特性开关: %s: %s",
+                type(e).__name__, e,
+            )
 
     def _init_llm_provider(self, llm_config: LLMConfig | None) -> None:
         """初始化 LLM 提供商和弱模型路由"""

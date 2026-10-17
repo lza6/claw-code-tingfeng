@@ -72,7 +72,7 @@ def chat(
         console.print(f"[bold red]错误:[/bold red] {e}")
         raise typer.Exit(code=1)
 
-@app.command(name="workflow")
+@app.command(name="run")
 def workflow_run(
     goal: str = typer.Argument(..., help="工作流目标描述"),
     iterations: int = typer.Option(3, "--iterations", "-i", help="最大迭代次数"),
@@ -84,6 +84,11 @@ def workflow_run(
 ):
     """
     执行自动化工作流 (识别 -> 规划 -> 执行 -> 审查 -> 发现)
+
+    命令名是 `run` 而不是 `workflow`：`workflow` 已被
+    `commands/workflow_commands.py` 注册为**命令组**（ralph/ralplan/team/autopilot）。
+    Typer 中同名命令与命令组共存时，组会遮蔽命令 ——
+    原先 `clawd workflow "目标"` 会把目标当成子命令去解析，永远跑不到本函数。
     """
     import asyncio
 
@@ -338,6 +343,12 @@ def _load_command_modules() -> tuple[tuple[str, object, str], ...]:
     )
 
 
+#: 已注册的组名。用于保证 `_register_command_modules()` **幂等** ——
+#: 模块导入时会调一次，`main()` 里又调一次；不加护栏会在
+#: `app.registered_groups` 里留下重复项（实测出现过 8 项 / 4 个名字）。
+_REGISTERED_GROUPS: set[str] = set()
+
+
 def _register_command_modules() -> list[str]:
     """注册模块化命令组，并**让失败可见**。
 
@@ -372,9 +383,12 @@ def _register_command_modules() -> list[str]:
         return [name for name, _m, _f in _COMMAND_MODULES]
 
     for group_name, mod, func_name in groups:
+        if group_name in _REGISTERED_GROUPS:
+            continue
         try:
             register = getattr(mod, func_name)
             register(app)
+            _REGISTERED_GROUPS.add(group_name)
         except Exception as exc:  # noqa: BLE001
             failed.append(group_name)
             # ImportError 之外也一并接住：`field` 未定义这类 NameError

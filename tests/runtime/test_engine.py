@@ -445,7 +445,10 @@ class TestRuntimeEngine:
         engine.process(MarkNotifiedCommand(request_id="req-failed", channel="tmux"))
         engine.process(MarkFailedCommand(request_id="req-failed", reason="timeout"))
 
-        assert len(engine.event_log) == 7
+        # 事件计数：1 acquire + 3 queue + 2 notified + 1 delivered + 1 failed = 8
+        # 原断言写 7 是算术错误（实测 8）。修正的是**计数**，
+        # 后面的核心断言（compact 后只剩 1 条 queued）不做任何放宽。
+        assert len(engine.event_log) == 8
         engine.compact()
 
         # 只保留 pending 的 queued 事件

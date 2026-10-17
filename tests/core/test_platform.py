@@ -30,17 +30,17 @@ def test_classify_spawn_error_none():
 
 
 def test_classify_spawn_error_missing():
-    err = OSError(errno=2, strerror='No such file or directory')
+    err = OSError(2, 'No such file or directory')  # CPython 的 OSError 不接受关键字参数
     assert classify_spawn_error(err) == SpawnErrorKind.MISSING
 
 
 def test_classify_spawn_error_blocked():
-    err = OSError(errno=13, strerror='Permission denied')
+    err = OSError(13, 'Permission denied')
     assert classify_spawn_error(err) == SpawnErrorKind.BLOCKED
 
 
 def test_classify_spawn_error_other():
-    err = OSError(errno=5, strerror='Input/output error')
+    err = OSError(5, 'Input/output error')
     assert classify_spawn_error(err) == SpawnErrorKind.ERROR
 
 

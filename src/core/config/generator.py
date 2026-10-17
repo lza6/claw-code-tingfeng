@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import toml
+import typer
 
 from src.utils.logger import get_logger
 

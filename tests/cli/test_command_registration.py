@@ -142,8 +142,33 @@ class TestNoSilentImportSwallow:
         entry = importlib.import_module("src.cli.entrypoint")
         entry._register_command_modules()
         present = {g.name for g in entry.app.registered_groups}
-        declared = {name for name, _m, _f in entry._COMMAND_MODULES}
+        declared = {name for name, _m, _f in entry._load_command_modules()}
         assert declared <= present, f"缺失: {declared - present}；实际: {sorted(present)}"
+
+    def test_registration_is_idempotent(self):
+        """重复调用不得产生重复组。
+
+        模块导入时调一次、`main()` 里又调一次；缺护栏时
+        `app.registered_groups` 会出现同名重复项（实测 8 项 / 4 个名字）。
+        """
+        entry = importlib.import_module("src.cli.entrypoint")
+        for _ in range(3):
+            entry._register_command_modules()
+        names = [g.name for g in entry.app.registered_groups]
+        assert len(names) == len(set(names)), f"出现重复组: {names}"
+
+    def test_run_command_is_not_shadowed_by_workflow_group(self):
+        """`run`（5 阶段引擎）与 `workflow`（命令组）不得同名。
+
+        历史缺陷：顶层命令曾叫 `workflow`，与同名命令组共存时被组遮蔽，
+        `clawd workflow "目标"` 会把目标当子命令解析，永远跑不到引擎。
+        """
+        entry = importlib.import_module("src.cli.entrypoint")
+        entry._register_command_modules()
+        commands = {c.name for c in entry.app.registered_commands}
+        groups = {g.name for g in entry.app.registered_groups}
+        assert "run" in commands
+        assert not (commands & groups), f"命令与命令组重名: {commands & groups}"
 
     @pytest.mark.parametrize(
         "modname",

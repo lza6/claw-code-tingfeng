@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.exceptions import ClawdError
 from src.workflow.engine import WorkflowEngine
 from src.workflow.models import (
     WorkflowIntent,
@@ -189,11 +190,14 @@ async def test_budget_exhaustion_during_iteration(tmp_path, mock_managers):
     engine._phase_review = AsyncMock(return_value="reviewed")
     engine._phase_discover = AsyncMock(return_value=["new point"])
 
-    # 非 EVOLVE 模式下预算耗尽应抛出异常
+    # 非 EVOLVE 模式下预算耗尽应终止本次运行并带上原因。
+    # 注意：`run()` 的设计是**把 ClawdError 收敛为失败结果**（保护 CLI 不抛栈），
+    # 因此断言"结果是 failed 且错误里点名预算耗尽"，而不是"向上抛异常"。
     engine.intent = WorkflowIntent.IMPLEMENT
-    with pytest.raises(ClawdError) as exc:
-        await engine.run("test goal")
-    assert "Budget exhausted" in str(exc.value)
+    result_impl = await engine.run("test goal")
+    assert result_impl.status == WorkflowStatus.FAILED
+    # WorkflowResult 没有 error 字段；中断原因写进 report 的「中断原因:」段落
+    assert "budget exhausted" in result_impl.report.lower()
 
     # EVOLVE 模式下应优雅退出
     engine.intent = WorkflowIntent.EVOLVE

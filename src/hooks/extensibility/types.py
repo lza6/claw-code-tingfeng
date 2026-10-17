@@ -209,41 +209,15 @@ class HookDispatchResult:
 
 
 @dataclass
-class HookDispatchOptions:
-    """钩子调度选项"""
-    cwd: str | None = None
-    event: HookEventEnvelope | None = None
-    env: dict | None = None
-    timeout_ms: int | None = None
-    allow_in_team_worker: bool | None = None
-    allow_team_worker_side_effects: bool | None = None
-    side_effects_enabled: bool | None = None
-    enabled: bool | None = None
 
 
 @dataclass
-class HookValidateOptions:
-    """钩子验证选项"""
-    cwd: str | None = None
-    env: dict | None = None
-    timeout_ms: int | None = None
 
 
 @dataclass
-class HookRuntimeDispatchInput:
-    """运行时调度输入"""
-    cwd: str
-    event: HookEventEnvelope
-    allow_team_worker_side_effects: bool | None = None
-    side_effects_enabled: bool | None = None
 
 
 @dataclass
-class HookRuntimeDispatchResult:
-    """运行时调度结果"""
-    dispatched: bool
-    reason: str
-    result: HookDispatchResult
 
 
 @dataclass

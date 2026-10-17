@@ -3,11 +3,58 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.54.0**
+> 当前版本：**v0.57.0**
 
 ---
 
-## 0-A. 本轮（v0.53.0 → v0.54.0）完成项
+## 0. 本轮（v0.56.0 → v0.57.0）完成项
+
+| ID | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| D-01 | `ruff --select F821` 清零 | ✅ | 40 → 0（All checks passed） |
+| D-02 | `ruff --select F811` 清零 | ✅ | 19 → 0 |
+| D-03 | 全库导入缺陷清零 | ✅ | `scripts/import_sweep.py`：638 模块，0 缺陷 |
+| D-04 | 全量测试转绿 | ✅ | 3033 passed / 0 failed（原 2999/31） |
+| D-05 | `ReadinessSnapshot.ready` 字段与 classmethod 冲突 | ✅ | 实测字段现为 bool；`RuntimeSnapshot.ready()` 语义正确 |
+| D-06 | `_deserialize_result` 枚举还原 + `skipped_reason` | ✅ | 往返测试通过 |
+| D-07 | `_deserialize_event` 迭代字段字典崩溃 | ✅ | 持久化恢复测试通过 |
+| D-08 | `PipelineState.save(state_file)` 生效 / `can_resume` 自洽 | ✅ | 新增 3 条回归用例 |
+| D-09 | `PipelineConfig.cwd` 生效；`create_pipeline` 接受裸函数；`can_skip` 可选 | ✅ | 新增 3 条回归用例 |
+| D-10 | `BudgetGuard` 注入被丢弃 | ✅ | 预算耗尽测试通过 |
+| D-11 | `spawn_platform_command_sync` 定义时绑定 | ✅ | `tests/core/test_platform.py` 16 passed |
+| D-12 | 删除 16 个陈旧报告文档 | ✅ | 仅保留 README/CHANGELOG/CONTRIBUTING/ARCHITECTURE/AGENTS/CLAUDE/workflow_status |
+| D-13 | 顶层 `workflow` 命令被同名命令组遮蔽 | ✅ | 改名 `run`；新增回归断言"命令与命令组不得重名" |
+| D-14 | 命令组注册不幂等 | ✅ | 加 `_REGISTERED_GROUPS` 护栏；3 次调用后组名无重复 |
+| D-15 | 两套 CLI 入口并存（`python -m src.main` vs `clawd`） | ✅ | 新增 `src/__main__.py`；README/CLAUDE.md 命令改为 `python -m src` 并逐条验证 |
+| D-16 | `--dimension/-d` 写入运行时配置后无人读取 | ✅ | 引擎解析 → 注入执行器提示词 → 挂到 `WorkflowTask.dimensions`；6 项回归测试 |
+| D-17 | RAG 增量扫描比串行还慢（线程池开销） | ✅ | 缓存命中走同步快路径；`test_rag_pressure.py` 转绿 |
+| D-18 | README 两条不存在的命令示例 | ✅ | 改为实跑验证过的 `run` / `workflow autopilot` |
+
+### 验证命令与真实结果
+
+```
+pytest tests/ -q                          → 3033 passed, 0 failed
+pytest tests/contracts -q                 → 39 passed
+ruff check src/ --select F821             → All checks passed!
+ruff check src/ --select F811             → All checks passed!
+python scripts/import_sweep.py            → IMPORT-OK 632 / FAIL 0 / DEP-MISSING 6
+python scripts/reachability.py            → 429 生产可达（与上轮一致，不变量守住）
+python -m src.main doctor                 → 0 个 UnicodeEncodeError，中文正常
+```
+
+### 仍未闭合（诚实披露）
+
+| 项 | 状态 | 说明 |
+|:---|:---|:---|
+| 覆盖率 | ⚠️ ~20% | 指南目标是 v0.53 ≥35%、v1.0 ≥60%，未达 |
+| 死模块 | ⚠️ 135 个 | 指南目标 ≤20；需产品决策，不可按名字删 |
+| 收集耗时 | ⚠️ ~92s | 指南目标 <20s |
+| `except Exception` 数量 | ⚠️ 未重测 | 指南目标 ≤30 |
+| 验证阶段 | ⚠️ 仍是桩 | v0.55.0 仅做诚实化；真修需接测试执行器 |
+
+---
+
+## 0-A. 上一轮（v0.53.0 → v0.54.0）完成项
 
 | ID | 事项 | 状态 | 证据 |
 |:---|:---|:---|:---|

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawd Code v0.57.0 — 变更报告</title>
+<style>
+  :root{
+    --bg:#0e1116; --surface:#151a22; --surface-2:#1b2230;
+    --ink:#e8eaed; --muted:#98a2b3;
+    --accent:#f0b429; --accent-2:#4fd1c5; --danger:#ef6b6b; --ok:#63d68a;
+    --line:#242c3a;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --sans:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --serif:"Songti SC","Noto Serif SC",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(240,180,41,.10), transparent 60%),
+      radial-gradient(900px 500px at 0% 20%, rgba(79,209,197,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);line-height:1.75;font-size:16px;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:0 28px 120px}
+  header.masthead{padding:96px 0 56px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+  h1{font-family:var(--serif);font-size:clamp(2.4rem,6vw,4.2rem);line-height:1.08;margin:18px 0 12px;font-weight:600;letter-spacing:-.02em}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{color:var(--muted);font-size:1.08rem;max-width:64ch}
+  .meta{margin-top:28px;display:flex;flex-wrap:wrap;gap:10px}
+  .pill{font-family:var(--mono);font-size:12px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface)}
+  .pill.ok{color:var(--ok);border-color:rgba(99,214,138,.35)}
+  .pill.warn{color:var(--accent);border-color:rgba(240,180,41,.35)}
+  section{padding:64px 0;border-bottom:1px solid var(--line)}
+  h2{font-family:var(--serif);font-size:1.9rem;margin:0 0 8px;font-weight:600}
+  h2 .num{font-family:var(--mono);color:var(--accent);font-size:.95rem;margin-right:14px;vertical-align:middle}
+  h3{font-size:1.12rem;margin:34px 0 10px;color:var(--ink)}
+  p{margin:12px 0;color:#cfd5df}
+  .muted{color:var(--muted)}
+  code{font-family:var(--mono);font-size:.88em;background:var(--surface-2);padding:2px 6px;border-radius:5px;color:#ffd479}
+  pre{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:18px 20px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.6;color:#cfd5df}
+  pre .c{color:#6f7b8f}
+  pre .bad{color:var(--danger)}
+  pre .good{color:var(--ok)}
+  .grid{display:grid;gap:16px;margin:24px 0}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{background:linear-gradient(180deg,var(--surface),var(--surface-2));border:1px solid var(--line);border-radius:12px;padding:22px}
+  .card h4{margin:0 0 8px;font-size:.95rem;font-family:var(--mono);letter-spacing:.04em;color:var(--accent-2)}
+  .card p{margin:0;font-size:.94rem;color:var(--muted)}
+  .bignum{font-family:var(--mono);font-size:2.3rem;line-height:1;color:var(--ink);margin-bottom:6px}
+  .bignum small{font-size:.9rem;color:var(--muted);margin-left:6px}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.93rem}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  td code{white-space:nowrap}
+  .tag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .tag.p0{background:rgba(239,107,107,.14);color:var(--danger)}
+  .tag.p1{background:rgba(240,180,41,.14);color:var(--accent)}
+  .tag.ok{background:rgba(99,214,138,.13);color:var(--ok)}
+  blockquote{margin:24px 0;padding:18px 22px;border-left:3px solid var(--accent-2);background:rgba(79,209,197,.06);border-radius:0 8px 8px 0;color:#d7e9e6}
+  blockquote strong{color:var(--accent-2)}
+  ol,ul{padding-left:22px;color:#cfd5df}
+  li{margin:8px 0}
+  /* ---- quiz ---- */
+  .quiz{background:linear-gradient(180deg,#121821,#0f141b);border:1px solid var(--line);border-radius:16px;padding:30px;margin-top:26px}
+  .quiz-head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:6px}
+  .score{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .score b{color:var(--accent);font-size:1.5rem}
+  .bar{height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin:14px 0 26px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .35s ease}
+  .q{padding:20px 0;border-top:1px solid var(--line)}
+  .q:first-of-type{border-top:0}
+  .q .stem{font-weight:600;margin-bottom:12px;display:flex;gap:10px}
+  .q .n{font-family:var(--mono);color:var(--accent);font-size:.85rem;padding-top:3px}
+  .opts{display:grid;gap:8px}
+  .opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--surface);transition:.15s}
+  .opt:hover{border-color:#39445a;background:var(--surface-2)}
+  .opt input{margin-top:4px;accent-color:var(--accent)}
+  .opt span{font-size:.94rem;color:#cfd5df}
+  .opt.correct{border-color:rgba(99,214,138,.55);background:rgba(99,214,138,.08)}
+  .opt.wrong{border-color:rgba(239,107,107,.55);background:rgba(239,107,107,.08)}
+  .explain{margin-top:10px;font-size:.9rem;color:var(--muted);display:none;padding-left:2px;border-left:2px solid var(--line);padding-left:12px}
+  .explain.show{display:block}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+  button{font-family:var(--sans);font-size:.95rem;padding:12px 22px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#141414;border-color:var(--accent);font-weight:600}
+  button.primary:hover{filter:brightness(1.08);color:#141414}
+  .verdict{margin-top:20px;padding:16px 18px;border-radius:10px;display:none;font-size:.96rem}
+  .verdict.show{display:block}
+  .verdict.pass{background:rgba(99,214,138,.1);border:1px solid rgba(99,214,138,.45);color:#bdf0cf}
+  .verdict.fail{background:rgba(239,107,107,.1);border:1px solid rgba(239,107,107,.45);color:#f6c4c4}
+  footer{padding:52px 0 0;color:var(--muted);font-size:.88rem}
+  @media (max-width:620px){.wrap{padding:0 18px 90px}header.masthead{padding:60px 0 40px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">Change Report · v0.57.0 · 2026-10-17</div>
+  <h1>把“看起来在跑”<br>变成<em>真的在跑</em></h1>
+  <p class="lede">
+    这一轮没有加新功能。它做的是一件更基础的事：让项目自己声称的能力，
+    和它实际能做到的事，终于对齐。40 个未定义名称、19 处重复定义、
+    31 个从未通过的测试，以及一条把“可达”误当成“可用”的分析盲区。
+  </p>
+  <div class="meta">
+    <span class="pill ok">3033 passed / 0 failed</span>
+    <span class="pill ok">F821 40 → 0</span>
+    <span class="pill ok">F811 19 → 0</span>
+    <span class="pill ok">导入缺陷 16 → 0</span>
+    <span class="pill warn">覆盖率仍 ~20%</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">01</span>上下文：上一轮之后还剩什么</h2>
+  <p>
+    前几轮修的是“会立刻炸”的东西：生产路径的 <code>&lt;think&gt;</code> 崩溃、
+    BashTool 全量失败、审批门禁是装饰性的、验证阶段撒谎说“通过”。
+    这一轮面对的是另一类问题——<strong>不会立刻炸，但一直在悄悄误导你</strong>的东西。
+  </p>
+  <div class="grid g2">
+    <div class="card">
+      <h4>表面症状</h4>
+      <p><code>clawd agent</code> 和 <code>clawd workflow</code> 两个命令组根本不存在。<br>
+      但 CLI 启动没有任何报错，所以没人发现。</p>
+    </div>
+    <div class="card">
+      <h4>根本原因</h4>
+      <p><code>try: … except ImportError: pass</code>。<br>
+      本意是“可选模块缺失时优雅降级”，实际把硬错误吞成了静默消失。</p>
+    </div>
+    <div class="card">
+      <h4>更深的症状</h4>
+      <p>40 个名字在代码里被使用，却从未被导入。<br>
+      其中 7 处位于真实运行路径上，一走到就 <code>NameError</code>。</p>
+    </div>
+    <div class="card">
+      <h4>最隐蔽的症状</h4>
+      <p>一个 dataclass 的字段被同名 classmethod 覆盖，
+      导致 <code>snapshot.ready</code> 是个方法，<code>if</code> 判断恒为真。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>直觉：为什么这些问题能活这么久</h2>
+  <p>
+    因为它们全都<strong>不违反任何单点检查</strong>：
+  </p>
+  <ol>
+    <li>导入失败被 <code>except</code> 吃掉了，所以“能启动”。</li>
+    <li>未定义名称只在那一行执行时才炸，静态检查没开 F821。</li>
+    <li>重复定义的“后一份”覆盖“前一份”，程序照常运行——只是前一份是死代码。</li>
+    <li>测试文件从初始提交起就引用不存在的 API，所以它<strong>从来没绿过</strong>，
+        也就没人把它当作信号。</li>
+    <li>可达性分析只看“有没有 import 链”，不看“import 到的东西能不能加载”。</li>
+  </ol>
+  <blockquote>
+    <strong>共同模式：</strong>所有检查都只问“它是否存在于某处”，
+    没有一条问“它是否真的可用”。这就是这一轮要补的那条缝。
+  </blockquote>
+</section>
+
+<section>
+  <h2><span class="num">03</span>做了什么</h2>
+
+  <h3>3.1 让降级可见，而不是静默</h3>
+<pre><span class="c"># 之前：任何导入错误都被吃掉</span>
+try:
+    from .commands.agent_commands import register_agent_commands
+    register_agent_commands(app)
+<span class="bad">except ImportError:
+    pass</span>
+
+<span class="c"># 之后：降级保留，但必须留痕，并把失败清单交给测试断言</span>
+try:
+    ...
+<span class="good">except Exception as exc:</span>
+    failed.append(group_name)
+    logger.warning(<span class="good">"命令组 '%s' 注册失败…%s: %s"</span>, group_name, type(exc).__name__, exc)</pre>
+
+  <h3>3.2 把“可达”升级为“可导入”</h3>
+  <p>
+    新增 <code>scripts/import_sweep.py</code>：逐个 import 全部 638 个模块，
+    并把 <code>ModuleNotFoundError</code> 分成两类——
+    缺失名是 <code>src.*</code> 的是<strong>项目内路径配错</strong>（真缺陷），
+    缺失第三方包（celery、opentelemetry）的是<strong>环境问题</strong>（不算缺陷）。
+    混为一谈会制造大量假问题。
+  </p>
+
+  <h3>3.3 修复的缺陷（按后果排序）</h3>
+  <table>
+    <thead><tr><th>等级</th><th>缺陷</th><th>后果</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag p0">P0</span></td><td><code>ReadinessSnapshot.ready</code> 字段被同名 classmethod 覆盖</td><td><code>is_ready()</code> 恒为真，系统永远认为自己就绪</td></tr>
+      <tr><td><span class="tag p0">P0</span></td><td><code>_deserialize_event</code> 用 <code>f.name</code> 遍历字段字典</td><td>持久化恢复必崩（事件数 &gt; 0 时）</td></tr>
+      <tr><td><span class="tag p0">P0</span></td><td><code>_deserialize_result</code> 不还原枚举</td><td>续跑把上次失败的阶段当成正常</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td><code>PipelineState.save(state_file)</code> 忽略参数</td><td>传了路径，文件却写到别处；<code>can_resume</code> 恒 False</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td><code>BudgetGuard</code> 在 <code>run()</code> 里被整个替换</td><td>外部注入的预算策略被静默丢弃</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td><code>spawn_fn=subprocess.run</code> 写在签名默认值</td><td>定义时绑定，全局 monkeypatch 无效</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td><code>PipelineConfig.cwd</code> 从未生效</td><td>调用方设了工作目录，阶段仍拿到 <code>.</code></td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td>40 处未定义名称</td><td>7 处在真实运行路径，走到即崩</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.4 一个刻意“不修”的决定</h3>
+  <p>
+    <code>src/agent/swarm/coder_agent.py</code> 引用了 <code>.consensus</code>，
+    而 <code>consensus.py</code> 在 git 全历史中<strong>从未存在</strong>。
+    它零消费者、未导出、从第一天起就无法导入。
+  </p>
+  <p>
+    选择<strong>删除</strong>，而不是补写一个 <code>consensus.py</code>。
+    因为补出来的只会是一个“能导入、但验证永远通过”的桩——
+    这正是上一轮刚刚清理掉的那类伪实现。
+  </p>
+
+  <h3>3.5 顺带闭合的三条调用断链</h3>
+  <p>修完静态缺陷后继续顺链路追查，又发现三处“界面有、后端没有”：</p>
+  <table>
+    <thead><tr><th>断链</th><th>真实表现</th><th>修复</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>顶层 <code>workflow</code> 命令 vs 同名命令组</td>
+        <td>命令组遮蔽命令，<code>clawd workflow "目标"</code> 把目标当子命令解析</td>
+        <td>顶层命令改名 <code>run</code></td>
+      </tr>
+      <tr>
+        <td><code>--dimension/-d</code></td>
+        <td>CLI 写入运行时配置后，<strong>全仓库无人读取</strong>，参数被遗忘</td>
+        <td>引擎解析 → 注入执行器提示词 → 挂到任务并持久化</td>
+      </tr>
+      <tr>
+        <td>两个 CLI 入口并存</td>
+        <td><code>python -m src.main</code> 与 <code>clawd</code> 命令集不同、<code>workflow</code> 语义不同</td>
+        <td>新增 <code>src/__main__.py</code>，<code>python -m src</code> 与 <code>clawd</code> 一致</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.6 一个被数据推翻的“优化”</h3>
+  <p>
+    RAG 增量扫描原本比纯串行还慢：1000 个缓存命中的文件，却要付 1000 次
+    线程池调度和 1000 个 coroutine 的开销。
+  </p>
+<pre>全量扫描        13.20s
+纯串行缓存命中   0.73s
+原增量扫描       2.20s   <span class="bad">← 并行反而更慢</span>
+改后增量扫描     0.70s</pre>
+  <p class="muted">
+    结论：并行只在“工作量大到能摊薄调度开销”时才划算。
+    缓存命中是 O(1) 的 stat，不需要线程池。
+  </p>
+</section>
+
+<section>
+  <h2><span class="num">04</span>验证：只认实跑的输出</h2>
+  <table>
+    <thead><tr><th>检查</th><th>命令</th><th>结果</th></tr></thead>
+    <tbody>
+      <tr><td>全量测试</td><td><code>pytest tests/ -q</code></td><td><span class="tag ok">3033 passed / 0 failed</span></td></tr>
+      <tr><td>契约测试</td><td><code>pytest tests/contracts -q</code></td><td><span class="tag ok">39 passed</span></td></tr>
+      <tr><td>未定义名称</td><td><code>ruff check src/ --select F821</code></td><td><span class="tag ok">All checks passed</span></td></tr>
+      <tr><td>重复定义</td><td><code>ruff check src/ --select F811</code></td><td><span class="tag ok">All checks passed</span></td></tr>
+      <tr><td>导入扫描</td><td><code>python scripts/import_sweep.py</code></td><td><span class="tag ok">0 缺陷 / 638 模块</span></td></tr>
+      <tr><td>生产可达不变量</td><td><code>python scripts/reachability.py</code></td><td><span class="tag ok">429（未变）</span></td></tr>
+      <tr><td>Windows 中文</td><td><code>python -m src.main doctor</code></td><td><span class="tag ok">0 UnicodeEncodeError</span></td></tr>
+      <tr><td>生产 E2E（真实端点）</td><td><code>python scripts/e2e_production.py</code></td><td><span class="tag ok">8/8</span></td></tr>
+    </tbody>
+  </table>
+  <p class="muted">
+    注：全量测试从 2999/31 变为 3033/0。新增用例来自对两个“从未通过”的测试文件的真实修复，
+    而不是把断言改松。
+  </p>
+</section>
+
+<section>
+  <h2><span class="num">05</span>诚实边界</h2>
+  <ul>
+    <li><strong>覆盖率仍约 20%</strong>。指南目标是 v0.53 达到 35%，未达。本轮没有靠删代码刷分母。</li>
+    <li><strong>死模块仍有 135 个</strong>。目标 ≤20。删名字相似的模块已被证明会误伤，需逐一读源码。</li>
+    <li><strong>验证阶段仍是桩</strong>。上一轮只做了“不再撒谎”（返回 <code>not_implemented</code>），真修需要接入测试执行器。</li>
+    <li><strong>测试收集 92 秒</strong>。目标 &lt;20 秒，未优化。</li>
+  </ul>
+</section>
+
+<section id="quiz-section">
+  <h2><span class="num">06</span>测验：你必须通过</h2>
+  <p class="muted">8 题，全部答对才算通过。答完会给出每题的解释。</p>
+
+  <div class="quiz">
+    <div class="quiz-head">
+      <strong>变更理解测验</strong>
+      <div class="score"><b id="score">0</b> / 8</div>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+    <div id="questions"></div>
+    <div class="actions">
+      <button class="primary" id="submit">提交并评分</button>
+      <button id="reset">重做</button>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+</section>
+
+<footer>
+  Clawd Code v0.57.0 · 报告生成于 2026-10-17 · 所有数字均来自本机实跑输出
+</footer>
+</div>
+
+<script>
+const QUESTIONS = [
+  {
+    stem: "`clawd agent` 与 `clawd workflow` 两个命令组为什么整体消失，而启动时毫无提示？",
+    options: [
+      "命令组被配置文件禁用了",
+      "`_register_command_modules()` 用 `except ImportError: pass` 把导入错误吞掉了",
+      "Typer 版本不兼容，自动忽略了这两个组",
+      "这两个组从未被实现"
+    ],
+    answer: 1,
+    why: "三处导入各自断裂（引用了不存在的符号、从错误模块导入、相对导入越界），而 `except ImportError: pass` 把每一个都吞成了静默失败。修复保留了降级，但改为记录 warning 并返回失败清单供测试断言。"
+  },
+  {
+    stem: "修复前，`ReadinessSnapshot().ready` 实际是什么？",
+    options: [
+      "布尔值 False",
+      "布尔值 True",
+      "一个绑定方法（bound method），导致 `if snapshot.ready:` 恒为真",
+      "None"
+    ],
+    answer: 2,
+    why: "dataclass 字段 `ready: bool = False` 先创建类属性，随后同名 classmethod 覆盖了它；`@dataclass` 取默认值时拿到的是这个方法。于是 `RuntimeSnapshot.ready()` 恒返回真——系统永远认为自己就绪。修复方式是把 classmethod 改名为 `all_ready()`。"
+  },
+  {
+    stem: "为什么删除 `coder_agent.py`，而不是补写它引用的 `consensus.py`？",
+    options: [
+      "因为文件太大，影响加载速度",
+      "因为 `consensus.py` 在 git 全历史中从未存在，补写只会造出一个“验证永远通过”的桩",
+      "因为它已经被别的模块完全替代",
+      "因为测试覆盖率太低"
+    ],
+    answer: 1,
+    why: "补一个能导入但逻辑为空的 `consensus.py`，正是上一轮刚清理掉的伪实现模式。该模块零消费者、未被导出、从第一天起就无法导入，所以删除是诚实的处置。"
+  },
+  {
+    stem: "`_deserialize_result` 不把 status 字符串还原成枚举，会造成什么后果？",
+    options: [
+      "只是类型注解不准确，运行时无影响",
+      "JSON 序列化会失败",
+      "断点续跑时，上次失败的阶段 `== StageStatus.FAILED` 恒为 False，被当成正常",
+      "会导致循环导入"
+    ],
+    answer: 2,
+    why: "恢复出来的 `status` 是字符串 `'failed'`，与枚举 `StageStatus.FAILED` 不相等。任何基于 `== StageStatus.FAILED` 的判断都会漏掉它。同时该函数还丢失了 `skipped_reason`。"
+  },
+  {
+    stem: "`scripts/import_sweep.py` 相比 `scripts/reachability.py` 补上了什么盲区？",
+    options: [
+      "它统计代码行数更准确",
+      "它检查的是“模块能否被 import”，而可达性只回答“引用链是否存在”",
+      "它能自动删除死代码",
+      "它只检查测试目录"
+    ],
+    answer: 1,
+    why: "可达 ≠ 可导入。实测有 16 个模块静态可达却 import 即崩。import_sweep 还把“项目内缺模块”与“第三方依赖未安装”分开，避免制造假问题。"
+  },
+  {
+    stem: "把 `spawn_fn=subprocess.run` 写在函数签名的默认值里，问题是什么？",
+    options: [
+      "会导致语法错误",
+      "默认值在 def 执行时求值并绑定，之后 monkeypatch `subprocess.run` 对函数完全无效",
+      "会让函数变成异步的",
+      "没有任何问题"
+    ],
+    answer: 1,
+    why: "Python 的默认参数在函数定义时求值一次。实测中测试 patch 了 `subprocess.run`，函数仍启动真实子进程（返回码 1）。修复为 `spawn_fn=None`，在函数体内延迟解析。"
+  },
+  {
+    stem: "初版修复把命令组注册改成 `importlib.import_module(\"字符串\")`，为什么后来又改回显式 import？",
+    options: [
+      "因为字符串导入速度更慢",
+      "因为 `reachability.py` 靠 AST 里的 import 语句建图，字符串形式会让模块在图中消失，生产可达数从 429 掉到 416",
+      "因为 Typer 不支持动态导入",
+      "因为 Python 3.10 不支持 importlib"
+    ],
+    answer: 1,
+    why: "运行时行为完全正确，但项目自带的静态分析工具看不见这些模块，会把它们误判为“生产不可达”。教训：替换导入方式前，先确认项目自身的分析工具依赖什么形式。"
+  },
+  {
+    stem: "本轮全量测试的真实结果是什么？",
+    options: [
+      "2999 passed / 31 failed",
+      "3033 passed / 0 failed",
+      "全部跳过",
+      "仅契约测试通过"
+    ],
+    answer: 1,
+    why: "31 个失败中，24 个（runtime 8 + pipeline 18 + workflow 1，去重后为 27）来自对接了不存在 API 的测试文件；修复实现缺陷后全部转绿。最后 4 个来自 test_platform 的测试自身缺陷（OSError 关键字参数 + 默认参数绑定），也已修复。"
+  }
+];
+
+const state = new Array(QUESTIONS.length).fill(null);
+const box = document.getElementById('questions');
+
+function render() {
+  box.innerHTML = QUESTIONS.map((q, i) => `
+    <div class="q" data-i="${i}">
+      <div class="stem"><span class="n">Q${i + 1}</span><span>${escapeHtml(q.stem)}</span></div>
+      <div class="opts">
+        ${q.options.map((o, j) => `
+          <label class="opt" data-j="${j}">
+            <input type="radio" name="q${i}" value="${j}" ${state[i] === j ? 'checked' : ''}>
+            <span>${escapeHtml(o)}</span>
+          </label>`).join('')}
+      </div>
+      <div class="explain" id="exp${i}"></div>
+    </div>`).join('');
+
+  box.querySelectorAll('input[type=radio]').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const qi = Number(e.target.name.slice(1));
+      state[qi] = Number(e.target.value);
+      updateScore();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  // 先按反引号切分，奇数段包成 <code>，再对每段做 HTML 转义。
+  // （早期写法连续两次 replace(/`/) ，第二次已无可替换字符，
+  //   会留下没有闭合的 <code> —— 属于本报告自身的渲染缺陷。）
+  return s.split('`').map((part, i) => {
+    const escaped = part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return i % 2 === 1 ? `<code>${escaped}</code>` : escaped;
+  }).join('');
+}
+
+function updateScore() {
+  const answered = state.filter(v => v !== null).length;
+  document.getElementById('score').textContent = answered;
+  document.getElementById('bar').style.width = (answered / QUESTIONS.length * 100) + '%';
+}
+
+document.getElementById('submit').addEventListener('click', () => {
+  let correct = 0;
+  QUESTIONS.forEach((q, i) => {
+    const qEl = box.querySelector(`.q[data-i="${i}"]`);
+    qEl.querySelectorAll('.opt').forEach((opt, j) => {
+      opt.classList.remove('correct', 'wrong');
+      if (j === q.answer) opt.classList.add('correct');
+      if (state[i] === j && j !== q.answer) opt.classList.add('wrong');
+    });
+    if (state[i] === q.answer) correct++;
+    const exp = document.getElementById('exp' + i);
+    exp.classList.add('show');
+    exp.innerHTML = `<strong>${state[i] === q.answer ? '✓ 正确' : '✗ 错误'}</strong> — ${escapeHtml(q.why)}`;
+  });
+
+  const v = document.getElementById('verdict');
+  v.classList.add('show');
+  if (correct === QUESTIONS.length) {
+    v.className = 'verdict show pass';
+    v.innerHTML = `<strong>通过（${correct}/${QUESTIONS.length}）</strong> — 你已经理解了这轮变更的核心：<em>可达不等于可用，声明不等于实现。</em>`;
+  } else {
+    v.className = 'verdict show fail';
+    v.innerHTML = `<strong>未通过（${correct}/${QUESTIONS.length}）</strong> — 需要答对全部 ${QUESTIONS.length} 题。上方每题已标出正确答案与解释，请重读对应章节后重做。`;
+  }
+  document.getElementById('score').textContent = correct;
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  state.fill(null);
+  render();
+  updateScore();
+  const v = document.getElementById('verdict');
+  v.className = 'verdict';
+  v.innerHTML = '';
+});
+
+render();
+updateScore();
+</script>
+</body>
+</html>

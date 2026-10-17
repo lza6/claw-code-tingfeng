@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import struct
 from pathlib import Path
+from typing import Optional
 
 from .trigram_index import DocPosting, TrigramIndex
 

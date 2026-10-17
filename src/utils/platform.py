@@ -367,8 +367,8 @@ def spawn_platform_command_sync(
     options: dict | None = None,
     platform: str | None = None,
     env: dict | None = None,
-    exists_fn=os.path.exists,
-    spawn_fn=subprocess.run
+    exists_fn=None,
+    spawn_fn=None
 ) -> ProbedPlatformCommand:
     """同步执行平台命令，自动处理 Windows 差异。
 
@@ -394,6 +394,14 @@ def spawn_platform_command_sync(
     platform = platform or sys.platform
     options = options or {}
     env = env or os.environ
+    # 默认值必须在**调用时**解析，不能写在函数签名里。
+    # 签名默认值在 def 求值时就绑定了 `subprocess.run` / `os.path.exists`，
+    # 此后 monkeypatch 这两个模块属性对本函数**完全无效**
+    # （实测：测试里 patch 了 subprocess.run，函数仍走真实子进程）。
+    if exists_fn is None:
+        exists_fn = os.path.exists
+    if spawn_fn is None:
+        spawn_fn = subprocess.run
 
     spec = build_platform_command_spec(command, args, platform, env)
 

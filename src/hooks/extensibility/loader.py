@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .types import HookPluginDescriptor
+
 # ===== 环境变量 =====
 HOOK_PLUGIN_ENABLE_ENV = "OMX_HOOK_PLUGINS"
 HOOK_PLUGIN_TIMEOUT_ENV = "OMX_HOOK_PLUGIN_TIMEOUT_MS"
@@ -110,17 +112,10 @@ async def validate_hook_plugin_export(plugin_path: str) -> HookPluginValidation:
 
 
 # ===== 插件发现 =====
-@dataclass
-class HookPluginDescriptor:
-    """钩子插件描述符"""
-    id: str
-    name: str
-    file: str
-    path: str
-    file_path: str
-    file_name: str
-    valid: bool = True
-    reason: str | None = None
+# HookPluginDescriptor 的**唯一定义**在 types.py（见文件顶部导入）。
+# 这里原先重复定义了一份字段完全相同的 dataclass —— 两个同名类意味着
+# 两边的 isinstance 互相为 False，而 `__init__.py` 又从两边各导入一次。
+# 统一到 types，消除契约漂移。
 
 
 async def discover_hook_plugins(cwd: str) -> list[HookPluginDescriptor]:

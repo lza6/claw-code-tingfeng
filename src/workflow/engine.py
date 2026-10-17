@@ -144,6 +144,38 @@ class WorkflowEngine:
         self.assurance_manager = None
         self.intervention_logger = None
         self.runtime_host: RuntimeHost | None = None
+        # 维度引导（`--dimension/-d`）。在 run() 里从运行时配置解析。
+        self._dimension_guidance: str = ""
+        self._resolved_dimensions: list[Any] = []
+
+    def _resolve_dimension_guidance(self) -> str:
+        """把 `--dimension/-d` 传入的维度解析成可注入提示词的文本。
+
+        此前这条链路是断的：CLI 调 `set_config("dimensions", [...])` 写进
+        运行时覆盖，但**没有任何代码读取它** —— 用户传了 `-d creative`
+        什么也不会发生。
+
+        这里读取并解析（使用 `src.core.config.dimensions`，它提供中文内置库且
+        生产可达；`src/workflow/dimensions.py` 是另一份英文重复实现，已被取代）。
+        """
+        try:
+            from ..core.config.dimensions import resolve_dimension_specs
+            from ..core.config.runtime import get_runtime_config
+
+            specs = get_runtime_config("dimensions", []) or []
+            if isinstance(specs, str):
+                specs = [s.strip() for s in specs.split(",") if s.strip()]
+            specs = [str(s) for s in specs if str(s).strip()]
+            if not specs:
+                return ""
+
+            resolved = resolve_dimension_specs(specs)
+            self._resolved_dimensions = resolved
+            lines = [f"- **{d.name}**: {d.guidance}" for d in resolved]
+            return "## 维度引导（本次运行请遵循）\n" + "\n".join(lines)
+        except Exception as e:  # noqa: BLE001 - 维度解析失败不应阻断工作流
+            self.logger.warning(f"维度解析失败，本次运行不启用维度引导: {e}")
+            return ""
 
     def _get_meta_correction(self):
         """懒加载 Meta-Self-Correction"""
@@ -233,6 +265,7 @@ class WorkflowEngine:
                 intent="implement",  # 显式设置意图
                 worktree_manager=self.worktree_manager,
                 assurance_manager=self.assurance_manager,
+                dimension_guidance=self._dimension_guidance,
             )
         return self._executor
 
@@ -277,9 +310,14 @@ class WorkflowEngine:
         self.assurance_manager = AssuranceManager(
             self.workdir, run_id, surface_manager=self.state_manager.surface_manager
         )
-        self.budget_guard = BudgetGuard(
-            self.budget_guard.config, str(self.workdir / ".clawd" / "runs" / run_id)
-        )
+        # 复用已有 BudgetGuard，只重定向它的运行目录。
+        #
+        # 原先这里 `self.budget_guard = BudgetGuard(...)` 直接换了个新实例，
+        # 把调用方在 `run()` 之前对 guard 注入的配置/替身**静默丢弃**。
+        # 实测后果：任何外部设置的预算策略（或测试替身）都不会生效。
+        _run_dir = str(self.workdir / ".clawd" / "runs" / run_id)
+        self.budget_guard.run_dir = _run_dir
+        self.budget_guard.intervention_logger = InterventionLogger(_run_dir)
         self.liveness_monitor = LivenessMonitor(
             str(self.workdir / ".clawd" / "runs" / run_id), self.resource_monitor
         )
@@ -296,6 +334,14 @@ class WorkflowEngine:
         self._use_isolation = (self.workdir / ".git").exists()
 
         self.budget_guard.start()
+
+        # 解析维度引导（`--dimension/-d`）。为空表示未启用。
+        self._dimension_guidance = self._resolve_dimension_guidance()
+        if self._dimension_guidance:
+            self.logger.info(
+                "已启用维度引导: %s", [d.name for d in self._resolved_dimensions]
+            )
+
         phase_summaries: dict[WorkflowPhase, str] = {}
         all_tasks: list[WorkflowTask] = []
         optimization_points: list[str] = []
@@ -1076,6 +1122,28 @@ class WorkflowEngine:
 
         planner = self._get_task_planner()
         tasks = planner.plan_tasks(issues, intent=self.intent)
+
+        # 把已解析的维度挂到任务上：既进入执行提示词，也随状态持久化，
+        # 便于恢复运行后仍知道"这次是按哪些维度跑的"。
+        #
+        # 注意：`WorkflowTask` 是 **frozen dataclass**，不能原地赋值
+        # （`task.dimensions = ...` 会抛 FrozenInstanceError）。
+        # 用 `dataclasses.replace()` 生成带维度的新任务。
+        if self._resolved_dimensions:
+            from dataclasses import replace as _dc_replace
+
+            from .models import Dimension as TaskDimension
+            from .models import DimensionSource
+
+            task_dims = [
+                TaskDimension(
+                    name=d.name,
+                    guidance=d.guidance,
+                    source=DimensionSource.CONFIG,
+                )
+                for d in self._resolved_dimensions
+            ]
+            tasks = [_dc_replace(t, dimensions=list(task_dims)) for t in tasks]
 
         # 挂载目标合约
         for task in tasks:

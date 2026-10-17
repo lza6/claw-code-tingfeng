@@ -11,12 +11,19 @@
 > （"X 尚未实现"、"文件在 Y"、"覆盖率约 N%"），用真实代码验证后再动手。
 > 判定规则与实例见上述 skill 的 Phase 1。
 >
-> **最短验证路径**（改动涉及 LLM / 工具 / 配置时）：
+> **最短验证路径**（改动涉及 LLM / 工具 / 配置 / 导入结构时）：
 > ```bash
 > python scripts/e2e_smoke.py          # 真实端点 E2E，退出码 0 才算通过
 > pytest tests/contracts/ -q           # 公共 API 契约
 > pytest tests/ --collect-only -q      # 期望 0 errors
+> python scripts/import_sweep.py       # 期望 IMPORT-FAIL = 0（可达 ≠ 可导入）
+> python -m ruff check src/ --select F821,F811   # 期望 All checks passed
+> python scripts/reachability.py       # 删代码后「生产可达数」必须不变
 > ```
+>
+> **本项目的三条硬指标**（v0.57.0 起作为基线）：
+> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0`。
+> 任何一项回升都视为回归，先修再谈其他。
 
 ## Project Overview
 
@@ -139,10 +146,12 @@ ruff check src/                            # Lint
 ruff format src/                           # Format
 
 # Run the agent
-python -m src.main                         # Launch REPL
-python -m src.main chat                    # Chat mode
-python -m src.main doctor                  # Environment diagnostics
-python -m src.main workflow                # Workflow engine
+python -m src                              # 规范入口（= clawd，Typer CLI）
+python -m src chat                          # Chat mode
+python -m src doctor                        # Environment diagnostics
+python -m src run "目标"                     # 5 阶段工作流引擎
+python -m src workflow autopilot "目标"       # 管道命令组（ralph/ralplan/team/autopilot）
+python -m src.main                          # 历史 argparse 入口（兼容保留，命令集更小）
 ```
 
 ## Conventions

@@ -104,44 +104,6 @@ def get_template_manifest() -> TemplateManifest:
     return _template_manifest
 
 
-class TemplateLoader:
-    """模板加载器"""
-
-    def __init__(self, manifest: TemplateManifest | None = None):
-        self._manifest = manifest or get_template_manifest()
-
-    def load(self, name: str) -> dict | None:
-        """加载模板"""
-        template = self._manifest.get(name)
-        if not template:
-            return None
-        return {
-            "name": template.name,
-            "description": template.description,
-            "category": template.category,
-            "variables": template.variables,
-        }
-
-    def list_all(self) -> list[dict]:
-        """列出所有模板"""
-        return [
-            {
-                "name": t.name,
-                "description": t.description,
-                "category": t.category,
-            }
-            for t in self._manifest.templates
-        ]
-
-    def list_by_category(self, category: str) -> list[dict]:
-        """按类别列出模板"""
-        return [
-            {
-                "name": t.name,
-                "description": t.description,
-            }
-            for t in self._manifest.get_by_category(category)
-        ]
 
 
 class TemplateLoader:

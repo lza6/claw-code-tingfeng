@@ -4,6 +4,7 @@ Embedding/Reranking 模型配置
 """
 import contextlib
 import json
+import logging
 import os
 
 #####

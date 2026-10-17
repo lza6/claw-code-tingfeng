@@ -77,7 +77,7 @@ class ConfigEnhancer:
         # 检查常见工具
         tools = ["git", "python", "node", "npm", "pip", "ruff"]
         for tool in tools:
-            if self._which(toil):
+            if self._which(tool):
                 assets.append(NativeAsset(
                     name=tool,
                     path=self._which(tool),

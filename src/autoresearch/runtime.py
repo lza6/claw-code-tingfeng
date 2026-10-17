@@ -123,7 +123,7 @@ def read_json_file(file_path: Path) -> Any:
 class AutoresearchEvaluationRecord:
     command: str
     ran_at: str
-    status: "pass" | "fail" | "error"
+    status: Literal["pass", "fail", "error"]
     pass_: bool | None = None
     score: float | None = None
     exit_code: int | None = None
@@ -145,10 +145,10 @@ class AutoresearchCandidateArtifact:
 @dataclass
 class AutoresearchLedgerEntry:
     iteration: int
-    kind: "baseline" | "iteration"
+    kind: Literal["baseline", "iteration"]
     decision: AutoresearchDecisionStatus
     decision_reason: str
-    candidate_status: AutoresearchCandidateStatus | "baseline"
+    candidate_status: Literal["candidate", "noop", "abort", "interrupted", "baseline"]
     base_commit: str
     candidate_commit: str | None
     kept_commit: str

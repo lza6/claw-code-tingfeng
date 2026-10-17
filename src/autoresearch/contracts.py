@@ -1,6 +1,7 @@
 """Autoresearch contracts for mission and sandbox definitions."""
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Literal

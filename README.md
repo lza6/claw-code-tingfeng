@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.56.0 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.57.0 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -64,12 +64,19 @@
 # 安装依赖
 pip install -e .
 
-# 运行 REPL 模式
-python -m src.main chat
+# 运行 REPL / Chat 模式（推荐入口，与安装后的 `clawd` 完全一致）
+python -m src chat
+# 或
+clawd chat
 
 # 运行一键诊断
-python -m src.main doctor
+python -m src doctor
 ```
+
+> **关于入口**：`python -m src` 与 `clawd` 是**同一个 Typer CLI**。
+> 历史上还存在一个 argparse 入口 `python -m src.main`，它的命令集更小、
+> 且 `workflow` 语义不同。该入口保留用于兼容，但**不再推荐**。
+
 
 ---
 
@@ -148,13 +155,21 @@ Clawd Code v0.50.0 深度集成了 **GoalX** 的持久化认知能力：
 ## 📚 API 参考
 
 ### 运行工作流
+
 ```bash
-python -m src.main workflow run --goal "重构认证模块" --intent evolve --budget 5usd
+# 5 阶段工作流引擎（识别 → 规划 → 执行 → 审查 → 发现）
+python -m src run "重构认证模块" --intent evolve --budget 5usd
+
+# 管道式命令组：ralph / ralplan / team / autopilot
+python -m src workflow autopilot "实现用户登录"
+python -m src workflow ralph "修复所有 lint 问题"
 ```
 
-### 资源监控
+### 查看成本
+
 ```bash
-python -m src.main budget status
+# 注：Typer CLI 没有独立的 budget 子命令；预算通过 --budget 传入 run/workflow。
+python -m src run "分析依赖" --budget 10usd
 ```
 
 ---
@@ -180,17 +195,30 @@ python scripts/e2e_smoke.py
 「属性名漂移」类缺陷。v0.51.0 修复的 11 个阻塞问题中，有 5 个只有在把
 真实请求完整打通时才会逐层暴露。
 
-### 质量基线（v0.51.0，实测）
+### 质量基线（v0.57.0，实测）
 
-| 指标 | 当前 | 目标 |
+| 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | 2857 收集 / 0 收集错误 | — |
-| 覆盖率 | **19.5%**（9,399 / 48,183 语句） | 60%（`pyproject.toml` 的 `fail_under`） |
-| Ruff 违规 | 563（历史存量） | 0 |
+| 测试用例 | **3041 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
+| 契约测试 | 39 passed | `pytest tests/contracts -q` |
+| 覆盖率 | **~20%** | 仍低于 `pyproject.toml` 的 `fail_under`，是已知缺口 |
+| Ruff `F821`（未定义名称） | **0** | 本轮从 40 清零 |
+| Ruff `F811`（重复定义） | **0** | 本轮从 19 清零 |
+| 导入期缺陷 | **0**（638 模块） | `python scripts/import_sweep.py` |
+| 生产可达模块 | 429 | `python scripts/reachability.py` |
+| 死模块 | 135 | 需逐一读源码，不可按名字删 |
 
-> 覆盖率爬升路线与死代码收敛计划见 `计划书/下一步改进指南.md`。
+> 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南.md`。
 > **注意**：删死代码会让覆盖率*百分比*上升但绝对覆盖行数不变，
 > 因此必须同时跟踪「已覆盖语句数」，防止分母变小造成的假象。
+
+### 三条硬指标（回归红线）
+
+```bash
+python -m ruff check src/ --select F821,F811   # 必须 All checks passed
+python scripts/import_sweep.py                 # 必须 IMPORT-FAIL = 0
+python scripts/reachability.py                 # 删代码前后可达数必须不变
+```
 
 ### 质量标准
 - 函数长度 < 50 行

@@ -6,7 +6,6 @@ Hook Extensibility - 钩子扩展系统
 """
 
 from .dispatcher import (
-    HookDispatchResult,
     dispatch_hook_event,
     is_hook_plugin_feature_enabled,
     should_force_enable_runtime_hook_dispatch,
@@ -22,9 +21,6 @@ from .loader import (
     resolve_hook_plugin_timeout_ms,
     validate_hook_plugin_export,
     validate_plugin_export,
-)
-from .loader import (
-    HookPluginDescriptor as HookPluginDescriptor,
 )
 from .runtime import (
     dispatch_hook_event_runtime,

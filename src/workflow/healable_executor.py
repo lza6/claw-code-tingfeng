@@ -30,6 +30,7 @@ class HealableExecutor:
         intent: str = "implement", # 默认为实现意图
         worktree_manager: Any | None = None,
         assurance_manager: Any | None = None,
+        dimension_guidance: str = "",
     ) -> None:
         self.logger = logging.getLogger('workflow.executor')
         self.workdir = workdir
@@ -39,6 +40,9 @@ class HealableExecutor:
         self.intent = intent
         self.worktree_manager = worktree_manager
         self.assurance_manager = assurance_manager
+        # 维度引导（由 `clawd run --dimension/-d` 经运行时配置传入）。
+        # 空字符串表示未启用，此时所有提示词保持原样。
+        self.dimension_guidance = dimension_guidance
         self._use_isolation = False
 
     async def execute_with_healing(
@@ -268,7 +272,16 @@ class HealableExecutor:
                 self.logger.warning(f"SwarmEngine 启动失败: {e}，回退到常规策略")
 
         # 使用常规策略模式执行修复
+        # 维度引导以**副本**形式注入，不修改调用方持有的 task 对象
+        from dataclasses import replace
+
         from .strategies import execute_strategy
+
+        if self.dimension_guidance:
+            task = replace(
+                task,
+                description=f"{self.dimension_guidance}\n\n任务说明:\n{task.description}",
+            )
         return execute_strategy(task, exec_workdir)
 
     async def _execute_with_swarm(self, task: WorkflowTask, workdir: Path) -> str | None:
@@ -286,6 +299,8 @@ class HealableExecutor:
             swarm = SwarmEngine(config=swarm_config, workdir=workdir, intent=self.intent)
 
             swarm_goal = f"修复代码中的质量问题: {task.title}\n\n详细说明:\n{task.description}"
+            if self.dimension_guidance:
+                swarm_goal = f"{self.dimension_guidance}\n\n{swarm_goal}"
             result = await swarm.run(swarm_goal)
 
             if result.success:

@@ -12,6 +12,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ...workflow.pipeline import (
     create_ralph_verify_stage,

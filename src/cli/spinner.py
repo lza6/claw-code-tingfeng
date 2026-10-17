@@ -23,6 +23,7 @@ from __future__ import annotations
 import sys
 import threading
 import time
+from typing import Any
 
 from rich.console import Console
 
