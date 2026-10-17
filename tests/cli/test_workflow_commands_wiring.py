@@ -150,3 +150,38 @@ class TestAutopilotBody:
         cb(goal="auto goal", workers=2, ralph_iterations=1,
            no_plan=True, recover=False, verbose=False)
         assert captured["config"].task == "auto goal"
+
+
+class TestPipelineCommandBody:
+    """`clawd pipeline` 也曾是"注册成功但运行即崩"。
+
+    原实现：`PipelineConfig(use_team=..., use_ralph=..., budget=...)`
+    —— 三个参数都不存在；`PipelineOrchestrator(Path.cwd(), config)` 参数顺序反了；
+    `orchestrator.execute()` 也不存在。实测 `TypeError` 立即抛出。
+    """
+
+    def test_runs_without_import_error(self, wf, monkeypatch):
+        import src.cli.entrypoint as entry
+        import src.workflow.pipeline_orchestrator as po
+
+        captured = {}
+
+        class FakeOrch:
+            def __init__(self, config, cwd=".", validate=True):
+                captured["config"] = config
+                captured["cwd"] = cwd
+
+            async def run(self):
+                from src.workflow.types import PipelineResult
+                return PipelineResult(
+                    status="completed", stage_results={}, duration_ms=1,
+                    artifacts={}, error=None, failed_stage=None,
+                )
+
+        monkeypatch.setattr(po, "PipelineOrchestrator", FakeOrch)
+
+        cb = _cmd(entry, "pipeline")
+        with pytest.raises(typer.Exit) as ei:
+            cb(goal="pipe goal", no_team=True, no_ralph=True, budget=None)
+        assert ei.value.exit_code == 0
+        assert captured["config"].task == "pipe goal"

@@ -9,6 +9,47 @@
 
 ## [未发布]
 
+### v0.57.3 (2026-10-18) — 审查补充项：`pipeline` 命令与若干静默失败
+
+#### `clawd pipeline` 同样"注册成功但运行即崩"
+
+原实现三处错位，实测第一条就抛 `TypeError`：
+
+```python
+PipelineConfig(use_team=..., use_ralph=..., budget=...)   # 三个参数都不存在
+PipelineOrchestrator(Path.cwd(), config)                  # 参数顺序反了
+await orchestrator.execute(goal)                          # 方法不存在
+```
+
+重写为真实 API（`create_ralplan_stage/create_team_exec_stage/create_ralph_verify_stage`
++ `create_autopilot_pipeline_config` + `PipelineOrchestrator(config, cwd)`），
+并新增 wiring 测试。`--budget` 在编排器上未实现，命令**明确提示不生效**而不是静默忽略。
+
+#### 锁文件损坏不再静默覆盖
+
+`LockStore.acquire()` 解析锁文件失败时 `except Exception: pass`，随后直接覆盖写 ——
+两个 owner 可能同时认为自己持锁，正是锁要防的事。
+现改为：`logger.error` + 把损坏文件隔离为 `*.corrupt-<ts>` 再重建（可见且不deadlock）。
+`release()` 失败也不再静默吞掉。
+
+#### 其他
+
+- `HookPluginDispatchResult.duration_ms` 声明了两次（后者把必填字段静默改成可选）→ 去重。
+- `sanitize_plugin_id()` 用 `str.replace(r"...")` 做"正则清洗"，实际是字面量替换，
+  完全不生效 → 改为 `re.sub`。实测 `My Plugin!@#.py` → `my-plugin`。
+- `memory_server.search()` 读到损坏 JSON 时静默跳过 → 增加 `logger.warning`（带路径）。
+
+#### 验证
+
+```
+pytest tests/cli tests/workflow tests/core -q  → 1081 passed
+ruff --select F821,F811                       → All checks passed
+python -m src pipeline --help                 → 正常
+python -m src catalog list / reload           → 正常
+```
+
+---
+
 ### v0.57.2 (2026-10-18) — 独立审查发现的 5 个阻塞项
 
 v0.57.0/0.57.1 的独立审查线程回传了结论（REQUEST_CHANGES）。以下问题

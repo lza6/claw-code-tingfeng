@@ -189,7 +189,6 @@ class HookPluginDispatchResult:
     plugin_id: str | None = None
     file: str | None = None
     status: HookPluginDispatchStatus | None = None
-    duration_ms: int | None = None
     reason: str | None = None
     output: Any | None = None
     error: str | None = None

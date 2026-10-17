@@ -165,38 +165,47 @@ def pipeline(
     """
     import asyncio
 
-    from ..workflow.pipeline_orchestrator import PipelineConfig, PipelineOrchestrator
-
-    config = PipelineConfig(
-        use_team=not no_team,
-        use_ralph=not no_ralph,
-        budget=budget,
+    from ..workflow.pipeline import (
+        create_ralph_verify_stage,
+        create_ralplan_stage,
+        create_team_exec_stage,
     )
-    orchestrator = PipelineOrchestrator(Path.cwd(), config)
+    from ..workflow.pipeline_orchestrator import (
+        PipelineOrchestrator,
+        create_autopilot_pipeline_config,
+    )
 
-    async def _run():
-        result = await orchestrator.execute(goal)
+    if budget:
+        # 不静默忽略：pipeline 编排器目前没有预算参数，
+        # 预算只在 `clawd run`（WorkflowEngine）生效。
+        console.print(
+            "[yellow]注意：pipeline 编排器暂不支持 --budget，"
+            "该参数本次不生效；如需预算控制请使用 `clawd run --budget`。[/yellow]"
+        )
+
+    stages = [create_ralplan_stage()]
+    if not no_team:
+        stages.append(create_team_exec_stage())
+    if not no_ralph:
+        stages.append(create_ralph_verify_stage())
+
+    cwd = str(Path.cwd())
+    config = create_autopilot_pipeline_config(task=goal, stages=stages, cwd=cwd)
+
+    async def _run() -> int:
+        result = await PipelineOrchestrator(config, cwd=cwd).run()
 
         console.print("\n[bold green]流水线执行报告[/bold green]")
-        console.print(f"目标: {result.goal}")
-        console.print(f"最终状态: {result.final_status}")
+        console.print(f"目标: {goal}")
+        console.print(f"最终状态: {result.status}")
+        console.print(f"耗时: {result.duration_ms / 1000:.2f}s")
+        if result.failed_stage:
+            console.print(f"[red]失败阶段: {result.failed_stage}[/red] {result.error or ''}")
+        for name, sr in result.stage_results.items():
+            console.print(f"  - {name}: {sr.status.value}")
+        return 0 if result.status == "completed" else 1
 
-        if result.consensus_plan:
-            console.print(f"计划信心: {result.consensus_plan.confidence:.2f}")
-            console.print(f"任务数: {len(result.consensus_plan.tasks)}")
-
-        if result.team_result:
-            console.print(f"团队执行: {result.team_result.get('status', 'unknown')}")
-
-        if result.ralph_result:
-            console.print(f"Ralph迭代: {result.ralph_result.get('iterations', 0)} 次")
-
-        if result.artifacts:
-            console.print("制品:")
-            for name, path in result.artifacts.items():
-                console.print(f"  - {name}: {path}")
-
-    asyncio.run(_run())
+    raise typer.Exit(asyncio.run(_run()))
 
 @app.command(name="ralplan")
 def ralplan_cli(

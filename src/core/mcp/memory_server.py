@@ -229,7 +229,8 @@ class MemoryServer:
         for p in (self.memory_dir / "entities").glob("*.json"):
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning("跳过无法读取的实体文件 %s: %s", p, exc)
                 continue
             haystack = " ".join(
                 str(data.get(k, "")) for k in ("id", "name", "description")
@@ -240,7 +241,8 @@ class MemoryServer:
         for p in (self.memory_dir / "observations").glob("*.json"):
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning("跳过无法读取的观测文件 %s: %s", p, exc)
                 continue
             if needle in str(data.get("content", "")).lower():
                 hits.append({"kind": "observation", "score": 1.0, **data})

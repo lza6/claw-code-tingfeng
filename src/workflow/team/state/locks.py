@@ -11,6 +11,10 @@
 from __future__ import annotations
 
 import json
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -81,8 +85,15 @@ class LockStore:
                 existing = LockInfo.from_dict(data)
                 if not existing.is_expired() and existing.owner != owner:
                     return None  # 锁被占用
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                # 锁文件损坏时**不能**静默当成"无锁"直接覆盖 ——
+                # 那会让两个 owner 同时认为自己持锁（正是锁要防的事）。
+                # 做法：告警 + 把损坏文件隔离为 .corrupt-<ts>，再重建。
+                logger.error("锁文件损坏，已隔离并重建: %s (%s)", path, exc)
+                try:
+                    path.rename(path.with_suffix(f".corrupt-{int(time.time())}"))
+                except OSError:
+                    pass
 
         # 创建新锁
         now = datetime.now()
@@ -112,7 +123,8 @@ class LockStore:
                 return False
             path.unlink()
             return True
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            logger.error("释放锁失败 %s: %s", lock_id, exc)
             return False
 
     def get(self, lock_id: str) -> LockInfo | None:

@@ -20,13 +20,13 @@ HOOK_PLUGIN_TIMEOUT_ENV = "OMX_HOOK_PLUGIN_TIMEOUT_MS"
 
 def sanitize_plugin_id(file_name: str) -> str:
     """清理插件ID"""
+    import re
+
     stem = Path(file_name).stem
-    normalized = (
-        stem.lower()
-        .replace(r"[^a-z0-9_-]+", "-")
-        .replace(r"-+", "-")
-        .strip("-")
-    )
+    # 原实现用 str.replace(r"[^a-z0-9_-]+", "-") —— 这是**字面量**替换，
+    # 正则表达式根本不会生效，任何非法字符都会原样保留。
+    normalized = re.sub(r"[^a-z0-9_-]+", "-", stem.lower())
+    normalized = re.sub(r"-+", "-", normalized).strip("-")
     return normalized or "plugin"
 
 
