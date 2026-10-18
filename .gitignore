@@ -95,3 +95,6 @@ tmp/
 
 # 运行时产物（BudgetGuard 的 InterventionLogger 等会写入）
 /latest/
+
+# 覆盖率产物（可重新生成，体积 3MB+）
+/coverage.json

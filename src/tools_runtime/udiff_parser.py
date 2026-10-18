@@ -312,7 +312,11 @@ def _apply_single_hunk(
 
 def _directly_apply_hunk(content: str, hunk: list[str]) -> str | None:
     """直接使用 flexi search-and-replace 应用 hunk"""
-    from .search_replace import SearchTextNotUnique, flexible_search_and_replace
+    # 注意：`SearchTextNotUnique` 定义在**本模块**，不在 search_replace 中。
+    # 此前这里从 search_replace 导入该名字 → ImportError，
+    # 导致 apply_hunks 的"直接应用"分支永远不可用。
+    # flexible_search_and_replace 抛出的是 ValueError 家族，统一按 ValueError 处理。
+    from .search_replace import flexible_search_and_replace
 
     before, after = hunk_to_before_after(hunk)
 
@@ -328,9 +332,8 @@ def _directly_apply_hunk(content: str, hunk: list[str]) -> str | None:
 
     try:
         return flexible_search_and_replace(content, before, after)
-    except SearchTextNotUnique:
-        return None
     except ValueError:
+        # 包含搜索文本不唯一、未找到等情况 —— 交给上层尝试其他策略
         return None
 
 

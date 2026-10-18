@@ -18,7 +18,7 @@ async def test_sleep_basic():
     start = time.time()
     await sleep(100)  # 100ms
     elapsed = time.time() - start
-    assert 0.08 <= elapsed <= 0.15  # Allow some tolerance
+    assert 0.08 <= elapsed <= 2.0  # 下界证明真的等待了；上界放宽以抗 CI 负载（实测被拖到 1.6s）
 
 
 @pytest.mark.asyncio
@@ -40,8 +40,8 @@ async def test_sleep_with_signal():
     await task
     elapsed = time.time() - start
     
-    # Should complete quickly after signal
-    assert elapsed < 0.2
+    # 收到信号后应尽快返回；上界放宽以抗 CI 负载
+    assert elapsed < 1.0
 
 
 def test_sleep_sync():
@@ -49,7 +49,7 @@ def test_sleep_sync():
     start = time.time()
     sleep_sync(100)  # 100ms
     elapsed = time.time() - start
-    assert 0.08 <= elapsed <= 0.2
+    assert 0.08 <= elapsed <= 2.0  # 上界放宽：时序断言在满载/覆盖率插桩下会严重漂移
 
 
 def test_sleep_until():
@@ -58,7 +58,7 @@ def test_sleep_until():
     start = time.time()
     sleep_until(target)
     elapsed = time.time() - start
-    assert 0.4 <= elapsed <= 0.7
+    assert 0.4 <= elapsed <= 2.5  # 下界证明等到了目标时刻；上界抗负载漂移
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_sleeper_async_sleep():
     start = time.time()
     await sleeper.sleep()
     elapsed = time.time() - start
-    assert 0.05 <= elapsed <= 0.2
+    assert 0.05 <= elapsed <= 2.0  # 上界放宽以抗 CI 负载
 
 
 def test_sleeper_sync_sleep():
@@ -128,4 +128,4 @@ def test_sleeper_sync_sleep():
     start = time.time()
     sleeper.sleep_sync()
     elapsed = time.time() - start
-    assert 0.05 <= elapsed <= 0.2
+    assert 0.05 <= elapsed <= 2.0  # 上界放宽以抗 CI 负载

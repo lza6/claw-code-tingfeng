@@ -410,6 +410,16 @@ def try_strategy(
         return SearchResult(success=True, content=result, strategy_used=strategy_fn.__name__)
     except (ValueError, IndexError, OSError):
         return SearchResult(success=False, content=content, error='未找到匹配')
+    except Exception as exc:  # noqa: BLE001
+        # 单个策略失败**不得中断回退矩阵**。
+        # 实例：git_cherry_pick_osr_onto_o 在非 git 仓库会抛
+        # `git.exc.InvalidGitRepositoryError`（不是 OSError），
+        # 此前会直接穿透，让"多策略自动回退"在非仓库目录下彻底失效。
+        logger.debug(
+            "策略 %s 抛出非预期异常，跳过: %s: %s",
+            getattr(strategy_fn, "__name__", strategy_fn), type(exc).__name__, exc,
+        )
+        return SearchResult(success=False, content=content, error='策略异常')
 
 
 # ==================== 策略矩阵 ====================

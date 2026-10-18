@@ -83,19 +83,36 @@ class RalphVerifyStage(PipelineStage):
 
             if not approved:
                 logger.info(f"[RalphVerify] Iteration {iteration} not approved: {verification_result.get('reason', 'Unknown')}")
+                if evidence.get("status") == "not_configured":
+                    # 没有可执行的验证命令：重试也不会改变结果，提前结束
+                    # （而不是空转 max_iterations 次并最终谎称完成）。
+                    logger.warning(
+                        "[RalphVerify] 未配置验证命令，停止迭代；"
+                        "结果标记为 skipped（未验证），不代表通过"
+                    )
+                    break
                 # 短暂延迟后继续下一次迭代
                 await self._delay(0.5)
 
         # 构建最终报告
         final_result = self._build_final_report(task, iteration, approved, evidence)
 
-        return StageResult.completed(
-            artifacts={
-                "ralph_result": final_result,
-                "iterations": iteration,
-                "approved": approved,
-                "evidence": evidence,
-            },
+        artifacts = {
+            "ralph_result": final_result,
+            "iterations": iteration,
+            "approved": approved,
+            "evidence": evidence,
+        }
+
+        # 阶段状态必须与验证结论一致：
+        # 未通过却返回 completed，等于让管道把失败当成成功继续往下走。
+        if approved:
+            return StageResult.completed(artifacts=artifacts)
+        if evidence.get("status") == "not_configured":
+            return StageResult.skipped(artifacts=artifacts)
+        return StageResult.failed(
+            error=evidence.get("reason") or "验证未通过",
+            artifacts=artifacts,
         )
 
     async def _verify_implementation(
@@ -104,25 +121,32 @@ class RalphVerifyStage(PipelineStage):
         plan: str,
         iteration: int,
     ) -> dict[str, Any]:
-        """验证实现
+        """真实验证：运行验证命令并以退出码判定。
 
-        通过 Architect 验证当前实现是否满足要求。
+        历史：这里曾 `return {"approved": True}`（"简化为总是通过"）——
+        循环结构看起来完整，循环体却永远批准。
+
+        现在接入 `verification_runner`：
+        - 有 tests/ 或设置了 CLAWD_VERIFY_COMMAND → 真跑，退出码 0 才算通过
+        - 两者都没有 → `not_configured`，**不冒充通过**，调用方会提前结束循环
         """
-        # TODO: 实现真正的验证逻辑
-        # - 检查实现与计划的匹配度
-        # - 验证测试通过
-        # - 检查证据完整性
+        from pathlib import Path
+
+        from ..verification_runner import run_verification
 
         logger.debug(f"[RalphVerify] Verifying implementation at iteration {iteration}")
+        vr = run_verification(Path(self._config.cwd))
 
-        # 模拟验证结果
-        # 实际实现应该调用 Architect agent 进行验证
         return {
-            "approved": True,  # 简化为总是通过
-            "reason": "Implementation matches plan",
+            "approved": vr.verified,
+            "reason": vr.reason or vr.status,
             "evidence": {
-                "tests_passed": True,
-                "code_reviewed": True,
+                "tests_passed": vr.verified,
+                "status": vr.status,
+                "command": vr.command,
+                "exit_code": vr.exit_code,
+                "duration_ms": vr.duration_ms,
+                "output_tail": vr.output_tail,
             },
         }
 

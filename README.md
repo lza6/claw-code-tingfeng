@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.57.3 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.58.0 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -185,6 +185,20 @@ make coverage       # 生成覆盖率报告
 python scripts/e2e_smoke.py
 ```
 
+### 工作流真实验证（v0.58.0）
+
+`ralph-verify` 阶段现在会**真正执行一条验证命令并以退出码判定**：
+
+```bash
+# 自定义验证命令（优先级最高）
+export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
+
+# 未设置时：工作目录有 tests/ → 自动跑 pytest；两者都没有 → 标记 skipped（未验证）
+```
+
+状态语义：`passed` → 阶段成功；`failed/timeout/error` → 阶段失败（管道停止）；
+`not_configured` → 阶段 skipped，**绝不冒充通过**。
+
 ### 真实 E2E 冒烟测试
 
 `scripts/e2e_smoke.py` 用**项目自身的 LLM 栈**（而非裸 SDK）打真实端点，
@@ -201,7 +215,7 @@ python scripts/e2e_smoke.py
 |:---|:---|:---|
 | 测试用例 | **3051 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
-| 覆盖率 | **~20%** | 仍低于 `pyproject.toml` 的 `fail_under`，是已知缺口 |
+| 覆盖率 | **46.15%**（25,877 / 56,072 行，全量 `--cov=src` 实测） | 仍低于 `fail_under = 60` |
 | Ruff `F821`（未定义名称） | **0** | 本轮从 40 清零 |
 | Ruff `F811`（重复定义） | **0** | 本轮从 19 清零 |
 | 导入期缺陷 | **0**（638 模块） | `python scripts/import_sweep.py` |

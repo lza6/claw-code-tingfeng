@@ -483,6 +483,7 @@ def create_ralplan_stage() -> PipelineStage:
     """
 
     class RalplanStage(PipelineStage):
+        _logger = logger  # 基类不提供；类属性避免每个 __init__ 都要设置
         @property
         def name(self) -> str:
             return "ralplan"
@@ -527,6 +528,7 @@ def create_team_exec_stage(
         配置好的 Team 执行阶段实例
     """
     class TeamExecStage(PipelineStage):
+        _logger = logger  # 基类不提供；类属性避免每个 __init__ 都要设置
         def __init__(self, worker_count: int, agent_type: str):
             self.worker_count = worker_count
             self.agent_type = agent_type
@@ -580,6 +582,7 @@ def create_ralph_verify_stage(
         配置好的 Ralph 验证阶段实例
     """
     class RalphVerifyStage(PipelineStage):
+        _logger = logger  # 基类不提供；类属性避免每个 __init__ 都要设置
         def __init__(self, max_iterations: int):
             self.max_iterations = max_iterations
 
@@ -592,26 +595,42 @@ def create_ralph_verify_stage(
                 f"Running ralph-verify (max_iterations={self.max_iterations})"
             )
 
-            # TODO: 集成 Ralph 循环逻辑
+            # 真实验证：跑命令并以退出码判定，而不是返回硬编码结果。
             #
-            # 🔴 这里曾返回硬编码的 `"verification_result": "passed"` ——
-            # 一个**从不运行任何测试、不做任何检查、却永远报告"通过"**的验证阶段。
-            # 这比缺少功能更糟：它谎称功能存在。
+            # 历史：这里曾固定返回 "verification_result": "passed" ——
+            # 从不运行任何测试却永远报告通过。v0.55.0 改成诚实的
+            # "not_implemented"，现在接上真实执行器。
             #
-            # 现已改为诚实值。**在真正的验证逻辑落地之前，任何依赖本阶段
-            # 结果做自动化放行决策的逻辑都是不可信的。**
+            # 状态语义：
+            #   passed          → SUCCESS
+            #   failed / timeout / error → FAILED（让管道停下来，而不是继续假装完成）
+            #   not_configured  → SKIPPED（没配置验证，不冒充通过）
+            from .verification_runner import run_verification
+
+            vr = run_verification(Path(ctx.cwd))
+
             artifacts = {
-                "verification_result": "not_implemented",
-                "verified": False,
-                "iterations": 0,
+                "verification_result": vr.status,
+                "verified": vr.verified,
+                "iterations": 1,
                 "max_iterations": self.max_iterations,
-                "verification_completed": False,
-                "note": "本阶段尚未实现真实验证；verified=False 表示未经验证，不代表通过",
+                "verification_completed": vr.status in ("passed", "failed"),
+                **vr.to_artifacts(),
+                "evidence": vr.result.to_dict(),
             }
 
+            if vr.status == "passed":
+                return StageResult(status=StageStatus.SUCCESS, artifacts=artifacts)
+            if vr.status == "not_configured":
+                return StageResult(
+                    status=StageStatus.SKIPPED,
+                    artifacts=artifacts,
+                    skipped_reason=vr.reason,
+                )
             return StageResult(
-                status=StageStatus.SUCCESS,
+                status=StageStatus.FAILED,
                 artifacts=artifacts,
+                error=vr.reason,
             )
 
     return RalphVerifyStage(max_iterations)
@@ -628,6 +647,7 @@ def create_precontext_intake_stage() -> PipelineStage:
     """
 
     class PreContextIntakeStage(PipelineStage):
+        _logger = logger  # 基类不提供；类属性避免每个 __init__ 都要设置
         @property
         def name(self) -> str:
             return "precontext-intake"

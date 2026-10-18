@@ -27,6 +27,7 @@ description: Guides safe changes to the Clawd Code codebase by reading the doc/m
 | `scripts/reachability.py` | 从生产入口**能否走到**某模块 | `python scripts/reachability.py --prod --list` |
 | `scripts/import_sweep.py` | 走到了**会不会 import 就炸** | `python scripts/import_sweep.py` |
 | `ruff --select F821,F811` | 有没有未定义名称 / 重复定义 | `python -m ruff check src/ --select F821,F811` |
+| `scripts/coverage_gap.py` | 哪些**生产可达**模块覆盖率低 | `python scripts/coverage_gap.py` |
 
 **三者必须一起用**。只跑任何一个都会漏掉另外两类缺陷：
 - 只跑可达性 → 漏掉"能走到但导入即崩"

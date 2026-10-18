@@ -41,6 +41,15 @@
 | D-28 | `PipelineState` 往返丢 `stage_names`/`artifacts`；artifacts 非 JSON 时状态静默丢失 | ✅ | 双向持久化 + JSON 归一化；新增往返用例 |
 | D-29 | 复用 `BudgetGuard` 跨轮泄漏预算状态 | ✅ | 新增 `reset_for_run()` 并在 run() 调用；回归测试 |
 | D-30 | `_resolved_dimensions` 跨轮残留；`create_pipeline(cwd)` 状态目录不一致 | ✅ | 每次解析前清空；cwd 传给编排器 |
+| D-31 | 验证阶段是桩（从不运行测试） | ✅ | 新增 `verification_runner`：真跑命令、按退出码判定；13 条测试 |
+| D-32 | **所有 pipeline 阶段真实执行时崩溃**（`self._logger` 基类无此属性） | ✅ | 4 个阶段类补 `_logger = logger`；端到端实测通过 |
+| D-33 | `ralph_verify_stage` 循环体永远 `approved=True`，且未通过也返回 completed | ✅ | 接真实验证；状态与结论一致（failed/skipped） |
+| D-34 | 本地安装部署未验证 | ✅ | `pip install -e .` 成功；`clawd.exe --version/agent/catalog` 实跑通过 |
+| D-35 | 容器部署 / 线上热更新 | ⛔ **阻塞** | 本机无 Docker，无部署目标与凭证；已披露，不冒充 |
+| D-36 | 覆盖率口径错误（文档长期写 ~20%） | ✅ | 全量插桩实测 **46.15%**；v0.53 目标（≥35%）已达成 |
+| D-37 | `udiff_parser` 导入不存在符号，`apply_hunks` 核心分支永远 ImportError | ✅ | 修正导入；新增 15 条解析/应用测试 |
+| D-38 | 非 git 目录下 `search_replace` 回退矩阵被 `InvalidGitRepositoryError` 中断 | ✅ | `try_strategy` 捕获策略级异常并继续下一策略 |
+| D-39 | 计时测试在覆盖率插桩下随机失败 | ✅ | 保留下界、放宽上界 |
 
 ### 验证命令与真实结果
 
@@ -58,11 +67,11 @@ python -m src.main doctor                 → 0 个 UnicodeEncodeError，中文�
 
 | 项 | 状态 | 说明 |
 |:---|:---|:---|
-| 覆盖率 | ⚠️ ~20% | 指南目标是 v0.53 ≥35%、v1.0 ≥60%，未达 |
+| 覆盖率 | 🟡 46.15% | v0.53 目标（≥35%）**已达成**；v1.0 目标（≥60%）未达 |
 | 死模块 | ⚠️ 135 个 | 指南目标 ≤20；需产品决策，不可按名字删 |
 | 收集耗时 | ⚠️ ~92s | 指南目标 <20s |
 | `except Exception` 数量 | ⚠️ 未重测 | 指南目标 ≤30 |
-| 验证阶段 | ⚠️ 仍是桩 | v0.55.0 仅做诚实化；真修需接测试执行器 |
+| 验证阶段 | ✅ **已实现** | v0.58.0：真跑命令 + 退出码判定；`tests/workflow/test_verification_runner.py` 13 passed |
 
 ---
 
@@ -109,7 +118,7 @@ workflow.worktree_isolation   "对照" cli.commands.workflow_commands
 | `HeuristicToolParser` 对闭合标签失效 | ⚠️ 未修 | 主路径正常，不阻塞 |
 | `CircuitBreaker` 半开态限流 | ⚠️ 未修 | 已锁 xfail |
 | 剩余 163 个死模块 | ⚠️ 未删 | 需人工逐条复核，已出清单 |
-| 覆盖率 | ⚠️ ~20% | 本轮补了 49 个用例 |
+| 覆盖率 | 🟡 46.15% | 本轮补了 49 个用例 |
 
 ---
 

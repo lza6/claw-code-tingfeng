@@ -110,6 +110,7 @@ pytest tests/ --collect-only -q            # 0 errors
 [ ] ruff --select F821,F811             → All checks passed
 [ ] python scripts/import_sweep.py      → IMPORT-FAIL = 0
 [ ] python scripts/reachability.py      → 生产可达数未下降
+[ ] python scripts/coverage_gap.py       → 只给「生产可达」模块补测试，不给死代码刷覆盖率
 [ ] python scripts/e2e_smoke.py         → 退出码 0（改动涉及 LLM/工具/配置时）
 [ ] python scripts/e2e_production.py    → 8/8（改动涉及生产路径时）
 [ ] 版本号三处一致（pyproject / src.__version__ / README）
@@ -138,3 +139,36 @@ pytest tests/ --collect-only -q            # 0 errors
    （返回 `verification_result="not_implemented"`）。
 2. **哪些指标没达标** —— 覆盖率 ~20%、死模块 135、静默吞异常 101、收集 92s。
 3. **下一步最该做什么** —— 见 `计划书/下一步改进指南.md` 顶部的状态表。
+
+---
+
+## 9. 部署与热更新（2026-10-18 实测边界）
+
+### 本地安装部署（已验证）
+
+```bash
+python -m pip install -e . --no-deps --no-build-isolation   # 成功构建 clawd-code
+clawd --version            # Clawd Code v0.57.3
+clawd agent keywords       # 11 个关键词
+clawd catalog reload       # 技能数 39（活跃 23）/ Agent 数 30（活跃 18）
+```
+
+> `clawd.exe` 默认装在 `%LOCALAPPDATA%\Programs\Python\Python310\Scripts\`，
+> 该目录可能不在 PATH —— 用完整路径或 `python -m src` 等价调用。
+
+### 容器部署（**未验证，环境缺失**）
+
+`Dockerfile` 与 `docker-compose.yml` 存在，但本机**没有安装 Docker**
+（`where docker` 无结果）。因此：
+
+- 镜像构建、容器启动、健康检查、热更新**均未实测**；
+- 不能声称"容器可部署"；
+- 恢复验证的最小条件：安装 Docker Desktop 后执行
+  `docker compose build && docker compose up -d`，
+  再验证 `:8765` 端口与 `clawd doctor`。
+
+### Python CLI 的"热更新"
+
+本项目是 CLI / 库，没有常驻服务进程。变更生效方式是重新安装
+（`pip install -e .` 后新进程即加载新代码），不存在需要 reload 的运行时。
+所谓"线上热更新"命令本仓库尚无可验证的落地路径，需要真实部署目标与凭证。

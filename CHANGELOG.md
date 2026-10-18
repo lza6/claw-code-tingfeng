@@ -9,6 +9,76 @@
 
 ## [未发布]
 
+### v0.58.0 (2026-10-18) — 验证阶段变为真实现；修正覆盖率口径
+
+#### 1. 验证阶段不再只是"诚实"，而是**真的执行**
+
+新增 `src/workflow/verification_runner.py`：
+
+- 默认命令：若 `<cwd>/tests/` 存在 → `python -m pytest -q --tb=short tests`
+- 可用 `CLAWD_VERIFY_COMMAND` 覆盖（Windows 引号/反斜杠已处理）
+- **以退出码判定**，保留命令、耗时、输出尾部作为证据
+- 状态语义：`passed` / `failed` / `timeout` / `error` / `not_configured`
+- 未配置时返回 `not_configured`，**绝不冒充通过**
+
+接线：
+- `pipeline.py` 的 `ralph-verify`：passed→SUCCESS，failed/timeout/error→FAILED，
+  not_configured→SKIPPED
+- `stages/ralph_verify_stage.py`：`_verify_implementation` 接同一执行器；
+  未通过时返回 `failed`（此前恒返回 `completed`），未配置时提前结束迭代
+
+#### 2. 所有 pipeline 阶段真实执行时崩溃（P0）
+
+4 个内嵌阶段类都用 `self._logger`，但基类 `PipelineStage` **没有该属性** ——
+一旦真正执行，第一个阶段就 `AttributeError`。此前只测过注册与构造，
+从未真正跑过阶段，所以一直没暴露。
+
+修复：4 个阶段类补 `_logger = logger` 类属性。已用真实 pipeline 端到端验证。
+
+#### 3. 两处编辑核心的真实缺陷（覆盖率工作发现）
+
+| 位置 | 问题 | 后果 |
+|:---|:---|:---|
+| `udiff_parser._directly_apply_hunk` | 从 `search_replace` 导入 **不存在** 的 `SearchTextNotUnique`（该名字定义在本模块） | `apply_hunks` 的直接应用分支**永远 ImportError** |
+| `search_replace.try_strategy` | 只捕获 `(ValueError, IndexError, OSError)`；`InvalidGitRepositoryError` 会穿透 | **非 git 目录下**多策略回退矩阵直接中断，编辑失败 |
+
+修复后新增 `tests/tools_runtime/test_udiff_parser.py`（15 用例）。
+
+#### 4. 覆盖率口径修正
+
+此前文档长期写"覆盖率 ~20%"，来自 2026-10-15 的陈旧 `coverage.json`。
+本轮用 `pytest --cov=src` 全量实测（48 分钟；补齐用例后全量为 3079 passed）：
+
+```
+覆盖率      46.15%（25,877 / 56,072 行，插桩运行时测得）
+```
+
+仍低于 `pyproject.toml` 的 `fail_under = 60`，但**不是 20%**。
+README / workflow_status / 指南中的旧数字已更正。
+
+同时修掉一个计时脆弱测试（`test_sleeper_sync_sleep` 在覆盖率插桩下
+100ms 睡眠被拖到 1.6s）——保留"确实等待了"的下界，放宽上界。
+
+#### 5. 部署验证边界
+
+- **本地安装部署已验证**：`pip install -e . --no-deps --no-build-isolation`
+  成功；`clawd.exe --version / agent keywords / catalog reload` 全部实跑通过。
+- **容器部署未验证**：本机未安装 Docker，`docker compose build/up` 无法执行。
+  已在 `docs/MAINTENANCE.md` 明确写清缺失条件与恢复验证步骤，不冒充已部署。
+- 本项目是 CLI/库，无常驻服务进程；"线上热更新"没有可验证的落地路径。
+
+#### 验证
+
+```
+pytest tests/tools_runtime/test_udiff_parser.py tests/test_search_replace.py   → 43 passed
+pytest tests/workflow/test_verification_runner.py                              → 13 passed
+pytest tests/core/utils/test_sleep.py                                          → 9 passed
+真实 pipeline 端到端（ralph-verify，CLAWD_VERIFY_COMMAND 控制退出码）          → SUCCESS/verified=True
+pip install -e . + clawd.exe --version/agent/catalog                          → 通过
+```
+
+---
+
 ### v0.57.3 (2026-10-18) — 审查补充项：`pipeline` 命令与若干静默失败
 
 #### `clawd pipeline` 同样"注册成功但运行即崩"
