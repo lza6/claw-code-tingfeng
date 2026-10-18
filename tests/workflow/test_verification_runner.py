@@ -140,3 +140,26 @@ class TestRalphVerifyStageWiring:
 
         assert result.status == StageStatus.SKIPPED
         assert result.artifacts["verified"] is False
+
+
+class TestVerificationConcurrency:
+    """并发调用不得相互污染（共享进程、独立子进程、独立结果）。
+
+    用户要求对核心模块做压测/深度自检。这里用 8 路并发验证：
+    每条命令独立退出码，结果不得串味（例如 A 的输出去到 B 的结果里）。
+    """
+
+    def test_concurrent_runs_are_isolated(self, tmp_path):
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(i: int) -> tuple[int, str]:
+            code = f"print('marker-{i}'); raise SystemExit({i % 2})"
+            run = run_verification(tmp_path, command=_py(code))
+            return run.exit_code, run.output_tail
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(one, range(8)))
+
+        for i, (code, tail) in enumerate(results):
+            assert code == i % 2
+            assert f"marker-{i}" in tail, f"第 {i} 路输出串味: {tail!r}"
