@@ -310,6 +310,28 @@ try:
     <code>test_resume_after_failure</code>（断言 s1 不重跑、s2 重试）、
     <code>test_load_then_save_keeps_resumable</code>、BudgetGuard 复位用例。
   </p>
+
+  <h3>3.9 v0.58.0：验证阶段从“诚实”变成“真的会验证”</h3>
+  <p>
+    上一轮把硬编码的 <code>"passed"</code> 改成了诚实的 <code>not_implemented</code>——
+    不再撒谎，但仍然不会验证。本轮补上执行侧：
+  </p>
+  <table>
+    <thead><tr><th>退出码 / 情况</th><th>阶段状态</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td><code>SUCCESS</code></td><td>真的跑过且通过</td></tr>
+      <tr><td>非 0 / 超时 / 启动失败</td><td><code>FAILED</code></td><td>验证未通过，管道停止</td></tr>
+      <tr><td>没有命令可用</td><td><code>SKIPPED</code></td><td><strong>未验证，绝不冒充通过</strong></td></tr>
+    </tbody>
+  </table>
+  <p>
+    同时发现：<strong>所有 pipeline 阶段类都用 <code>self._logger</code>，而基类根本没有这个属性</strong> ——
+    真实执行第一个阶段就 <code>AttributeError</code>。此前只测过注册与构造，从未跑过阶段。
+  </p>
+  <blockquote>
+    覆盖率的真实数字也一并纠正：文档长期写“~20%”，实测 <strong>46.15%</strong>
+    （25,877 / 56,072 行）。旧数字来自一份陈旧的 <code>coverage.json</code>。
+  </blockquote>
 </section>
 
 <section>
@@ -478,6 +500,17 @@ const QUESTIONS = [
     ],
     answer: 1,
     why: "三处叠加才导致续跑从未发生：`run()` 先 `start_mode()` 覆盖状态再 `can_resume()`；`_complete_pipeline('failed')` 写 active=False 且 phase='failed' 被 `can_resume` 排除；失败阶段写 i+1 会跳过失败阶段。缺任何一处，续跑仍是坏的。"
+  },
+  {
+    stem: "工作流的验证阶段如何判定「通过」？",
+    options: [
+      "固定返回 passed，保证管道能走完",
+      "运行一条验证命令并以退出码判定；没有命令可跑时标记为 skipped（未验证），绝不冒充通过",
+      "检查代码里有没有 TODO 注释",
+      "由 LLM 自行声称是否通过"
+    ],
+    answer: 1,
+    why: "v0.58.0 起 ralph-verify 真正执行命令（默认 pytest，可用 CLAWD_VERIFY_COMMAND 覆盖）：退出码 0 → SUCCESS；非 0/超时/启动失败 → FAILED，管道停止；没有 tests/ 也没有环境变量 → SKIPPED，表示未验证。"
   }
 ];
 
