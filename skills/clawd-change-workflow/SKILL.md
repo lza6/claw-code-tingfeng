@@ -254,6 +254,7 @@ python scripts/verify_html_report.py 计划书/变更报告-v0.57.0.html
 | 并发迭代原字典 | `RuntimeError: dictionary changed size` | 后台线程会改的容器，迭代时取快照 `list(d)` |
 | 同步调用 async 函数 | 只得到协程，`RuntimeWarning`，功能静默失效 | 看 `inspect.iscoroutinefunction()` |
 | Windows 控制台 GBK | `UnicodeEncodeError` + 满屏乱码 | 输出前 `reconfigure(encoding='utf-8', errors='replace')` |
+| **editable 安装的版本元数据滞后** | `python -m src --version` 与 pyproject 不一致 | bump 后重跑 `pip install -e . --no-deps --no-build-isolation` |
 | **测试文件从初始提交起就没通过** | 没人把它当信号，缺陷长期隐藏 | 见到长期红的文件，先查它引用的 API 是否真实存在 |
 
 ---

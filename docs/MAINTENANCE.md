@@ -102,7 +102,23 @@ pytest tests/ --collect-only -q            # 0 errors
 
 ---
 
+## 5.5 版本号陷阱：editable 安装的元数据会滞后
+
+`src.__version__` 优先读 **已安装发行版的元数据**。`pip install -e .` 之后
+再改 `pyproject.toml` 的版本号，元数据仍停留在旧值 —— 表现为
+`python -m src --version` 与 `pyproject.toml` 不一致。
+
+**每次 bump 版本后必须重装**：
+
+```bash
+python -m pip install -e . --no-deps --no-build-isolation
+python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
+```
+
+---
+
 ## 6. 发布前检查单
+
 
 ```text
 [ ] pytest tests/ -q                    → 0 failed
