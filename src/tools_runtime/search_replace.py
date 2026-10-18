@@ -410,6 +410,10 @@ def try_strategy(
         return SearchResult(success=True, content=result, strategy_used=strategy_fn.__name__)
     except (ValueError, IndexError, OSError):
         return SearchResult(success=False, content=content, error='未找到匹配')
+    except (MemoryError, RecursionError):
+        # 这两类不是"策略没匹配上"，而是资源/实现层面的严重问题，
+        # 必须向上抛，不能被降级成"未找到匹配"。
+        raise
     except Exception as exc:  # noqa: BLE001
         # 单个策略失败**不得中断回退矩阵**。
         # 实例：git_cherry_pick_osr_onto_o 在非 git 仓库会抛
@@ -419,7 +423,13 @@ def try_strategy(
             "策略 %s 抛出非预期异常，跳过: %s: %s",
             getattr(strategy_fn, "__name__", strategy_fn), type(exc).__name__, exc,
         )
-        return SearchResult(success=False, content=content, error='策略异常')
+        # error 里带上异常类型，便于定位"策略本身写错了"（如 TypeError），
+        # 而不是一律显示"未找到匹配"。
+        return SearchResult(
+            success=False,
+            content=content,
+            error=f'策略异常: {type(exc).__name__}',
+        )
 
 
 # ==================== 策略矩阵 ====================

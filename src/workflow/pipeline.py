@@ -491,17 +491,31 @@ def create_ralplan_stage() -> PipelineStage:
         async def run(self, ctx: StageContext) -> StageResult:
             self._logger.info("Running RALPLAN consensus planning")
 
-            # TODO: 实现三方博弈规划逻辑
-            #
-            # ⚠️ 当前是**占位实现**，不产出任何真实计划。artifacts 里的字符串
-            # 是占位符而非产物 —— 消费方必须检查 `plan_implemented`，
-            # 不要把 "generated implementation plan" 当作真实计划使用。
+            # 接入真实规划引擎（此前是返回 "<未实现>" 的占位实现，
+            # 却仍报 SUCCESS —— 会让调用方以为计划已经产出）。
+            try:
+                from .ralplan import RalplanEngine
+
+                engine = RalplanEngine(workdir=Path(ctx.cwd), max_rounds=1)
+                plan = await engine.run(ctx.task)
+            except Exception as exc:  # noqa: BLE001 - 阶段失败必须变成 FAILED
+                self._logger.error("RALPLAN 阶段失败: %s: %s", type(exc).__name__, exc)
+                return StageResult(
+                    status=StageStatus.FAILED,
+                    artifacts={"plan_implemented": False, "planning_completed": False},
+                    error=f"RALPLAN 失败: {type(exc).__name__}: {exc}",
+                )
+
             artifacts = {
-                "plan": "<未实现>",
-                "prd": "<未实现>",
-                "test_spec": "<未实现>",
-                "plan_implemented": False,
-                "planning_completed": False,
+                # chosen_option 是 PlanOption 对象，artifacts 要能 JSON 序列化，
+                # 只保留名称；完整信息在 prd/tasks 里。
+                "plan": (plan.chosen_option.name if plan.chosen_option else ""),
+                "prd": plan.prd,
+                "test_spec": plan.tasks,
+                "confidence": plan.confidence,
+                "risks": plan.risks,
+                "plan_implemented": True,
+                "planning_completed": True,
             }
 
             return StageResult(
@@ -547,22 +561,43 @@ def create_team_exec_stage(
                 f"{self.agent_type} workers"
             )
 
-            # TODO: 集成 Swarm 执行器
-            #
-            # ⚠️ 当前是**占位实现**，没有真正启动任何 worker。
-            # `execution_completed=False` 是刻意设置的诚实值 —— 消费方
-            # 不要读 `execution_result` 的字符串把它当作执行结论。
+            # 接入真实 Swarm 引擎（此前是返回 "<未实现>" 的占位实现，
+            # 却仍报 SUCCESS —— 会让调用方以为 worker 真的执行过）。
+            try:
+                from ..agent.swarm.config import SwarmConfig
+                from ..agent.swarm.engine import SwarmEngine
+
+                engine = SwarmEngine(
+                    config=SwarmConfig(
+                        max_workers=max(1, self.worker_count),
+                        fallback_to_single_agent=True,
+                    ),
+                    workdir=Path(ctx.cwd),
+                    intent=self.agent_type,
+                )
+                result = await engine.run(ctx.task)
+            except Exception as exc:  # noqa: BLE001 - 阶段失败必须变成 FAILED
+                self._logger.error("team-exec 阶段失败: %s: %s", type(exc).__name__, exc)
+                return StageResult(
+                    status=StageStatus.FAILED,
+                    artifacts={"execution_implemented": True, "execution_completed": False},
+                    error=f"team-exec 失败: {type(exc).__name__}: {exc}",
+                )
+
             artifacts = {
-                "execution_result": "<未实现>",
+                "execution_result": (result.final_result or "")[:4000],
                 "worker_count": self.worker_count,
                 "agent_type": self.agent_type,
-                "execution_implemented": False,
-                "execution_completed": False,
+                "elapsed_seconds": getattr(result, "elapsed_seconds", 0),
+                "errors": list(getattr(result, "errors", []) or [])[:10],
+                "execution_implemented": True,
+                "execution_completed": bool(result.success),
             }
 
             return StageResult(
-                status=StageStatus.SUCCESS,
+                status=StageStatus.SUCCESS if result.success else StageStatus.FAILED,
                 artifacts=artifacts,
+                error=None if result.success else "; ".join(artifacts["errors"]) or "执行失败",
             )
 
     return TeamExecStage(worker_count, agent_type)
@@ -572,12 +607,14 @@ def create_ralph_verify_stage(
     max_iterations: int = 10,
 ) -> PipelineStage:
     """创建 Ralph 验证阶段
-    
-    该阶段运行 Ralph 持久循环，直到任务验证通过或达到最大迭代次数。
-    
+
+    **本阶段只做一次真实验证**，不做迭代重试：
+    验证失败后没有任何"重新实现"步骤，重复执行同一条命令只会得到同样结果
+    （原 docstring 声称"持久循环"，与实现不符，已更正）。
+
     Args:
-        max_iterations: 最大迭代次数（默认 10）
-        
+        max_iterations: 仅为配置兼容而保留，会记录进 artifacts，但当前不触发重试。
+
     Returns:
         配置好的 Ralph 验证阶段实例
     """
@@ -618,6 +655,11 @@ def create_ralph_verify_stage(
                 **vr.to_artifacts(),
                 "evidence": vr.result.to_dict(),
             }
+            if self.max_iterations > 1:
+                artifacts["note"] = (
+                    "本阶段为单次验证；验证失败后没有重新实现步骤，"
+                    "因此不会重复执行同一命令（max_iterations 仅记录，不触发重试）"
+                )
 
             if vr.status == "passed":
                 return StageResult(status=StageStatus.SUCCESS, artifacts=artifacts)
@@ -655,30 +697,51 @@ def create_precontext_intake_stage() -> PipelineStage:
         async def run(self, ctx: StageContext) -> StageResult:
             self._logger.info("Running pre-context intake")
 
+            # 真实的最小上下文摄入：扫描目标目录的源码文件并给出摘要。
+            #
+            # 历史：这里 `from .intake import IntakeGate` —— 该模块**从未存在**，
+            # 异常被捕获后仍返回 SUCCESS，等于永远"成功"地什么都没做。
+            # 现改为不依赖任何占位模块的真实扫描。
             try:
-                # 导入延迟以避免循环依赖
-                from .intake import IntakeGate
+                root = Path(ctx.cwd)
+                py_files = sorted(
+                    (p for p in root.rglob("*.py") if p.is_file()),
+                    key=lambda p: p.stat().st_size,
+                    reverse=True,
+                )[:2000]
 
-                intake = IntakeGate(ctx.cwd)
-                snapshot_path = intake.process_task(ctx.task)
+                key_files = [str(p.relative_to(root)) for p in py_files[:10]]
+                total_lines = 0
+                for p in py_files:
+                    try:
+                        with p.open(encoding="utf-8", errors="replace") as fh:
+                            total_lines += sum(1 for _ in fh)
+                    except OSError:
+                        continue
 
                 artifacts = {
-                    "context_snapshot": str(snapshot_path),
+                    "codebase_summary": (
+                        f"{len(py_files)} Python files, {total_lines} lines; "
+                        f"largest: {', '.join(key_files[:3]) or '(none)'}"
+                    ),
+                    "key_files": key_files,
+                    "file_count": len(py_files),
+                    "line_count": total_lines,
                     "intake_completed": True,
                 }
 
-                self._logger.info(f"Context snapshot created: {snapshot_path}")
-
-                return StageResult(
-                    status=StageStatus.SUCCESS,
-                    artifacts=artifacts,
+                self._logger.info(
+                    "Context intake: %d files / %d lines", len(py_files), total_lines
                 )
-            except Exception as e:
-                # Intake 失败不应阻止 pipeline，但应记录
+                return StageResult(status=StageStatus.SUCCESS, artifacts=artifacts)
+            except Exception as e:  # noqa: BLE001 - 不阻止 pipeline，但不得报成功
+                # Intake 失败不应阻止 pipeline，但**不能报 SUCCESS**：
+                # 用 SKIPPED 表示"本阶段没做成事但允许继续"。
                 self._logger.warning(f"Intake failed: {e}")
                 return StageResult(
-                    status=StageStatus.SUCCESS,  # 继续执行
+                    status=StageStatus.SKIPPED,
                     artifacts={"intake_failed": True, "intake_error": str(e)},
+                    skipped_reason=f"Intake 失败: {type(e).__name__}: {e}",
                 )
 
     return PreContextIntakeStage()

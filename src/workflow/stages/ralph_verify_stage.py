@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..pipeline_stage import PipelineStage, StageContext, StageResult
@@ -76,7 +77,9 @@ class RalphVerifyStage(PipelineStage):
             logger.info(f"[RalphVerify] Iteration {iteration}/{self._config.max_iterations}")
 
             # 验证当前状态
-            verification_result = await self._verify_implementation(task, plan, iteration)
+            verification_result = await self._verify_implementation(
+                task, plan, iteration, cwd=Path(ctx.cwd)
+            )
 
             approved = verification_result.get("approved", False)
             evidence = verification_result.get("evidence", {})
@@ -91,8 +94,12 @@ class RalphVerifyStage(PipelineStage):
                         "结果标记为 skipped（未验证），不代表通过"
                     )
                     break
-                # 短暂延迟后继续下一次迭代
-                await self._delay(0.5)
+                # 验证失败后**不重试**：本阶段没有"重新实现"步骤，
+                # 原样重跑同一条命令只会得到同样结果（白跑最多 10 次全量测试）。
+                logger.info(
+                    "[RalphVerify] 验证未通过；本阶段无重新实现步骤，停止迭代"
+                )
+                break
 
         # 构建最终报告
         final_result = self._build_final_report(task, iteration, approved, evidence)
@@ -120,6 +127,7 @@ class RalphVerifyStage(PipelineStage):
         task: str,
         plan: str,
         iteration: int,
+        cwd: Path | None = None,
     ) -> dict[str, Any]:
         """真实验证：运行验证命令并以退出码判定。
 
@@ -130,12 +138,18 @@ class RalphVerifyStage(PipelineStage):
         - 有 tests/ 或设置了 CLAWD_VERIFY_COMMAND → 真跑，退出码 0 才算通过
         - 两者都没有 → `not_configured`，**不冒充通过**，调用方会提前结束循环
         """
-        from pathlib import Path
-
         from ..verification_runner import run_verification
 
-        logger.debug(f"[RalphVerify] Verifying implementation at iteration {iteration}")
-        vr = run_verification(Path(self._config.cwd))
+        # 必须用**管道上下文的工作目录**，而不是配置默认值 "."：
+        # 否则会把进程当前目录当成目标项目去跑测试，可能对另一个项目报通过
+        # —— 正是本项目刚修复过的那类"假验证"。
+        target = Path(cwd) if cwd is not None else Path(self._config.cwd)
+
+        logger.debug(
+            f"[RalphVerify] Verifying implementation at iteration {iteration} "
+            f"(cwd={target})"
+        )
+        vr = run_verification(target)
 
         return {
             "approved": vr.verified,

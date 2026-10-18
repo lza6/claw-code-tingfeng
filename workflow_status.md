@@ -50,6 +50,11 @@
 | D-37 | `udiff_parser` 导入不存在符号，`apply_hunks` 核心分支永远 ImportError | ✅ | 修正导入；新增 15 条解析/应用测试 |
 | D-38 | 非 git 目录下 `search_replace` 回退矩阵被 `InvalidGitRepositoryError` 中断 | ✅ | `try_strategy` 捕获策略级异常并继续下一策略 |
 | D-39 | 计时测试在覆盖率插桩下随机失败 | ✅ | 保留下界、放宽上界 |
+| D-40 | `ralplan` / `team-exec` 阶段是占位实现却报 SUCCESS | ✅ | 接 `RalplanEngine` / `SwarmEngine`；异常→FAILED；7 条阶段测试 |
+| D-41 | `precontext-intake` 导入不存在的 `.intake` 模块，永远"成功"地什么都不做 | ✅ | 改为真实文件/行数扫描；失败→SKIPPED |
+| D-42 | `stages/ralph_verify_stage.py` 用 `config.cwd` 而非 `ctx.cwd` 验证 | ✅ | 传 `ctx.cwd`；失败不再无意义重试 |
+| D-43 | `search_replace` 策略回退修复无回归测试 | ✅ | 新增 7 条：异常回退、异常类型、MemoryError 上抛、非 git 目录 |
+| D-44 | 非法 `CLAWD_VERIFY_COMMAND` 让 ValueError 穿透 | ✅ | 返回 `status="error"`；新增用例 |
 
 ### 验证命令与真实结果
 

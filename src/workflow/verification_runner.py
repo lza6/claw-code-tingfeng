@@ -125,7 +125,20 @@ def run_verification(
 ) -> VerificationRun:
     """在工作目录运行验证命令，以退出码判定是否通过。"""
     cwd = Path(workdir)
-    argv, display = resolve_command(cwd, command)
+    try:
+        argv, display = resolve_command(cwd, command)
+    except ValueError as exc:
+        # 非法命令（例如未闭合引号）不能让异常穿透：
+        # 本模块承诺所有失败都有结构化 status。
+        return VerificationRun(
+            status="error",
+            verified=False,
+            command=str(command or ""),
+            exit_code=None,
+            duration_ms=0,
+            output_tail="",
+            reason=f"验证命令无法解析: {exc}",
+        )
 
     if argv is None:
         return VerificationRun(

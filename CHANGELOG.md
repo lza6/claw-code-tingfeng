@@ -9,6 +9,64 @@
 
 ## [未发布]
 
+### v0.59.0 (2026-10-19) — 审查阻塞项：pipeline 阶段去占位、验证目录修正
+
+独立审查（review-d）判定 REQUEST_CHANGES，两条阻塞项经复现后修复；
+处理过程中又发现两个"从未能工作"的占位阶段。
+
+#### 1. `ralplan` / `team-exec` 是占位实现（返回 `<未实现>` 却报 SUCCESS）
+
+`pipeline.py` 的这两个阶段此前不调用任何引擎，直接返回占位字符串并把
+阶段标成 SUCCESS —— 调用方会以为"计划已产出、worker 已执行"。
+
+现接真实引擎：
+- `RalplanStage` → `RalplanEngine.run()`，产物含 plan/prd/tasks/confidence；异常 → FAILED
+- `TeamExecStage` → `SwarmEngine.run()`，产物含 execution_result/errors；
+  swarm 失败 → FAILED
+
+#### 2. `precontext-intake` 导入不存在的模块，永远"成功"地什么都没做
+
+`from .intake import IntakeGate` —— `src/workflow/intake.py` **从未存在**。
+异常被捕获后仍返回 SUCCESS。
+
+现改为**真实的最小扫描**：统计目标目录的 `.py` 文件数/行数、给出最大的若干文件；
+失败时返回 SKIPPED（而不是 SUCCESS）。
+
+#### 3. `stages/ralph_verify_stage.py` 用错验证目录（审查阻塞项）
+
+`Path(self._config.cwd)` 默认 `"."`，忽略了 `ctx.cwd` —— 若挂进管道，
+会在**进程当前目录**跑测试，可能对另一个项目报 passed。
+现改为 `Path(ctx.cwd)`，并把"失败后原样重试同一命令最多 10 次"改为**不重试**
+（没有重新实现步骤，重试没有意义）。
+
+#### 4. `search_replace` 修复补齐回归测试（审查阻塞项）
+
+`try_strategy` 的策略级异常回退此前无任何测试（原有 28 个用例都不进入 git 策略）。
+新增 `tests/tools_runtime/test_search_replace_strategy_fallback.py`：
+- 普通异常 → 返回失败且 error 带异常类型（不再一律"未找到匹配"）
+- `MemoryError` / `RecursionError` → 仍向上抛（资源级问题不得降级）
+- 非 git 目录 → 回退矩阵不中断
+
+#### 5. 其他审查项
+
+- 非法 `CLAWD_VERIFY_COMMAND`（未闭合引号）此前会让 `ValueError` 穿透 →
+  现返回 `status="error"`（模块承诺所有失败都有结构化状态）
+- `pipeline.py` 工厂 docstring 声称"持久循环"但实现只跑一次 → 已更正，
+  并在 artifacts 里记录 `max_iterations` 仅作配置保留
+- `docs/MAINTENANCE.md` 仍写"验证阶段是桩""覆盖率 ~20%" → 已同步真实状态
+
+#### 验证
+
+```
+pytest tests/workflow/test_pipeline_stage_factories.py      → 7 passed
+pytest tests/workflow/test_verification_runner.py           → 15 passed
+pytest tests/tools_runtime/test_search_replace_strategy_fallback.py → 7 passed
+pytest tests/tools_runtime/test_udiff_parser.py             → 15 passed
+真实 pipeline（ralph-verify）                                → SUCCESS, verified=True
+```
+
+---
+
 ### v0.58.0 (2026-10-18) — 验证阶段变为真实现；修正覆盖率口径
 
 #### 1. 验证阶段不再只是"诚实"，而是**真的执行**

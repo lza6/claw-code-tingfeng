@@ -163,3 +163,13 @@ class TestVerificationConcurrency:
         for i, (code, tail) in enumerate(results):
             assert code == i % 2
             assert f"marker-{i}" in tail, f"第 {i} 路输出串味: {tail!r}"
+
+
+class TestMalformedCommand:
+    """非法命令必须返回结构化 error，而不是让 ValueError 穿透。"""
+
+    def test_unclosed_quote_is_error(self, tmp_path):
+        run = run_verification(tmp_path, command='python -c "unclosed')
+        assert run.status == "error"
+        assert run.verified is False
+        assert "无法解析" in run.reason

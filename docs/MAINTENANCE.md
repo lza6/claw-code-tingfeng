@@ -151,9 +151,11 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 
 ## 8. 交接时要交代的三件事
 
-1. **哪些是真实现、哪些是桩** —— 当前唯一已知的桩是工作流验证阶段
-   （返回 `verification_result="not_implemented"`）。
-2. **哪些指标没达标** —— 覆盖率 ~20%、死模块 135、静默吞异常 101、收集 92s。
+1. **哪些是真实现、哪些是桩** —— v0.59.0 起，pipeline 的 ralplan / team-exec /
+   ralph-verify / precontext-intake 四个阶段都接的是真实实现
+   （有替身驱动的阶段回归测试）。仍需注意：`src/workflow/stages/` 与
+   `src/workflow/pipeline_stages/` 是**未被引用的平行实现**，不要误认为它们在生产路径上。
+2. **哪些指标没达标** —— 覆盖率 46.15%（目标 60%）、死模块 135、静默吞异常 101、收集 ~92s。
 3. **下一步最该做什么** —— 见 `计划书/下一步改进指南.md` 顶部的状态表。
 
 ---
