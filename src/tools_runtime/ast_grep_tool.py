@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 class ASTGrepTool(BaseTool):
     """基于 ast-grep 的结构化代码搜索工具"""
 
+
+    risk_kind = 'read'
+
     name = 'ASTGrepTool'
     description = '使用 ast-grep (sg) 进行结构化代码搜索和模式匹配。相比正则搜索，它能更好地理解代码结构。'
 

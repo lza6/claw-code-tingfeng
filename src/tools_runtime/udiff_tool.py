@@ -44,6 +44,9 @@ class UnifiedDiffTool(BaseTool):
     - SEARCH/REPLACE 策略回退
     """
 
+
+    risk_kind = 'write'
+
     name = 'UnifiedDiffTool'
     description = '应用标准 unified diff 格式编辑文件。支持 git diff 输出格式。'
 

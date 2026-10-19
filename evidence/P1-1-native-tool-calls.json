@@ -1,0 +1,28 @@
+{
+  "task_id": "P1-1-native-tool-calls",
+  "status": "passed",
+  "timestamp": "2026-10-19T09:00:00+08:00",
+  "commands_executed": [
+    {"cmd": "pytest tests/agent/test_native_tool_calls.py -q", "exit_code": 0, "raw_output_tail": "6 passed in 23.76s"},
+    {"cmd": "scripts/e2e_smoke.py", "exit_code": 0, "raw_output_tail": "5/5 PASS（文本协议路径）"},
+    {"cmd": "python - <<'PY' (加载 .env，provider.chat(tools=...))", "exit_code": 0, "raw_output_tail": "content='' tool_calls=[{'id':'chatcmpl-tool-...','type':'function','function':{'name':'BashTool','arguments':'{\"command\": \"echo hi\"}'}}]（真实端点）"}
+  ],
+  "files_changed": [
+    "src/llm/config.py",
+    "src/llm/providers/openai.py",
+    "src/agent/engine_loop.py",
+    "src/agent/engine.py",
+    "tests/agent/test_native_tool_calls.py"
+  ],
+  "tests": [
+    {"name": "消息序列化保留 tool_calls/tool_call_id", "type": "unit", "status": "passed"},
+    {"name": "原生 tool_calls 提取", "type": "unit", "status": "passed"},
+    {"name": "开关默认关闭不生成 schema", "type": "regression", "status": "passed"},
+    {"name": "Agent 循环用 role=tool + tool_call_id 回传", "type": "integration", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["LLMResponse", "LLMMessage", "OpenAICompatibleProvider.chat", "AgentLoop 工具解析"],
+  "mock_scenarios_covered": ["missing tool_calls", "malformed arguments", "native disabled"],
+  "browser_validation": "not_run",
+  "limitations": "流式路径仍使用文本协议（原生调用只在非流式路径启用）；真实端点已验证非流式原生 tool_calls 返回，但未跑完整 Agent 多轮原生链路（受最小调用预算限制）。"
+}

@@ -91,6 +91,51 @@ def atomic_write_json(file_path: str | Path, data: Any, indent: int = 2, retries
     content = json.dumps(data, indent=indent, ensure_ascii=False)
     atomic_write(file_path, content, retries=retries)
 
+@contextlib.contextmanager
+def file_lock(file_path: str | Path, timeout: float = 10.0, stale_after: float = 60.0):
+    """跨平台文件锁（基于原子 `mkdir`）。
+
+    不依赖 fcntl/msvcrt：目录创建在本地文件系统上是原子的。
+    进程崩溃可能留下锁目录，超过 ``stale_after`` 秒会被回收。
+
+    Args:
+        file_path: 被保护的**目标文件**路径（锁目录为其同级的 `<name>.lock`）。
+        timeout: 获取锁的最长等待秒数。
+        stale_after: 锁目录超过该秒数视为陈旧并回收；<=0 表示不回收。
+    """
+    lock_dir = Path(str(file_path) + '.lock')
+    deadline = time.monotonic() + timeout
+
+    while True:
+        try:
+            lock_dir.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            try:
+                if stale_after > 0 and time.time() - lock_dir.stat().st_mtime > stale_after:
+                    with contextlib.suppress(OSError):
+                        lock_dir.rmdir()
+                    continue
+            except FileNotFoundError:
+                continue
+
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f'获取文件锁超时: {lock_dir}')
+            time.sleep(0.05)
+
+    try:
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            lock_dir.rmdir()
+
+
+def locked_atomic_write_json(file_path: str | Path, data: Any, indent: int = 2) -> None:
+    """加锁 + 原子写 JSON。用于多执行者共享的状态文件。"""
+    with file_lock(file_path):
+        atomic_write_json(file_path, data, indent=indent)
+
+
 def _rename_with_retry(src: str, dest: str, retries: int = 3, delay_ms: int = 50) -> None:
     """Atomically rename a file with retries for Windows compatibility (EPERM/EACCES).
 

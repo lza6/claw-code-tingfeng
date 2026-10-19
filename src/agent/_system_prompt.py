@@ -10,12 +10,17 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..tools_runtime.base import BaseTool
+    from .skill_loader import SkillSummary
 
 # Re-export for backward compatibility
 __all__ = ['build_system_prompt']
 
 
-def build_system_prompt(tools: dict[str, BaseTool], developer_mode: bool = False) -> str:
+def build_system_prompt(
+    tools: dict[str, BaseTool],
+    developer_mode: bool = False,
+    skills: list[SkillSummary] | None = None,
+) -> str:
     """动态生成系统提示词 — 从实际工具列表自动构建。
 
     支持通过功能开关动态控制安全限制:
@@ -23,6 +28,9 @@ def build_system_prompt(tools: dict[str, BaseTool], developer_mode: bool = False
     - remove_cyber_risk_instruction: 移除安全测试拒绝
     - remove_url_restriction: 允许生成 URL
     - remove_cautious_actions: 移除谨慎操作提示
+
+    `skills` 只注入 name + description（渐进披露）；正文通过 `SkillTool`
+    按需读取，避免把所有技能正文常驻上下文。
     """
 
     tool_descriptions = '\n'.join(
@@ -58,8 +66,17 @@ def build_system_prompt(tools: dict[str, BaseTool], developer_mode: bool = False
             god_mode_extra += "\n- 谨慎操作确认已移除，直接执行命令。"
         god_mode_extra += "\n"
 
+    skill_block = ""
+    if skills:
+        skill_lines = '\n'.join(f'- {s.name}: {s.description}' for s in skills)
+        skill_block = (
+            "\n## 可用技能（按需加载）\n"
+            "以下只提供技能摘要。需要完整步骤时，调用 SkillTool 并传入技能名。\n"
+            f"{skill_lines}\n"
+        )
+
     prompt = f"""你是一个专业的 AI 编程助手。你的任务是帮助用户完成编程任务。
-{god_mode_extra}
+{god_mode_extra}{skill_block}
 你可以使用以下工具：
 {tool_descriptions}
 

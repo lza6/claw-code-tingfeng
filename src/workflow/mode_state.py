@@ -23,6 +23,8 @@ Mode State 管理系统
 from __future__ import annotations
 
 import json
+
+from ..utils.file_ops import locked_atomic_write_json
 import os
 import logging
 from dataclasses import dataclass, field
@@ -198,10 +200,7 @@ def save_skill_state(state_path: Path, state: SkillActiveState) -> bool:
     """保存技能状态到磁盘"""
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(
-            json.dumps(state.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
+        locked_atomic_write_json(state_path, state.to_dict())
         return True
     except Exception as e:
         logger.warning(f"[ModeState] Failed to persist skill state: {e}")
@@ -587,7 +586,7 @@ class ModeStateManager:
 
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(state.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+            locked_atomic_write_json(path, state.to_dict())
         except Exception as e:
             logger.error(f"[ModeState] Failed to write state to {path}: {e}")
 

@@ -23,6 +23,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+
+from ..utils.file_ops import atomic_write, file_lock
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -71,6 +73,18 @@ def _stable_json_pretty(value: Any) -> str:
         sorted_dict = {k: value[k] for k in sorted(value.keys())}
         return json.dumps(sorted_dict, indent=2, ensure_ascii=False)
     return json.dumps(value, indent=2, ensure_ascii=False)
+
+
+def _write_ledger(path: Path, ledger: RalphProgressLedger) -> None:
+    """加锁 + 原子写账本。
+
+    账本会被多个执行者/会话读改写；直接 `open('w')` 在并发下会丢写或
+    留下半截 JSON。统一走 file_lock + atomic_write。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = _stable_json_pretty(ledger.to_dict()) + "\n"
+    with file_lock(path):
+        atomic_write(path, text)
 
 
 # ===== 数据类 =====
@@ -161,9 +175,7 @@ def _ensure_progress_ledger(path: Path) -> RalphProgressLedger:
         created_at=now,
         updated_at=now,
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(_stable_json_pretty(ledger.to_dict()) + "\n")
+    _write_ledger(path, ledger)
     return ledger
 
 
@@ -190,8 +202,7 @@ def add_progress_entry(
     ledger.entries.append(entry)
     ledger.updated_at = datetime.now().isoformat()
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(_stable_json_pretty(ledger.to_dict()) + "\n")
+    _write_ledger(path, ledger)
 
     return ledger
 
@@ -229,8 +240,7 @@ def record_visual_feedback(
     ledger.visual_feedback = ledger.visual_feedback[-30:]
     ledger.updated_at = datetime.now().isoformat()
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(_stable_json_pretty(ledger.to_dict()) + "\n")
+    _write_ledger(path, ledger)
 
     return ledger
 
@@ -276,8 +286,7 @@ def migrate_legacy_progress(
         )
 
         canonical_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(canonical_path, 'w', encoding='utf-8') as f:
-            f.write(_stable_json_pretty(ledger.to_dict()) + "\n")
+        _write_ledger(canonical_path, ledger)
 
         return True
     except Exception:

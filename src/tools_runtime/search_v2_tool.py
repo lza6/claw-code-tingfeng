@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 class SearchV2Tool(BaseTool):
     """Trigram-accelerated full-text search tool."""
 
+
+    risk_kind = 'read'
+
     name = 'SearchV2Tool'
     description = '使用三元组索引进行超快速全量代码搜索（性能优于正则扫描）'
 

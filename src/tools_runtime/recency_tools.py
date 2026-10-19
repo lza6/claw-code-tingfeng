@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 class HotFilesTool(BaseTool):
     """Get the most recently modified files in the codebase."""
 
+
+    risk_kind = 'read'
+
     name = "codedb_hot"
     description = "Get the most recently modified files in the codebase, ordered by recency."
 
@@ -48,6 +51,9 @@ class HotFilesTool(BaseTool):
 
 class DependencyTool(BaseTool):
     """Get reverse dependencies for a file."""
+
+
+    risk_kind = 'read'
 
     name = "codedb_deps"
     description = "Get reverse dependencies: which files import/depend on the given file."

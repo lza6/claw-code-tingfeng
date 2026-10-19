@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.59.0 | **测试**: 见 `scripts/e2e_smoke.py` 与 `pytest tests/` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.60.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -71,7 +71,18 @@ clawd chat
 
 # 运行一键诊断
 python -m src doctor
+
+# 启动 WebSocket 服务端（远程会话；未配置令牌时会生成本次一次性令牌）
+python -m src server --port 8765
 ```
+
+### 可选能力开关
+
+| 环境变量 | 默认 | 作用 |
+|:---|:---|:---|
+| `CLAWD_ENABLE_RAG` | 关闭 | 为工作目录建立惰性文本索引，首轮注入相关上下文；`doctor` 会显示状态 |
+| `CLAWD_NATIVE_TOOLS` | 关闭 | 使用 OpenAI 兼容原生 function calling；关闭时走 `<tool>{json}</tool>` 文本协议 |
+| `CLAWD_SCRAPE_ALLOW_PRIVATE` | 关闭 | 仅本地测试用：放开 ScrapeTool 的私网限制（生产禁止） |
 
 > **关于入口**：`python -m src` 与 `clawd` 是**同一个 Typer CLI**。
 > 历史上还存在一个 argparse 入口 `python -m src.main`，它的命令集更小、
@@ -209,18 +220,19 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 「属性名漂移」类缺陷。v0.51.0 修复的 11 个阻塞问题中，有 5 个只有在把
 真实请求完整打通时才会逐层暴露。
 
-### 质量基线（v0.57.0，实测）
+### 质量基线（v0.60.0，实测）
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3051 passed / 0 failed**（4 skipped, 1 xfailed） | 全量 `pytest tests/ -q` |
+| 测试用例 | **3148 passed / 4 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（1527s） |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
-| 覆盖率 | **46.15%**（25,877 / 56,072 行，全量 `--cov=src` 实测） | 仍低于 `fail_under = 60` |
-| Ruff `F821`（未定义名称） | **0** | 本轮从 40 清零 |
-| Ruff `F811`（重复定义） | **0** | 本轮从 19 清零 |
-| 导入期缺陷 | **0**（638 模块） | `python scripts/import_sweep.py` |
-| 生产可达模块 | 429 | `python scripts/reachability.py` |
-| 死模块 | 135 | 需逐一读源码，不可按名字删 |
+| 覆盖率 | **46.15%**（25,877 / 56,072 行） | 仍低于 `fail_under = 60`，需独立批次提升 |
+| Ruff `F821` / `F811` | **0 / 0** | `ruff check src/ --select F821,F811` |
+| 导入期缺陷 | **0**（642 模块，636 OK） | `python scripts/import_sweep.py` |
+| 生产可达模块 | **442**（基线 431，未下降） | `python scripts/reachability.py` |
+| 死模块 | 200 | 需逐一读源码，不可按名字删 |
+| 真实 E2E | `e2e_smoke` 5/5 · `e2e_production` 8/8 | 真实端点 |
+| 并发压测 | 200 并发 5/5 | `scripts/stress_test.py --n 200` |
 
 > 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南.md`。
 > **注意**：删死代码会让覆盖率*百分比*上升但绝对覆盖行数不变，

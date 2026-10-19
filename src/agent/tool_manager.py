@@ -19,12 +19,17 @@ _WRITE_TOOL_MARKERS: tuple[str, ...] = ('edit', 'write', 'patch')
 _EXEC_TOOL_MARKERS: tuple[str, ...] = ('bash', 'shell', 'command', 'exec')
 
 
-def classify_tool(tool_name: str) -> str:
+def classify_tool(tool_name: str, tool: BaseTool | None = None) -> str:
     """把工具分成 read / write / exec 三类。
 
-    门禁按类别判定，而不是硬编码工具名 —— 这样新增工具只要命名符合约定
-    就会被自动纳入管控，不需要再改门禁代码。
+    优先使用工具**显式声明**的 `risk_kind`；未声明时才回退到名称约定。
+    这样新增工具只要声明了风险类别，就无需再改门禁代码，也不会因为
+    命名不合约定而绕过审批。
     """
+    declared = getattr(tool, 'risk_kind', None)
+    if declared in ('read', 'write', 'exec'):
+        return declared
+
     lower = tool_name.lower()
     if any(m in lower for m in _EXEC_TOOL_MARKERS):
         return 'exec'
@@ -113,7 +118,7 @@ class ToolManager:
         修复的缺陷：此前 approval_mode 只在配置层被读写，
         **没有任何运行时消费者** —— 用户设成 plan 后 Agent 照样写盘。
         """
-        kind = classify_tool(tool_name)
+        kind = classify_tool(tool_name, self.tools.get(tool_name))
         if kind == 'read':
             return
 

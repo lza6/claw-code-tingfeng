@@ -10,6 +10,9 @@ from .path_utils import resolve_path
 class FileEditTool(BaseTool):
     """安全文件编辑工具 - 支持写入和编辑文件"""
 
+
+    risk_kind = 'write'
+
     name = 'FileEditTool'
     description = '写入或编辑文件内容'
 

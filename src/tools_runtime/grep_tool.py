@@ -37,6 +37,9 @@ def get_optimal_workers() -> int:
 class GrepTool(BaseTool):
     """文件内容正则搜索工具（并发优化版）"""
 
+
+    risk_kind = 'read'
+
     name = 'GrepTool'
     description = '在文件内容中搜索正则表达式（支持自适应并发搜索）'
 

@@ -125,6 +125,51 @@ def workflow_run(
         console.print(f"[bold red]意外错误:[/bold red] {e}")
         raise typer.Exit(code=1)
 
+@app.command(name="server")
+def server(
+    host: str | None = typer.Option(None, "--host", help="监听地址（默认取配置）"),
+    port: int | None = typer.Option(None, "--port", "-p", help="监听端口（0=随机端口）"),
+    token: str | None = typer.Option(None, "--token", help="认证令牌；缺省读取 AGENT_SERVER_TOKEN"),
+    developer_mode: bool = typer.Option(False, "--developer-mode", help="开发者模式（放宽工具限制）"),
+):
+    """
+    启动 WebSocket 服务端（远程会话）
+
+    客户端必须携带令牌完成认证；未配置令牌时会为本进程生成一次性令牌并打印。
+    """
+    import asyncio
+    import secrets
+
+    from ..server import create_server
+
+    auth_token = token or os.environ.get('AGENT_SERVER_TOKEN', '')
+    generated = False
+    if not auth_token:
+        auth_token = secrets.token_urlsafe(24)
+        generated = True
+
+    srv = create_server(
+        host=host,
+        port=port,
+        token=auth_token,
+        developer_mode=developer_mode,
+    )
+
+    console.print(Panel(
+        f"启动 WebSocket 服务端\n"
+        f"监听: [bold]{srv.host}:{srv.port}[/bold]\n"
+        f"令牌: [yellow]{auth_token}[/yellow]"
+        + ("\n[yellow]未配置 AGENT_SERVER_TOKEN，已生成本次一次性令牌[/yellow]" if generated else ""),
+        title="Clawd Server",
+        border_style="cyan",
+    ))
+
+    try:
+        asyncio.run(srv.run_forever())
+    except KeyboardInterrupt:
+        console.print("\n[dim]服务端已停止[/dim]")
+
+
 @app.command(name="doctor")
 def doctor():
     """

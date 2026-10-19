@@ -344,6 +344,9 @@ class WatchTool(BaseTool):
         >>> tool.execute(action='stop')
     """
 
+
+    risk_kind = 'read'
+
     name = 'WatchTool'
     description = '监控文件变化，检测 AI 注释，支持 gitignore 规则'
 

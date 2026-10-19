@@ -51,6 +51,21 @@ PIPELINE_MAX_ITERATIONS_KEY = "pipeline_max_ralph_iterations"
 PIPELINE_WORKER_COUNT_KEY = "pipeline_worker_count"
 PIPELINE_AGENT_TYPE_KEY = "pipeline_agent_type"
 PIPELINE_ARTIFACTS_KEY = "pipeline_artifacts"
+PIPELINE_SCHEMA_VERSION_KEY = "schema_version"
+PIPELINE_ATTEMPT_KEY = "attempt"
+PIPELINE_UPDATED_AT_KEY = "updated_at"
+PIPELINE_WORKING_PATH_KEY = "working_path"
+
+#: 状态文件格式版本。升级格式时递增；load 遇到更高版本会拒绝恢复。
+PIPELINE_STATE_SCHEMA_VERSION = 1
+
+
+class StaleStateError(RuntimeError):
+    """状态写入被拒：磁盘上的 attempt 与调用方预期不一致。
+
+    用于防止"旧 worker 覆盖新状态"：调用方拿到的状态若已被别的执行者
+    推进过，必须重新读取而不是盲目覆盖。
+    """
 
 
 # ========== PipelineModeStateExtension（状态扩展）==========
@@ -181,19 +196,28 @@ class PipelineState:
         # 完整阶段名列表。`can_resume` 需要它判断"是否还有未执行的阶段"。
         # 未提供时为空列表：不猜测、不伪造，`can_resume` 按"无法判断=不可恢复"处理。
         self.stage_names = list(stage_names) if stage_names is not None else []
+        #: 乐观并发标记：每次成功 save 递增；调用方可用 expected_attempt 防止覆盖。
+        self.attempt: int = 0
+        #: 最近一次成功 save 的时间（UTC ISO）。
+        self.updated_at: str | None = None
 
-    def save(self, state_file: str | None = None) -> None:
+    def save(self, state_file: str | None = None, expected_attempt: int | None = None) -> None:
         """
         保存 pipeline 状态到磁盘。
 
         Args:
             state_file: 显式输出路径。**提供时优先使用**；未提供时写入
                 `<cwd>/.clawd/pipeline/<pipeline_name>.json`。
+            expected_attempt: 乐观并发检查。提供时，只有当磁盘上的
+                `attempt` 与它相等才允许写入；否则抛 `StaleStateError`。
+                用于防止旧执行者覆盖新状态。
 
         说明：早先此参数被完全忽略（docstring 称"兼容性参数"），
         调用方传入路径后文件并不会出现在那里 —— 这是"接受参数但不生效"
         的典型伪契约，已修正为真正生效。
         """
+        from ..utils.file_ops import atomic_write_json, file_lock
+
         if state_file:
             state_path = Path(state_file)
             state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -202,25 +226,46 @@ class PipelineState:
             state_dir.mkdir(parents=True, exist_ok=True)
             state_path = state_dir / f"{self.pipeline_name}.json"
 
-        payload = {
-            PIPELINE_NAME_KEY: self.pipeline_name,
-            PIPELINE_STAGES_KEY: self.stage_names,
-            PIPELINE_STAGE_INDEX_KEY: self.current_stage_index,
-            PIPELINE_STAGE_RESULTS_KEY: {
-                name: _serialize_result(result)
-                for name, result in self.stage_results.items()
-            },
-            PIPELINE_MAX_ITERATIONS_KEY: 10,
-            PIPELINE_WORKER_COUNT_KEY: 2,
-            PIPELINE_AGENT_TYPE_KEY: "executor",
-            # artifacts 必须持久化：此前 save/load 都不带它，
-            # 导致 `load → 修改 → save` 静默丢失所有阶段产物。
-            PIPELINE_ARTIFACTS_KEY: self.artifacts,
-        }
-        state_path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False, default=str),
-            encoding="utf-8",
-        )
+        with file_lock(state_path):
+            disk_attempt = 0
+            if state_path.exists():
+                try:
+                    existing = json.loads(state_path.read_text(encoding="utf-8"))
+                    disk_attempt = int(existing.get(PIPELINE_ATTEMPT_KEY, 0))
+                except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                    # 损坏的旧文件按 0 处理：允许覆盖，但不静默当成"无状态"。
+                    logger.warning("现有 pipeline 状态无法解析，按 attempt=0 覆盖: %s", state_path)
+                    disk_attempt = 0
+
+            if expected_attempt is not None and disk_attempt != expected_attempt:
+                raise StaleStateError(
+                    f"pipeline 状态已被推进：expected attempt={expected_attempt}, "
+                    f"disk attempt={disk_attempt} ({state_path})"
+                )
+
+            self.attempt = disk_attempt + 1
+            self.updated_at = datetime.now().astimezone().isoformat()
+
+            payload = {
+                PIPELINE_SCHEMA_VERSION_KEY: PIPELINE_STATE_SCHEMA_VERSION,
+                PIPELINE_ATTEMPT_KEY: self.attempt,
+                PIPELINE_UPDATED_AT_KEY: self.updated_at,
+                PIPELINE_WORKING_PATH_KEY: str(Path(self._cwd).resolve()),
+                PIPELINE_NAME_KEY: self.pipeline_name,
+                PIPELINE_STAGES_KEY: self.stage_names,
+                PIPELINE_STAGE_INDEX_KEY: self.current_stage_index,
+                PIPELINE_STAGE_RESULTS_KEY: {
+                    name: _serialize_result(result)
+                    for name, result in self.stage_results.items()
+                },
+                PIPELINE_MAX_ITERATIONS_KEY: 10,
+                PIPELINE_WORKER_COUNT_KEY: 2,
+                PIPELINE_AGENT_TYPE_KEY: "executor",
+                # artifacts 必须持久化：此前 save/load 都不带它，
+                # 导致 `load → 修改 → save` 静默丢失所有阶段产物。
+                PIPELINE_ARTIFACTS_KEY: self.artifacts,
+            }
+            atomic_write_json(state_path, payload)
 
     @classmethod
     def load(cls, state_file: str) -> PipelineState | None:
@@ -255,7 +300,18 @@ class PipelineState:
         # 推断 cwd：向上查找 .clawd 父目录
         cwd = str(p.parent.parent.parent) if p.parent.name == "pipeline" else str(p.parent)
 
-        return cls(
+        try:
+            schema = int(data.get(PIPELINE_SCHEMA_VERSION_KEY, 1))
+        except (TypeError, ValueError):
+            schema = PIPELINE_STATE_SCHEMA_VERSION
+        if schema > PIPELINE_STATE_SCHEMA_VERSION:
+            logger.warning(
+                "Pipeline state schema %s 高于当前支持的 %s，拒绝恢复: %s",
+                schema, PIPELINE_STATE_SCHEMA_VERSION, state_file,
+            )
+            return None
+
+        state = cls(
             pipeline_name=name,
             current_stage_index=data.get(PIPELINE_STAGE_INDEX_KEY, 0),
             stage_results=stage_results,
@@ -266,6 +322,12 @@ class PipelineState:
             # 于是任何 load → save 之后 can_resume 重新恒为 False。
             stage_names=list(data.get(PIPELINE_STAGES_KEY, []) or []),
         )
+        try:
+            state.attempt = int(data.get(PIPELINE_ATTEMPT_KEY, 0))
+        except (TypeError, ValueError):
+            state.attempt = 0
+        state.updated_at = data.get(PIPELINE_UPDATED_AT_KEY)
+        return state
 
     @classmethod
     def can_resume(cls, state_file: str) -> bool:

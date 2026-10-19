@@ -17,6 +17,9 @@ class BundleTool(BaseTool):
     Combines outline, search, read, and other indexed operations to save round-trips.
     """
 
+
+    risk_kind = 'write'
+
     name = "codedb_bundle"
     description = (
         "Execute multiple read-only intelligence queries in a single call. "

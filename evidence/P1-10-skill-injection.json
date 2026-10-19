@@ -1,0 +1,29 @@
+{
+  "task_id": "P1-10-skill-injection",
+  "status": "passed",
+  "timestamp": "2026-10-19T09:00:00+08:00",
+  "commands_executed": [
+    {"cmd": "pytest tests/agent/test_skill_injection.py -q", "exit_code": 0, "raw_output_tail": "6 passed in 21.28s"},
+    {"cmd": "python -c \"discover_skills(Path.cwd()); build_system_prompt(...)\"", "exit_code": 0, "raw_output_tail": "skills: 50; injected: True; SkillTool hint: True; prompt len 7216"}
+  ],
+  "files_changed": [
+    "src/agent/skill_loader.py",
+    "src/tools_runtime/skill_tool.py",
+    "src/agent/_system_prompt.py",
+    "src/agent/engine.py",
+    "src/tools_runtime/__init__.py",
+    "tests/agent/test_skill_injection.py"
+  ],
+  "tests": [
+    {"name": "frontmatter 解析", "type": "unit", "status": "passed"},
+    {"name": "系统提示只注入摘要不注入正文", "type": "regression", "status": "passed"},
+    {"name": "SkillTool 按需读取正文", "type": "unit", "status": "passed"},
+    {"name": "未知技能/路径遍历拒绝", "type": "security", "status": "passed"},
+    {"name": "超长正文截断", "type": "unit", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["AgentEngine 默认工具池", "build_system_prompt"],
+  "mock_scenarios_covered": ["missing description", "path traversal", "long body"],
+  "browser_validation": "not_run",
+  "limitations": "只扫描 <workdir>/skills 与仓库内置 skills，不扫描 ~/.claude/skills；真实 REPL 中选择技能的端到端行为由现有 agent 测试覆盖，未新增浏览器/交互测试。"
+}

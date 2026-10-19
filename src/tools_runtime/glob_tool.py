@@ -10,6 +10,9 @@ from .base import BaseTool, ParameterSchema, ToolResult
 class GlobTool(BaseTool):
     """文件模式匹配搜索工具（带超时和深度保护）"""
 
+
+    risk_kind = 'read'
+
     name = 'GlobTool'
     description = '使用 glob 模式搜索文件（带深度限制）'
 

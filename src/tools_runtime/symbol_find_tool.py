@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 class SymbolFindTool(BaseTool):
     """Global symbol discovery tool."""
 
+
+    risk_kind = 'read'
+
     name = 'SymbolFindTool'
     description = '在全量代码库中查找函数、类或定义的具体位置（O(1) 性能）'
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.59.0"
+version = "0.60.0"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -68,6 +68,12 @@ scrape = [
 clipboard = [
     "pyperclip>=1.8",
 ]
+tracing = [
+    "opentelemetry-api>=1.22.0",
+    "opentelemetry-sdk>=1.22.0",
+    "opentelemetry-exporter-otlp>=1.22.0",
+    "langfuse>=0.50.0",
+]
 all-extras = [
     "clawd-code[voice,watch,scrape,clipboard]",
 ]
@@ -82,6 +88,10 @@ include = ["src*"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "."]
 python_files = ["test_*.py"]
+# 本机/CI 环境里装了不少与本项目无关的 pytest 插件（langsmith/seleniumbase/faker/flask），
+# 它们会在每次 pytest 启动时自动导入，实测拖慢收集（langsmith ~12s 累计）。
+# 本项目测试不依赖这些插件，显式禁用；需要时可在命令行 `-p <name>` 重新启用。
+addopts = "-p no:langsmith_plugin -p no:seleniumbase -p no:faker -p no:flask"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 norecursedirs = ["node_modules", ".git", "__pycache__", "dist", ".venv", "venv"]

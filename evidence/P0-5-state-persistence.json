@@ -1,0 +1,29 @@
+{
+  "task_id": "P0-5-state-persistence",
+  "status": "passed",
+  "timestamp": "2026-10-19T09:00:00+08:00",
+  "commands_executed": [
+    {"cmd": "pytest tests/workflow/test_state_persistence_semantics.py -q", "exit_code": 0, "raw_output_tail": "9 passed in 31.03s"},
+    {"cmd": "pytest tests/workflow tests/agent tests/tools_runtime tests/llm tests/contracts tests/cli -q", "exit_code": 0, "raw_output_tail": "1348 passed, 1 xfailed in 702.78s"}
+  ],
+  "files_changed": [
+    "src/utils/file_ops.py",
+    "src/workflow/pipeline_orchestrator.py",
+    "src/workflow/mode_state.py",
+    "src/workflow/team_persistence.py",
+    "src/workflow/ralph_ledger.py",
+    "tests/workflow/test_state_persistence_semantics.py"
+  ],
+  "tests": [
+    {"name": "schema/attempt/working_path 写入", "type": "unit", "status": "passed"},
+    {"name": "attempt fence 拒绝旧写且不覆盖", "type": "unit", "status": "passed"},
+    {"name": "更高 schema 拒绝恢复", "type": "unit", "status": "passed"},
+    {"name": "并发加锁写不产生半截 JSON", "type": "concurrency", "status": "passed"},
+    {"name": "file_lock 超时", "type": "unit", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["PipelineState.save/load", "ModeState 写入", "TeamState 写入", "RalphProgressLedger 写入"],
+  "mock_scenarios_covered": ["corrupted existing state", "legacy state without schema", "stale attempt"],
+  "browser_validation": "not_run",
+  "limitations": "未做跨进程锁竞争压测（仅线程并发）；Windows 目录锁在 NFS/网络盘上的原子性未验证。"
+}

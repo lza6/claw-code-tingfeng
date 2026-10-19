@@ -1,0 +1,40 @@
+{
+  "task_id": "P1-4-tool-policy",
+  "status": "passed",
+  "timestamp": "2026-10-19T09:00:00+08:00",
+  "commands_executed": [
+    {"cmd": "pytest tests/agent/test_tool_policy.py -q", "exit_code": 0, "raw_output_tail": "10 passed in 28.54s"},
+    {"cmd": "ruff check src/tools_runtime/ src/agent/tool_manager.py --select F821,F811,E9", "exit_code": 0, "raw_output_tail": "All checks passed!"}
+  ],
+  "files_changed": [
+    "src/tools_runtime/base.py",
+    "src/agent/tool_manager.py",
+    "src/tools_runtime/bash_executor.py",
+    "src/tools_runtime/file_edit_tool.py",
+    "src/tools_runtime/file_read_tool.py",
+    "src/tools_runtime/glob_tool.py",
+    "src/tools_runtime/grep_tool.py",
+    "src/tools_runtime/recency_tools.py",
+    "src/tools_runtime/scrape_tool.py",
+    "src/tools_runtime/udiff_tool.py",
+    "src/tools_runtime/search_v2_tool.py",
+    "src/tools_runtime/ast_grep_tool.py",
+    "src/tools_runtime/symbol_find_tool.py",
+    "src/tools_runtime/clipboard_tool.py",
+    "src/tools_runtime/voice_tool.py",
+    "src/tools_runtime/watch_tool.py",
+    "src/tools_runtime/bundle_tool.py",
+    "src/tools_runtime/dependency_tool.py",
+    "tests/agent/test_tool_policy.py"
+  ],
+  "tests": [
+    {"name": "显式 risk_kind 优先于名称", "type": "unit", "status": "passed"},
+    {"name": "未声明时回退名称启发式", "type": "unit", "status": "passed"},
+    {"name": "PLAN 模式拒绝声明为 write 的非常规命名工具", "type": "regression", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["ToolManager._enforce_approval", "BaseTool"],
+  "mock_scenarios_covered": ["unknown declaration", "missing declaration", "plan/yolo/auto-edit modes"],
+  "browser_validation": "not_run",
+  "limitations": "非交互场景下 DEFAULT/AUTO_EDIT 仍按既有语义放行（构造时告警），本轮未改变该行为。"
+}

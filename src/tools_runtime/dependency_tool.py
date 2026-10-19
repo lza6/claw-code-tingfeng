@@ -13,6 +13,9 @@ from .base import BaseTool, ToolResult
 class DependencyTool(BaseTool):
     """Tool to find which files import another file (reverse dependencies)."""
 
+
+    risk_kind = 'read'
+
     name = "dependency_query"
     description = (
         "Find which files in the project import or depend on a given file. "

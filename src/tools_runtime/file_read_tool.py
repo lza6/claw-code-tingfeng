@@ -15,6 +15,9 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 class FileReadTool(BaseTool):
     """安全文件读取工具"""
 
+
+    risk_kind = 'read'
+
     name = 'FileReadTool'
     description = '读取文件内容，支持文本文件和代码文件'
 

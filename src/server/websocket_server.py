@@ -49,8 +49,16 @@ class ClawdWebSocketServer:
         self._event_bus = event_bus or get_event_bus()
 
         # 主机:端口
-        self.host = host or os.environ.get('AGENT_SERVER_HOST') or self._settings.agent_server_host
-        self.port = port or int(os.environ.get('AGENT_SERVER_PORT', '0')) or self._settings.agent_server_port
+        # 注意：0 是合法端口（让操作系统分配随机端口），不能用 `or` 合并，
+        # 否则 `--port 0` 会被当成"未提供"而回退到配置端口。
+        if host is not None:
+            self.host = host
+        else:
+            self.host = os.environ.get('AGENT_SERVER_HOST') or self._settings.agent_server_host
+        if port is not None:
+            self.port = int(port)
+        else:
+            self.port = int(os.environ.get('AGENT_SERVER_PORT', '0')) or self._settings.agent_server_port
 
         # 认证、路由、引擎工厂
         self._auth_manager = AuthManager(token=token)

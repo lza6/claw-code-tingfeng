@@ -21,9 +21,18 @@ class LLMProviderType(Enum):
 
 @dataclass(frozen=True)
 class LLMMessage:
-    """LLM 消息"""
-    role: str  # system | user | assistant
+    """LLM 消息
+
+    `tool_calls` / `tool_call_id` / `name` 用于原生 function calling：
+    - assistant 消息携带 `tool_calls`；
+    - 工具结果以 `role="tool"` + `tool_call_id` 回传。
+    不使用原生调用时这些字段均为 None，行为与旧版一致。
+    """
+    role: str  # system | user | assistant | tool
     content: str
+    tool_calls: list[dict] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +43,9 @@ class LLMResponse:
     thinking: str = ""  # 推理过程（Ported from Project B）
     usage: dict[str, int] = field(default_factory=dict)
     finish_reason: str = 'stop'
+    #: 原生 function calling 的原始 tool_calls（OpenAI 兼容格式）。
+    #: 为空表示模型没有发起工具调用。
+    tool_calls: list[dict] | None = None
 
 
 @dataclass

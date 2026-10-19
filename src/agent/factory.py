@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,47 @@ from ..utils import debug
 
 if TYPE_CHECKING:
     from .engine import AgentEngine
+
+#: 建立 RAG 索引时跳过的目录（与仓库约定一致）
+_RAG_SKIP_DIRS = {
+    '__pycache__', '.git', 'node_modules', 'dist', 'build', 'target',
+    '.venv', 'venv', '.mypy_cache', '.pytest_cache', '.ruff_cache',
+}
+
+#: RAG 索引的文件上限，避免在超大仓库上拖慢启动
+_RAG_MAX_FILES = 2000
+
+
+def _create_rag_index(workdir: Path | None) -> object | None:
+    """按需创建 RAG 索引。
+
+    - 默认**不启用**（不改变既有行为）；
+    - 设置 `CLAWD_ENABLE_RAG=1` 后，为工作目录建立惰性文本索引；
+    - 索引在首次搜索时才真正构建（`LazyIndexer`），不阻塞启动；
+    - 任何失败都降级为“无 RAG”，并留下 debug 痕迹。
+    """
+    if os.environ.get('CLAWD_ENABLE_RAG', '').lower() not in ('1', 'true', 'yes'):
+        return None
+
+    try:
+        from ..rag import LazyIndexer
+
+        index = LazyIndexer(index_content=True)
+        root = workdir or Path.cwd()
+        count = 0
+        for path in root.rglob('*.py'):
+            if count >= _RAG_MAX_FILES:
+                break
+            if any(part in _RAG_SKIP_DIRS for part in path.parts):
+                continue
+            if path.is_file():
+                index.add_file(path)
+                count += 1
+        debug(f'RAG 索引已挂载: {root} ({count} 个 Python 文件)')
+        return index
+    except Exception as e:  # noqa: BLE001 - 索引是可选增强，失败不应阻塞 Agent
+        debug(f'RAG 索引初始化失败，降级为无 RAG: {e}')
+        return None
 
 
 def get_agent_prompt(agent_name: str) -> str | None:
@@ -78,6 +120,7 @@ def create_agent_engine(
                 enable_token_tracking=enable_token_tracking,
                 developer_mode=getattr(_s, 'developer_mode', developer_mode),
                 intent=intent,
+                rag_index=_create_rag_index(workdir),
             )
         except (KeyError, ValueError) as e:
             debug(f'环境变量加载失败: {e}，使用默认配置')
@@ -120,14 +163,8 @@ def create_agent_engine(
         enable_token_tracking=enable_token_tracking,
         developer_mode=developer_mode,
         intent=intent,
+        rag_index=_create_rag_index(workdir),
     )
-
-
-# ===== 导出 =====
-__all__ = [
-    "create_agent_engine",
-    "get_agent_prompt",
-]
 
 
 # ===== 导出 =====

@@ -54,6 +54,8 @@ class AgentLoopConfig:
     _truncator: Any = None
     _parse_tool_calls: Callable[[str], list[tuple[str, dict[str, Any]]]] | None = None
     _execute_tool: Callable[[str, dict[str, Any]], Any] | None = None
+    #: 原生 function calling 的工具 schema。为空时使用文本 `<tool>` 协议。
+    tool_schemas: list[dict[str, Any]] | None = None
     _count_tokens: Callable[[list[LLMMessage]], int] | None = None
     _missing_info_patterns: list[str] | None = None
     _deep_rag_patch: Callable[[list[dict]], Any] | None = None
@@ -213,7 +215,10 @@ async def _run_agent_loop(
                     )
                 else:
                     # 非流式模式
-                    response = await config.llm_provider.chat(messages=config.messages)
+                    tool_kwargs: dict[str, Any] = {}
+                    if config.tool_schemas:
+                        tool_kwargs = {'tools': config.tool_schemas, 'tool_choice': 'auto'}
+                    response = await config.llm_provider.chat(messages=config.messages, **tool_kwargs)
                     _llm_latency = time.monotonic() - _llm_start
                     full_content = response.content
 
@@ -285,13 +290,40 @@ async def _run_agent_loop(
             if config.on_step:
                 config.on_step(llm_step, config.session)
 
-            config.messages.append(LLMMessage(role='assistant', content=full_content))
+            native_calls = list(getattr(response, 'tool_calls', None) or [])
+            if native_calls:
+                config.messages.append(
+                    LLMMessage(role='assistant', content=full_content, tool_calls=native_calls)
+                )
+            else:
+                config.messages.append(LLMMessage(role='assistant', content=full_content))
 
             # --- Tool calls -------------------------------------------------
-            if config._parse_tool_calls:
+            tool_calls: list[tuple[str, dict[str, Any]]] = []
+            # 同一 (name, args) 可能出现多次（模型重复调用）。tool_call_id 必须
+            # 一一对应，因此按签名维护**队列**，结果按顺序消费，不能共用一个 id。
+            native_call_id_by_signature: dict[tuple[str, str], list[str]] = {}
+            if native_calls:
+                # 原生 function calling 优先；参数解析失败时跳过该调用，
+                # 但保留其余调用（不让单个坏参数拖垮整轮）。
+                for call in native_calls:
+                    fn = call.get('function') or {}
+                    name = str(fn.get('name') or '')
+                    raw_args = fn.get('arguments') or '{}'
+                    try:
+                        args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+                    except (ValueError, TypeError) as exc:
+                        warn(f'原生工具调用参数解析失败 ({name or "?"}): {exc}')
+                        continue
+                    if not name or not isinstance(args, dict):
+                        continue
+                    tool_calls.append((name, args))
+                    signature = (name, json.dumps(args, sort_keys=True))
+                    native_call_id_by_signature.setdefault(signature, []).append(
+                        str(call.get('id') or '')
+                    )
+            elif config._parse_tool_calls:
                 tool_calls = config._parse_tool_calls(full_content)
-            else:
-                tool_calls = []
             if tool_calls:
                 info(f'{mode_tag} 检测到 {len(tool_calls)} 个工具调用')
 
@@ -414,7 +446,24 @@ async def _run_agent_loop(
                     if rag_patch:
                         content_parts.append(f'\n\n## 补充参考资料\n\n{rag_patch}\n\n请利用以上资料重新尝试。')
 
-                    config.messages.append(LLMMessage(role='user', content='\n'.join(content_parts)))
+                    result_content = '\n'.join(content_parts)
+                    _signature = (tool_name, json.dumps(tool_args, sort_keys=True))
+                    _pending_ids = native_call_id_by_signature.get(_signature) if native_calls else None
+                    call_id = _pending_ids.pop(0) if _pending_ids else None
+
+                    if call_id:
+                        # 原生 function calling：必须用 role=tool + tool_call_id 回传，
+                        # 否则 OpenAI 兼容端点会以 400 拒绝下一轮请求。
+                        config.messages.append(
+                            LLMMessage(
+                                role='tool',
+                                content=result_content,
+                                tool_call_id=call_id,
+                                name=tool_name,
+                            )
+                        )
+                    else:
+                        config.messages.append(LLMMessage(role='user', content=result_content))
                     step = AgentStep(step_type='execute', action=f'{tool_name}({tool_args})',
                                      result=_res_obj.output, success=_res_obj.success)
                     config.session.steps.append(step)

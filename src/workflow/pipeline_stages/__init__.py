@@ -1,8 +1,11 @@
 """
-Pipeline stages for workflow orchestration.
+Pipeline stages for workflow orchestration（平行实现，非生产默认路径）.
 
 This module provides stage adapters that wrap various runtime components
 into PipelineStage format for the orchestrator.
+
+⚠️ 生产 pipeline 使用 `src/workflow/pipeline.py` 内嵌的阶段工厂。
+本包是历史上的平行实现；新增阶段请加到 `pipeline.py`。
 
 整合 oh-my-codex 的 Pipeline 设计：
 - 状态持久化（PipelineState）

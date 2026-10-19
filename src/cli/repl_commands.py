@@ -180,6 +180,34 @@ def _handle_doctor() -> None:
     except Exception as e:
         _print(f'  {status_warn()} 框架一致性检查过程中出现异常: {e}')
 
+    _print(f'\n  {bold_cyan("能力状态（默认是否启用）")}\n')
+    try:
+        import importlib.util
+
+        def _has(module: str) -> bool:
+            return importlib.util.find_spec(module) is not None
+
+        rag_on = os.environ.get('CLAWD_ENABLE_RAG', '').lower() in ('1', 'true', 'yes')
+        if _has('src.rag.text_indexer'):
+            if rag_on:
+                _print(f'  {status_pass()} RAG 索引: 已启用 (CLAWD_ENABLE_RAG=1)')
+            else:
+                _print(f'  {status_warn()} RAG 索引: 默认关闭 {dim("(设置 CLAWD_ENABLE_RAG=1 启用)")}')
+        else:
+            _print(f'  {status_fail()} RAG 索引: 模块不可导入')
+
+        if _has('src.brain.world_model'):
+            _print(f'  {status_pass()} World Model: 可用 {dim("(Agent 启动时后台初始化)")}')
+        else:
+            _print(f'  {status_warn()} World Model: 模块不可导入')
+
+        if _has('src.server.websocket_server'):
+            _print(f'  {status_pass()} WebSocket 服务端: 模块可用')
+        else:
+            _print(f'  {status_warn()} WebSocket 服务端: 模块不可导入')
+    except Exception as e:
+        _print(f'  {status_warn()} 能力状态检查失败: {e}')
+
     _print()
 
 

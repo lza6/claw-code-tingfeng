@@ -149,6 +149,9 @@ class ClipboardTool(BaseTool):
         >>> tool.execute(action='watch_start')
     """
 
+
+    risk_kind = 'write'
+
     name = 'ClipboardTool'
     description = '操作系统剪贴板，支持读取、写入和监控'
 

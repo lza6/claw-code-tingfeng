@@ -95,6 +95,12 @@ class BaseTool(ABC):
     category: ToolCategory = ToolCategory.UTILITY
     version: str = "1.0.0"
 
+    #: 显式风险类别：`read` / `write` / `exec`。
+    #: None 表示未声明，审批门禁会回退到名称启发式（向后兼容）。
+    #: **新增会产生磁盘或进程副作用的工具必须显式声明**，否则命名不合约定
+    #: 时会绕过审批。
+    risk_kind: str | None = None
+
     # 子类应覆盖此属性定义参数 schema
     parameter_schemas: tuple[ParameterSchema, ...] = ()
 

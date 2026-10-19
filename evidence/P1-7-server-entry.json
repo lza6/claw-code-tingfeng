@@ -1,0 +1,26 @@
+{
+  "task_id": "P1-7-server-entry",
+  "status": "passed",
+  "timestamp": "2026-10-19T10:00:00+08:00",
+  "commands_executed": [
+    {"cmd": "python -m src server --help", "exit_code": 0, "raw_output_tail": "显示 host/port/token/developer-mode 选项"},
+    {"cmd": "create_server(port=0).start() + websockets 客户端鉴权", "exit_code": 0, "raw_output_tail": "started 127.0.0.1 58327; wrong-token -> error; good-token -> response authenticated"},
+    {"cmd": "pytest tests/server -q", "exit_code": 0, "raw_output_tail": "24 passed in 22.59s"}
+  ],
+  "files_changed": [
+    "src/cli/entrypoint.py",
+    "src/server/websocket_server.py",
+    "tests/server/test_server_port_semantics.py"
+  ],
+  "tests": [
+    {"name": "CLI server 命令注册", "type": "cli", "status": "passed"},
+    {"name": "port=0 保留为随机端口", "type": "unit", "status": "passed"},
+    {"name": "错误 token 拒绝 / 正确 token 认证", "type": "integration", "status": "passed"},
+    {"name": "服务端启动与优雅停止", "type": "integration", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["CLI entrypoint", "ClawdWebSocketServer 构造", "AuthManager"],
+  "mock_scenarios_covered": ["wrong token", "missing token", "port 0"],
+  "browser_validation": "not_run",
+  "limitations": "未验证真实客户端消息循环（agent 会话）；仅验证认证握手与启停。生产 TLS/反向代理未配置。"
+}

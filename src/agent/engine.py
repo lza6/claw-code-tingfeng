@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -23,6 +24,7 @@ from ..tools_runtime import (
     GlobTool,
     GrepTool,
     HotFilesTool,
+    SkillTool,
 )
 from ..utils import debug, get_logger, warn
 from ._system_prompt import build_system_prompt
@@ -66,8 +68,6 @@ class AgentEngine:
     def publish_task_error(self, goal: str, error: str, error_code: str | None, tokens: int) -> None:
         """[Proxy] 发布任务错误事件"""
         self.events.publish_task_error(goal, error, error_code, tokens)
-        self.logger = get_logger('agent.engine')
-        self.workdir = self.workdir or Path.cwd()
 
     def __init__(
         self,
@@ -157,8 +157,16 @@ class AgentEngine:
             'GlobTool': GlobTool(base_path=self.workdir),
             'GrepTool': GrepTool(base_path=self.workdir),
             'HotFilesTool': HotFilesTool(tracker=self.recency_tracker),
+            'SkillTool': SkillTool(workdir=self.workdir),
         }
-        self.system_prompt = build_system_prompt(self.tools, developer_mode=self.developer_mode)
+        from .skill_loader import discover_skills
+
+        self.skills = discover_skills(self.workdir)
+        self.system_prompt = build_system_prompt(
+            self.tools,
+            developer_mode=self.developer_mode,
+            skills=self.skills,
+        )
 
         # 原子补丁引擎
         self.patcher = AtomicPatcher(base_path=self.workdir)
@@ -319,6 +327,55 @@ class AgentEngine:
             from ..core.cost_estimator import CostEstimator
             self._cost_estimator = CostEstimator()
 
+    def _build_tool_schemas(self) -> list[dict[str, Any]] | None:
+        """为原生 function calling 生成工具 schema。
+
+        默认关闭；设置 `CLAWD_NATIVE_TOOLS=1` 后启用。关闭时返回 None，
+        Agent 继续使用文本 `<tool>{json}</tool>` 协议（既有行为不变）。
+        """
+        if os.environ.get('CLAWD_NATIVE_TOOLS', '').lower() not in ('1', 'true', 'yes'):
+            return None
+
+        type_map = {
+            'str': 'string',
+            'int': 'integer',
+            'float': 'number',
+            'bool': 'boolean',
+            'dict': 'object',
+            'list': 'array',
+        }
+
+        schemas: list[dict[str, Any]] = []
+        for name, tool in self.tools.items():
+            properties: dict[str, Any] = {}
+            required: list[str] = []
+            for param in getattr(tool, 'parameter_schemas', ()) or ():
+                prop: dict[str, Any] = {
+                    'type': type_map.get(getattr(param, 'param_type', 'str'), 'string')
+                }
+                if getattr(param, 'description', ''):
+                    prop['description'] = param.description
+                if getattr(param, 'allowed_values', None):
+                    prop['enum'] = list(param.allowed_values)
+                properties[param.name] = prop
+                if getattr(param, 'required', False):
+                    required.append(param.name)
+
+            schemas.append({
+                'type': 'function',
+                'function': {
+                    'name': name,
+                    'description': getattr(tool, 'description', ''),
+                    'parameters': {
+                        'type': 'object',
+                        'properties': properties,
+                        'required': required,
+                    },
+                },
+            })
+
+        return schemas or None
+
     def _init_world_model_async(self) -> None:
         """异步初始化 WorldModel"""
         try:
@@ -400,6 +457,7 @@ class AgentEngine:
             _truncator=self._truncator,
             _parse_tool_calls=self.tool_manager.parse_tool_calls,
             _execute_tool=self.tool_manager.execute_tool,
+            tool_schemas=self._build_tool_schemas(),
             _count_tokens=self._truncator.count_tokens,
             _missing_info_patterns=self._missing_info_patterns,
             _deep_rag_patch=self._deep_rag_patch,

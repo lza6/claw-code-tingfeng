@@ -9,7 +9,56 @@
 
 ## [未发布]
 
-### v0.59.0 (2026-10-19) — 审查阻塞项：pipeline 阶段去占位、验证目录修正
+### v0.60.0 (2026-10-19) — 参考对标落地：CI 门禁、持久化语义、工具策略、Skill 接线、原生工具调用
+
+本轮基于 `参考的结果计划指南.md` 的 Phase A 审计，按 P0/P1 批次落地。
+
+#### P0
+
+- **CI 门禁修复**：移除无效的 `--fail-on-incremental`；lint 分为
+  “硬错误阻塞（F821/F811/E9）+ 全量非阻塞报告”；覆盖率阈值按实测基线
+  分阶段设为 45%（目标 60% 保留在 `pyproject.toml`）。
+- **tracing 移植残留**：`src/core/tracing/setup.py` 不再绝对导入 `onyx.*`；
+  Braintrust processor 未移植时明确告警并跳过；Langfuse 改用项目内
+  `TraceProvider.register_processor`。`pyproject.toml` 新增 `tracing` 可选依赖。
+- **能力可见性**：`clawd doctor` 新增 RAG / World Model / WebSocket 服务端
+  的启用状态；RAG 默认关闭并提示 `CLAWD_ENABLE_RAG=1`。
+- **Agent 错误路径**：修复 `publish_task_error()` 方法体内混入 `__init__`
+  尾部赋值的问题。
+
+#### P0-5 状态持久化语义
+
+- 新增 `file_lock` / `locked_atomic_write_json`（跨平台目录锁 + 原子写）。
+- `PipelineState` 写入增加 `schema_version` / `attempt` / `updated_at` /
+  `working_path`；`save(expected_attempt=...)` 提供乐观并发检查，
+  不匹配抛 `StaleStateError`；更高 schema 版本拒绝恢复。
+- `mode_state` / `team_persistence` / `ralph_ledger` 的 JSON 写入统一为
+  加锁原子写，避免并发丢写与半截文件。
+
+#### P1
+
+- **工具风险策略**：`BaseTool.risk_kind` 显式声明 read/write/exec；
+  `classify_tool()` 优先使用声明，名称启发式仅作兜底。
+  默认工具（Bash/FileEdit/FileRead/Glob/Grep/HotFiles/Scrape/UDiff/Clipboard 等）已声明。
+- **Scrape SSRF 加固**：仅 http/https；默认拒绝 localhost/元数据域名/
+  私网/回环/链路本地/保留地址；DNS 解析结果同样校验；重定向后二次校验；
+  `CLAWD_SCRAPE_ALLOW_PRIVATE=1` 仅供本地测试。
+- **Skill 渐进披露**：新增 `skill_loader` 与 `SkillTool`；系统提示注入
+  name + description 清单，正文按需读取；默认工具池新增 `SkillTool`。
+- **WebSocket 入口**：新增 `clawd server` 命令（host/port/token/developer-mode），
+  未配置 `AGENT_SERVER_TOKEN` 时生成本次一次性令牌。
+- **原生工具调用（可选）**：`LLMResponse` 支持 `tool_calls`；
+  OpenAI 兼容 provider 解析原生调用；Agent 循环优先原生、回退文本；
+  设置 `CLAWD_NATIVE_TOOLS=1` 启用，默认关闭。
+- **测试收集**：`pyproject.toml` 禁用与本项目无关的 pytest 插件
+  （langsmith/seleniumbase/faker/flask）。
+
+#### 验证
+
+见 `test_ledger.md` 与本轮 `evidence/`。未达成的指标（覆盖率 60%、
+收集 <120s、死模块 ≤20）在 `workflow_status.md` 中如实披露。
+
+---### v0.59.0 (2026-10-19) — 审查阻塞项：pipeline 阶段去占位、验证目录修正
 
 独立审查（review-d）判定 REQUEST_CHANGES，两条阻塞项经复现后修复；
 处理过程中又发现两个"从未能工作"的占位阶段。

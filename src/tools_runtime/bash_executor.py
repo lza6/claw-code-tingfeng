@@ -30,6 +30,9 @@ class BashTool(BaseTool):
     - isolation: 可选沙箱隔离 (local/docker)
     """
 
+
+    risk_kind = 'exec'
+
     name = 'BashTool'
     # 描述里如实声明不支持管道/重定向/命令串联 —— 实现走 shlex.split +
     # 参数列表执行（无 shell），因此这些 shell 特性天然不可用。

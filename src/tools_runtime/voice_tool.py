@@ -54,6 +54,9 @@ class VoiceTool(BaseTool):
         >>> result = tool.execute(action='transcribe', audio_file='audio.wav')
     """
 
+
+    risk_kind = 'read'
+
     name = 'VoiceTool'
     description = '录制语音并转换为文字，支持多种音频格式'
 

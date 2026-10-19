@@ -44,14 +44,15 @@ python -m ruff check src/ --select F821,F811   # 静态缺陷数
 
 | 步骤 | 位置 | 要点 |
 |:---|:---|:---|
-| 1 | `src/tools_runtime/<name>_tool.py` | 继承 `BaseTool`，声明 `name` / `description` / `parameter_schemas` |
+| 1 | `src/tools_runtime/<name>_tool.py` | 继承 `BaseTool`，声明 `name` / `description` / `parameter_schemas` / **`risk_kind`** |
 | 2 | `src/tools_runtime/__init__.py` | 导出并注册 |
 | 3 | `src/agent/tool_manager.py` | 确认它被 `classify_tool()` 归入 read/write/exec |
 | 4 | 审批语义 | write/exec 必须走 `_enforce_approval`（唯一咽喉点） |
 | 5 | 验证 | `pytest tests/tools_runtime tests/agent -q` |
 
-**红线**：新增工具若能在磁盘/网络产生副作用，必须落入 `write` 或 `exec` 分类，
-否则审批门禁形同虚设。
+**红线**：新增工具若能在磁盘/网络产生副作用，必须显式声明
+`risk_kind = 'write'` 或 `'exec'`。未声明时门禁会回退到名称启发式，
+命名不合约定就会绕过审批。`ScrapeTool` 这类网络访问工具按 `exec` 处理。
 
 ---
 
@@ -146,6 +147,25 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 | 测试单独跑绿、合并跑红 | 进程级全局泄漏（`set_allowed_workdirs`、`set_config`） |
 | 断点续跑行为异常 | `PipelineState` / `_deserialize_result` 的枚举还原 |
 | 长任务扫描变慢 | 是否在缓存命中路径上付了线程池调度开销 |
+
+---
+
+## 7.5 能力开关与状态持久化（v0.60.0）
+
+| 能力 | 开关 | 默认 | 说明 |
+|:---|:---|:---|:---|
+| RAG 首轮上下文 | `CLAWD_ENABLE_RAG=1` | 关 | `create_agent_engine()` 为工作目录建立 `LazyIndexer`；`doctor` 显示状态 |
+| 原生 function calling | `CLAWD_NATIVE_TOOLS=1` | 关 | provider 解析 `tool_calls`；Agent 循环用 `role=tool` + `tool_call_id` 回传结果 |
+| Scrape 私网访问 | `CLAWD_SCRAPE_ALLOW_PRIVATE=1` | 关 | **仅本地测试**；生产保持关闭 |
+
+状态写入统一走 `src/utils/file_ops.py` 的 `atomic_write` / `file_lock` /
+`locked_atomic_write_json`：
+
+- `PipelineState.save(expected_attempt=N)` 做乐观并发检查，不匹配抛 `StaleStateError`；
+- 状态文件包含 `schema_version`，更高版本会被拒绝恢复（不猜测未来格式）；
+- `mode_state` / `team_persistence` / `ralph_ledger` 均为加锁原子写。
+
+新增状态文件时**不要**直接 `open(path, 'w')`；复用上述原语。
 
 ---
 

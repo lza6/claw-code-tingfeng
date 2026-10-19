@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..utils.file_ops import locked_atomic_write_json
+
 # 常量
 TEAM_STATE_FILE = "team-state.json"
 TEAM_MEMBERS_FILE = "team-members.json"
@@ -116,8 +118,7 @@ def _ensure_team_state(path: Path) -> TeamStateData:
         started_at=now,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(state.to_dict(), f, indent=2, ensure_ascii=False)
+    locked_atomic_write_json(path, state.to_dict())
     return state
 
 
@@ -135,8 +136,7 @@ def write_team_state(
     """写入团队状态"""
     path = _get_team_state_path(cwd, session_id)
     try:
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(state.to_dict(), f, indent=2, ensure_ascii=False)
+        locked_atomic_write_json(path, state.to_dict())
         return True
     except Exception:
         return False

@@ -3,7 +3,51 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.57.0**
+> 当前版本：**v0.60.0**
+
+---
+
+## 0-0. 本轮（v0.59.0 → v0.60.0）：参考对标落地
+
+依据 `参考的结果计划指南.md` 的 Phase A 审计，按 P0/P1 批次实施。
+**验证结果见 `test_ledger.md`，逐项证据见 `evidence/`。**
+
+| ID | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| E-01 | CI 门禁修复（非法参数、lint 分层、覆盖率阈值 45） | ✅ | evidence/B1-ci-gates.json；CI YAML 可解析 |
+| E-02 | tracing 移除 `onyx.*` 绝对导入；Braintrust 明确跳过 | ✅ | 导入测试 + `ruff F821/F811` |
+| E-03 | doctor 显示 RAG/World Model/Server 能力状态 | ✅ | `python -m src doctor` 实跑 |
+| E-04 | RAG 开关接线（`CLAWD_ENABLE_RAG=1`） | ✅ | `_create_rag_index` 开/关实测；检索返回 2247 字符 |
+| E-05 | 状态持久化：原子写 + 文件锁 + schema/attempt/expected_attempt | ✅ | evidence/P0-5（9 条回归） |
+| E-06 | 工具显式风险声明（risk_kind） | ✅ | evidence/P1-4（10 条回归） |
+| E-07 | Scrape SSRF 加固（私网/元数据/DNS/重定向） | ✅ | evidence/P1-9（22 条回归） |
+| E-08 | Skill 渐进披露 + SkillTool | ✅ | evidence/P1-10（6 条回归） |
+| E-09 | 原生工具调用（默认关，真实端点已验证） | ✅ | evidence/P1-1；真实端点返回 BashTool tool_calls |
+| E-10 | `clawd server` 命令 + token 鉴权 + port=0 语义 | ✅ | evidence/P1-7（24 条 server 测试） |
+| E-11 | 平行阶段实现标注（不删除） | ✅ | `stages/`、`pipeline_stages/` docstring |
+| E-12 | 全量回归 | ✅ | **3148 passed, 4 skipped, 1 xfailed, 0 failed**（1527s） |
+| E-13 | 真实 E2E | ✅ | `e2e_smoke.py` 5/5；`e2e_production.py` 8/8 |
+| E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~12 req/s） |
+| E-15 | 版本一致性 v0.60.0 | ✅ | `python -m src --version` + metadata |
+| E-16 | 覆盖率 60% | ❌ 未达成 | 基线 46.15%；本轮未降低，需独立批次 |
+| E-17 | 收集 <120s | ❌ 未达成 | 已禁用无关插件；全量收集仍需数分钟 |
+| E-18 | 死模块 ≤20 | ❌ 未达成 | 200 不可达；需人工逐条复核 |
+| E-19 | GitHub Release | ⛔ 阻塞 | 本机无 `gh` CLI |
+| E-20 | Docker 构建/部署/热更新 | ⛔ 阻塞 | 本机无 Docker、无部署目标与凭证 |
+
+### 本轮验证命令与真实结果
+
+```text
+pytest tests/ -q                                  → 3148 passed, 4 skipped, 1 xfailed, 0 failed (1527.26s)
+pytest tests/{workflow,agent,tools_runtime,llm,contracts,cli} -q → 1348 passed, 1 xfailed (702.78s)
+ruff check src/ --select F821,F811                → All checks passed!
+python scripts/import_sweep.py                    → 642 模块 / IMPORT-OK 636 / FAIL 0 / DEP-MISSING 6
+python scripts/reachability.py                    → 442 生产可达（基线 431，未下降）
+python scripts/e2e_smoke.py                       → 5/5 PASS
+python scripts/e2e_production.py                  → 8/8 PASS
+python scripts/stress_test.py --n 200             → 5/5 PASS
+python -m src --version                           → v0.60.0
+```
 
 ---
 

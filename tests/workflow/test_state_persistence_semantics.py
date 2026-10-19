@@ -1,0 +1,144 @@
+"""状态持久化语义回归测试（P0-5）。
+
+覆盖：
+- 原子写 + schema_version / attempt / working_path
+- attempt fence：旧执行者不得覆盖新状态
+- 更高 schema 拒绝恢复
+- 加锁并发写不产生半截 JSON
+"""
+from __future__ import annotations
+
+import json
+import threading
+
+import pytest
+
+from src.utils.file_ops import file_lock, locked_atomic_write_json
+from src.workflow.pipeline_orchestrator import (
+    PIPELINE_ARTIFACTS_KEY,
+    PIPELINE_ATTEMPT_KEY,
+    PIPELINE_SCHEMA_VERSION_KEY,
+    PIPELINE_STAGES_KEY,
+    PIPELINE_UPDATED_AT_KEY,
+    PIPELINE_WORKING_PATH_KEY,
+    PipelineState,
+    StaleStateError,
+)
+from src.workflow.types import StageResult, StageStatus
+
+
+def test_save_writes_schema_attempt_and_working_path(tmp_path):
+    path = tmp_path / "state.json"
+    state = PipelineState("demo", stage_names=["identify", "plan"])
+    state.save(str(path))
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data[PIPELINE_SCHEMA_VERSION_KEY] == 1
+    assert data[PIPELINE_ATTEMPT_KEY] == 1
+    assert data[PIPELINE_STAGES_KEY] == ["identify", "plan"]
+    assert data[PIPELINE_WORKING_PATH_KEY]
+    assert data[PIPELINE_UPDATED_AT_KEY]
+
+
+def test_attempt_increments_on_each_save(tmp_path):
+    path = tmp_path / "state.json"
+    state = PipelineState("demo")
+    state.save(str(path))
+    state.save(str(path))
+
+    assert json.loads(path.read_text(encoding="utf-8"))[PIPELINE_ATTEMPT_KEY] == 2
+    assert state.attempt == 2
+
+
+def test_stale_attempt_is_rejected_and_does_not_overwrite(tmp_path):
+    path = tmp_path / "state.json"
+    state = PipelineState("demo")
+    state.save(str(path))  # disk attempt = 1
+    before = path.read_text(encoding="utf-8")
+
+    with pytest.raises(StaleStateError):
+        state.save(str(path), expected_attempt=0)
+
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_matching_attempt_is_allowed(tmp_path):
+    path = tmp_path / "state.json"
+    state = PipelineState("demo")
+    state.save(str(path))  # attempt 1
+
+    state.save(str(path), expected_attempt=1)
+    assert json.loads(path.read_text(encoding="utf-8"))[PIPELINE_ATTEMPT_KEY] == 2
+
+
+def test_newer_schema_is_refused(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({"pipeline_name": "future", "schema_version": 999}),
+        encoding="utf-8",
+    )
+    assert PipelineState.load(str(path)) is None
+
+
+def test_roundtrip_preserves_results_and_artifacts(tmp_path):
+    path = tmp_path / "state.json"
+    state = PipelineState("demo", stage_names=["a", "b"])
+    state.stage_results["a"] = StageResult(
+        status=StageStatus.SUCCESS,
+        artifacts={"note": "ok"},
+        duration_ms=12,
+    )
+    state.artifacts = {"shared": {"x": 1}}
+    state.save(str(path))
+
+    loaded = PipelineState.load(str(path))
+    assert loaded is not None
+    assert loaded.stage_names == ["a", "b"]
+    assert loaded.stage_results["a"].status is StageStatus.SUCCESS
+    assert loaded.artifacts == {"shared": {"x": 1}}
+    assert loaded.attempt == 1
+    assert loaded.updated_at
+
+
+def test_legacy_state_without_schema_is_still_loadable(tmp_path):
+    path = tmp_path / "legacy.json"
+    path.write_text(
+        json.dumps({"pipeline_name": "legacy", "pipeline_stages": ["a"]}),
+        encoding="utf-8",
+    )
+    loaded = PipelineState.load(str(path))
+    assert loaded is not None
+    assert loaded.pipeline_name == "legacy"
+    assert loaded.stage_names == ["a"]
+    assert loaded.attempt == 0
+
+
+def test_locked_atomic_write_is_valid_json_under_concurrency(tmp_path):
+    path = tmp_path / "shared.json"
+    errors: list[BaseException] = []
+
+    def worker(value: int) -> None:
+        try:
+            for _ in range(20):
+                locked_atomic_write_json(path, {"value": value, "pad": "x" * 200})
+        except BaseException as exc:  # noqa: BLE001 - 测试记录任何失败
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["value"] in {0, 1, 2, 3}
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_file_lock_times_out_when_held(tmp_path):
+    target = tmp_path / "locked.json"
+    with file_lock(target, timeout=1, stale_after=0):
+        with pytest.raises(TimeoutError):
+            with file_lock(target, timeout=0.2, stale_after=0):
+                pass

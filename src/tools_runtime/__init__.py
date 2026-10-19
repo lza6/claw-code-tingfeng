@@ -53,6 +53,7 @@ from .path_utils import BINARY_EXTENSIONS, TEXT_EXTENSIONS, resolve_path
 from .recency_tools import HotFilesTool
 from .registry import ToolRegistry
 from .scrape_tool import Scraper, ScrapeTool, detect_urls
+from .skill_tool import SkillTool
 from .search_replace import (
     RelativeIndenter,
     SearchResult,
@@ -105,6 +106,7 @@ __all__ = [
     # Scrape
     'ScrapeTool',
     'Scraper',
+    'SkillTool',
     'SearchResult',
     # UnifiedDiff (from aider)
     'SearchTextNotUnique',

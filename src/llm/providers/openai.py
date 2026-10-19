@@ -22,6 +22,44 @@ from .base import (
 logger = logging.getLogger('llm')
 
 
+def _serialize_messages(messages: list[LLMMessage]) -> list[dict[str, Any]]:
+    """把 LLMMessage 转换为 OpenAI 兼容的消息字典。
+
+    仅在有原生工具字段时才附加额外键，保证旧调用方行为不变。
+    """
+    serialized: list[dict[str, Any]] = []
+    for m in messages:
+        item: dict[str, Any] = {'role': m.role, 'content': m.content}
+        if getattr(m, 'tool_calls', None):
+            item['tool_calls'] = m.tool_calls
+        if getattr(m, 'tool_call_id', None):
+            item['tool_call_id'] = m.tool_call_id
+        if getattr(m, 'name', None):
+            item['name'] = m.name
+        serialized.append(item)
+    return serialized
+
+
+def _extract_native_tool_calls(message: Any) -> list[dict[str, Any]] | None:
+    """从 OpenAI 响应消息中提取 tool_calls（保持 OpenAI 原始结构）。"""
+    raw_calls = getattr(message, 'tool_calls', None)
+    if not raw_calls:
+        return None
+
+    out: list[dict[str, Any]] = []
+    for tc in raw_calls:
+        fn = getattr(tc, 'function', None)
+        out.append({
+            'id': getattr(tc, 'id', '') or '',
+            'type': getattr(tc, 'type', 'function') or 'function',
+            'function': {
+                'name': getattr(fn, 'name', '') if fn is not None else '',
+                'arguments': getattr(fn, 'arguments', '') if fn is not None else '',
+            },
+        })
+    return out or None
+
+
 class OpenAICompatibleProvider(BaseLLMProvider):
     """OpenAI 兼容 API 提供商基类
 
@@ -111,7 +149,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
                 response = await client.chat.completions.create(
                     model=self.config.model or self.DEFAULT_MODEL,
-                    messages=[{'role': m.role, 'content': m.content} for m in messages],
+                    messages=_serialize_messages(messages),
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature,
                     **kwargs,
@@ -145,6 +183,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                         'total_tokens': response.usage.total_tokens if response.usage else 0,
                     },
                     finish_reason=choice.finish_reason or 'stop',
+                    tool_calls=_extract_native_tool_calls(choice.message),
                 )
             except Exception as e:
                 last_error = e
@@ -183,7 +222,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             client = self._get_client()
             stream = await client.chat.completions.create(
                 model=self.config.model or self.DEFAULT_MODEL,
-                messages=[{'role': m.role, 'content': m.content} for m in messages],
+                messages=_serialize_messages(messages),
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 stream=True,
