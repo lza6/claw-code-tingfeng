@@ -161,9 +161,15 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 状态写入统一走 `src/utils/file_ops.py` 的 `atomic_write` / `file_lock` /
 `locked_atomic_write_json`：
 
+- `file_lock` 是**可重入**的（同线程嵌套不会自锁），锁目录内写 `pid-随机 owner`，
+  释放时只删除自己持有的锁；陈旧锁通过原子 rename 回收。
+- 读改写（read → modify → write）必须把**整段**放进 `file_lock`，只给写加锁
+  仍会丢更新。
 - `PipelineState.save(expected_attempt=N)` 做乐观并发检查，不匹配抛 `StaleStateError`；
-- 状态文件包含 `schema_version`，更高版本会被拒绝恢复（不猜测未来格式）；
-- `mode_state` / `team_persistence` / `ralph_ledger` 均为加锁原子写。
+  该类主要用于兼容/测试，生产路径是 `ModeStateManager`。
+- 状态文件包含 `schema_version`，更高版本会被拒绝恢复（不猜测未来格式）。
+- `mode_state.update_state` / `ralph_ledger.add_progress_entry` 已覆盖读改写；
+  `record_visual_feedback` 目前只保证原子写，未覆盖读改写（已知限制）。
 
 新增状态文件时**不要**直接 `open(path, 'w')`；复用上述原语。
 

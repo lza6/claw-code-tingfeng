@@ -110,6 +110,46 @@ class _FakeProvider:
 
 
 @pytest.mark.asyncio
+async def test_malformed_arguments_get_tool_error_message():
+    """参数解析失败也必须回一条 tool 消息，不能留下悬空 tool_call_id。"""
+    provider = _FakeProvider()
+    provider.responses = [
+        LLMResponse(
+            content='',
+            model='fake',
+            finish_reason='tool_calls',
+            tool_calls=[{
+                'id': 'call_bad',
+                'type': 'function',
+                'function': {'name': 'BashTool', 'arguments': 'not-json'},
+            }],
+        ),
+        LLMResponse(content='done', model='fake', finish_reason='stop'),
+    ]
+
+    async def execute_tool(name: str, args: dict):
+        raise AssertionError('参数无效的调用不应被执行')
+
+    config = AgentLoopConfig(
+        goal='test',
+        llm_provider=provider,
+        messages=[],
+        max_iterations=2,
+        system_prompt='system',
+        tools={},
+        _execute_tool=execute_tool,
+        tool_schemas=[{'type': 'function', 'function': {'name': 'BashTool'}}],
+    )
+
+    await _run_agent_loop(config=config)
+
+    tool_msgs = [m for m in config.messages if m.role == 'tool']
+    assert len(tool_msgs) == 1
+    assert tool_msgs[0].tool_call_id == 'call_bad'
+    assert '参数无效' in tool_msgs[0].content
+
+
+@pytest.mark.asyncio
 async def test_duplicate_signatures_get_distinct_tool_call_ids():
     """同一 (name, args) 出现两次时，两条 tool 消息必须使用不同的 id。"""
     provider = _FakeProvider()

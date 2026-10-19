@@ -29,22 +29,16 @@ def setup_tracing() -> list[str]:
     langfuse_public = os.environ.get("LANGFUSE_PUBLIC_KEY")
     langfuse_secret = os.environ.get("LANGFUSE_SECRET_KEY")
     if langfuse_secret and langfuse_public:
-        try:
-            _setup_langfuse(langfuse_public, langfuse_secret)
+        if _setup_langfuse(langfuse_public, langfuse_secret):
             initialized_providers.append("langfuse")
-        except Exception as e:
-            logger.error(f"Failed to initialize Langfuse tracing: {e}")
     else:
         logger.info("Langfuse credentials not provided, skipping Langfuse setup")
 
     # Setup Braintrust if configured
     braintrust_key = os.environ.get("BRAINTRUST_API_KEY")
     if braintrust_key:
-        try:
-            _setup_braintrust(braintrust_key)
+        if _setup_braintrust(braintrust_key):
             initialized_providers.append("braintrust")
-        except Exception as e:
-            logger.error(f"Failed to initialize Braintrust tracing: {e}")
     else:
         logger.info("Braintrust API key not provided, skipping Braintrust setup")
 
@@ -58,7 +52,7 @@ def setup_tracing() -> list[str]:
     return initialized_providers
 
 
-def _setup_braintrust(api_key: str) -> None:
+def _setup_braintrust(api_key: str) -> bool:
     """Initialize Braintrust tracing.
 
     NOTE: 本项目只移植了 tracing framework 与 Langfuse processor，
@@ -70,22 +64,23 @@ def _setup_braintrust(api_key: str) -> None:
         import braintrust  # noqa: F401
     except ImportError:
         logger.warning("braintrust not installed, skipping Braintrust setup")
-        return
+        return False
 
     logger.warning(
         "Braintrust processor is not ported in this repository; "
         "BRAINTRUST_API_KEY is set but tracing will stay disabled. "
         "Use Langfuse (LANGFUSE_*) or OpenTelemetry instead."
     )
+    return False
 
 
-def _setup_langfuse(public_key: str, secret_key: str) -> None:
+def _setup_langfuse(public_key: str, secret_key: str) -> bool:
     """Initialize Langfuse tracing using the native Langfuse SDK."""
     try:
         from langfuse import Langfuse
     except ImportError:
         logger.warning("langfuse not installed, skipping Langfuse setup")
-        return
+        return False
 
     from .framework import get_trace_provider
     from .langfuse_tracing_processor import LangfuseTracingProcessor
@@ -103,3 +98,4 @@ def _setup_langfuse(public_key: str, secret_key: str) -> None:
     )
 
     get_trace_provider().register_processor(LangfuseTracingProcessor(client=client))
+    return True

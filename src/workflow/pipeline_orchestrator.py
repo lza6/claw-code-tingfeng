@@ -21,7 +21,7 @@ import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -177,6 +177,12 @@ class PipelineState:
         from .mode_state import ModeStateManager
         manager = ModeStateManager(cwd=".")
         manager.update_metadata({"pipeline_name": "my-pipeline"})
+
+    并发语义:
+        `save(expected_attempt=N)` 提供乐观并发检查：磁盘上的 attempt 与 N
+        不一致时抛 `StaleStateError`，用于防止旧执行者覆盖新状态。注意
+        `expected_attempt` 是**显式可选**参数；本类目前主要用于兼容与测试，
+        生产路径使用 `ModeStateManager`。
     """
 
     def __init__(
@@ -196,6 +202,8 @@ class PipelineState:
         # 完整阶段名列表。`can_resume` 需要它判断"是否还有未执行的阶段"。
         # 未提供时为空列表：不猜测、不伪造，`can_resume` 按"无法判断=不可恢复"处理。
         self.stage_names = list(stage_names) if stage_names is not None else []
+        #: 工作目录（resume 时用于定位）。旧文件可能没有该字段。
+        self.working_path: str | None = None
         #: 乐观并发标记：每次成功 save 递增；调用方可用 expected_attempt 防止覆盖。
         self.attempt: int = 0
         #: 最近一次成功 save 的时间（UTC ISO）。
@@ -244,13 +252,14 @@ class PipelineState:
                 )
 
             self.attempt = disk_attempt + 1
-            self.updated_at = datetime.now().astimezone().isoformat()
+            self.updated_at = datetime.now(timezone.utc).isoformat()
+            self.working_path = str(Path(self._cwd).resolve())
 
             payload = {
                 PIPELINE_SCHEMA_VERSION_KEY: PIPELINE_STATE_SCHEMA_VERSION,
                 PIPELINE_ATTEMPT_KEY: self.attempt,
                 PIPELINE_UPDATED_AT_KEY: self.updated_at,
-                PIPELINE_WORKING_PATH_KEY: str(Path(self._cwd).resolve()),
+                PIPELINE_WORKING_PATH_KEY: self.working_path,
                 PIPELINE_NAME_KEY: self.pipeline_name,
                 PIPELINE_STAGES_KEY: self.stage_names,
                 PIPELINE_STAGE_INDEX_KEY: self.current_stage_index,
@@ -265,6 +274,9 @@ class PipelineState:
                 # 导致 `load → 修改 → save` 静默丢失所有阶段产物。
                 PIPELINE_ARTIFACTS_KEY: self.artifacts,
             }
+            # artifacts 可能含 Path / dataclass；旧实现用 json.dumps(default=str)
+            # 兜底。atomic_write_json 不带 default，这里显式归一化，保持兼容。
+            payload = json.loads(json.dumps(payload, default=str))
             atomic_write_json(state_path, payload)
 
     @classmethod
@@ -327,6 +339,7 @@ class PipelineState:
         except (TypeError, ValueError):
             state.attempt = 0
         state.updated_at = data.get(PIPELINE_UPDATED_AT_KEY)
+        state.working_path = data.get(PIPELINE_WORKING_PATH_KEY)
         return state
 
     @classmethod

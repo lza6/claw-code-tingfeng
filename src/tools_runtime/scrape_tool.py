@@ -46,7 +46,7 @@ def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
     )
 
 
-def is_safe_url(url: str) -> tuple[bool, str]:
+def is_safe_url(url: str, check_dns: bool = True) -> tuple[bool, str]:
     """SSRF 防护：只允许访问公网 http/https URL。
 
     规则（参考 agent-browser 的安全模型）：
@@ -86,6 +86,11 @@ def is_safe_url(url: str) -> tuple[bool, str]:
     if literal is not None:
         if not allow_private and _is_blocked_ip(literal):
             return False, f'禁止访问内网/保留地址: {host}'
+        return True, ''
+
+    if not check_dns:
+        # 快速路径：只做协议/主机名/IP 字面量检查，供 validate 使用，
+        # 避免在事件循环中同步 DNS 解析阻塞流式输出与心跳。
         return True, ''
 
     try:
@@ -154,19 +159,29 @@ class Scraper:
         return None
 
     def _scrape_with_playwright(self, url: str) -> str | None:
-        """使用 Playwright 抓取"""
+        """使用 Playwright 抓取（在请求发出前拦截不安全重定向/子资源）"""
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
                 page = browser.new_page()
+
+                def _guard(route):
+                    try:
+                        safe, reason = is_safe_url(route.request.url)
+                        if not safe:
+                            logger.warning(
+                                f'拦截不安全请求: {route.request.url} ({reason})'
+                            )
+                            route.abort()
+                            return
+                        route.continue_()
+                    except Exception:
+                        route.abort()
+
+                page.route('**/*', _guard)
                 page.goto(url, wait_until='domcontentloaded', timeout=30000)
-                final_url = page.url
-                safe, reason = is_safe_url(final_url)
-                if not safe:
-                    logger.warning(f'重定向到不安全 URL，已拒绝: {final_url} ({reason})')
-                    return None
                 html = page.content()
             finally:
                 browser.close()
@@ -174,7 +189,7 @@ class Scraper:
         return self._html_to_markdown(html)
 
     def _scrape_with_httpx(self, url: str) -> str | None:
-        """使用 httpx 抓取"""
+        """使用 httpx 抓取（手动逐跳校验重定向）"""
         import httpx
 
         headers = {
@@ -185,35 +200,54 @@ class Scraper:
 
         with httpx.Client(
             verify=self.verify_ssl,
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=30.0,
         ) as client:
-            resp = client.get(url, headers=headers)
-            resp.raise_for_status()
-            final_url = str(resp.url)
-            safe, reason = is_safe_url(final_url)
-            if not safe:
-                logger.warning(f'重定向到不安全 URL，已拒绝: {final_url} ({reason})')
+            current = url
+            html = ''
+            for _ in range(5):
+                safe, reason = is_safe_url(current)
+                if not safe:
+                    logger.warning(f'拒绝抓取不安全的 URL: {current} ({reason})')
+                    return None
+
+                resp = client.get(current, headers=headers)
+                if resp.is_redirect:
+                    location = resp.headers.get('location')
+                    if not location:
+                        return None
+                    current = str(httpx.URL(current).join(location))
+                    continue
+
+                resp.raise_for_status()
+                html = resp.text
+                break
+            else:
+                logger.warning(f'重定向次数过多，已拒绝: {url}')
                 return None
-            html = resp.text
 
         return self._html_to_markdown(html)
 
     def _scrape_with_urllib(self, url: str) -> str | None:
-        """使用 urllib 抓取（标准库回退）"""
+        """使用 urllib 抓取（标准库回退，重定向前置校验）"""
         import urllib.error
         import urllib.request
 
+        class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                safe, reason = is_safe_url(newurl)
+                if not safe:
+                    raise urllib.error.HTTPError(
+                        newurl, code, f'blocked redirect: {reason}', headers, fp
+                    )
+                return super().redirect_request(req, fp, code, msg, headers, newurl)
+
         headers = {'User-Agent': USER_AGENT}
         req = urllib.request.Request(url, headers=headers)
+        opener = urllib.request.build_opener(_SafeRedirectHandler())
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                final_url = resp.geturl()
-                safe, reason = is_safe_url(final_url)
-                if not safe:
-                    logger.warning(f'重定向到不安全 URL，已拒绝: {final_url} ({reason})')
-                    return None
+            with opener.open(req, timeout=30) as resp:
                 html = resp.read().decode('utf-8', errors='replace')
         except urllib.error.URLError:
             return None
@@ -330,7 +364,9 @@ class ScrapeTool(BaseTool):
         url = kwargs.get('url', '')
         if not url:
             return False, 'URL 不能为空'
-        return is_safe_url(url)
+        # 校验阶段只做协议/主机名/IP 字面量检查；DNS 在真正抓取时解析，
+        # 避免同步 getaddrinfo 阻塞事件循环。
+        return is_safe_url(url, check_dns=False)
 
     def execute(self, **kwargs) -> ToolResult:
         url = kwargs.get('url', '')

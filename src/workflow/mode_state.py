@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 
-from ..utils.file_ops import locked_atomic_write_json
+from ..utils.file_ops import file_lock, locked_atomic_write_json
 import os
 import logging
 from dataclasses import dataclass, field
@@ -481,18 +481,20 @@ class ModeStateManager:
             return None
 
     def update_state(self, mode: str, updates: dict[str, Any]) -> ModeState | None:
-        """更新模式状态"""
-        state = self.read_state(mode)
-        if not state:
-            logger.warning(f"[ModeState] No existing state for mode: {mode}")
-            return None
-        for key, value in updates.items():
-            if hasattr(state, key):
-                setattr(state, key, value)
-            else:
-                state.metadata[key] = value
-        state.updated_at = datetime.now().isoformat()
-        self._write_state(state)
+        """更新模式状态（读改写整体加锁，避免并发丢更新）"""
+        path = get_mode_state_path(mode, self._cwd)
+        with file_lock(path):
+            state = self.read_state(mode)
+            if not state:
+                logger.warning(f"[ModeState] No existing state for mode: {mode}")
+                return None
+            for key, value in updates.items():
+                if hasattr(state, key):
+                    setattr(state, key, value)
+                else:
+                    state.metadata[key] = value
+            state.updated_at = datetime.now().isoformat()
+            self._write_state(state)
         logger.debug(f"[ModeState] Updated mode: {mode}, phase: {state.current_phase}")
         return state
 

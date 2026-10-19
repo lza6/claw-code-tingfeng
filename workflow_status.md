@@ -3,11 +3,11 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.60.0**
+> 当前版本：**v0.60.1**
 
 ---
 
-## 0-0. 本轮（v0.59.0 → v0.60.0）：参考对标落地
+## 0-0. 本轮（v0.59.0 → v0.60.1）：参考对标落地 + 独立审查修复
 
 依据 `参考的结果计划指南.md` 的 Phase A 审计，按 P0/P1 批次实施。
 **验证结果见 `test_ledger.md`，逐项证据见 `evidence/`。**
@@ -25,20 +25,26 @@
 | E-09 | 原生工具调用（默认关，真实端点已验证） | ✅ | evidence/P1-1；真实端点返回 BashTool tool_calls |
 | E-10 | `clawd server` 命令 + token 鉴权 + port=0 语义 | ✅ | evidence/P1-7（24 条 server 测试） |
 | E-11 | 平行阶段实现标注（不删除） | ✅ | `stages/`、`pipeline_stages/` docstring |
-| E-12 | 全量回归 | ✅ | **3148 passed, 4 skipped, 1 xfailed, 0 failed**（1527s） |
+| E-12 | 全量回归 | ✅ | **3158 passed, 4 skipped, 1 xfailed, 0 failed**（1458s） |
 | E-13 | 真实 E2E | ✅ | `e2e_smoke.py` 5/5；`e2e_production.py` 8/8 |
 | E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~12 req/s） |
-| E-15 | 版本一致性 v0.60.0 | ✅ | `python -m src --version` + metadata |
+| E-15 | 版本一致性 v0.60.1 | ✅ | `python -m src --version` + metadata |
 | E-16 | 覆盖率 60% | ❌ 未达成 | 基线 46.15%；本轮未降低，需独立批次 |
 | E-17 | 收集 <120s | ❌ 未达成 | 已禁用无关插件；全量收集仍需数分钟 |
 | E-18 | 死模块 ≤20 | ❌ 未达成 | 200 不可达；需人工逐条复核 |
 | E-19 | GitHub Release | ⛔ 阻塞 | 本机无 `gh` CLI |
 | E-20 | Docker 构建/部署/热更新 | ⛔ 阻塞 | 本机无 Docker、无部署目标与凭证 |
+| E-21 | 审查 C1：CI lint 覆盖 `tests/` 的 4 个 F811 | ✅ | `ruff check src/ tests/ --select F821,F811,E9` → All checks passed |
+| E-22 | 审查 C2：`dev` 依赖补 `ruff` / `pytest-cov` | ✅ | `pyproject.toml` |
+| E-23 | 审查 R1：悬空 `tool_call_id`、重复 id、流式开关告警 | ✅ | 8 条原生调用测试 |
+| E-24 | 审查 R2：重定向前置校验 + validate 不做同步 DNS | ✅ | 24 条 SSRF 测试 |
+| E-25 | 审查 R3/R4：tracing 返回 bool + 接线；可重入锁 + owner + 读改写加锁 | ✅ | 11 条持久化测试（连续复跑） |
+| E-26 | 审查发现的全量回归（`error` 变量遮蔽） | ✅ | `tests/agent/test_core_engine.py` 48 passed |
 
 ### 本轮验证命令与真实结果
 
 ```text
-pytest tests/ -q                                  → 3148 passed, 4 skipped, 1 xfailed, 0 failed (1527.26s)
+pytest tests/ -q                                  → 3158 passed, 4 skipped, 1 xfailed, 0 failed (1458.56s)
 pytest tests/{workflow,agent,tools_runtime,llm,contracts,cli} -q → 1348 passed, 1 xfailed (702.78s)
 ruff check src/ --select F821,F811                → All checks passed!
 python scripts/import_sweep.py                    → 642 模块 / IMPORT-OK 636 / FAIL 0 / DEP-MISSING 6
@@ -46,7 +52,7 @@ python scripts/reachability.py                    → 442 生产可达（基线 
 python scripts/e2e_smoke.py                       → 5/5 PASS
 python scripts/e2e_production.py                  → 8/8 PASS
 python scripts/stress_test.py --n 200             → 5/5 PASS
-python -m src --version                           → v0.60.0
+python -m src --version                           → v0.60.1
 ```
 
 ---

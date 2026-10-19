@@ -55,7 +55,7 @@ class VoiceTool(BaseTool):
     """
 
 
-    risk_kind = 'read'
+    risk_kind = 'exec'
 
     name = 'VoiceTool'
     description = '录制语音并转换为文字，支持多种音频格式'

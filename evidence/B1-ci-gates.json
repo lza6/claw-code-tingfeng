@@ -1,20 +1,28 @@
 {
   "task_id": "B1-ci-gates",
   "status": "passed",
-  "timestamp": "2026-10-19T09:00:00+08:00",
+  "timestamp": "2026-10-19T11:30:00+08:00",
   "commands_executed": [
     {"cmd": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\"", "exit_code": 0, "raw_output_tail": "yaml OK"},
-    {"cmd": "ruff check src/ tests/ --select F821,F811,E9", "exit_code": 0, "raw_output_tail": "All checks passed!"},
+    {"cmd": "ruff check src/ tests/ --select F821,F811,E9", "exit_code": 0, "raw_output_tail": "All checks passed!（修复了 tests 中 4 个 F811 后）"},
     {"cmd": "pytest --help | grep incremental", "exit_code": 1, "raw_output_tail": "无该选项（原 CI 参数无效，已移除）"}
   ],
-  "files_changed": [".github/workflows/ci.yml"],
+  "correction": "上一版证据只执行了 `ruff check src/`，与 CI 的 `src/ tests/` 不一致。独立审查发现后已修为真实命令，并修复 tests 中 4 个 F811。",
+  "files_changed": [
+    ".github/workflows/ci.yml",
+    "pyproject.toml",
+    "tests/core/test_replay_engine.py",
+    "tests/test_state/test_command_event.py",
+    "tests/workflow/test_workflow.py"
+  ],
   "tests": [
     {"name": "CI YAML 可解析", "type": "config", "status": "passed"},
-    {"name": "硬错误 lint 规则通过", "type": "static", "status": "passed"}
+    {"name": "CI 同款 lint 命令（src+tests）", "type": "static", "status": "passed"},
+    {"name": "dev extras 含 ruff/pytest-cov", "type": "config", "status": "passed"}
   ],
   "coverage_summary": {"threshold": 45, "current": 46.15},
   "seams_touched": ["GitHub Actions lint/test"],
   "mock_scenarios_covered": [],
   "browser_validation": "not_run",
-  "limitations": "未在 GitHub Actions 实跑（本机无 gh CLI / 无法触发远端 CI）；本地等价命令已执行。"
+  "limitations": "未在 GitHub Actions 实跑（本机无 gh CLI / 无法触发远端 CI）；本地已执行与 CI 完全相同的 lint 命令。"
 }

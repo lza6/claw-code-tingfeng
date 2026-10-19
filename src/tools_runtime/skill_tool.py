@@ -33,6 +33,13 @@ class SkillTool(BaseTool):
     def __init__(self, workdir: Path | None = None) -> None:
         super().__init__()
         self._workdir = workdir
+        self._skills: dict | None = None
+
+    def _get_skills(self) -> dict:
+        """按实例缓存 skill 清单，避免每次调用都扫描目录。"""
+        if self._skills is None:
+            self._skills = {skill.name: skill for skill in discover_skills(self._workdir)}
+        return self._skills
 
     def execute(self, **kwargs) -> ToolResult:
         name = str(kwargs.get('name', '')).strip()
@@ -40,7 +47,7 @@ class SkillTool(BaseTool):
             return ToolResult(success=False, output='', error='缺少参数 name', exit_code=1)
 
         # 只允许加载“发现清单”中的技能：避免用 ../ 或绝对路径读取任意文件。
-        skills = {skill.name: skill for skill in discover_skills(self._workdir)}
+        skills = self._get_skills()
         skill = skills.get(name)
         if skill is None:
             available = ', '.join(sorted(skills)[:20])

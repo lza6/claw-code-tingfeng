@@ -3,7 +3,7 @@
   "status": "passed",
   "timestamp": "2026-10-19T09:00:00+08:00",
   "commands_executed": [
-    {"cmd": "pytest tests/tools_runtime/test_scrape_ssrf.py -q", "exit_code": 0, "raw_output_tail": "22 passed in 13.27s"},
+    {"cmd": "pytest tests/tools_runtime/test_scrape_ssrf.py -q", "exit_code": 0, "raw_output_tail": "24 passed in 10.07s"},
     {"cmd": "ruff check src/tools_runtime/scrape_tool.py --select F821,F811,E9", "exit_code": 0, "raw_output_tail": "All checks passed!"}
   ],
   "files_changed": [
@@ -16,11 +16,13 @@
     {"name": "127/10/172.16/192.168/169.254/::1/0.0.0.0 拒绝", "type": "unit", "status": "passed"},
     {"name": "域名解析到私网拒绝", "type": "unit", "status": "passed"},
     {"name": "解析失败默认拒绝", "type": "unit", "status": "passed"},
-    {"name": "公网 IP/域名放行", "type": "unit", "status": "passed"}
+    {"name": "公网 IP/域名放行", "type": "unit", "status": "passed"},
+    {"name": "urllib 重定向前置拦截（302→元数据地址）", "type": "security", "status": "passed"},
+    {"name": "validate 不做同步 DNS", "type": "regression", "status": "passed"}
   ],
   "coverage_summary": null,
-  "seams_touched": ["ScrapeTool.validate", "Scraper.scrape", "重定向后校验"],
-  "mock_scenarios_covered": ["dns failure", "dns to private", "private opt-in"],
+  "seams_touched": ["ScrapeTool.validate", "Scraper.scrape", "httpx 手动逐跳重定向", "urllib RedirectHandler", "Playwright route 拦截"],
+  "mock_scenarios_covered": ["dns failure", "dns to private", "private opt-in", "redirect to metadata"],
   "browser_validation": "not_run",
-  "limitations": "Playwright/httpx/urllib 的真实重定向路径未逐个联网验证；校验逻辑在三条后端均已接入，但仅通过单元测试覆盖。"
+  "limitations": "DNS rebinding TOCTOU 仍存在（校验解析与连接解析各一次）；Playwright 的 route 拦截未在真实浏览器中验证。httpx 手动重定向路径未用真实 302 服务验证。"
 }

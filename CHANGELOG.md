@@ -9,6 +9,46 @@
 
 ## [未发布]
 
+### v0.60.1 (2026-10-19) — 独立审查修复：CI 门禁、原生调用协议、SSRF 前置校验、锁语义
+
+独立审查（reviewer-round1）判定 Request Changes；以下为逐项修复。
+
+#### 阻塞项
+
+- **CI lint 真实通过**：`ruff check src/ tests/ --select F821,F811,E9` 此前有
+  4 个 F811（全部在 `tests/`）。已修复，CI 同款命令现在 `All checks passed`。
+  `evidence/B1-ci-gates.json` 已更正为此前只跑 `src/` 的错误证据。
+- **CI 依赖可复现**：`dev` 额外依赖补 `ruff` 与 `pytest-cov`，干净环境可执行
+  lint 与 `--cov`。
+
+#### 原生工具调用协议
+
+- 参数解析失败时补一条 `role=tool` 消息，避免 assistant 的 `tool_calls`
+  留下悬空 id（否则下一轮 400）。
+- 同名同参的重复调用按**队列**分配 `tool_call_id`，不再复用同一 id。
+- 流式路径启用开关时显式告警并回退文本协议，不再静默无效。
+
+#### 安全
+
+- Scrape 的三种后端改为**重定向前置校验**：httpx 手动逐跳、urllib 自定义
+  `HTTPRedirectHandler`、Playwright `page.route` 拦截。
+- `validate` 阶段不再做同步 DNS，避免阻塞事件循环；DNS 在真正抓取时校验。
+- DNS rebinding TOCTOU 仍未消除，已在 evidence limitations 中披露。
+
+#### 持久化与可观测性
+
+- `file_lock` 改为可重入 + owner token + 原子回收陈旧锁；`update_state` /
+  `add_progress_entry` 的读改写整体加锁，修复丢失更新。
+- `atomic_write` 的 Windows 重试提高到 5 次 / 100ms，并发测试连续 3 次稳定。
+- tracing 的 `_setup_*` 返回 bool，跳过时不再谎报“已初始化”；`setup_tracing()`
+  接入 `initialize()`，功能不再是无调用点的死代码。
+
+#### 验证
+
+全量回归、E2E、SSRF/状态/原生调用回归见 `test_ledger.md` 与 `evidence/`。
+
+---
+
 ### v0.60.0 (2026-10-19) — 参考对标落地：CI 门禁、持久化语义、工具策略、Skill 接线、原生工具调用
 
 本轮基于 `参考的结果计划指南.md` 的 Phase A 审计，按 P0/P1 批次落地。

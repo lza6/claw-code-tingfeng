@@ -303,6 +303,9 @@ async def _run_agent_loop(
             # 同一 (name, args) 可能出现多次（模型重复调用）。tool_call_id 必须
             # 一一对应，因此按签名维护**队列**，结果按顺序消费，不能共用一个 id。
             native_call_id_by_signature: dict[tuple[str, str], list[str]] = {}
+            # 参数解析失败的调用也必须回一条 tool 消息，否则 assistant 的
+            # tool_calls 会留下悬空 id，下一轮 OpenAI 兼容端点直接 400。
+            native_failed_calls: list[tuple[str, str, str]] = []
             if native_calls:
                 # 原生 function calling 优先；参数解析失败时跳过该调用，
                 # 但保留其余调用（不让单个坏参数拖垮整轮）。
@@ -314,8 +317,14 @@ async def _run_agent_loop(
                         args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
                     except (ValueError, TypeError) as exc:
                         warn(f'原生工具调用参数解析失败 ({name or "?"}): {exc}')
+                        native_failed_calls.append(
+                            (str(call.get('id') or ''), name or 'unknown', f'参数解析失败: {exc}')
+                        )
                         continue
                     if not name or not isinstance(args, dict):
+                        native_failed_calls.append(
+                            (str(call.get('id') or ''), name or 'unknown', '缺少工具名或参数不是对象')
+                        )
                         continue
                     tool_calls.append((name, args))
                     signature = (name, json.dumps(args, sort_keys=True))
@@ -324,6 +333,22 @@ async def _run_agent_loop(
                     )
             elif config._parse_tool_calls:
                 tool_calls = config._parse_tool_calls(full_content)
+
+            # 为解析失败的调用补 tool 消息（保持 id 一一对应）。
+            if native_failed_calls:
+                for call_id, name, err_detail in native_failed_calls:
+                    if call_id:
+                        config.messages.append(
+                            LLMMessage(
+                                role='tool',
+                                content=f'工具调用参数无效: {err_detail}',
+                                tool_call_id=call_id,
+                                name=name,
+                            )
+                        )
+                if not tool_calls:
+                    # 没有可执行调用；让模型在下一轮修正参数。
+                    continue
             if tool_calls:
                 info(f'{mode_tag} 检测到 {len(tool_calls)} 个工具调用')
 

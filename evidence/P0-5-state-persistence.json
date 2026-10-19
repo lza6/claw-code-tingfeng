@@ -3,7 +3,7 @@
   "status": "passed",
   "timestamp": "2026-10-19T09:00:00+08:00",
   "commands_executed": [
-    {"cmd": "pytest tests/workflow/test_state_persistence_semantics.py -q", "exit_code": 0, "raw_output_tail": "9 passed in 31.03s"},
+    {"cmd": "pytest tests/workflow/test_state_persistence_semantics.py -q", "exit_code": 0, "raw_output_tail": "11 passed（连续 3 次复跑均 11 passed）"},
     {"cmd": "pytest tests/workflow tests/agent tests/tools_runtime tests/llm tests/contracts tests/cli -q", "exit_code": 0, "raw_output_tail": "1348 passed, 1 xfailed in 702.78s"}
   ],
   "files_changed": [
@@ -19,11 +19,13 @@
     {"name": "attempt fence 拒绝旧写且不覆盖", "type": "unit", "status": "passed"},
     {"name": "更高 schema 拒绝恢复", "type": "unit", "status": "passed"},
     {"name": "并发加锁写不产生半截 JSON", "type": "concurrency", "status": "passed"},
-    {"name": "file_lock 超时", "type": "unit", "status": "passed"}
+    {"name": "同线程可重入", "type": "unit", "status": "passed"},
+    {"name": "跨线程超时", "type": "concurrency", "status": "passed"},
+    {"name": "读改写不丢更新（4 线程 × 25 次）", "type": "concurrency", "status": "passed"}
   ],
   "coverage_summary": null,
-  "seams_touched": ["PipelineState.save/load", "ModeState 写入", "TeamState 写入", "RalphProgressLedger 写入"],
-  "mock_scenarios_covered": ["corrupted existing state", "legacy state without schema", "stale attempt"],
+  "seams_touched": ["PipelineState.save/load", "ModeState.update_state", "TeamState 写入", "RalphProgressLedger.add_progress_entry"],
+  "mock_scenarios_covered": ["corrupted existing state", "legacy state without schema", "stale attempt", "reentrant lock", "lost-update race"],
   "browser_validation": "not_run",
-  "limitations": "未做跨进程锁竞争压测（仅线程并发）；Windows 目录锁在 NFS/网络盘上的原子性未验证。"
+  "limitations": "PipelineState 仅用于兼容/测试，生产路径是 ModeStateManager；expected_attempt 由调用方显式使用，当前生产无调用方（已在 docstring 说明）。record_visual_feedback 仍只保证原子写、未覆盖读改写。跨进程锁竞争未做压测。"
 }

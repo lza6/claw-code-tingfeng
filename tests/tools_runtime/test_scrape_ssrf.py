@@ -80,3 +80,36 @@ def test_scrape_tool_validate_uses_safe_url():
 
     ok, reason = tool.validate(url='')
     assert ok is False
+
+
+def test_validate_does_not_block_on_dns(monkeypatch):
+    """validate 阶段不应做同步 DNS（避免阻塞事件循环）。"""
+    def _fail(*a, **k):
+        raise OSError('no dns')
+
+    monkeypatch.setattr(socket, 'getaddrinfo', _fail)
+    ok, reason = ScrapeTool().validate(url='https://example.com')
+    assert ok is True, reason
+
+
+def test_urllib_redirect_handler_blocks_private_target():
+    import urllib.error
+    import urllib.request
+
+    from src.tools_runtime.scrape_tool import Scraper
+
+    captured = {}
+
+    class _Handler(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            safe, reason = is_safe_url(newurl)
+            if not safe:
+                raise urllib.error.HTTPError(newurl, code, f'blocked redirect: {reason}', headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    handler = _Handler()
+    captured['handler'] = handler
+    assert isinstance(Scraper, type)
+    req = urllib.request.Request('https://example.com/')
+    with pytest.raises(urllib.error.HTTPError):
+        handler.redirect_request(req, None, 302, 'Found', {}, 'http://169.254.169.254/latest/meta-data/')

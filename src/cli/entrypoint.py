@@ -164,8 +164,13 @@ def server(
         border_style="cyan",
     ))
 
+    async def _serve() -> None:
+        host, port = await srv.start()
+        console.print(f"[green]实际监听: {host}:{port}[/green]")
+        await srv.run_forever()
+
     try:
-        asyncio.run(srv.run_forever())
+        asyncio.run(_serve())
     except KeyboardInterrupt:
         console.print("\n[dim]服务端已停止[/dim]")
 

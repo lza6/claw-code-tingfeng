@@ -26,7 +26,6 @@ from src.core.state.command_event import (
     RuntimeStateEngine,
 )
 from src.core.state.authority import AuthorityLease, LeaseInfo
-from src.core.state.authority import AuthorityLease, LeaseInfo
 
 
 # ========== RuntimeCommand 测试 ==========

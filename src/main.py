@@ -78,6 +78,16 @@ def initialize() -> None:
         print(f'[警告] .env 文件加载失败: {e}', file=sys.stderr)
         print('[警告] 请检查 .env 文件格式，或复制 .env.example 为 .env', file=sys.stderr)
 
+    # 初始化 tracing（仅在配置了 LANGFUSE_* / BRAINTRUST_* 时真正注册）
+    try:
+        from .core.tracing.setup import setup_tracing
+
+        tracing_providers = setup_tracing()
+        if tracing_providers:
+            print(f'[*] Tracing 已启用: {", ".join(tracing_providers)}')
+    except Exception as e:
+        print(f'[警告] Tracing 初始化失败: {e}', file=sys.stderr)
+
     # 自动启用文件日志
     enable_logging = _os.environ.get('ENABLE_FILE_LOGGING', 'true').lower() in ('1', 'true', 'yes')
     if enable_logging:

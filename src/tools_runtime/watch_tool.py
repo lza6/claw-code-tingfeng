@@ -345,7 +345,7 @@ class WatchTool(BaseTool):
     """
 
 
-    risk_kind = 'read'
+    risk_kind = 'exec'
 
     name = 'WatchTool'
     description = '监控文件变化，检测 AI 注释，支持 gitignore 规则'

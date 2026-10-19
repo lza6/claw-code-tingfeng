@@ -18,14 +18,14 @@
 
 | 范围 | 命令 | 结果 | 证据 |
 |:---|:---|:---|:---|
-| 新增：状态持久化 | `pytest tests/workflow/test_state_persistence_semantics.py -q` | **9 passed** | evidence/P0-5 |
+| 新增：状态持久化 | `pytest tests/workflow/test_state_persistence_semantics.py -q` | **11 passed**（连续 3 次） | evidence/P0-5 |
 | 新增：工具策略 | `pytest tests/agent/test_tool_policy.py -q` | **10 passed** | evidence/P1-4 |
-| 新增：SSRF | `pytest tests/tools_runtime/test_scrape_ssrf.py -q` | **22 passed** | evidence/P1-9 |
+| 新增：SSRF | `pytest tests/tools_runtime/test_scrape_ssrf.py -q` | **24 passed** | evidence/P1-9 |
 | 新增：Skill 注入 | `pytest tests/agent/test_skill_injection.py -q` | **6 passed** | evidence/P1-10 |
-| 新增：原生工具调用 | `pytest tests/agent/test_native_tool_calls.py -q` | **6 passed** | evidence/P1-1 |
+| 新增：原生工具调用 | `pytest tests/agent/test_native_tool_calls.py -q` | **8 passed** | evidence/P1-1 |
 | 定向回归（6 目录） | `pytest tests/workflow tests/agent tests/tools_runtime tests/llm tests/contracts tests/cli -q` | **1348 passed, 1 xfailed, 0 failed**（702.78s） | 本轮 |
-| **全量测试** | `pytest tests/ -q` | **3148 passed, 4 skipped, 1 xfailed, 0 failed**（1527.26s） | 本轮 |
-| 静态硬指标 | `ruff check src/ --select F821,F811` | All checks passed | 本轮 |
+| **全量测试** | `pytest tests/ -q` | **3158 passed, 4 skipped, 1 xfailed, 0 failed**（1458.56s） | 本轮 |
+| 静态硬指标（CI 同款） | `ruff check src/ tests/ --select F821,F811,E9` | All checks passed（修复 tests 中 4 个 F811 后） | evidence/B1 |
 | 导入完整性 | `python scripts/import_sweep.py` | 642 模块 / IMPORT-OK 636 / **FAIL 0** / DEP-MISSING 6 | 本轮 |
 | 生产可达 | `python scripts/reachability.py` | **442 可达**（基线 431，未下降）/ 200 不可达 | 本轮 |
 | 真实 E2E 冒烟 | `python scripts/e2e_smoke.py` | **5/5 PASS**（真实端点，退出码 0） | 本轮 |

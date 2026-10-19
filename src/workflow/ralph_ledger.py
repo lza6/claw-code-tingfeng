@@ -190,19 +190,20 @@ def add_progress_entry(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> RalphProgressLedger:
-    """添加进度条目"""
+    """添加进度条目（读改写整体加锁）"""
     path = get_ralph_progress_path(cwd, session_id)
-    ledger = _ensure_progress_ledger(path)
+    with file_lock(path):
+        ledger = _ensure_progress_ledger(path)
 
-    entry = {
-        "index": len(ledger.entries) + 1,
-        "text": text,
-        "recorded_at": datetime.now().isoformat(),
-    }
-    ledger.entries.append(entry)
-    ledger.updated_at = datetime.now().isoformat()
+        entry = {
+            "index": len(ledger.entries) + 1,
+            "text": text,
+            "recorded_at": datetime.now().isoformat(),
+        }
+        ledger.entries.append(entry)
+        ledger.updated_at = datetime.now().isoformat()
 
-    _write_ledger(path, ledger)
+        _write_ledger(path, ledger)
 
     return ledger
 

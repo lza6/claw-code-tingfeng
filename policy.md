@@ -6,7 +6,7 @@
 
 | 门禁 | 阈值 | 命令 |
 |:---|:---|:---|
-| 静态未定义名/重复定义 | `F821 = 0` · `F811 = 0` | `ruff check src/ --select F821,F811` |
+| 静态未定义名/重复定义 | `F821 = 0` · `F811 = 0`（**src 与 tests 都算**） | `ruff check src/ tests/ --select F821,F811,E9` |
 | 导入完整性 | `IMPORT-FAIL = 0` | `python scripts/import_sweep.py` |
 | 生产可达数 | 删除代码前后**不得下降** | `python scripts/reachability.py` |
 | 契约测试 | 100% 通过 | `pytest tests/contracts -q` |

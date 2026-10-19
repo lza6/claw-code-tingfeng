@@ -640,7 +640,6 @@ class TestWorkflowEngineBasic:
         ]
         # _split_tasks 是静态方法
         # 需要检查其实现
-        from src.workflow.engine import WorkflowEngine
         # 如果没有 _split_tasks 方法，检查 _consolidate_similar_tasks 处理空列表
         result = WorkflowEngine._consolidate_similar_tasks([])
         assert result == []

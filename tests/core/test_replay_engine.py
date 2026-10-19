@@ -60,7 +60,6 @@ def test_helper_functions(temp_state_dir):
     ev = record_event(EventType.USER_INPUT, "helper-session", {"msg": "hi"}, state_dir=temp_state_dir)
     assert ev.session_id == "helper-session"
     # Flush to ensure event is written to disk
-    from src.core.replay_engine import get_replay_engine
     engine = get_replay_engine(temp_state_dir)
     engine.flush_all()
     # Retrieve summary via helper

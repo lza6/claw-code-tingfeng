@@ -12,6 +12,8 @@ import json
 import logging
 import os
 import secrets
+import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -58,7 +60,7 @@ def normalize_content(content: str) -> str:
     # Normalize line endings to LF (\n)
     return content.replace('\r\n', '\n').replace('\r', '\n')
 
-def atomic_write(file_path: str | Path, content: str | bytes, encoding: str = 'utf-8', retries: int = 3) -> None:
+def atomic_write(file_path: str | Path, content: str | bytes, encoding: str = 'utf-8', retries: int = 8) -> None:
     """Writes content to a file atomically by using a temporary file and renaming it.
 
     Enhanced for Windows (Ported from Project B):
@@ -86,48 +88,109 @@ def atomic_write(file_path: str | Path, content: str | bytes, encoding: str = 'u
                 temp_path.unlink()
         raise e
 
-def atomic_write_json(file_path: str | Path, data: Any, indent: int = 2, retries: int = 3) -> None:
+def atomic_write_json(file_path: str | Path, data: Any, indent: int = 2, retries: int = 8) -> None:
     """Atomically write JSON data to a file."""
     content = json.dumps(data, indent=indent, ensure_ascii=False)
     atomic_write(file_path, content, retries=retries)
 
+_lock_state = threading.local()
+
+
 @contextlib.contextmanager
 def file_lock(file_path: str | Path, timeout: float = 10.0, stale_after: float = 60.0):
-    """跨平台文件锁（基于原子 `mkdir`）。
+    """跨平台、**可重入**的文件锁（原子 `mkdir` + owner token）。
 
-    不依赖 fcntl/msvcrt：目录创建在本地文件系统上是原子的。
-    进程崩溃可能留下锁目录，超过 ``stale_after`` 秒会被回收。
+    - 同一线程重复获取同一把锁直接放行：读改写函数内部再调用
+      `locked_atomic_write_json` 时不会自锁；
+    - 锁目录内写入 `pid-随机串`，释放时只删除自己持有的锁；
+    - 陈旧锁通过原子 rename 回收，避免与刚获得锁的新持有者竞争；
+    - 不依赖 fcntl/msvcrt，Windows 可用。
 
     Args:
-        file_path: 被保护的**目标文件**路径（锁目录为其同级的 `<name>.lock`）。
+        file_path: 被保护的**目标文件**路径（锁目录为同级的 `<name>.lock`）。
         timeout: 获取锁的最长等待秒数。
         stale_after: 锁目录超过该秒数视为陈旧并回收；<=0 表示不回收。
     """
     lock_dir = Path(str(file_path) + '.lock')
+    key = str(lock_dir)
+
+    held = getattr(_lock_state, 'held', None)
+    if held is None:
+        held = {}
+        _lock_state.held = held
+
+    # 可重入：同一线程已经持有 -> 直接进入
+    if key in held:
+        held[key] += 1
+        try:
+            yield
+        finally:
+            held[key] -= 1
+        return
+
     deadline = time.monotonic() + timeout
+    owner = f'{os.getpid()}-{secrets.token_hex(8)}'
+    owner_written = False
 
     while True:
         try:
             lock_dir.mkdir(parents=True, exist_ok=False)
+            try:
+                (lock_dir / 'owner').write_text(owner, encoding='utf-8')
+                owner_written = True
+            except OSError:
+                pass
             break
         except FileExistsError:
             try:
-                if stale_after > 0 and time.time() - lock_dir.stat().st_mtime > stale_after:
-                    with contextlib.suppress(OSError):
-                        lock_dir.rmdir()
-                    continue
+                is_stale = (
+                    stale_after > 0
+                    and time.time() - lock_dir.stat().st_mtime > stale_after
+                )
             except FileNotFoundError:
+                continue
+
+            if is_stale:
+                # 先原子移走，再删除：不会误删刚获得锁的新持有者目录。
+                stale_dir = lock_dir.with_name(
+                    f'{lock_dir.name}.stale.{secrets.token_hex(4)}'
+                )
+                try:
+                    os.replace(lock_dir, stale_dir)
+                    shutil.rmtree(stale_dir, ignore_errors=True)
+                except OSError:
+                    pass
                 continue
 
             if time.monotonic() >= deadline:
                 raise TimeoutError(f'获取文件锁超时: {lock_dir}')
             time.sleep(0.05)
+        except OSError:
+            # Windows 上杀软/索引器短暂占用目录时 mkdir/stat 可能抛
+            # PermissionError。这不是锁冲突，重试直到 timeout 即可。
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
 
+    held[key] = 1
     try:
         yield
     finally:
-        with contextlib.suppress(OSError):
-            lock_dir.rmdir()
+        held.pop(key, None)
+        if owner_written:
+            try:
+                current_owner = (lock_dir / 'owner').read_text(encoding='utf-8').strip()
+            except OSError:
+                current_owner = ''
+            if current_owner == owner:
+                with contextlib.suppress(OSError):
+                    (lock_dir / 'owner').unlink()
+                with contextlib.suppress(OSError):
+                    lock_dir.rmdir()
+            # owner 不匹配：锁已被回收/换主，绝不能删除别人的锁。
+        else:
+            with contextlib.suppress(OSError):
+                lock_dir.rmdir()
 
 
 def locked_atomic_write_json(file_path: str | Path, data: Any, indent: int = 2) -> None:
@@ -136,7 +199,7 @@ def locked_atomic_write_json(file_path: str | Path, data: Any, indent: int = 2) 
         atomic_write_json(file_path, data, indent=indent)
 
 
-def _rename_with_retry(src: str, dest: str, retries: int = 3, delay_ms: int = 50) -> None:
+def _rename_with_retry(src: str, dest: str, retries: int = 8, delay_ms: int = 50) -> None:
     """Atomically rename a file with retries for Windows compatibility (EPERM/EACCES).
 
     Matches Project B's renameWithRetry behavior.

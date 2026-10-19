@@ -440,6 +440,14 @@ class AgentEngine:
         self.session_manager.record_user_goal(goal)
         session = AgentSession(goal=goal)
 
+        # 原生 function calling 只在非流式路径可用：流式分支无法可靠收集
+        # tool_calls（各 provider 的 delta 事件实现不一致）。启用开关但走流式时
+        # 必须显式告警，不能静默地"开关无效"。
+        tool_schemas = self._build_tool_schemas()
+        if tool_schemas and kwargs.get('is_stream'):
+            warn('流式模式暂不支持原生 function calling，已回退文本工具协议')
+            tool_schemas = None
+
         config = AgentLoopConfig(
             goal=goal,
             llm_provider=self.llm_provider,
@@ -457,7 +465,7 @@ class AgentEngine:
             _truncator=self._truncator,
             _parse_tool_calls=self.tool_manager.parse_tool_calls,
             _execute_tool=self.tool_manager.execute_tool,
-            tool_schemas=self._build_tool_schemas(),
+            tool_schemas=tool_schemas,
             _count_tokens=self._truncator.count_tokens,
             _missing_info_patterns=self._missing_info_patterns,
             _deep_rag_patch=self._deep_rag_patch,
