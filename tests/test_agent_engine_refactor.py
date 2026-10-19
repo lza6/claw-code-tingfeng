@@ -4,13 +4,16 @@ from src.agent.engine import AgentEngine
 from src.llm import LLMConfig, LLMProviderType
 
 @pytest.fixture
-def agent_engine():
+def agent_engine(tmp_path, monkeypatch):
+    # 本测试只验证引擎的初始化/委托接口，不需要 World Model 的后台构建。
+    # 后者会启动进程池；若子进程未退出，pytest 进程会一直挂起（实际踩过）。
+    monkeypatch.setattr(AgentEngine, '_init_world_model_async', lambda self: None)
     config = LLMConfig(
         provider=LLMProviderType.ANTHROPIC,
         model="claude-3-haiku-20240307",
         api_key="test-key"
     )
-    return AgentEngine(llm_config=config, workdir=Path("/tmp"))
+    return AgentEngine(llm_config=config, workdir=tmp_path)
 
 def test_engine_initialization(agent_engine):
     """验证引擎初始化是否正常"""

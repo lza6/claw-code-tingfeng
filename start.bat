@@ -1,6 +1,6 @@
 chcp 65001 >nul 2>&1
 @echo off
-REM 从 pyproject.toml 动态读取版本号
+REM Read version from pyproject.toml dynamically
 for /f "tokens=2 delims==" %%a in ('findstr /r "^version" pyproject.toml') do (
     set VERSION_RAW=%%a
 )
@@ -8,112 +8,135 @@ set VERSION=%VERSION_RAW:"=%
 set VERSION=%VERSION: =%
 
 echo ========================================
-echo   Clawd Code - AI 编程代理框架 v%VERSION%
+echo   Clawd Code - AI Coding Agent Framework v%VERSION%
 echo ========================================
 echo.
 
-REM 检查 Python 是否安装
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [错误] 未检测到 Python，请先安装 Python 3.10+
-    echo 下载地址: https://www.python.org/downloads/
+REM Resolve Python: prefer 3.10 (verified), then py -3 / python
+set "PYTHON="
+py -3.10 --version >nul 2>&1
+if not errorlevel 1 set "PYTHON=py -3.10"
+if not defined PYTHON (
+    py -3 --version >nul 2>&1
+    if not errorlevel 1 set "PYTHON=py -3"
+)
+if not defined PYTHON (
+    python --version >nul 2>&1
+    if not errorlevel 1 set "PYTHON=python"
+)
+if not defined PYTHON (
+    echo [ERROR] Python not found. Please install Python 3.10+
+    echo Download: https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
-echo [信息] Python 版本:
-python --version
+echo [INFO] Python version:
+%PYTHON% --version
 echo.
 
-REM 检查并创建虚拟环境
+REM Check and create virtual environment
 if not exist "venv\Scripts\python.exe" (
-    echo [信息] 正在创建虚拟环境...
-    python -m venv venv
+    echo [INFO] Creating virtual environment...
+    %PYTHON% -m venv venv
     if errorlevel 1 (
-        echo [错误] 虚拟环境创建失败
+        echo [ERROR] Failed to create virtual environment
         pause
         exit /b 1
     )
-    echo [成功] 虚拟环境已创建
+    echo [OK] Virtual environment created
 ) else (
-    echo [信息] 虚拟环境已存在
+    echo [INFO] Virtual environment already exists
 )
 echo.
 
-REM 激活虚拟环境
-echo [信息] 激活虚拟环境...
+REM Activate virtual environment
+echo [INFO] Activating virtual environment...
 call venv\Scripts\activate.bat
 if errorlevel 1 (
-    echo [警告] 虚拟环境激活失败，继续使用系统 Python
+    echo [WARN] Activation failed; using system Python
+) else (
+    set "PYTHON=venv\Scripts\python.exe"
 )
 echo.
 
-REM 检查并安装依赖
+REM Check and install dependencies
 pip show openai >nul 2>&1
 if errorlevel 1 (
-    echo [信息] 正在安装依赖包...
-    if exist "requirements.txt" (
-        pip install -r requirements.txt
+    echo [INFO] Installing dependencies...
+    pip install --timeout 120 --retries 5 --upgrade setuptools wheel
+    if errorlevel 1 echo [WARN] Failed to install build tools; continuing
+    if exist "pyproject.toml" (
+        pip install --timeout 120 --retries 5 --no-build-isolation -e .
     ) else (
-        echo [信息] 未找到 requirements.txt，安装核心依赖...
-        pip install openai anthropic
+        if exist "requirements.txt" (
+            pip install --timeout 120 --retries 5 -r requirements.txt
+        ) else (
+            echo [INFO] requirements.txt not found; installing core deps...
+            pip install --timeout 120 --retries 5 openai anthropic
+        )
     )
-    echo [成功] 依赖安装完成
+    if errorlevel 1 (
+        echo [ERROR] Dependency installation failed; check network and requirements.txt
+        pause
+        exit /b 1
+    )
+    echo [OK] Dependencies installed
 ) else (
-    echo [信息] 依赖已安装
+    echo [INFO] Dependencies already installed
 )
 echo.
 
-REM 检查并自动创建 .env 文件
+REM Check and create .env
 if not exist ".env" (
-    echo [警告] 未找到 .env 配置文件，正在从 .env.example 创建...
+    echo [WARN] .env not found; creating from .env.example...
     copy .env.example .env >nul 2>&1
     if errorlevel 1 (
-        echo [错误] .env 文件创建失败，请手动复制 .env.example 为 .env
+        echo [ERROR] Failed to create .env; copy .env.example to .env manually
     ) else (
-        echo [成功] 已自动创建 .env 文件，请编辑并配置你的 API key
+        echo [OK] Created .env; edit it and set your API key
     )
     echo.
 )
 
-REM 安全检查：检查 .env 是否被 Git 跟踪
+REM Security: check whether .env is tracked by Git
 git ls-files --error-unmatch .env >nul 2>&1
 if not errorlevel 1 (
     echo.
-    echo [严重警告] .env 文件已被 Git 跟踪！
-    echo   这可能导致您的 API 密钥被公开泄露！
-    echo   请立即执行以下命令：
+    echo [CRITICAL] .env is tracked by Git!
+    echo   This may expose your API keys publicly!
+    echo   Run the following commands:
     echo     git rm --cached .env
     echo     echo .env >> .gitignore
     echo.
 )
 
-REM 安全检查：扫描 .env 文件中的密钥模式
+REM Security: scan .env for key patterns
 if exist ".env" (
     findstr /i "sk-" .env >nul 2>&1
     if not errorlevel 1 (
         findstr /i "sk-or-v1" .env >nul 2>&1
         if errorlevel 1 (
-            echo [安全提示] .env 文件中包含可能的 API 密钥 (sk-)
-            echo   请确保 .env 已加入 .gitignore，且未提交到远程仓库
+            echo [SECURITY] .env contains a possible API key (sk-)
+            echo   Ensure .env is in .gitignore and not committed
             echo.
         )
     )
     findstr /i "ghp_" .env >nul 2>&1
     if not errorlevel 1 (
-        echo [安全提示] .env 文件中包含可能的 GitHub Token (ghp_)
-        echo   请确保 .env 已加入 .gitignore，且未提交到远程仓库
+        echo [SECURITY] .env contains a possible GitHub token (ghp_)
+        echo   Ensure .env is in .gitignore and not committed
         echo.
     )
     findstr /i "AKIA" .env >nul 2>&1
     if not errorlevel 1 (
-        echo [安全提示] .env 文件中包含可能的 AWS Access Key (AKIA)
-        echo   请确保 .env 已加入 .gitignore，且未提交到远程仓库
+        echo [SECURITY] .env contains a possible AWS access key (AKIA)
+        echo   Ensure .env is in .gitignore and not committed
         echo.
     )
 )
 
-REM 解析命令行参数
+REM Parse command line arguments
 set MODE=%1
 set UPGRADE=
 if /i "%MODE%"=="upgrade" (
@@ -126,39 +149,50 @@ if /i "%MODE%"=="upgrade" (
     set MODE=cli
 )
 
-REM 如果请求升级，强制重新安装依赖
+REM Force reinstall when upgrade requested
 if "%UPGRADE%"=="1" (
-    echo [信息] 正在升级依赖包...
-    if exist "requirements.txt" (
-        pip install --upgrade -r requirements.txt
+    echo [INFO] Upgrading dependencies...
+    pip install --timeout 120 --retries 5 --upgrade setuptools wheel
+    if errorlevel 1 echo [WARN] Failed to install build tools; continuing
+    if exist "pyproject.toml" (
+        pip install --timeout 120 --retries 5 --no-build-isolation --upgrade -e .
     ) else (
-        pip install --upgrade openai anthropic
+        if exist "requirements.txt" (
+            pip install --timeout 120 --retries 5 --upgrade -r requirements.txt
+        ) else (
+            pip install --timeout 120 --retries 5 --upgrade openai anthropic
+        )
     )
-    echo [成功] 依赖升级完成
+    if errorlevel 1 (
+        echo [ERROR] Dependency upgrade failed; check network and requirements.txt
+        pause
+        exit /b 1
+    )
+    echo [OK] Dependencies upgraded
     echo.
 )
 
 if /i "%MODE%"=="cli" (
-    REM 启动交互式 REPL 模式（类 Claude Code）
+    REM Launch interactive REPL (Claude Code style)
     echo ========================================
-    echo   启动 Clawd Code 交互式 AI 编程代理
+    echo   Starting Clawd Code interactive AI coding agent
     echo ========================================
     echo.
-    python -m src.main
+    %PYTHON% -m src chat
 ) else if /i "%MODE%"=="doctor" (
-    REM 运行环境诊断
-    python -m src.main doctor
+    REM Run environment diagnostics
+    %PYTHON% -m src doctor
 ) else (
-    REM 默认启动交互式 REPL
+    REM Default: interactive REPL
     echo ========================================
-    echo   启动 Clawd Code CLI v%VERSION%
+    echo   Starting Clawd Code CLI v%VERSION%
     echo ========================================
     echo.
-    python -m src.main
+    %PYTHON% -m src chat
 )
 
 echo.
 echo ========================================
-echo   完成
+echo   Done
 echo ========================================
 pause

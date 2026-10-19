@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.60.2"
+version = "0.60.3"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -40,9 +40,10 @@ dependencies = [
     "prompt-toolkit>=3.0.40",
     "pyyaml>=6.0.1",
     "jinja2>=3.0.0",
+    "loguru>=0.7.0",  # 核心模块（api_key_manager/health_check/middleware 等）直接 import
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0; python_version < '3.11'",
-    "toml>=0.10.2; python_version >= '3.11'",
+    "toml>=0.10.2",  # config/generator.py 与 hooks_config.py 在所有版本都 import
 ]
 
 [project.optional-dependencies]

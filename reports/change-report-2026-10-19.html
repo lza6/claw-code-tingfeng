@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawd Code v0.60.2 变更报告</title>
+<style>
+  :root{
+    --bg:#0e1116; --surface:#151b23; --line:#25303d; --text:#e6edf3;
+    --muted:#8b98a8; --accent:#5eead4; --warn:#fbbf24; --bad:#f87171; --good:#34d399;
+    --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .kicker{font:600 12px/1 var(--mono);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:14px 0 10px;letter-spacing:-.02em}
+  .lede{color:var(--muted);max-width:72ch;margin:0}
+  h2{font-size:22px;margin:44px 0 14px;padding-top:18px;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--accent)}
+  p{margin:10px 0}
+  code{font-family:var(--mono);font-size:.9em;background:#1c2530;padding:2px 6px;border-radius:4px}
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto}
+  pre code{background:none;padding:0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  .pill{display:inline-block;font:600 11px/1 var(--mono);padding:4px 8px;border-radius:999px}
+  .ok{background:rgba(52,211,153,.14);color:var(--good)}
+  .no{background:rgba(248,113,113,.14);color:var(--bad)}
+  .warn{background:rgba(251,191,36,.14);color:var(--warn)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card b{display:block;font:600 26px/1.2 var(--mono);color:var(--accent);margin-bottom:4px}
+  .card span{color:var(--muted);font-size:13px}
+  .q{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0}
+  .q p{margin:0 0 10px;font-weight:600}
+  .opt{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .opt:hover{background:#1b2430}
+  .opt input{margin-top:5px}
+  .opt.correct{background:rgba(52,211,153,.12);outline:1px solid rgba(52,211,153,.4)}
+  .opt.wrong{background:rgba(248,113,113,.12);outline:1px solid rgba(248,113,113,.4)}
+  .explain{display:none;margin-top:10px;padding:10px 12px;border-left:2px solid var(--accent);
+           color:var(--muted);font-size:14px}
+  .explain.show{display:block}
+  .actions{display:flex;gap:12px;align-items:center;margin-top:22px;flex-wrap:wrap}
+  button{font:600 14px/1 inherit;padding:11px 18px;border-radius:8px;border:1px solid var(--line);
+         background:#1c2530;color:var(--text);cursor:pointer}
+  button#submit{background:var(--accent);color:#06231f;border-color:transparent}
+  #verdict{font-weight:700}
+  #score{font-family:var(--mono);color:var(--accent)}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Change Report · 2026-10-19</div>
+  <h1>Clawd Code v0.60.2<br>参考对标落地与两轮审查收口</h1>
+  <p class="lede">从“文档说有、生产跑不到”到可验证的接线：CI 门禁、状态持久化、工具策略、
+  SSRF 前置拦截、Skill 渐进披露、原生工具调用与 server 入口。所有数字来自实际执行。</p>
+</header>
+
+<h2>1. 为什么做这次变更</h2>
+<p>Phase A 审计发现三类系统性问题：<strong>宣称能力默认关闭且无提示</strong>、
+<strong>文本式工具调用是单点脆弱性</strong>、<strong>CI 门禁实际必红</strong>。
+本轮按 P0/P1 批次修复，并由两轮独立审查逐项收口。</p>
+
+<h2>2. 关键决策</h2>
+<div class="grid">
+  <div class="card"><b>默认关</b><span>原生工具调用（CLAWD_NATIVE_TOOLS=1 开启），流式显式回退</span></div>
+  <div class="card"><b>pyproject</b><span>版本真相源优先，避免 editable 元数据滞后</span></div>
+  <div class="card"><b>请求前</b><span>SSRF 重定向逐跳校验，而非事后检查</span></div>
+  <div class="card"><b>按序对应</b><span>tool_call_id 与调用顺序一一对应，不用签名映射</span></div>
+</div>
+
+<h2>3. 做了什么</h2>
+<table>
+  <tr><th>域</th><th>变更</th><th>状态</th></tr>
+  <tr><td>CI</td><td>lint 分层；移除非法 pytest 参数；覆盖率阈值 45；dev 依赖补 ruff/pytest-cov</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>Agent</td><td>原生 tool_calls；失败/过滤调用补 tool 消息；id 按序；SkillTool；工具 risk_kind</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>持久化</td><td>可重入文件锁 + owner；schema/attempt；读改写整体加锁</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>安全</td><td>Scrape 私网/元数据/DNS/重定向前置拦截</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>服务</td><td><code>clawd server</code> + token 鉴权 + port=0 语义</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>可观测</td><td>doctor 能力状态；tracing 返回 bool 并接线</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>覆盖率/收集/死模块</td><td>46.15% / 全量 1531s / 200 不可达</td><td><span class="pill no">未达成</span></td></tr>
+  <tr><td>Release/部署</td><td>无 gh、无 Docker、无部署目标</td><td><span class="pill warn">BLOCKED</span></td></tr>
+</table>
+
+<h2>4. 验证证据</h2>
+<pre><code>pytest tests/ -q                          → 3162 passed, 4 skipped, 1 xfailed, 0 failed (1531s)
+pytest tests/contracts -q                 → 39 passed
+ruff check src/ tests/ --select F821,F811,E9 → All checks passed
+python scripts/import_sweep.py            → 642 模块 / IMPORT-FAIL 0
+python scripts/reachability.py            → 442 生产可达（基线 431，未下降）
+python scripts/e2e_smoke.py               → 5/5 PASS
+python scripts/e2e_production.py          → 8/8 PASS
+python scripts/stress_test.py --n 200     → 5/5 PASS（~11 req/s）
+python -m src --version                   → v0.60.2</code></pre>
+
+<h2>5. 风险与回滚</h2>
+<ul>
+  <li>新增能力均有开关或默认关闭；回滚按提交 <code>git revert</code>。</li>
+  <li>DNS rebinding TOCTOU 仍未消除；流式原生调用未实现；均已在限制中披露。</li>
+  <li>未执行任何数据迁移；无不可逆操作。</li>
+</ul>
+
+<h2>6. 测验（必须通过）</h2>
+<p>共 8 题，全部答对判定“通过”。提交后会显示解释与正确/错误标记。</p>
+
+<div class="q" data-i="0">
+  <p>1. 原生 function calling 的默认状态是？</p>
+  <label class="opt"><input type="radio" name="q0" value="0"> 默认关闭，设置 <code>CLAWD_NATIVE_TOOLS=1</code> 启用</label>
+  <label class="opt"><input type="radio" name="q0" value="1"> 默认启用，无法关闭</label>
+  <label class="opt"><input type="radio" name="q0" value="2"> 只在测试中启用</label>
+  <label class="opt"><input type="radio" name="q0" value="3"> 由模型自行决定，无需开关</label>
+  <div class="explain">默认关闭以保持既有文本协议行为；开启后非流式路径使用原生调用，流式会显式告警并回退。</div>
+</div>
+
+<div class="q" data-i="1">
+  <p>2. CI 的阻塞式 lint 检查覆盖哪些路径与规则？</p>
+  <label class="opt"><input type="radio" name="q1" value="0"> <code>src/</code> 与 <code>tests/</code> 的 F821/F811/E9</label>
+  <label class="opt"><input type="radio" name="q1" value="1"> 只检查 <code>src/</code> 的 F821</label>
+  <label class="opt"><input type="radio" name="q1" value="2"> 全量 ruff 所有规则</label>
+  <label class="opt"><input type="radio" name="q1" value="3"> 只检查格式</label>
+  <div class="explain">只拦截必然导致运行时崩溃的硬错误；全量 1697 条历史违规作为非阻塞报告，独立批次清理。</div>
+</div>
+
+<div class="q" data-i="2">
+  <p>3. 文件锁的正确语义是？</p>
+  <label class="opt"><input type="radio" name="q2" value="0"> 可重入 + owner token + 覆盖读改写整段</label>
+  <label class="opt"><input type="radio" name="q2" value="1"> 只锁写操作即可</label>
+  <label class="opt"><input type="radio" name="q2" value="2"> 只支持 Unix 的 fcntl</label>
+  <label class="opt"><input type="radio" name="q2" value="3"> 用文件 mtime 判断锁是否有效</label>
+  <div class="explain">只锁写仍会丢更新；owner token 防止误删他人锁；原子回收陈旧锁避免与新持有者竞争。</div>
+</div>
+
+<div class="q" data-i="3">
+  <p>4. Scrape 的 SSRF 重定向校验发生在什么时候？</p>
+  <label class="opt"><input type="radio" name="q3" value="0"> 请求发出前逐跳校验目标 URL</label>
+  <label class="opt"><input type="radio" name="q3" value="1"> 请求完成后检查最终 URL</label>
+  <label class="opt"><input type="radio" name="q3" value="2"> 只在启动时校验一次</label>
+  <label class="opt"><input type="radio" name="q3" value="3"> 不校验，交给用户</label>
+  <div class="explain">事后校验时内网请求已经发出；httpx 手动逐跳、urllib 自定义 handler、Playwright route 均在请求前拦截。</div>
+</div>
+
+<div class="q" data-i="4">
+  <p>5. Skill 如何注入系统提示？</p>
+  <label class="opt"><input type="radio" name="q4" value="0"> 只注入 name + description，正文由 SkillTool 按需读取</label>
+  <label class="opt"><input type="radio" name="q4" value="1"> 注入全部 SKILL.md 正文</label>
+  <label class="opt"><input type="radio" name="q4" value="2"> 完全不注入</label>
+  <label class="opt"><input type="radio" name="q4" value="3"> 只在日志里打印</label>
+  <div class="explain">渐进披露：常驻上下文只放摘要，避免提示膨胀；SkillTool 只能读取发现清单中的技能，防止路径遍历。</div>
+</div>
+
+<div class="q" data-i="5">
+  <p>6. 版本号的真相源优先级是？</p>
+  <label class="opt"><input type="radio" name="q5" value="0"> <code>pyproject.toml</code> 优先，metadata 兜底</label>
+  <label class="opt"><input type="radio" name="q5" value="1"> 已安装 metadata 优先</label>
+  <label class="opt"><input type="radio" name="q5" value="2"> 硬编码在 <code>src/__init__.py</code></label>
+  <label class="opt"><input type="radio" name="q5" value="3"> README 优先</label>
+  <div class="explain">editable 安装的 metadata 会滞后；源码树中 pyproject 始终是最新值，避免不同解释器显示不同版本。</div>
+</div>
+
+<div class="q" data-i="6">
+  <p>7. 为什么本轮没有删除计划文档？</p>
+  <label class="opt"><input type="radio" name="q6" value="0"> 仍含未闭环任务或为维护依据，不满足删除条件</label>
+  <label class="opt"><input type="radio" name="q6" value="1"> 用户没有授权删除</label>
+  <label class="opt"><input type="radio" name="q6" value="2"> 文档太大</label>
+  <label class="opt"><input type="radio" name="q6" value="3"> 已全部归档</label>
+  <div class="explain">覆盖率、死模块、收集提速仍未闭环；死代码复核报告仍是维护依据。删除前必须全部闭环并归档 manifest。</div>
+</div>
+
+<div class="q" data-i="7">
+  <p>8. 当前部署与 GitHub Release 状态是？</p>
+  <label class="opt"><input type="radio" name="q7" value="0"> BLOCKED：无 gh CLI、无 Docker/部署目标</label>
+  <label class="opt"><input type="radio" name="q7" value="1"> 已部署到生产并完成热更新</label>
+  <label class="opt"><input type="radio" name="q7" value="2"> 已创建 GitHub Release</label>
+  <label class="opt"><input type="radio" name="q7" value="3"> 不需要部署</label>
+  <div class="explain">不得假装已上线；最小下一步是提供 gh 登录与 Docker/部署目标。</div>
+</div>
+
+<div class="actions">
+  <button id="submit" onclick="submitQuiz()">提交答案</button>
+  <button id="reset" onclick="resetQuiz()">重置</button>
+  <span>得分：<span id="score">0</span> / <span id="total">8</span></span>
+  <span id="verdict">未提交</span>
+</div>
+
+<footer>
+  Clawd Code v0.60.2 · 全部数字来自 2026-10-19 实际执行 ·
+  证据见 <code>test_ledger.md</code>、<code>evidence/</code>、<code>workflow_status.md</code>
+</footer>
+
+</div>
+
+<script>
+const QUESTIONS = [
+  {answer: 0, explain: '默认关闭；CLAWD_NATIVE_TOOLS=1 开启；流式回退文本协议。'},
+  {answer: 0, explain: 'src/ 与 tests/ 的 F821/F811/E9；全量报告非阻塞。'},
+  {answer: 0, explain: '可重入 + owner token + 读改写整段加锁。'},
+  {answer: 0, explain: '请求前逐跳校验；事后校验不是防护。'},
+  {answer: 0, explain: '只注入 name+description，正文按需。'},
+  {answer: 0, explain: 'pyproject 优先；editable metadata 会滞后。'},
+  {answer: 0, explain: '仍含未闭环任务；不满足删除条件。'},
+  {answer: 0, explain: '无 gh、无 Docker/部署目标；标记 BLOCKED。'}
+];
+document.getElementById('total').textContent = QUESTIONS.length;
+
+function submitQuiz() {
+  let score = 0;
+  QUESTIONS.forEach((q, i) => {
+    const root = document.querySelector('.q[data-i="' + i + '"]');
+    const opts = root.querySelectorAll('.opt');
+    const chosen = root.querySelector('input:checked');
+    opts.forEach((el, j) => {
+      el.classList.remove('correct', 'wrong');
+      if (j === q.answer) el.classList.add('correct');
+    });
+    if (chosen) {
+      const v = Number(chosen.value);
+      if (v === q.answer) score += 1;
+      else opts[v].classList.add('wrong');
+    }
+    root.querySelector('.explain').classList.add('show');
+  });
+  document.getElementById('score').textContent = score;
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = score === QUESTIONS.length ? '通过' : '未通过（' + score + '/' + QUESTIONS.length + '）';
+  verdict.style.color = score === QUESTIONS.length ? '#34d399' : '#f87171';
+}
+
+function resetQuiz() {
+  document.querySelectorAll('.q input').forEach(el => { el.checked = false; });
+  document.querySelectorAll('.opt').forEach(el => el.classList.remove('correct', 'wrong'));
+  document.querySelectorAll('.explain').forEach(el => el.classList.remove('show'));
+  document.getElementById('score').textContent = '0';
+  const verdict = document.getElementById('verdict');
+  verdict.textContent = '未提交';
+  verdict.style.color = '';
+}
+</script>
+</body>
+</html>

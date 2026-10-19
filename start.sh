@@ -12,9 +12,13 @@ echo "  Clawd Code - AI 编程代理框架 v${VERSION}"
 echo "========================================"
 echo ""
 
-# 检查 Python 是否安装
-if ! command -v python3 &> /dev/null; then
-    echo "[错误] 未检测到 Python3，请先安装 Python 3.10+"
+# 解析 Python 解释器：优先 python3，回退 python
+if command -v python3 &> /dev/null; then
+    PYTHON_BIN="${PYTHON_BIN:-python3}"
+elif command -v python &> /dev/null; then
+    PYTHON_BIN="${PYTHON_BIN:-python}"
+else
+    echo "[错误] 未检测到 Python，请先安装 Python 3.10+"
     echo "Mac: brew install python3"
     echo "Ubuntu/Debian: sudo apt install python3"
     echo "CentOS/RHEL: sudo yum install python3"
@@ -22,13 +26,13 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 echo "[信息] Python 版本:"
-python3 --version
+$PYTHON_BIN --version
 echo ""
 
 # 检查并创建虚拟环境
 if [ ! -d "venv" ]; then
     echo "[信息] 正在创建虚拟环境..."
-    python3 -m venv venv
+    $PYTHON_BIN -m venv venv
     echo "[成功] 虚拟环境已创建"
 else
     echo "[信息] 虚拟环境已存在"
@@ -38,16 +42,20 @@ echo ""
 # 激活虚拟环境
 echo "[信息] 激活虚拟环境..."
 source venv/bin/activate
+PYTHON_BIN="python"
 echo ""
 
 # 检查并安装依赖
 if ! pip show openai >/dev/null 2>&1; then
     echo "[信息] 正在安装依赖包..."
-    if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt
+    pip install --timeout 120 --retries 5 --upgrade setuptools wheel || echo "[警告] 构建工具安装失败，继续尝试"
+    if [ -f "pyproject.toml" ]; then
+        pip install --timeout 120 --retries 5 --no-build-isolation -e .
+    elif [ -f "requirements.txt" ]; then
+        pip install --timeout 120 --retries 5 -r requirements.txt
     else
         echo "[信息] 未找到 requirements.txt，安装核心依赖..."
-        pip install openai anthropic PySide6
+        pip install --timeout 120 --retries 5 openai anthropic
     fi
     echo "[成功] 依赖安装完成"
 else
@@ -110,10 +118,13 @@ fi
 # 如果请求升级，强制重新安装依赖
 if [ "$UPGRADE" = "1" ]; then
     echo "[信息] 正在升级依赖包..."
-    if [ -f "requirements.txt" ]; then
-        pip install --upgrade -r requirements.txt
+    pip install --timeout 120 --retries 5 --upgrade setuptools wheel || echo "[警告] 构建工具安装失败，继续尝试"
+    if [ -f "pyproject.toml" ]; then
+        pip install --timeout 120 --retries 5 --no-build-isolation --upgrade -e .
+    elif [ -f "requirements.txt" ]; then
+        pip install --timeout 120 --retries 5 --upgrade -r requirements.txt
     else
-        pip install --upgrade openai anthropic PySide6
+        pip install --timeout 120 --retries 5 --upgrade openai anthropic
     fi
     echo "[成功] 依赖升级完成"
     echo ""
@@ -131,26 +142,26 @@ if [ "$BASE_MODE" = "cli" ] || [ "$BASE_MODE" = "--cli" ] || [ "$BASE_MODE" = "-
     echo "  可用命令"
     echo "========================================"
     echo ""
-    echo "  python -m src.main summary        - 查看移植工作区摘要"
-    echo "  python -m src.main manifest       - 查看工作区清单"
-    echo "  python -m src.main commands       - 列出命令条目"
-    echo "  python -m src.main tools          - 列出工具条目"
-    echo "  python -m src.main parity-audit   - 运行奇偶校验审计"
-    echo "  python -m src.main setup-report   - 查看设置报告"
-    echo "  python -m src.main --help         - 查看所有可用命令"
+    echo "  $PYTHON_BIN -m src --help        - 查看所有命令"
+    echo "  $PYTHON_BIN -m src catalog list  - 查看技能/命令清单"
+    echo "  $PYTHON_BIN -m src doctor        - 环境诊断"
+    echo "  $PYTHON_BIN -m src chat          - 交互式对话"
+    echo "  $PYTHON_BIN -m src workflow --help - 工作流命令"
+    echo "  $PYTHON_BIN -m src setup --help  - 初始化项目"
+    echo "  $PYTHON_BIN -m src --version     - 查看版本"
     echo ""
     echo "========================================"
     echo "  快速开始"
     echo "========================================"
     echo ""
-    python -m src.main summary
+    $PYTHON_BIN -m src --help
 else
     # 默认启动 CLI
     echo "========================================"
     echo "  启动 Clawd Code CLI v${VERSION}"
     echo "========================================"
     echo ""
-    python -m src.main summary
+    $PYTHON_BIN -m src --help
 fi
 
 echo ""

@@ -1,0 +1,41 @@
+{
+  "task_id": "E-31-start-scripts-and-core-deps",
+  "status": "passed",
+  "timestamp": "2026-10-19T20:15:00+08:00",
+  "commands_executed": [
+    {"cmd": "cmd /c .\\start.bat doctor", "exit_code": 0, "raw_output_tail": "环境诊断：Python 3.10.9 / openai / anthropic / websockets / tiktoken / httpx 全 PASS；能力状态正常；版本一致性 0.60.2；耗时 89s"},
+    {"cmd": "venv/Scripts/python.exe -m src --version", "exit_code": 0, "raw_output_tail": "Clawd Code v0.60.2（无 ModuleNotFound / atexit traceback）"},
+    {"cmd": "venv/Scripts/python.exe -m src doctor", "exit_code": 0, "raw_output_tail": "能力状态：RAG 默认关闭；World Model / WebSocket 可用；版本一致性 PASS"},
+    {"cmd": "python -c \"模拟 pathspec 缺失后 import src.utils\"", "exit_code": 0, "raw_output_tail": "import src.utils OK; watch available=False; FileWatcher 抛明确 ImportError"},
+    {"cmd": "ruff check src/ tests/ --select F821,F811,E9", "exit_code": 0, "raw_output_tail": "All checks passed!"}
+  ],
+  "files_changed": [
+    "requirements.txt",
+    "pyproject.toml",
+    "start.bat",
+    "start.sh",
+    "src/utils/__init__.py",
+    "src/main.py",
+    "src/cli/repl_commands.py",
+    ".agent/", "reports/", "计划书/下一步改进指南.md", "AGENTS.md"
+  ],
+  "tests": [
+    {"name": "start.bat 端到端 doctor", "type": "smoke", "status": "passed"},
+    {"name": "venv CLI 启动", "type": "smoke", "status": "passed"},
+    {"name": "pathspec 缺失降级", "type": "unit", "status": "passed"},
+    {"name": "doctor 版本一致性", "type": "smoke", "status": "passed"}
+  ],
+  "coverage_summary": null,
+  "seams_touched": ["CLI 启动", "依赖声明", "可选依赖导入", "atexit 清理"],
+  "mock_scenarios_covered": ["missing optional dependency", "missing build wheel", "missing core dependency"],
+  "browser_validation": {
+    "performed": true,
+    "paths": ["reports/change-report-2026-10-19.html"],
+    "screenshots": []
+  },
+  "limitations": [
+    "start.sh 未在 Linux/macOS 实跑（当前为 Windows）。",
+    "venv 首次安装依赖受网络速度影响（实测一次 10 分钟超时、一次成功）。",
+    "未安装 [watch] extra 时 FileWatcher 不可用（按设计降级并给出明确提示）。"
+  ]
+}

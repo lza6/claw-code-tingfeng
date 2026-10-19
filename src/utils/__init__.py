@@ -66,8 +66,23 @@ from .url_utils import (
 )
 from .voice import SoundDeviceError, Voice
 from .voice import is_available as is_voice_available
-from .watch import FileWatcher
-from .watch import is_available as is_watch_available
+try:
+    from .watch import FileWatcher
+    from .watch import is_available as is_watch_available
+except ImportError:
+    # `pathspec` 属于可选依赖（pyproject 的 `watch` extra）。核心安装
+    # （pip install -e .）不应因它缺失而让整个 CLI 无法导入。
+    class _MissingWatchDependency:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "FileWatcher 需要可选依赖 pathspec；"
+                "请运行: pip install -e '.[watch]'"
+            )
+
+    FileWatcher = _MissingWatchDependency  # type: ignore[assignment,misc]
+
+    def is_watch_available() -> bool:  # type: ignore[misc]
+        return False
 
 SNAPSHOT_PATH = Path(__file__).resolve().parent.parent / 'reference_data' / 'subsystems' / 'utils.json'
 try:

@@ -1,5 +1,9 @@
 # AGENTS.md
 
+> **执行契约与记忆**：动手前先读 `.agent/rules.md`、`.agent/memory/*.md`，
+> 并按任务匹配 `.agent/skills/*.md`。计划文档审计见 `reports/plan-audit-2026-10-19.md`，
+> 变更报告与测验见 `reports/change-report-2026-10-19.html`。
+
 This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Repository Overview

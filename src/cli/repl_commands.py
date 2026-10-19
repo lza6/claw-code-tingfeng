@@ -165,7 +165,9 @@ def _handle_doctor() -> None:
         rd_version = ""
         if readme.exists():
             content = readme.read_text(encoding='utf-8')
-            match = re.search(r'当前版本：v?([\d\.]+)', content)
+            # README 可能写作 "**当前版本**: vX" 或 "当前版本：vX"；
+            # 两种冒号都要匹配，否则版本一致性检查永远显示"无法提取"。
+            match = re.search(r'当前版本\**\s*[:：]\s*\**\s*v?([\d\.]+)', content)
             if match:
                 rd_version = match.group(1)
 

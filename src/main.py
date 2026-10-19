@@ -228,9 +228,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _register_shutdown_hooks() -> None:
-    """注册清理函数"""
-    from .agent import tool_executor as exec_mod
-    exec_mod.shutdown_executor()
+    """进程退出清理。
+
+    注意：本函数由 ``atexit`` 调用，解释器可能已经进入 shutdown 阶段。
+    此时再做**重导入**（例如 `from .agent import tool_executor`）会触发
+    ``RuntimeError: can't register atexit after shutdown``。清理失败不应
+    改变退出码，也不应向用户抛 traceback，因此这里吞掉异常并留下 debug。
+    """
+    try:
+        from .agent import tool_executor as exec_mod
+
+        exec_mod.shutdown_executor()
+    except Exception as e:  # noqa: BLE001 - atexit 阶段不允许再抛
+        try:
+            from .utils import debug
+
+            debug(f'退出清理跳过: {type(e).__name__}: {e}')
+        except Exception:
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:

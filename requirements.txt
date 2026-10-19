@@ -1,4 +1,4 @@
-# Clawd Code - 核心依赖（整合 Onyx 特性）
+﻿# Clawd Code - 核心依赖（整合 Onyx 特性）
 # 安装: pip install -r requirements.txt
 # 版本锁定日期: 2026-04-08
 
@@ -6,6 +6,8 @@
 openai>=2.30.0
 anthropic>=0.40.0
 litellm>=1.40.0  # 参考 Onyx LLM 集成
+loguru>=0.7.0  # 核心模块直接 import（api_key_manager/health_check/middleware 等）
+toml>=0.10.2  # config/generator.py 与 hooks_config.py 直接 import
 
 # ==================== 后台任务（参考 Onyx Celery）====================
 celery[redis]>=5.3.0
@@ -41,7 +43,8 @@ opentelemetry-exporter-otlp>=1.22.0
 
 # ==================== 追踪Provider（整合自 Onyx）====================
 langfuse>=0.50.0  # Langfuse 追踪
-braintrust>=0.50.0  # Braintrust 追踪
+# braintrust: processor is not ported and >=0.50.0 does not exist on PyPI.
+# Keeping it would fail the whole pip install (observed in practice).
 
 # ==================== 可选依赖 ====================
 # google-generativeai>=0.3.0  # Google Gemini 支持

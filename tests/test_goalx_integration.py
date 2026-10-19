@@ -1,7 +1,18 @@
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
+
+import pytest
+
+# 这是**真实 LLM 端到端**测试：会走完整 Agent 循环且没有超时。
+# 默认跳过，避免 `pytest tests/` 因网络/模型响应而挂起；
+# 需要时显式运行：RUN_GOALX_E2E=1 pytest tests/test_goalx_integration.py
+pytestmark = pytest.mark.skipif(
+    os.environ.get('RUN_GOALX_E2E') != '1',
+    reason='真实 LLM E2E；设置 RUN_GOALX_E2E=1 启用',
+)
 
 # 添加 src 到路径
 sys.path.append(str(Path.cwd()))

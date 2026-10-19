@@ -9,6 +9,51 @@
 
 ## [未发布]
 
+### v0.60.3 (2026-10-19) — 终局审计：启动链路、核心依赖、测试套件退出、执行骨架
+
+把项目当成真实交付物做终检，发现并修复以下问题。
+
+#### P0：核心安装/启动链路
+
+- `requirements.txt` 含不存在的 `braintrust>=0.50.0`，`pip install -r` 整体失败；
+  该 processor 也未移植，已移除。
+- `start.bat` 依赖 PATH 中不存在的 `python`；改为 `py -3.10` → `py -3` → `python`。
+- 启动脚本安装全部 `requirements.txt`（含 celery/redis 等非必需）且失败仍报“成功”；
+  改为 `pip install -e .`，失败 `exit /b 1`。
+- venv 缺 `wheel` 导致 editable 构建失败；脚本先装 `setuptools wheel` 并使用
+  `--no-build-isolation`。
+- `src/utils/__init__.py` 急切导入可选依赖 `pathspec`，核心安装后 CLI 直接崩溃；
+  改为可选导入 + 明确降级提示。
+- `loguru`、`toml` 被核心模块直接 import 但未在 `pyproject.toml` 声明；
+  已补进核心依赖（否则命令组整体失效）。
+
+#### P1/P2
+
+- `atexit` 阶段重导入导致 `can't register atexit after shutdown` traceback；
+  清理函数捕获并降级为 debug。
+- `doctor` 版本正则只认中文冒号，README 写成英文冒号时显示“无法提取”；已兼容。
+- 测试套件无法退出：`test_goalx_integration.py` 是无超时的真实 LLM E2E，
+  改为 `RUN_GOALX_E2E=1` opt-in；`test_agent_engine_refactor.py` 启动 WorldModel
+  进程池导致 pytest 挂起，fixture 改为 tmp_path 并禁用后台初始化。
+- 删除无任何测试函数的 `tests/test_slop_data.py`。
+
+#### 执行骨架与文档
+
+- 新增 `.agent/skills/`（9 个）、`.agent/memory/`（7 个）、`.agent/rules.md`。
+- 新增 `reports/change-report-2026-10-19.html`（8 题测验，真实浏览器 8/8 通过）
+  与 `reports/plan-audit-2026-10-19.md`。
+- 计划文档审计：三份文档仍含未闭环项或为维护依据，**未删除、未归档**。
+- 更新 `计划书/下一步改进指南.md` 顶部状态表为 v0.60.3 实测。
+
+#### 验证
+
+- `start.bat doctor` 端到端退出码 0（89s，诊断全 PASS）。
+- `venv/Scripts/python.exe -m src --version` → v0.60.3，无缺失依赖/traceback。
+- 根目录测试 270 passed / 1 skipped（76.5s，正常退出）。
+- 全量测试结果见 `test_ledger.md`。
+
+---
+
 ### v0.60.2 (2026-10-19) — 复审收口：过滤调用 id、生产读改写锁、安全测试真实性、版本解析
 
 第二轮独立审查（reviewer-round2）仍判定 Request Changes；本轮逐项关闭。

@@ -24,7 +24,7 @@
 | 新增：Skill 注入 | `pytest tests/agent/test_skill_injection.py -q` | **6 passed** | evidence/P1-10 |
 | 新增：原生工具调用 | `pytest tests/agent/test_native_tool_calls.py -q` | **8 passed** | evidence/P1-1 |
 | 定向回归（7 目录） | `pytest tests/agent tests/workflow tests/tools_runtime tests/llm tests/contracts tests/cli tests/server -q` | **1383 passed, 1 xfailed, 0 failed**（564.12s） | 本轮 |
-| **全量测试** | `pytest tests/ -q` | **3162 passed, 4 skipped, 1 xfailed, 0 failed**（1531.01s） | 本轮 |
+| **全量测试** | `pytest tests/ -q` | **3161 passed, 5 skipped, 1 xfailed, 0 failed**（2977.20s） | 本轮 |
 | 静态硬指标（CI 同款） | `ruff check src/ tests/ --select F821,F811,E9` | All checks passed（修复 tests 中 4 个 F811 后） | evidence/B1 |
 | 导入完整性 | `python scripts/import_sweep.py` | 642 模块 / IMPORT-OK 636 / **FAIL 0** / DEP-MISSING 6 | 本轮 |
 | 生产可达 | `python scripts/reachability.py` | **442 可达**（基线 431，未下降）/ 200 不可达 | 本轮 |
@@ -32,7 +32,10 @@
 | 生产路径 E2E | `python scripts/e2e_production.py` | **8/8 PASS**（v0.60.1 复跑，含上游失败路径） | 本轮 |
 | 原生工具真实端点 | 加载 `.env` 后 `provider.chat(tools=...)` | 返回 `BashTool {"command":"echo hi"}` | 本轮 |
 | 并发压测 | `python scripts/stress_test.py --n 200` | **5/5 PASS**；200 并发 24.49s（~11 req/s）；审批混合拒绝=100/只读=100/YOLO=100/错误=0 | 本轮 |
-| 版本一致性 | `python -m src --version` + metadata | **v0.60.0** / 0.60.0 | 本轮 |
+| 版本一致性 | `python -m src --version` + metadata | **v0.60.2** / 0.60.2 | 本轮 |
+| 快速启动脚本 | `cmd /c .\start.bat doctor` | 退出码 0；89s；诊断全 PASS | evidence/E-31 |
+| venv 独立启动 | `venv/Scripts/python.exe -m src --version` | v0.60.2；无缺失依赖/traceback | evidence/E-31 |
+| HTML 报告测验 | `scripts/verify_html_report.py reports/change-report-2026-10-19.html` | 8/8；错一题正确判未通过；6 项断言通过 | 本轮 |
 | CI YAML | `python -c "yaml.safe_load(...)"` | yaml OK | evidence/B1 |
 
 ## 未执行 / 未达成（如实披露）

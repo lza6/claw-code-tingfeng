@@ -7,6 +7,21 @@
 
 ---
 
+## 0-0-0. 技能检查记录（2026-10-19 终审）
+
+| 检查项 | 结果 |
+|:---|:---|
+| `.agent/skills/` | 本轮创建 9 个技能（api/feature/release/rollback/verification/review/audit/concurrency/plan-doc） |
+| `.agent/memory/` | 本轮创建 7 个记忆文件 |
+| `.agent/rules.md` | 本轮创建执行契约 |
+| `AGENTS.md` / `CLAUDE.md` | 已存在；项目约定有效 |
+| `skills/`（项目内） | 62 个条目；`clawd-change-workflow` 为项目专用流程 |
+| `.claude/skills/` | 已安装但无 `spec-driven-development` / `brainstorming` 目录（使用项目内 `skills/` 与 `.agent/skills/` 兜底） |
+| Spec Kit / addyosmani skills | 未安装到本项目；参考项目 `D:\参考项目\addyosmani__agent-skills` 已分析 |
+| 外部技能安装 | 未安装（本地技能已覆盖当前技术栈；避免引入无关依赖） |
+
+---
+
 ## 0-0. 本轮（v0.59.0 → v0.60.2）：参考对标落地 + 两轮独立审查修复
 
 依据 `参考的结果计划指南.md` 的 Phase A 审计，按 P0/P1 批次实施。
@@ -25,7 +40,7 @@
 | E-09 | 原生工具调用（默认关，真实端点已验证） | ✅ | evidence/P1-1；真实端点返回 BashTool tool_calls |
 | E-10 | `clawd server` 命令 + token 鉴权 + port=0 语义 | ✅ | evidence/P1-7（24 条 server 测试） |
 | E-11 | 平行阶段实现标注（不删除） | ✅ | `stages/`、`pipeline_stages/` docstring |
-| E-12 | 全量回归 | ✅ | **3162 passed, 4 skipped, 1 xfailed, 0 failed**（1531s） |
+| E-12 | 全量回归 | ✅ | **3161 passed, 5 skipped, 1 xfailed, 0 failed**（2977s） |
 | E-13 | 真实 E2E | ✅ | v0.60.1 复跑：`e2e_smoke.py` 5/5；`e2e_production.py` 8/8（含上游失败路径） |
 | E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~11 req/s，无死锁/错配） |
 | E-15 | 版本一致性 v0.60.2 | ✅ | `python -m src --version` + metadata |
@@ -44,11 +59,23 @@
 | E-28 | 复审 Required 2：`cancel_mode` 与 `team_persistence` 读改写整体加锁 | ✅ | 定向回归 1383 passed |
 | E-29 | 复审 Required 3：`SafeRedirectHandler` 提到模块级，测试直接测生产实现 | ✅ | SSRF 测试 25 passed |
 | E-30 | 复审 Required 4/5：版本解析改为 pyproject 优先；补生产函数并发测试 | ✅ | 双解释器均 0.60.1；持久化 14 passed |
+| E-31 | 终审 P0：`requirements.txt` 含不存在的 `braintrust>=0.50.0` | ✅ | 移除；`pip install -r` 可解析（BOM + dry-run） |
+| E-32 | 终审 P0：启动脚本依赖 PATH 中不存在的 `python` | ✅ | 改为 `py -3.10` → `py -3` → `python` |
+| E-33 | 终审 P0：启动脚本安装全部 requirements（可选/重型）且失败仍报成功 | ✅ | 改为 `pip install -e .`；失败 `exit /b 1` |
+| E-34 | 终审 P0：venv 缺 wheel 导致 editable 构建失败 | ✅ | 先装 setuptools/wheel，`--no-build-isolation` |
+| E-35 | 终审 P0：`utils` 急切导入可选 `pathspec`，核心安装后 CLI 崩溃 | ✅ | 可选导入 + 明确降级提示；`loguru`/`toml` 补进核心依赖 |
+| E-36 | 终审 P1：atexit 阶段重导入抛 traceback | ✅ | `_register_shutdown_hooks` 捕获并 debug |
+| E-37 | 终审 P2：doctor 版本正则只认中文冒号 | ✅ | `版本一致性: 0.60.2` PASS |
+| E-38 | 启动脚本端到端验证 | ✅ | `start.bat doctor` 退出码 0，89s，诊断全 PASS |
+| E-39 | 终审 P1：`test_goalx_integration.py` 真实 LLM 无超时，挂起全量 | ✅ | 改为 `RUN_GOALX_E2E=1` opt-in，默认 skip |
+| E-40 | 终审 P1：`test_agent_engine_refactor.py` 启动进程池导致 pytest 不退出 | ✅ | fixture 用 tmp_path + 禁用后台 WorldModel；47s 正常退出 |
+| E-41 | 终审 P2：`test_slop_data.py` 无任何测试函数（死资产） | ✅ 已删除 | `git rm`；无引用 |
+| E-42 | 终审：根目录测试整体 | ✅ | 270 passed / 1 skipped（76.5s，正常退出） |
 
 ### 本轮验证命令与真实结果
 
 ```text
-pytest tests/ -q                                  → 3162 passed, 4 skipped, 1 xfailed, 0 failed (1531.01s)
+pytest tests/ -q                                  → 3161 passed, 5 skipped, 1 xfailed, 0 failed (2977.20s)
 pytest tests/{workflow,agent,tools_runtime,llm,contracts,cli} -q → 1348 passed, 1 xfailed (702.78s)
 ruff check src/ --select F821,F811                → All checks passed!
 python scripts/import_sweep.py                    → 642 模块 / IMPORT-OK 636 / FAIL 0 / DEP-MISSING 6
