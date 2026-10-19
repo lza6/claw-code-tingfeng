@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.60.5 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.60.6 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -224,7 +224,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3163 passed / 5 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（2773s） |
+| 测试用例 | **3165 passed / 5 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（2806s） |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
 | 覆盖率 | **46.15%**（25,877 / 56,072 行） | 仍低于 `fail_under = 60`，需独立批次提升 |
 | Ruff `F821` / `F811` | **0 / 0** | `ruff check src/ --select F821,F811` |

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clawd Code v0.60.4 变更报告</title>
+<title>Clawd Code v0.60.6 变更报告</title>
 <style>
   :root{
     --bg:#0e1116; --surface:#151b23; --line:#25303d; --text:#e6edf3;
@@ -59,7 +59,7 @@
 
 <header>
   <div class="kicker">Change Report · 2026-10-20</div>
-  <h1>Clawd Code v0.60.4<br>参考对标、两轮审查与终局审计</h1>
+  <h1>Clawd Code v0.60.6<br>参考对标、两轮审查与终局审计</h1>
   <p class="lede">从“文档说有、生产跑不到”到可验证的接线：CI 门禁、状态持久化、工具策略、
   SSRF 前置拦截、Skill 渐进披露、原生工具调用与 server 入口。所有数字来自实际执行。</p>
 </header>
@@ -111,7 +111,7 @@ python -m src --version                   → v0.60.2</code></pre>
 </ul>
 
 <h2>6. 测验（必须通过）</h2>
-<p>共 8 题，全部答对判定“通过”。提交后会显示解释与正确/错误标记。</p>
+<p>共 9 题，全部答对判定“通过”。提交后会显示解释与正确/错误标记。</p>
 
 <div class="q" data-i="0">
   <p>1. 原生 function calling 的默认状态是？</p>
@@ -187,11 +187,11 @@ python -m src --version                   → v0.60.2</code></pre>
 
 <div class="q" data-i="8">
   <p>9. Windows 上状态快照曾保存失败，根因是？</p>
-  <label class="opt"><input type="radio" name="q8" value="0"> 函数内 <code>import fcntl</code>，Windows 必然 ImportError</label>
+  <label class="opt"><input type="radio" name="q8" value="0"> 函数内 <code>import fcntl</code>（该模块生产不可达）</label>
   <label class="opt"><input type="radio" name="q8" value="1"> 磁盘空间不足</label>
   <label class="opt"><input type="radio" name="q8" value="2"> JSON 序列化不支持</label>
   <label class="opt"><input type="radio" name="q8" value="3"> 没有写权限</label>
-  <div class="explain">已改用跨平台 <code>file_lock + atomic_write</code>；并补了 Windows 保存回归。</div>
+  <div class="explain">该平行实现已改为跨平台锁；真正的生产路径 <code>core/persistence/run_state.py</code> 也在 v0.60.6 修复（固定 tmp/无锁/无 fsync）。</div>
 </div>
 
 <div class="actions">
@@ -202,7 +202,7 @@ python -m src --version                   → v0.60.2</code></pre>
 </div>
 
 <footer>
-  Clawd Code v0.60.4 · 全部数字来自 2026-10-19/20 实际执行 ·
+  Clawd Code v0.60.6 · 全部数字来自 2026-10-19/20 实际执行 ·
   证据见 <code>test_ledger.md</code>、<code>evidence/</code>、<code>workflow_status.md</code>
 </footer>
 

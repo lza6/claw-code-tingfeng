@@ -9,6 +9,38 @@
 
 ## [未发布]
 
+### v0.60.6 (2026-10-20) — 第三轮审查收口：生产持久化、测试强度、证据修正
+
+第三轮独立审查（reviewer-round3）判定 Request Changes，阻塞点为 C1（修复落在
+生产不可达模块）与 C2（并发测试被降强度）。本轮逐项关闭。
+
+#### C1：生产持久化
+
+- 确认 `src/core/state_impl.py` 在 `reachability --prod --list` 中属于
+  **生产不加载**（391 行）；v0.60.4 的修复只提升了一致性，不等于生产已修复。
+- 真正生产可达的 `src/core/persistence/run_state.py`（被 `workflow/engine.py`、
+  `status_dashboard.py` 等使用）存在同类问题：
+  - `_write_atomic` 使用固定 `<name>.tmp`、无锁、无 fsync，且先 move 目标再 replace；
+  - `record_evidence_event` 的 JSONL 追加无锁、无 fsync；
+  - `update_task` 的 OCC 检查与写入不在同一临界区。
+  已改为 `file_lock + atomic_write`、锁内读改写、备份先 copy 再覆盖。
+- 新增生产函数并发回归：`tests/core/test_run_state_concurrency.py`
+  （4 线程更新任务不丢、4×10 事件追加 40 行且每行合法 JSON）。
+
+#### C2：测试强度
+
+- 恢复 `test_state_persistence_semantics.py` 的原并发强度：
+  atomic write 20 次、mode_state 10 次、progress 10 次、读改写 25 次（断言 100）。
+  `timeout=60` 保留（审查实测原参数可通过）。
+
+#### 证据修正
+
+- 收集基线改为实测 **3171 tests / 0 errors / 64.84s**。
+- HTML 报告题数说明改为 9 题；正文证据更新为 v0.60.5/3163 passed/2773s。
+- `.agent/memory` 的收集数字与“未达成”矛盾已清理；补充 async 重入限制条目。
+
+---
+
 ### v0.60.5 (2026-10-20) — 持久化持久性与锁等待
 
 - `atomic_write` 增加 `flush + fsync`：掉电后不再出现“文件存在但内容为空/半截”。
@@ -28,13 +60,14 @@
 
 ### v0.60.4 (2026-10-20) — 终审补充：跨平台状态持久化
 
-- `src/core/state_impl.py` 的 `save_snapshot` 曾在函数内 `import fcntl`；
-  Windows 上必然 ImportError，导致快照保存**永远失败**。改用
-  `file_lock + atomic_write`。
-- `src/core/state/persistence.py`：快照/事件写入改为原子写；
-  `append_event` 的读改写整体加锁，修复并发丢事件。
+- `src/core/state_impl.py`（**生产不可达**的平行实现）的 `save_snapshot`
+  曾在函数内 `import fcntl`；该模块在 Windows 上会保存失败。已改用
+  `file_lock + atomic_write`，但**不宣称生产受此缺陷影响**。
+- `src/core/state/persistence.py`：快照/事件原子写；`append_event` 加锁。
+  该模块在 `src/` 中无调用方（`append_event` 也无生产调用方），属一致性修复。
+- 生产路径 `src/core/persistence/run_state.py` 的同类问题在 v0.60.6 修复。
 - 新增回归：Windows 跨平台保存、4 线程 ×10 次并发追加（40 条不丢）。
-- 收集基线复测：**3167 tests / 0 errors / 78.99s**（收集 <120s 已达成）。
+- 收集基线复测：**3171 tests / 0 errors / 64.84s**（收集 <120s 已达成）。
 
 #### 验证
 
@@ -74,7 +107,7 @@
 #### 执行骨架与文档
 
 - 新增 `.agent/skills/`（9 个）、`.agent/memory/`（7 个）、`.agent/rules.md`。
-- 新增 `reports/change-report-2026-10-19.html`（8 题测验，真实浏览器 8/8 通过）
+- 新增 `reports/change-report-2026-10-19.html`（9 题测验，真实浏览器 9/9 通过）
   与 `reports/plan-audit-2026-10-19.md`。
 - 计划文档审计：三份文档仍含未闭环项或为维护依据，**未删除、未归档**。
 - 更新 `计划书/下一步改进指南.md` 顶部状态表为 v0.60.3 实测。

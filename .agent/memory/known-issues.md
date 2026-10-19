@@ -5,7 +5,7 @@
 |:---|:---|:---|:---|
 | K-01 | 覆盖率 60% | 46.15%（25,877/56,072） | 回归保护不足 |
 | K-02 | 死模块 ≤20 | 200 个生产不可达（41,561 行） | 维护负担与误判风险 |
-| K-03 | 测试收集 <120s | ✅ **已达成**：3167 tests / 0 errors / 78.99s | — |
+| K-03 | 测试收集 <120s | ✅ **已达成**：3171 tests / 0 errors / 64.84s | — |
 | K-04 | 静默吞异常 | 全库 206 处 `pass/continue` | 故障不可见 |
 
 ## 已知限制（已披露）
@@ -17,6 +17,7 @@
 | L-04 | `PipelineState` 非生产路径 | 生产用 `ModeStateManager`；`expected_attempt` 无生产调用方 |
 | L-05 | 无 Web UI / 无浏览器验证 | 项目为 CLI |
 | L-06 | `FilePathWatcher`（`src/utils/watch.py`）依赖可选 `pathspec` | 未装 `[watch]` extra 时降级，`FileWatcher` 抛明确 ImportError；核心 CLI 不受影响 |
+| L-07 | `file_lock` 的重入状态是**线程级** | async 临界区若在持锁期间 `await`，同线程两个协程会被误判为可重入；当前调用方均为同步且临界区无 `await` |
 
 ## 环境阻塞
 | ID | 阻塞 | 缺什么 |

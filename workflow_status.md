@@ -40,7 +40,7 @@
 | E-09 | 原生工具调用（默认关，真实端点已验证） | ✅ | evidence/P1-1；真实端点返回 BashTool tool_calls |
 | E-10 | `clawd server` 命令 + token 鉴权 + port=0 语义 | ✅ | evidence/P1-7（24 条 server 测试） |
 | E-11 | 平行阶段实现标注（不删除） | ✅ | `stages/`、`pipeline_stages/` docstring |
-| E-12 | 全量回归 | ✅ | **3163 passed, 5 skipped, 1 xfailed, 0 failed**（2773s） |
+| E-12 | 全量回归 | ✅ | **3165 passed, 5 skipped, 1 xfailed, 0 failed**（2806s） |
 | E-13 | 真实 E2E | ✅ | v0.60.1 复跑：`e2e_smoke.py` 5/5；`e2e_production.py` 8/8（含上游失败路径） |
 | E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~11 req/s，无死锁/错配） |
 | E-15 | 版本一致性 v0.60.2 | ✅ | `python -m src --version` + metadata |
@@ -73,15 +73,19 @@
 | E-42 | 终审：根目录测试整体 | ✅ | 270 passed / 1 skipped（76.5s，正常退出） |
 | E-43 | 终审 P1：`state_impl.save_snapshot` 的 `import fcntl` 在 Windows 必失败 | ✅ | 改用 file_lock + atomic_write；2 条回归 |
 | E-44 | 终审 P1：`persistence.append_event` 读改写无锁，并发丢事件 | ✅ | 锁内读改写；4×10 并发 40 条不丢 |
-| E-45 | 收集基线复测 | ✅ | 3167 tests / 0 errors / 78.99s（收集 <120s 达成） |
+| E-45 | 收集基线复测 | ✅ | 3171 tests / 0 errors / 64.84s（收集 <120s 达成） |
 | E-46 | 终审补充：`atomic_write` 缺 fsync | ✅ | flush+fsync；持久化测试 16 passed |
 | E-47 | 终审补充：高负载下状态锁 10s 超时 | ✅ | 提高到 30s；并行 core+workflow 895 passed |
 | E-48 | 终审补充：熔断器半开测试固定 sleep 余量偶发失败 | ✅ | 改有界轮询；连续 5 次 25 passed |
+| E-49 | 第三轮 C1：生产 `core/persistence/run_state.py` 无锁/固定 tmp/无 fsync | ✅ | file_lock + atomic_write；生产并发测试 2 passed |
+| E-50 | 第三轮 C2：并发测试被无依据降强度 | ✅ | 恢复 20/10/10/25；14 passed |
+| E-51 | 第三轮 R1–R4：题数、收集数、`.agent` 矛盾、HTML 版本 | ✅ | 收集实测 3171/64.84s；HTML 9 题；矛盾已清理 |
+| E-52 | 第三轮审查结论 | Request Changes → 已逐项修复 | 待复审 |
 
 ### 本轮验证命令与真实结果
 
 ```text
-pytest tests/ -q                                  → 3163 passed, 5 skipped, 1 xfailed, 0 failed (2773.05s)
+pytest tests/ -q                                  → 3165 passed, 5 skipped, 1 xfailed, 0 failed (2806.15s)
 pytest tests/{workflow,agent,tools_runtime,llm,contracts,cli} -q → 1348 passed, 1 xfailed (702.78s)
 ruff check src/ --select F821,F811                → All checks passed!
 python scripts/import_sweep.py                    → 642 模块 / IMPORT-OK 636 / FAIL 0 / DEP-MISSING 6

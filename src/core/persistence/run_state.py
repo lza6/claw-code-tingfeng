@@ -1,6 +1,9 @@
 import json
 import logging
+import os
 import re
+import shutil
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -130,7 +133,13 @@ class RunStateManager:
         return self._load_json(self.obligation_file)
 
     def record_evidence_event(self, scenario_id: str, harness_kind: str, result: dict[str, Any], artifacts: list[str] | None = None) -> None:
-        """记录证据事件到 JSONL (借鉴 GoalX AppendEvidenceLogEvent)"""
+        """记录证据事件到 JSONL (借鉴 GoalX AppendEvidenceLogEvent)
+
+        并发安全：JSONL 追加在文件锁内完成，并 flush + fsync，
+        避免多执行者同时写时出现交错行或掉电丢事件。
+        """
+        from ...utils.file_ops import file_lock
+
         event = {
             "timestamp": datetime.utcnow().isoformat(),
             "scenario_id": scenario_id,
@@ -138,8 +147,12 @@ class RunStateManager:
             "oracle_result": result,
             "artifact_refs": artifacts or []
         }
-        with open(self.evidence_log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        line = json.dumps(event, ensure_ascii=False) + "\n"
+        with file_lock(self.evidence_log_file, timeout=30.0):
+            with open(self.evidence_log_file, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())
 
 
     def _to_dict(self, obj: Any) -> dict[str, Any]:
@@ -152,37 +165,30 @@ class RunStateManager:
         return obj
 
     def _write_atomic(self, path: Path, data: dict[str, Any]) -> None:
-        """原子写入文件"""
-        temp_file = path.with_suffix(".tmp")
+        """原子写入文件（跨平台锁 + fsync；备份先复制再覆盖）
+
+        旧实现使用固定 `<name>.tmp`、无锁、无 fsync，且先 move 目标再 replace：
+        并发写会互相覆盖，崩溃窗口里目标文件可能不存在。
+        """
+        from ...utils.file_ops import atomic_write, file_lock
+
         try:
-            with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            with file_lock(path, timeout=30.0):
+                # 先备份现有文件（copy 而不是 move：目标始终存在）
+                if path.exists():
+                    backup_name = (
+                        f"{path.stem}_{int(datetime.utcnow().timestamp())}_"
+                        f"{uuid.uuid4().hex[:6]}{path.suffix}"
+                    )
+                    backup_path = self.backup_dir / backup_name
+                    try:
+                        shutil.copy2(path, backup_path)
+                    except OSError as backup_err:
+                        logger.warning(f"创建备份失败 (非致命): {backup_err}")
 
-            # 备份现有文件
-            if path.exists():
-                backup_name = f"{path.stem}_{int(datetime.utcnow().timestamp())}{path.suffix}"
-                backup_path = self.backup_dir / backup_name
-                try:
-                    # 使用 shutil.move 提高跨文件系统兼容性 (Reviewer suggestion)
-                    import shutil
-                    shutil.move(str(path), str(backup_path))
-                except Exception as backup_err:
-                    logger.warning(f"创建备份失败 (非致命): {backup_err}")
-
-            # 替换为新文件
-            try:
-                temp_file.replace(path)
-            except OSError:
-                # 跨卷移动回退方案
-                import shutil
-                shutil.move(str(temp_file), str(path))
+                atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False))
         except Exception as e:
             logger.error(f"原子写入 {path} 失败: {e}")
-            if temp_file.exists():
-                try:
-                    temp_file.unlink()
-                except OSError as cleanup_error:
-                    logger.warning(f"清理临时文件失败: {cleanup_error}")
             raise RuntimeError(f"原子写入失败: {path}") from e
 
     def _load_json(self, path: Path) -> dict[str, Any] | None:
@@ -232,7 +238,20 @@ class RunStateManager:
     def update_task(self, task_id: str, status: WorkflowStatus, result: Any = None, evidence: list[str] | None = None, worktree_id: str | None = None, verification_criteria: str | None = None, expected_version: int | None = None):
         """增量更新单个任务状态 (借鉴 GoalX CoordinationRequiredItem)
         支持乐观并发控制 (OCC)。
+
+        读改写整体加锁：OCC 检查与实际写入必须在同一临界区，
+        否则两个执行者可能同时通过版本检查后互相覆盖。
         """
+        from ...utils.file_ops import file_lock
+
+        with file_lock(self.coordination_file, timeout=30.0):
+            return self._update_task_locked(
+                task_id, status, result, evidence, worktree_id,
+                verification_criteria, expected_version,
+            )
+
+    def _update_task_locked(self, task_id: str, status: WorkflowStatus, result: Any = None, evidence: list[str] | None = None, worktree_id: str | None = None, verification_criteria: str | None = None, expected_version: int | None = None):
+        """在文件锁内执行 update_task 的读改写。"""
         current_data = self.load()
         if not current_data:
              # 如果无法加载，尝试初始化一个

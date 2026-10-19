@@ -20,15 +20,16 @@
 |:---|:---|:---|:---|
 | 新增：状态持久化 | `pytest tests/workflow/test_state_persistence_semantics.py -q` | **14 passed**（含生产函数并发） | evidence/P0-5 |
 | 新增：跨平台状态快照 | `pytest tests/core/test_state_persistence_windows_safe.py -q` | **2 passed**（Windows 保存 + 并发追加 40 条；并行负载下复验） | 本轮 |
+| 生产持久化并发 | `pytest tests/core/test_run_state_concurrency.py -q` | **2 passed**（4 线程任务不丢 + 40 行 JSONL 合法） | 本轮 |
 | 并行负载复验 | 同时跑 `tests/core` 与 `tests/workflow` | **669 + 226 passed / 0 failed** | 本轮 |
 | 熔断器时序 | `pytest tests/llm/test_circuit_breaker.py -q` | **25 passed / 1 xfailed**（连续 5 次） | 本轮 |
-| 测试收集 | `pytest tests/ --collect-only -q` | **3167 collected / 0 errors / 78.99s** | 本轮 |
+| 测试收集 | `pytest tests/ --collect-only -q` | **3171 collected / 0 errors / 64.84s** | 本轮 |
 | 新增：工具策略 | `pytest tests/agent/test_tool_policy.py -q` | **10 passed** | evidence/P1-4 |
 | 新增：SSRF | `pytest tests/tools_runtime/test_scrape_ssrf.py -q` | **25 passed** | evidence/P1-9 |
 | 新增：Skill 注入 | `pytest tests/agent/test_skill_injection.py -q` | **6 passed** | evidence/P1-10 |
 | 新增：原生工具调用 | `pytest tests/agent/test_native_tool_calls.py -q` | **8 passed** | evidence/P1-1 |
 | 定向回归（7 目录） | `pytest tests/agent tests/workflow tests/tools_runtime tests/llm tests/contracts tests/cli tests/server -q` | **1383 passed, 1 xfailed, 0 failed**（564.12s） | 本轮 |
-| **全量测试** | `pytest tests/ -q` | **3163 passed, 5 skipped, 1 xfailed, 0 failed**（2773.05s） | 本轮 |
+| **全量测试** | `pytest tests/ -q` | **3165 passed, 5 skipped, 1 xfailed, 0 failed**（2806.15s） | 本轮 |
 | 静态硬指标（CI 同款） | `ruff check src/ tests/ --select F821,F811,E9` | All checks passed（修复 tests 中 4 个 F811 后） | evidence/B1 |
 | 导入完整性 | `python scripts/import_sweep.py` | 642 模块 / IMPORT-OK 636 / **FAIL 0** / DEP-MISSING 6 | 本轮 |
 | 生产可达 | `python scripts/reachability.py` | **442 可达**（基线 431，未下降）/ 200 不可达 | 本轮 |
@@ -39,7 +40,7 @@
 | 版本一致性 | `python -m src --version` + metadata | **v0.60.2** / 0.60.2 | 本轮 |
 | 快速启动脚本 | `cmd /c .\start.bat doctor` | 退出码 0；89s；诊断全 PASS | evidence/E-31 |
 | venv 独立启动 | `venv/Scripts/python.exe -m src --version` | v0.60.2；无缺失依赖/traceback | evidence/E-31 |
-| HTML 报告测验 | `scripts/verify_html_report.py reports/change-report-2026-10-19.html` | 8/8；错一题正确判未通过；6 项断言通过 | 本轮 |
+| HTML 报告测验 | `scripts/verify_html_report.py reports/change-report-2026-10-19.html` | 9/9；错一题正确判未通过；6 项断言通过 | 本轮 |
 | CI YAML | `python -c "yaml.safe_load(...)"` | yaml OK | evidence/B1 |
 
 ## 未执行 / 未达成（如实披露）

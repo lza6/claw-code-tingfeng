@@ -11,7 +11,7 @@
 | 7 目录定向 | `pytest tests/agent tests/workflow tests/tools_runtime tests/llm tests/contracts tests/cli tests/server -q` | 1383 passed / 1 xfailed |
 | 状态持久化 | `tests/workflow/test_state_persistence_semantics.py` | 14 passed（含生产函数并发） |
 | 跨平台状态 | `tests/core/test_state_persistence_windows_safe.py` | 2 passed（Windows 保存 + 并发 40 条） |
-| 收集 | `pytest tests/ --collect-only -q` | 3167 / 0 errors / 78.99s |
+| 收集 | `pytest tests/ --collect-only -q` | 3171 / 0 errors / 64.84s |
 | 原生工具调用 | `tests/agent/test_native_tool_calls.py` | 9 passed |
 | 工具策略 | `tests/agent/test_tool_policy.py` | 10 passed |
 | SSRF | `tests/tools_runtime/test_scrape_ssrf.py` | 25 passed |

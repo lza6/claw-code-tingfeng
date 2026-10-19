@@ -38,4 +38,4 @@
 ## v0.60.4 补充
 - `src/core/state_impl.py`：`save_snapshot` 改用 `file_lock + atomic_write`（原 `import fcntl` 在 Windows 必失败）。
 - `src/core/state/persistence.py`：快照/事件原子写；`append_event` 读改写加锁。
-- 收集基线：3167 tests / 0 errors / 78.99s。
+- 收集基线：3171 tests / 0 errors / 64.84s。
