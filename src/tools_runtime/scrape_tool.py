@@ -18,6 +18,8 @@ import logging
 import os
 import re
 import socket
+import urllib.error
+import urllib.request
 from urllib.parse import urlparse
 
 from .base import BaseTool, ParameterSchema, ToolResult
@@ -57,6 +59,9 @@ def is_safe_url(url: str, check_dns: bool = True) -> tuple[bool, str]:
     - 解析失败时**默认拒绝**（安全默认），除非显式放开私网。
 
     设置 `CLAWD_SCRAPE_ALLOW_PRIVATE=1` 可放开私网限制（仅供本地测试）。
+
+    注意：`check_dns=False` 只用于 `ScrapeTool.validate` 的快速预检，
+    **不是安全边界**；真正的 DNS/重定向拦截发生在 `Scraper.scrape`。
     """
     allow_private = os.environ.get('CLAWD_SCRAPE_ALLOW_PRIVATE', '').lower() in ('1', 'true', 'yes')
 
@@ -108,6 +113,21 @@ def is_safe_url(url: str, check_dns: bool = True) -> tuple[bool, str]:
             return False, f'域名解析到内网/保留地址: {host} -> {addr}'
 
     return True, ''
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """urllib 重定向处理器：在跟随重定向前校验目标 URL。
+
+    这是生产实现（不是测试副本）：`Scraper._scrape_with_urllib` 使用它。
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        safe, reason = is_safe_url(newurl)
+        if not safe:
+            raise urllib.error.HTTPError(
+                newurl, code, f'blocked redirect: {reason}', headers, fp
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 # ==================== 网页抓取器 ====================
@@ -230,21 +250,9 @@ class Scraper:
 
     def _scrape_with_urllib(self, url: str) -> str | None:
         """使用 urllib 抓取（标准库回退，重定向前置校验）"""
-        import urllib.error
-        import urllib.request
-
-        class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, req, fp, code, msg, headers, newurl):
-                safe, reason = is_safe_url(newurl)
-                if not safe:
-                    raise urllib.error.HTTPError(
-                        newurl, code, f'blocked redirect: {reason}', headers, fp
-                    )
-                return super().redirect_request(req, fp, code, msg, headers, newurl)
-
         headers = {'User-Agent': USER_AGENT}
         req = urllib.request.Request(url, headers=headers)
-        opener = urllib.request.build_opener(_SafeRedirectHandler())
+        opener = urllib.request.build_opener(SafeRedirectHandler())
 
         try:
             with opener.open(req, timeout=30) as resp:

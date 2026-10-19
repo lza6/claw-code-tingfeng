@@ -29,16 +29,22 @@ def setup_tracing() -> list[str]:
     langfuse_public = os.environ.get("LANGFUSE_PUBLIC_KEY")
     langfuse_secret = os.environ.get("LANGFUSE_SECRET_KEY")
     if langfuse_secret and langfuse_public:
-        if _setup_langfuse(langfuse_public, langfuse_secret):
-            initialized_providers.append("langfuse")
+        try:
+            if _setup_langfuse(langfuse_public, langfuse_secret):
+                initialized_providers.append("langfuse")
+        except Exception as e:
+            logger.error(f"Failed to initialize Langfuse tracing: {e}")
     else:
         logger.info("Langfuse credentials not provided, skipping Langfuse setup")
 
     # Setup Braintrust if configured
     braintrust_key = os.environ.get("BRAINTRUST_API_KEY")
     if braintrust_key:
-        if _setup_braintrust(braintrust_key):
-            initialized_providers.append("braintrust")
+        try:
+            if _setup_braintrust(braintrust_key):
+                initialized_providers.append("braintrust")
+        except Exception as e:
+            logger.error(f"Failed to initialize Braintrust tracing: {e}")
     else:
         logger.info("Braintrust API key not provided, skipping Braintrust setup")
 

@@ -499,19 +499,20 @@ class ModeStateManager:
         return state
 
     def cancel_mode(self, mode: str, reason: str = "") -> bool:
-        """取消模式状态"""
+        """取消模式状态（读改写整体加锁）"""
         path = get_mode_state_path(mode, self._cwd)
         if not path.exists():
             return False
         try:
-            state = self.read_state(mode)
-            if state:
-                state.current_phase = f"mode:{mode}:cancelled"
-                state.metadata["cancel_reason"] = reason
-                state.updated_at = datetime.now().isoformat()
-                self._write_state(state)
-                logger.info(f"[ModeState] Cancelled mode: {mode}, reason: {reason}")
-                return True
+            with file_lock(path):
+                state = self.read_state(mode)
+                if state:
+                    state.current_phase = f"mode:{mode}:cancelled"
+                    state.metadata["cancel_reason"] = reason
+                    state.updated_at = datetime.now().isoformat()
+                    self._write_state(state)
+                    logger.info(f"[ModeState] Cancelled mode: {mode}, reason: {reason}")
+                    return True
         except Exception as e:
             logger.error(f"[ModeState] Failed to cancel mode: {e}")
         return False

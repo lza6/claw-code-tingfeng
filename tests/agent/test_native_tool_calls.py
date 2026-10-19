@@ -150,6 +150,53 @@ async def test_malformed_arguments_get_tool_error_message():
 
 
 @pytest.mark.asyncio
+async def test_filtered_duplicate_calls_get_tool_messages():
+    """被 max_repeat_calls 过滤的调用也必须回 tool 消息，不能留悬空 id。"""
+    provider = _FakeProvider()
+    provider.responses = [
+        LLMResponse(
+            content='',
+            model='fake',
+            finish_reason='tool_calls',
+            tool_calls=[
+                {'id': 'call_1', 'type': 'function', 'function': {'name': 'BashTool', 'arguments': '{"command": "echo hi"}'}},
+                {'id': 'call_2', 'type': 'function', 'function': {'name': 'BashTool', 'arguments': '{"command": "echo hi"}'}},
+            ],
+        ),
+        LLMResponse(content='done', model='fake', finish_reason='stop'),
+    ]
+
+    executed: list[str] = []
+
+    async def execute_tool(name: str, args: dict):
+        executed.append(name)
+        return ToolResult(success=True, output='hi')
+
+    config = AgentLoopConfig(
+        goal='test',
+        llm_provider=provider,
+        messages=[],
+        max_iterations=2,
+        system_prompt='system',
+        tools={},
+        _execute_tool=execute_tool,
+        max_repeat_calls=1,
+        tool_schemas=[{'type': 'function', 'function': {'name': 'BashTool'}}],
+    )
+
+    await _run_agent_loop(config=config)
+
+    assert executed == ['BashTool']
+    tool_msgs = [m for m in config.messages if m.role == 'tool']
+    # OpenAI 协议只要求每个 tool_call_id 都有对应响应，不要求顺序一致。
+    assert len(tool_msgs) == 2
+    assert {m.tool_call_id for m in tool_msgs} == {'call_1', 'call_2'}
+    content_by_id = {m.tool_call_id: m.content for m in tool_msgs}
+    assert '重复调用已跳过' in content_by_id['call_2']
+    assert '重复调用已跳过' not in content_by_id['call_1']
+
+
+@pytest.mark.asyncio
 async def test_duplicate_signatures_get_distinct_tool_call_ids():
     """同一 (name, args) 出现两次时，两条 tool 消息必须使用不同的 id。"""
     provider = _FakeProvider()

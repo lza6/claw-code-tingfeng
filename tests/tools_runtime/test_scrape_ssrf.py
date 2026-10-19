@@ -96,20 +96,21 @@ def test_urllib_redirect_handler_blocks_private_target():
     import urllib.error
     import urllib.request
 
-    from src.tools_runtime.scrape_tool import Scraper
+    from src.tools_runtime.scrape_tool import SafeRedirectHandler
 
-    captured = {}
-
-    class _Handler(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            safe, reason = is_safe_url(newurl)
-            if not safe:
-                raise urllib.error.HTTPError(newurl, code, f'blocked redirect: {reason}', headers, fp)
-            return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-    handler = _Handler()
-    captured['handler'] = handler
-    assert isinstance(Scraper, type)
+    handler = SafeRedirectHandler()
     req = urllib.request.Request('https://example.com/')
     with pytest.raises(urllib.error.HTTPError):
         handler.redirect_request(req, None, 302, 'Found', {}, 'http://169.254.169.254/latest/meta-data/')
+
+
+def test_urllib_redirect_handler_allows_public_target():
+    import urllib.request
+
+    from src.tools_runtime.scrape_tool import SafeRedirectHandler
+
+    handler = SafeRedirectHandler()
+    req = urllib.request.Request('https://example.com/')
+    # 不实际发请求，只验证不会因安全校验被拒绝（返回 Request 对象）
+    redirected = handler.redirect_request(req, None, 302, 'Found', {}, 'https://example.org/next')
+    assert redirected is not None

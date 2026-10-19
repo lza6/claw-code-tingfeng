@@ -97,7 +97,7 @@ _lock_state = threading.local()
 
 
 @contextlib.contextmanager
-def file_lock(file_path: str | Path, timeout: float = 10.0, stale_after: float = 60.0):
+def file_lock(file_path: str | Path, timeout: float = 10.0, stale_after: float = 300.0):
     """跨平台、**可重入**的文件锁（原子 `mkdir` + owner token）。
 
     - 同一线程重复获取同一把锁直接放行：读改写函数内部再调用
@@ -189,8 +189,11 @@ def file_lock(file_path: str | Path, timeout: float = 10.0, stale_after: float =
                     lock_dir.rmdir()
             # owner 不匹配：锁已被回收/换主，绝不能删除别人的锁。
         else:
-            with contextlib.suppress(OSError):
-                lock_dir.rmdir()
+            # owner 文件写入失败：无法证明锁目录属于自己，宁可留下锁目录
+            # 等待 stale 回收，也不要误删别人刚获得的锁。
+            logger.warning(
+                '无法写入锁 owner 文件，保留锁目录待 stale 回收: %s', lock_dir
+            )
 
 
 def locked_atomic_write_json(file_path: str | Path, data: Any, indent: int = 2) -> None:

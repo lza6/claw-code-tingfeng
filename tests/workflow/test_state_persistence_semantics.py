@@ -179,6 +179,63 @@ def test_file_lock_is_reentrant_in_same_thread(tmp_path):
     assert json.loads(target.read_text(encoding="utf-8")) == {"ok": True}
 
 
+def test_mode_state_update_concurrent_no_lost_updates(tmp_path):
+    """直接测生产函数 ModeStateManager.update_state 的读改写锁。"""
+    from src.workflow.mode_state import ModeStateManager
+
+    manager = ModeStateManager(cwd=str(tmp_path))
+    manager.start_mode("pipeline", "task")
+    errors: list[BaseException] = []
+
+    def worker(tid: int) -> None:
+        try:
+            for i in range(10):
+                manager.update_state("pipeline", {f"k{tid}_{i}": i})
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(tid,)) for tid in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"并发更新异常: {errors!r}"
+    state = manager.read_state("pipeline")
+    assert state is not None
+    missing = [
+        f"k{tid}_{i}"
+        for tid in range(4)
+        for i in range(10)
+        if f"k{tid}_{i}" not in state.metadata
+    ]
+    assert not missing, f"丢失更新: {missing[:5]}"
+
+
+def test_add_progress_entry_concurrent_no_lost_updates(tmp_path):
+    """直接测生产函数 add_progress_entry 的读改写锁。"""
+    from src.workflow.ralph_ledger import add_progress_entry, read_ralph_progress
+
+    errors: list[BaseException] = []
+
+    def worker(tid: int) -> None:
+        try:
+            for i in range(10):
+                add_progress_entry(f"{tid}-{i}", cwd=str(tmp_path))
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(tid,)) for tid in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"并发写入异常: {errors!r}"
+    ledger = read_ralph_progress(cwd=str(tmp_path))
+    assert len(ledger.entries) == 40, f"丢失更新: 只有 {len(ledger.entries)} 条"
+
+
 def test_locked_read_modify_write_does_not_lose_updates(tmp_path):
     """锁必须覆盖 read -> modify -> write，而不只是写。"""
     target = tmp_path / "counter.json"

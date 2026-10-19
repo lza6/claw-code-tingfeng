@@ -300,9 +300,9 @@ async def _run_agent_loop(
 
             # --- Tool calls -------------------------------------------------
             tool_calls: list[tuple[str, dict[str, Any]]] = []
-            # 同一 (name, args) 可能出现多次（模型重复调用）。tool_call_id 必须
-            # 一一对应，因此按签名维护**队列**，结果按顺序消费，不能共用一个 id。
-            native_call_id_by_signature: dict[tuple[str, str], list[str]] = {}
+            # 原生调用的 id 与 tool_calls 按**调用顺序**一一对应。
+            # 不能用 (name,args) 签名映射：同名同参的调用会拿到彼此的 id。
+            native_call_ids_in_order: list[str] = []
             # 参数解析失败的调用也必须回一条 tool 消息，否则 assistant 的
             # tool_calls 会留下悬空 id，下一轮 OpenAI 兼容端点直接 400。
             native_failed_calls: list[tuple[str, str, str]] = []
@@ -327,10 +327,7 @@ async def _run_agent_loop(
                         )
                         continue
                     tool_calls.append((name, args))
-                    signature = (name, json.dumps(args, sort_keys=True))
-                    native_call_id_by_signature.setdefault(signature, []).append(
-                        str(call.get('id') or '')
-                    )
+                    native_call_ids_in_order.append(str(call.get('id') or ''))
             elif config._parse_tool_calls:
                 tool_calls = config._parse_tool_calls(full_content)
 
@@ -354,19 +351,40 @@ async def _run_agent_loop(
 
                 # 过滤循环
                 valid_calls: list[tuple[str, dict[str, Any]]] = []
+                valid_call_ids: list[str] = []
                 loop_warnings: list[str] = []
-                for tool_name, tool_args in tool_calls:
+                native_filtered_calls: list[tuple[str, str, str]] = []
+                for idx, (tool_name, tool_args) in enumerate(tool_calls):
                     call_signature = (tool_name, json.dumps(tool_args, sort_keys=True))
                     repeat_count = tool_call_history.count(call_signature)
+                    call_id = native_call_ids_in_order[idx] if idx < len(native_call_ids_in_order) else ''
                     if repeat_count >= config.max_repeat_calls:
                         warn(f'{mode_tag} 检测到重复工具调用: {tool_name} (已调用 {repeat_count + 1} 次)')
                         loop_warnings.append(
                             f'你已重复调用 {tool_name} 相同参数 {repeat_count + 1} 次。'
                             f'请换一种方法或直接给出最终答案。'
                         )
+                        # 被过滤的调用同样必须回一条 tool 消息，否则 assistant
+                        # 的 tool_calls 会留下悬空 id（下一轮 400）。
+                        native_filtered_calls.append((call_id, tool_name, '重复调用已跳过'))
                         continue
                     tool_call_history.append(call_signature)
                     valid_calls.append((tool_name, tool_args))
+                    valid_call_ids.append(call_id)
+
+                if native_calls:
+                    for call_id, name, reason in native_filtered_calls:
+                        if call_id:
+                            config.messages.append(
+                                LLMMessage(
+                                    role='tool',
+                                    content=f'工具调用未执行: {reason}',
+                                    tool_call_id=call_id,
+                                    name=name,
+                                )
+                            )
+                        else:
+                            warn(f'{mode_tag} 被过滤的原生调用缺少 id，无法回传 tool 消息: {name}')
 
                 # 并行执行多个工具（当 >1 个调用时使用 asyncio.gather）
                 if len(valid_calls) > 1 and config._execute_tool is not None:
@@ -438,7 +456,7 @@ async def _run_agent_loop(
                                 await config.healing_engine.heal(e, context={"tool_name": tool_name, "tool_args": tool_args})
                             raise e
 
-                for tool_name, tool_args, result in results:
+                for result_idx, (tool_name, tool_args, result) in enumerate(results):
                     if config.publish_tool_completed:
                         config.publish_tool_completed(tool_name, tool_args, result)
 
@@ -472,9 +490,11 @@ async def _run_agent_loop(
                         content_parts.append(f'\n\n## 补充参考资料\n\n{rag_patch}\n\n请利用以上资料重新尝试。')
 
                     result_content = '\n'.join(content_parts)
-                    _signature = (tool_name, json.dumps(tool_args, sort_keys=True))
-                    _pending_ids = native_call_id_by_signature.get(_signature) if native_calls else None
-                    call_id = _pending_ids.pop(0) if _pending_ids else None
+                    call_id = (
+                        valid_call_ids[result_idx]
+                        if result_idx < len(valid_call_ids)
+                        else None
+                    )
 
                     if call_id:
                         # 原生 function calling：必须用 role=tool + tool_call_id 回传，

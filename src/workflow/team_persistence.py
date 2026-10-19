@@ -17,9 +17,9 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from ..utils.file_ops import locked_atomic_write_json
+from ..utils.file_ops import file_lock, locked_atomic_write_json
 
 # 常量
 TEAM_STATE_FILE = "team-state.json"
@@ -142,13 +142,26 @@ def write_team_state(
         return False
 
 
+def _mutate_team_state(
+    cwd: str,
+    session_id: str | None,
+    mutator: Callable[[TeamStateData], bool],
+) -> bool:
+    """在文件锁内执行 read -> mutate -> write，避免并发丢更新。"""
+    path = _get_team_state_path(cwd, session_id)
+    with file_lock(path):
+        state = _ensure_team_state(path)
+        if not mutator(state):
+            return False
+        return write_team_state(state, cwd, session_id)
+
+
 def add_team_member(
     member: TeamMemberState,
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """添加团队成员"""
-    state = read_team_state(cwd, session_id)
+    """添加团队成员（读改写加锁）"""
     member_dict = {
         "id": member.id,
         "name": member.name,
@@ -158,12 +171,16 @@ def add_team_member(
         "joined_at": member.joined_at,
         "last_active_at": member.last_active_at,
     }
-    # 检查是否已存在
-    existing = [m for m in state.members if m.get("id") == member.id]
-    if not existing:
+
+    def _mutate(state: TeamStateData) -> bool:
+        # 检查是否已存在
+        existing = [m for m in state.members if m.get("id") == member.id]
+        if existing:
+            return False
         state.members.append(member_dict)
-        return write_team_state(state, cwd, session_id)
-    return False
+        return True
+
+    return _mutate_team_state(cwd, session_id, _mutate)
 
 
 def remove_team_member(
@@ -171,10 +188,12 @@ def remove_team_member(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """移除团队成员"""
-    state = read_team_state(cwd, session_id)
-    state.members = [m for m in state.members if m.get("id") != member_id]
-    return write_team_state(state, cwd, session_id)
+    """移除团队成员（读改写加锁）"""
+    def _mutate(state: TeamStateData) -> bool:
+        state.members = [m for m in state.members if m.get("id") != member_id]
+        return True
+
+    return _mutate_team_state(cwd, session_id, _mutate)
 
 
 def update_member_status(
@@ -184,16 +203,18 @@ def update_member_status(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """更新成员状态"""
-    state = read_team_state(cwd, session_id)
-    for member in state.members:
-        if member.get("id") == member_id:
-            member["status"] = status
-            member["last_active_at"] = datetime.now().isoformat()
-            if current_task:
-                member["current_task"] = current_task
-            return write_team_state(state, cwd, session_id)
-    return False
+    """更新成员状态（读改写加锁）"""
+    def _mutate(state: TeamStateData) -> bool:
+        for member in state.members:
+            if member.get("id") == member_id:
+                member["status"] = status
+                member["last_active_at"] = datetime.now().isoformat()
+                if current_task:
+                    member["current_task"] = current_task
+                return True
+        return False
+
+    return _mutate_team_state(cwd, session_id, _mutate)
 
 
 def add_team_message(
@@ -203,19 +224,21 @@ def add_team_message(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """添加团队消息"""
-    state = read_team_state(cwd, session_id)
-    message = {
-        "id": f"msg-{len(state.messages) + 1}",
-        "member_id": member_id,
-        "content": content,
-        "timestamp": datetime.now().isoformat(),
-        "type": msg_type,
-    }
-    state.messages.append(message)
-    # 保持最近 1000 条消息
-    state.messages = state.messages[-1000:]
-    return write_team_state(state, cwd, session_id)
+    """添加团队消息（读改写加锁）"""
+    def _mutate(state: TeamStateData) -> bool:
+        message = {
+            "id": f"msg-{len(state.messages) + 1}",
+            "member_id": member_id,
+            "content": content,
+            "timestamp": datetime.now().isoformat(),
+            "type": msg_type,
+        }
+        state.messages.append(message)
+        # 保持最近 1000 条消息
+        state.messages = state.messages[-1000:]
+        return True
+
+    return _mutate_team_state(cwd, session_id, _mutate)
 
 
 def get_team_messages(

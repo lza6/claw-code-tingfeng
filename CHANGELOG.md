@@ -9,6 +9,48 @@
 
 ## [未发布]
 
+### v0.60.2 (2026-10-19) — 复审收口：过滤调用 id、生产读改写锁、安全测试真实性、版本解析
+
+第二轮独立审查（reviewer-round2）仍判定 Request Changes；本轮逐项关闭。
+
+#### 原生工具调用
+
+- **被 `max_repeat_calls` 过滤的调用也补 `role=tool` 消息**：此前过滤后
+  assistant 的 `tool_calls` 留下悬空 id，下一轮会 400。
+- `tool_call_id` 改为**按调用顺序**与 `tool_calls` 一一对应，不再按
+  (name,args) 签名映射（同名同参会拿到彼此的 id）。
+- 新增“重复调用被过滤后无悬空 id”的回归测试。
+
+#### 状态持久化
+
+- `ModeStateManager.cancel_mode` 的 read→modify→write 整体加锁。
+- `team_persistence` 的 `add_team_member` / `remove_team_member` /
+  `update_member_status` / `add_team_message` 统一走
+  `_mutate_team_state`（锁内读改写）。
+- 新增直接针对生产函数的并发回归：`ModeStateManager.update_state`、
+  `add_progress_entry`。
+- `file_lock` 的 `stale_after` 默认提高到 300s；owner 写入失败时保留锁目录
+  等待回收，不再冒险删除他人锁。
+
+#### 安全
+
+- `SafeRedirectHandler` 提到模块级；测试直接导入生产实现并断言拦截，
+  不再在测试里复制一份逻辑（消除虚假覆盖）。
+
+#### 版本与可观测性
+
+- `src.__version__` 改为 **pyproject.toml 优先**：editable 安装元数据滞后时，
+  不同解释器也能显示同一版本。
+- tracing 恢复逐 provider 异常隔离（一个 provider 失败不影响另一个）。
+
+#### 验证
+
+- 全量：**3162 passed, 4 skipped, 1 xfailed, 0 failed**（1531s）。
+- 定向：1383 passed / 1 xfailed。
+- E2E：`e2e_smoke` 5/5、`e2e_production` 8/8；压测 5/5。
+
+---
+
 ### v0.60.1 (2026-10-19) — 独立审查修复：CI 门禁、原生调用协议、SSRF 前置校验、锁语义
 
 独立审查（reviewer-round1）判定 Request Changes；以下为逐项修复。
@@ -25,6 +67,8 @@
 
 - 参数解析失败时补一条 `role=tool` 消息，避免 assistant 的 `tool_calls`
   留下悬空 id（否则下一轮 400）。
+- 被 `max_repeat_calls` 过滤的调用同样补 `role=tool` 消息；id 与调用顺序
+  一一对应（不再按签名映射，避免同名同参错配）。
 - 同名同参的重复调用按**队列**分配 `tool_call_id`，不再复用同一 id。
 - 流式路径启用开关时显式告警并回退文本协议，不再静默无效。
 
@@ -38,10 +82,20 @@
 #### 持久化与可观测性
 
 - `file_lock` 改为可重入 + owner token + 原子回收陈旧锁；`update_state` /
-  `add_progress_entry` 的读改写整体加锁，修复丢失更新。
-- `atomic_write` 的 Windows 重试提高到 5 次 / 100ms，并发测试连续 3 次稳定。
+  `add_progress_entry` / `cancel_mode` / `team_persistence` 的读改写整体加锁，
+  修复丢失更新。
+- 新增直接针对生产函数的并发回归：`ModeStateManager.update_state` 与
+  `add_progress_entry`。
+- `atomic_write` 的 Windows 重试提高到 8 次 / 50ms，并发测试连续 3 次稳定。
 - tracing 的 `_setup_*` 返回 bool，跳过时不再谎报“已初始化”；`setup_tracing()`
   接入 `initialize()`，功能不再是无调用点的死代码。
+
+#### 其他
+
+- `SafeRedirectHandler` 提到模块级，安全测试直接测生产实现（不再复制逻辑）。
+- `src.__version__` 改为 **pyproject.toml 优先**，避免 editable 元数据滞后
+  导致不同解释器显示不同版本。
+- `atomic_write` 的 Windows 重试提高到 8 次 / 50ms。
 
 #### 验证
 

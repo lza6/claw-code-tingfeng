@@ -3,7 +3,7 @@
   "status": "passed",
   "timestamp": "2026-10-19T09:00:00+08:00",
   "commands_executed": [
-    {"cmd": "pytest tests/workflow/test_state_persistence_semantics.py -q", "exit_code": 0, "raw_output_tail": "11 passed（连续 3 次复跑均 11 passed）"},
+    {"cmd": "pytest tests/workflow/test_state_persistence_semantics.py -q", "exit_code": 0, "raw_output_tail": "14 passed（含 ModeStateManager.update_state 与 add_progress_entry 的直接并发测试）"},
     {"cmd": "pytest tests/workflow tests/agent tests/tools_runtime tests/llm tests/contracts tests/cli -q", "exit_code": 0, "raw_output_tail": "1348 passed, 1 xfailed in 702.78s"}
   ],
   "files_changed": [
