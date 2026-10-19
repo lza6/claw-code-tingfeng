@@ -46,7 +46,7 @@ class StateManager:
         try:
             from ...utils.file_ops import file_lock
 
-            with file_lock(self._snapshot_file):
+            with file_lock(self._snapshot_file, timeout=30.0):
                 _save_snapshot_file(snapshot, self._snapshot_file)
             logger.debug(f"状态快照已保存: {self._snapshot_file}")
         except Exception as e:
@@ -101,7 +101,7 @@ class StateManager:
         """追加单个事件到日志（读改写整体加锁，避免并发丢事件）"""
         from ...utils.file_ops import file_lock
 
-        with file_lock(self._events_file):
+        with file_lock(self._events_file, timeout=30.0):
             events = self.load_events()
             events.append(event)
             self.save_events(events)

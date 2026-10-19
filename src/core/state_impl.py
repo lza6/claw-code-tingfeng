@@ -267,7 +267,7 @@ class StateManager:
         try:
             from ..utils.file_ops import atomic_write, file_lock
 
-            with file_lock(self._snapshot_file):
+            with file_lock(self._snapshot_file, timeout=30.0):
                 atomic_write(self._snapshot_file, snapshot.to_json(indent=2))
             logger.debug(f"状态快照已保存: {self._snapshot_file}")
         except Exception as e:

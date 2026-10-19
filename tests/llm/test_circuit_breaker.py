@@ -33,6 +33,23 @@ def config() -> CircuitBreakerConfig:
     )
 
 
+def _wait_for_state(
+    breaker: CircuitBreaker,
+    expected: CircuitState,
+    timeout: float = 3.0,
+) -> CircuitState:
+    """有界轮询等待状态迁移。
+
+    熔断器用墙钟 `time.time()` 判断超时；固定 sleep(timeout + 0.05) 在
+    高负载/时钟精度/系统时间调整下会偶发踩边界（全量回归实测）。
+    轮询只改变“等待方式”，不改变“必须迁移到 expected”的断言。
+    """
+    deadline = time.monotonic() + timeout
+    while breaker.state != expected and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return breaker.state
+
+
 @pytest.fixture
 def breaker(config: CircuitBreakerConfig) -> CircuitBreaker:
     return CircuitBreaker("test-channel", config)
@@ -107,9 +124,7 @@ class TestOpenToHalfOpen:
             breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
-        time.sleep(config.timeout + 0.05)
-
-        assert breaker.state == CircuitState.HALF_OPEN
+        assert _wait_for_state(breaker, CircuitState.HALF_OPEN) == CircuitState.HALF_OPEN
         assert breaker.is_available is True
 
     def test_stays_open_before_timeout(self, breaker: CircuitBreaker):
@@ -121,9 +136,7 @@ class TestOpenToHalfOpen:
     def test_half_open_resets_counters(self, breaker: CircuitBreaker, config):
         for _ in range(config.failure_threshold):
             breaker.record_failure()
-        time.sleep(config.timeout + 0.05)
-
-        assert breaker.state == CircuitState.HALF_OPEN
+        assert _wait_for_state(breaker, CircuitState.HALF_OPEN) == CircuitState.HALF_OPEN
         stats = breaker.get_stats()
         assert stats["failure_count"] == 0
         assert stats["success_count"] == 0

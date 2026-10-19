@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clawd Code v0.60.2 变更报告</title>
+<title>Clawd Code v0.60.4 变更报告</title>
 <style>
   :root{
     --bg:#0e1116; --surface:#151b23; --line:#25303d; --text:#e6edf3;
@@ -58,8 +58,8 @@
 <div class="wrap">
 
 <header>
-  <div class="kicker">Change Report · 2026-10-19</div>
-  <h1>Clawd Code v0.60.2<br>参考对标落地与两轮审查收口</h1>
+  <div class="kicker">Change Report · 2026-10-20</div>
+  <h1>Clawd Code v0.60.4<br>参考对标、两轮审查与终局审计</h1>
   <p class="lede">从“文档说有、生产跑不到”到可验证的接线：CI 门禁、状态持久化、工具策略、
   SSRF 前置拦截、Skill 渐进披露、原生工具调用与 server 入口。所有数字来自实际执行。</p>
 </header>
@@ -86,6 +86,8 @@
   <tr><td>安全</td><td>Scrape 私网/元数据/DNS/重定向前置拦截</td><td><span class="pill ok">已闭环</span></td></tr>
   <tr><td>服务</td><td><code>clawd server</code> + token 鉴权 + port=0 语义</td><td><span class="pill ok">已闭环</span></td></tr>
   <tr><td>可观测</td><td>doctor 能力状态；tracing 返回 bool 并接线</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>启动链路</td><td>py -3.10 优先；pip install -e .；wheel；pathspec/loguru/toml 依赖修复</td><td><span class="pill ok">已闭环</span></td></tr>
+  <tr><td>状态持久化</td><td>Windows 快照保存（原 fcntl 必失败）；并发事件追加加锁；fsync</td><td><span class="pill ok">已闭环</span></td></tr>
   <tr><td>覆盖率/收集/死模块</td><td>46.15% / 全量 1531s / 200 不可达</td><td><span class="pill no">未达成</span></td></tr>
   <tr><td>Release/部署</td><td>无 gh、无 Docker、无部署目标</td><td><span class="pill warn">BLOCKED</span></td></tr>
 </table>
@@ -183,6 +185,15 @@ python -m src --version                   → v0.60.2</code></pre>
   <div class="explain">不得假装已上线；最小下一步是提供 gh 登录与 Docker/部署目标。</div>
 </div>
 
+<div class="q" data-i="8">
+  <p>9. Windows 上状态快照曾保存失败，根因是？</p>
+  <label class="opt"><input type="radio" name="q8" value="0"> 函数内 <code>import fcntl</code>，Windows 必然 ImportError</label>
+  <label class="opt"><input type="radio" name="q8" value="1"> 磁盘空间不足</label>
+  <label class="opt"><input type="radio" name="q8" value="2"> JSON 序列化不支持</label>
+  <label class="opt"><input type="radio" name="q8" value="3"> 没有写权限</label>
+  <div class="explain">已改用跨平台 <code>file_lock + atomic_write</code>；并补了 Windows 保存回归。</div>
+</div>
+
 <div class="actions">
   <button id="submit" onclick="submitQuiz()">提交答案</button>
   <button id="reset" onclick="resetQuiz()">重置</button>
@@ -191,7 +202,7 @@ python -m src --version                   → v0.60.2</code></pre>
 </div>
 
 <footer>
-  Clawd Code v0.60.2 · 全部数字来自 2026-10-19 实际执行 ·
+  Clawd Code v0.60.4 · 全部数字来自 2026-10-19/20 实际执行 ·
   证据见 <code>test_ledger.md</code>、<code>evidence/</code>、<code>workflow_status.md</code>
 </footer>
 
@@ -206,7 +217,8 @@ const QUESTIONS = [
   {answer: 0, explain: '只注入 name+description，正文按需。'},
   {answer: 0, explain: 'pyproject 优先；editable metadata 会滞后。'},
   {answer: 0, explain: '仍含未闭环任务；不满足删除条件。'},
-  {answer: 0, explain: '无 gh、无 Docker/部署目标；标记 BLOCKED。'}
+  {answer: 0, explain: '无 gh、无 Docker/部署目标；标记 BLOCKED。'},
+  {answer: 0, explain: '函数内 import fcntl 在 Windows 必失败；已改跨平台锁。'}
 ];
 document.getElementById('total').textContent = QUESTIONS.length;
 

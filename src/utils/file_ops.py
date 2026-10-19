@@ -75,10 +75,18 @@ def atomic_write(file_path: str | Path, content: str | bytes, encoding: str = 'u
     temp_path = file_path.with_name(f"{file_path.name}.{suffix}.tmp")
 
     try:
+        # flush + fsync：保证 rename 之前数据已落到磁盘，避免掉电后
+        # 得到一个"文件存在但内容为空/半截"的快照。
         if isinstance(content, str):
-            temp_path.write_text(content, encoding=encoding)
+            with open(temp_path, 'w', encoding=encoding) as fh:
+                fh.write(content)
+                fh.flush()
+                os.fsync(fh.fileno())
         else:
-            temp_path.write_bytes(content)
+            with open(temp_path, 'wb') as fh:
+                fh.write(content)
+                fh.flush()
+                os.fsync(fh.fileno())
 
         # Rename temp file to target path
         _rename_with_retry(str(temp_path), str(file_path), retries=retries)

@@ -9,6 +9,23 @@
 
 ## [未发布]
 
+### v0.60.5 (2026-10-20) — 持久化持久性与锁等待
+
+- `atomic_write` 增加 `flush + fsync`：掉电后不再出现“文件存在但内容为空/半截”。
+- `state_impl` / `state.persistence` 的状态写入锁等待上限提高到 30s：
+  全量测试高负载 + fsync 下，10s 会偶发 `TimeoutError`（实测）。
+- HTML 变更报告更新到 v0.60.4/0.60.5，测验扩为 9 题（真实浏览器 9/9 通过）。
+- 并行负载复验：`tests/core` 669 + `tests/workflow` 226，0 failed。
+- 熔断器半开测试改为有界轮询等待：固定 `sleep(timeout + 0.05)` 在高负载下
+  偶发踩边界（全量实测），轮询不改变“必须迁移到 HALF_OPEN”的断言。
+
+#### 验证
+
+- `pytest tests/core/test_state_persistence_windows_safe.py -q` 连续 5 次通过。
+- 并行跑 core/workflow 无锁超时。
+
+---
+
 ### v0.60.4 (2026-10-20) — 终审补充：跨平台状态持久化
 
 - `src/core/state_impl.py` 的 `save_snapshot` 曾在函数内 `import fcntl`；
