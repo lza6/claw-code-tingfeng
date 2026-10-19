@@ -224,7 +224,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3148 passed / 4 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（1527s） |
+| 测试用例 | **3158 passed / 4 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（1458s） |
 | 契约测试 | 39 passed | `pytest tests/contracts -q` |
 | 覆盖率 | **46.15%**（25,877 / 56,072 行） | 仍低于 `fail_under = 60`，需独立批次提升 |
 | Ruff `F821` / `F811` | **0 / 0** | `ruff check src/ --select F821,F811` |

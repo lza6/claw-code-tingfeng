@@ -26,8 +26,8 @@
 | E-10 | `clawd server` 命令 + token 鉴权 + port=0 语义 | ✅ | evidence/P1-7（24 条 server 测试） |
 | E-11 | 平行阶段实现标注（不删除） | ✅ | `stages/`、`pipeline_stages/` docstring |
 | E-12 | 全量回归 | ✅ | **3158 passed, 4 skipped, 1 xfailed, 0 failed**（1458s） |
-| E-13 | 真实 E2E | ✅ | `e2e_smoke.py` 5/5；`e2e_production.py` 8/8 |
-| E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~12 req/s） |
+| E-13 | 真实 E2E | ✅ | v0.60.1 复跑：`e2e_smoke.py` 5/5；`e2e_production.py` 8/8（含上游失败路径） |
+| E-14 | 并发压测 | ✅ | `stress_test.py --n 200` 5/5（~11 req/s，无死锁/错配） |
 | E-15 | 版本一致性 v0.60.1 | ✅ | `python -m src --version` + metadata |
 | E-16 | 覆盖率 60% | ❌ 未达成 | 基线 46.15%；本轮未降低，需独立批次 |
 | E-17 | 收集 <120s | ❌ 未达成 | 已禁用无关插件；全量收集仍需数分钟 |

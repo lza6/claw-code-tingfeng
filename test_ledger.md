@@ -28,10 +28,10 @@
 | 静态硬指标（CI 同款） | `ruff check src/ tests/ --select F821,F811,E9` | All checks passed（修复 tests 中 4 个 F811 后） | evidence/B1 |
 | 导入完整性 | `python scripts/import_sweep.py` | 642 模块 / IMPORT-OK 636 / **FAIL 0** / DEP-MISSING 6 | 本轮 |
 | 生产可达 | `python scripts/reachability.py` | **442 可达**（基线 431，未下降）/ 200 不可达 | 本轮 |
-| 真实 E2E 冒烟 | `python scripts/e2e_smoke.py` | **5/5 PASS**（真实端点，退出码 0） | 本轮 |
-| 生产路径 E2E | `python scripts/e2e_production.py` | **8/8 PASS** | 本轮 |
+| 真实 E2E 冒烟 | `python scripts/e2e_smoke.py` | **5/5 PASS**（v0.60.1 复跑，退出码 0） | 本轮 |
+| 生产路径 E2E | `python scripts/e2e_production.py` | **8/8 PASS**（v0.60.1 复跑，含上游失败路径） | 本轮 |
 | 原生工具真实端点 | 加载 `.env` 后 `provider.chat(tools=...)` | 返回 `BashTool {"command":"echo hi"}` | 本轮 |
-| 并发压测 | `python scripts/stress_test.py --n 200` | **5/5 PASS**；200 并发工具执行 23.13s（~12 req/s）；审批混合拒绝=100/只读=100/YOLO=100/错误=0 | 本轮 |
+| 并发压测 | `python scripts/stress_test.py --n 200` | **5/5 PASS**；200 并发 24.49s（~11 req/s）；审批混合拒绝=100/只读=100/YOLO=100/错误=0 | 本轮 |
 | 版本一致性 | `python -m src --version` + metadata | **v0.60.0** / 0.60.0 | 本轮 |
 | CI YAML | `python -c "yaml.safe_load(...)"` | yaml OK | evidence/B1 |
 
