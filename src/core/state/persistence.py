@@ -21,11 +21,10 @@ logger = __import__("logging").getLogger(__name__)
 
 
 def _save_snapshot_file(snapshot, snapshot_file: Path) -> None:
-    """保存快照到文件的内部方法"""
-    snapshot_file.write_text(
-        snapshot.to_json(indent=2),
-        encoding="utf-8"
-    )
+    """保存快照到文件的内部方法（原子写）"""
+    from ...utils.file_ops import atomic_write
+
+    atomic_write(snapshot_file, snapshot.to_json(indent=2))
 
 
 class StateManager:
@@ -43,19 +42,11 @@ class StateManager:
         self._lock_file = self.state_dir / "engine.lock"
 
     def save_snapshot(self, snapshot: Any) -> None:
-        """保存状态快照"""
+        """保存状态快照（跨平台锁 + 原子写）"""
         try:
-            # 使用锁防止并发写入（仅在 Unix 上启用）
-            if fcntl is not None:
-                lock_path = self.state_dir / ".snapshot.lock"
-                with lock_path.open("w") as lock_f:
-                    fcntl.flock(lock_f, fcntl.LOCK_EX)
-                    try:
-                        _save_snapshot_file(snapshot, self._snapshot_file)
-                    finally:
-                        fcntl.flock(lock_f, fcntl.LOCK_UN)
-            else:
-                # Windows 上直接保存，无文件锁
+            from ...utils.file_ops import file_lock
+
+            with file_lock(self._snapshot_file):
                 _save_snapshot_file(snapshot, self._snapshot_file)
             logger.debug(f"状态快照已保存: {self._snapshot_file}")
         except Exception as e:
@@ -79,11 +70,13 @@ class StateManager:
             return None
 
     def save_events(self, events: list[dict[str, Any]]) -> None:
-        """保存事件日志"""
+        """保存事件日志（原子写）"""
         try:
-            self._events_file.write_text(
+            from ...utils.file_ops import atomic_write
+
+            atomic_write(
+                self._events_file,
                 json.dumps(events, indent=2, ensure_ascii=False),
-                encoding="utf-8"
             )
             logger.debug(f"事件日志已保存: {len(events)} 条")
         except Exception as e:
@@ -105,10 +98,13 @@ class StateManager:
             return []
 
     def append_event(self, event: dict[str, Any]) -> None:
-        """追加单个事件到日志"""
-        events = self.load_events()
-        events.append(event)
-        self.save_events(events)
+        """追加单个事件到日志（读改写整体加锁，避免并发丢事件）"""
+        from ...utils.file_ops import file_lock
+
+        with file_lock(self._events_file):
+            events = self.load_events()
+            events.append(event)
+            self.save_events(events)
 
     def create_compatibility_view(self, snapshot: Any) -> None:
         """创建兼容性视图文件（用于外部工具读取）

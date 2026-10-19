@@ -9,6 +9,23 @@
 
 ## [未发布]
 
+### v0.60.4 (2026-10-20) — 终审补充：跨平台状态持久化
+
+- `src/core/state_impl.py` 的 `save_snapshot` 曾在函数内 `import fcntl`；
+  Windows 上必然 ImportError，导致快照保存**永远失败**。改用
+  `file_lock + atomic_write`。
+- `src/core/state/persistence.py`：快照/事件写入改为原子写；
+  `append_event` 的读改写整体加锁，修复并发丢事件。
+- 新增回归：Windows 跨平台保存、4 线程 ×10 次并发追加（40 条不丢）。
+- 收集基线复测：**3167 tests / 0 errors / 78.99s**（收集 <120s 已达成）。
+
+#### 验证
+
+`pytest tests/core/test_state_persistence_windows_safe.py -q` → 2 passed；
+`pytest tests/core/test_run_state_manager.py tests/integration/test_phase2_integration.py -q` → 21 passed。
+
+---
+
 ### v0.60.3 (2026-10-19) — 终局审计：启动链路、核心依赖、测试套件退出、执行骨架
 
 把项目当成真实交付物做终检，发现并修复以下问题。

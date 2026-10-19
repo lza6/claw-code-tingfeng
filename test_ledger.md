@@ -19,6 +19,8 @@
 | 范围 | 命令 | 结果 | 证据 |
 |:---|:---|:---|:---|
 | 新增：状态持久化 | `pytest tests/workflow/test_state_persistence_semantics.py -q` | **14 passed**（含生产函数并发） | evidence/P0-5 |
+| 新增：跨平台状态快照 | `pytest tests/core/test_state_persistence_windows_safe.py -q` | **2 passed**（Windows 保存 + 并发追加 40 条） | 本轮 |
+| 测试收集 | `pytest tests/ --collect-only -q` | **3167 collected / 0 errors / 78.99s** | 本轮 |
 | 新增：工具策略 | `pytest tests/agent/test_tool_policy.py -q` | **10 passed** | evidence/P1-4 |
 | 新增：SSRF | `pytest tests/tools_runtime/test_scrape_ssrf.py -q` | **25 passed** | evidence/P1-9 |
 | 新增：Skill 注入 | `pytest tests/agent/test_skill_injection.py -q` | **6 passed** | evidence/P1-10 |

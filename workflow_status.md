@@ -71,6 +71,9 @@
 | E-40 | 终审 P1：`test_agent_engine_refactor.py` 启动进程池导致 pytest 不退出 | ✅ | fixture 用 tmp_path + 禁用后台 WorldModel；47s 正常退出 |
 | E-41 | 终审 P2：`test_slop_data.py` 无任何测试函数（死资产） | ✅ 已删除 | `git rm`；无引用 |
 | E-42 | 终审：根目录测试整体 | ✅ | 270 passed / 1 skipped（76.5s，正常退出） |
+| E-43 | 终审 P1：`state_impl.save_snapshot` 的 `import fcntl` 在 Windows 必失败 | ✅ | 改用 file_lock + atomic_write；2 条回归 |
+| E-44 | 终审 P1：`persistence.append_event` 读改写无锁，并发丢事件 | ✅ | 锁内读改写；4×10 并发 40 条不丢 |
+| E-45 | 收集基线复测 | ✅ | 3167 tests / 0 errors / 78.99s（收集 <120s 达成） |
 
 ### 本轮验证命令与真实结果
 

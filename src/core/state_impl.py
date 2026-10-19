@@ -259,20 +259,16 @@ class StateManager:
         self._lock_file = self.state_dir / "engine.lock"
 
     def save_snapshot(self, snapshot: SystemSnapshot) -> None:
-        """保存状态快照"""
+        """保存状态快照（跨平台文件锁 + 原子写）
+
+        此前直接 `import fcntl`：Windows 上必然 ImportError，被 except 捕获后
+        重新抛出 —— 等于状态快照在 Windows 上**永远保存失败**。
+        """
         try:
-            # 使用锁防止并发写入
-            lock_path = self.state_dir / ".snapshot.lock"
-            with lock_path.open("w") as lock_f:
-                import fcntl
-                fcntl.flock(lock_f, fcntl.LOCK_EX)
-                try:
-                    self._snapshot_file.write_text(
-                        snapshot.to_json(indent=2),
-                        encoding="utf-8"
-                    )
-                finally:
-                    fcntl.flock(lock_f, fcntl.LOCK_UN)
+            from ..utils.file_ops import atomic_write, file_lock
+
+            with file_lock(self._snapshot_file):
+                atomic_write(self._snapshot_file, snapshot.to_json(indent=2))
             logger.debug(f"状态快照已保存: {self._snapshot_file}")
         except Exception as e:
             logger.error(f"保存状态快照失败: {e}")

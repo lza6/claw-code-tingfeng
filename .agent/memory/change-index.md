@@ -30,5 +30,12 @@
 - `src/__init__.py`：版本解析 pyproject 优先。
 
 ## 测试
-- 新增：`test_state_persistence_semantics.py`(14)、`test_tool_policy.py`(10)、`test_scrape_ssrf.py`(25)、`test_skill_injection.py`(6)、`test_native_tool_calls.py`(9)、`test_server_port_semantics.py`(3)。
+- 新增：`test_state_persistence_semantics.py`(14)、`test_tool_policy.py`(10)、`test_scrape_ssrf.py`(25)、`test_skill_injection.py`(6)、`test_native_tool_calls.py`(9)、`test_server_port_semantics.py`(3)、`test_state_persistence_windows_safe.py`(2)。
 - 修复：tests 中 4 个 F811。
+- 默认跳过：`test_goalx_integration.py`（真实 LLM，`RUN_GOALX_E2E=1` 启用）。
+- 删除：`tests/test_slop_data.py`（无测试函数）。
+
+## v0.60.4 补充
+- `src/core/state_impl.py`：`save_snapshot` 改用 `file_lock + atomic_write`（原 `import fcntl` 在 Windows 必失败）。
+- `src/core/state/persistence.py`：快照/事件原子写；`append_event` 读改写加锁。
+- 收集基线：3167 tests / 0 errors / 78.99s。
