@@ -52,13 +52,18 @@
 > **0.60.10**，因为全量回归（3551 passed / 0 failed）是在两者合并状态下跑的，
 > 单独发布任一方的版本号都会与内容集不符。
 
-#### 验证
+#### 验证（2026-10-23 实跑）
 
-- 全量：`py -3.10 -m pytest tests/ -q` → 见 `test_ledger.md`
-- 覆盖率：见下方实测
-- 硬指标：`F821/F811/E9` All checks passed；`import_sweep --strict-exit` 0；
-  `reachability` 443 不变（删除 8 个死模块后仍为 443）；
-  静默吞异常仍 172（新增测试未引入 `except: pass`）
+| 项 | 命令 | 结果 |
+|:---|:---|:---|
+| 全量回归 | `py -3.10 -m pytest tests/ -q --cov=src` | ✅ **3551 passed / 5 skipped / 2 xfailed / 0 failed**（663s） |
+| 覆盖率 | `coverage-final2.json` totals | **49.89%**（28,175 / 56,469），较本轮起点 47.44% **+2.45pp** |
+| 静态硬指标 | `ruff --select F821,F811,E9` | All checks passed |
+| 导入完整性 | `import_sweep --strict-exit` | IMPORT-FAIL 0 / IMPORT-EXIT 0 / DEP-MISSING 7（均可选 extras） |
+| 生产可达 | `reachability.py` | **443**（删除 8 个死模块后不变） |
+| 静默吞异常 | `check_silent_except.py --no-gate` | **172**（未新增） |
+| 真实 E2E | `e2e_smoke.py` / `e2e_production.py` | **5/5** 与 **8/8**，退出码 0 |
+| 并发压测 | `stress_test.py --n 200` | **5/5**，137 req/s，无死锁/错配 |
 
 ---
 
