@@ -93,7 +93,7 @@ Clawd Code is a comprehensive AI-powered coding agent framework written in Pytho
 
 - **Language:** Python 3.10+
 - **Package Manager:** pip / pyproject.toml
-- **Testing:** pytest（2026-10-23 实测：**3171 收集用例 / 0 errors / 29.31s**；覆盖率 **46.15%**，目标 60% —— 见 `pyproject.toml` 的 `fail_under`）
+- **Testing:** pytest（2026-10-23 实测：**3261 收集用例 / 0 errors / 4.6s**；全量 **3254 passed / 0 failed / 640s**；覆盖率 **47.44%**，`fail_under = 47` 已生效 —— 见 `pyproject.toml` 的 `[tool.coverage.report]`）
   > 注：覆盖率数字请以 `pytest --cov=src` 的实际输出为准。历史上此处长期
   > 虚报为 "1414 用例 / ~50%"、后来又写成 "2857 用例 / 19.5%"，
   > 与实测相差 2 倍以上。指标不要写死在文档里。
