@@ -72,6 +72,29 @@ class MemoryManager:
         self.context_window = ContextWindowManager()  # 对话窗口管理器
         self.evolver = MemoryEvolver(store=self)  # 记忆演进引擎
 
+    @staticmethod
+    def _pattern_from_row(row: Any) -> SemanticPattern:
+        """把 `semantic_patterns` 表的一行还原成 SemanticPattern。
+
+        `target_skills` 在库里是 JSON 字符串，直接 `SemanticPattern(**dict(row))`
+        会让 `target_skills` 变成 str —— 类型契约要求 list[str]，且调用方按
+        list 迭代时会退化成逐字符遍历。
+        """
+        data = {
+            k: v for k, v in dict(row).items()
+            if k in SemanticPattern.__dataclass_fields__
+        }
+        target_skills = data.get("target_skills")
+        if isinstance(target_skills, str):
+            try:
+                decoded = json.loads(target_skills) if target_skills else []
+            except json.JSONDecodeError:
+                decoded = []
+            data["target_skills"] = decoded if isinstance(decoded, list) else []
+        elif target_skills is None:
+            data["target_skills"] = []
+        return SemanticPattern(**data)
+
     async def initialize(self, session_id: str | None = None) -> None:
         """初始化 - 加载已有记忆"""
         try:
@@ -85,7 +108,7 @@ class MemoryManager:
                     # 回退到基础查询
                     with self.storage._connect() as conn:
                         rows = conn.execute("SELECT * FROM semantic_patterns").fetchall()
-                        self._patterns = [SemanticPattern(**dict(r)) for r in rows]
+                        self._patterns = [self._pattern_from_row(r) for r in rows]
 
                 # 加载当前会话的工作记忆
                 if session_id:
@@ -386,10 +409,28 @@ class MemoryManager:
 
     # 状态
 
+    async def _storage_size_bytes(self) -> int:
+        """存储占用字节数（兼容两种后端）。
+
+        JSON 后端（MemoryStorage）提供 `get_storage_size()`（协程）；
+        SQLite 后端没有该方法，只能取数据库文件大小。原先 `get_status()`
+        直接 `await self.storage.get_storage_size()`，在**默认**的
+        `use_sqlite=True` 后端上必然 AttributeError。
+        """
+        getter = getattr(self.storage, "get_storage_size", None)
+        if getter is not None:
+            result = getter()
+            return int(await result if asyncio.iscoroutine(result) else result)
+
+        db_path = getattr(self.storage, "db_path", None)
+        if db_path is None:
+            return 0
+        path = Path(db_path)
+        return path.stat().st_size if path.is_file() else 0
+
     async def get_status(self) -> MemoryStatus:
         """获取记忆状态"""
-        storage_size = await self.storage.get_storage_size()
-        await self.storage.list_episodic()
+        storage_size = await self._storage_size_bytes()
 
         return MemoryStatus(
             total_memories=len(self._entries),
@@ -406,12 +447,14 @@ class MemoryManager:
         data = {
             "entries": [e.to_dict() for e in self._entries],
             "patterns": [p.to_dict() for p in self._patterns],
-            "episodic": [m.to_dict() for m in await self.storage.list_episodic()],
+            # 双后端包装器：SQLite 的 list_episodic() 是同步返回，直接 await 会 TypeError
+            "episodic": [m.to_dict() for m in await self.list_episodic()],
             "working": self._working.data,
         }
         await asyncio.to_thread(
             output_path.write_text,
             json.dumps(data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
         )
 
     async def import_memories(self, input_path: Path) -> int:
@@ -521,11 +564,15 @@ class MemoryManager:
         # 使用 RAG 检索相似的语义记忆
         semantic_results = await self.search_memories(query, use_rag=True)
 
+        # 使用本类的双后端包装器（SQLite 后端是同步返回，直接 await 会 TypeError）
+        episodic_list = await self.list_episodic()
+
         # 查找相关的情景记忆
         related_episodic = []
         for entry in semantic_results[:limit]:
-            episodic_list = await self.storage.list_episodic()
-            related = [e for e in episodic_list if entry.id in e.tags or entry.id in (e.metadata or {})]
+            # EpisodicMemory 没有 tags / metadata 字段，语义记忆与情景记忆
+            # 之间唯一的关联字段是 related_pattern_id。
+            related = [e for e in episodic_list if e.related_pattern_id == entry.id]
             related_episodic.extend(related[:2])  # 每个语义记忆最多取 2 个情景
 
         return related_episodic[:limit]

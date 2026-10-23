@@ -65,6 +65,10 @@ DEEP_INTERVIEW_BLOCKED_APPROVAL_INPUTS = [
 DEEP_INTERVIEW_INPUT_LOCK_MESSAGE = (
     "Deep interview is active; auto-approval shortcuts are blocked until the interview finishes."
 )
+# `src.agent.keyword_registry` 把 deep-interview 技能登记为 "deep_interview"（下划线），
+# 而状态文件的读取方（keyword_registry.is_deep_interview_input_blocked /
+# get_deep_interview_lock_state）只认 "deep-interview"。两种写法都要识别。
+DEEP_INTERVIEW_SKILL_ALIASES = frozenset({"deep-interview", "deep_interview"})
 
 
 @dataclass
@@ -245,9 +249,20 @@ class SkillStateManager:
             now_iso: ISO时间戳
             keyword_detector_func: 关键词检测函数 (text) -> Optional[KeywordMatch]
         """
-        from .keyword_registry import detect_keywords, detect_primary_keyword
+        from ..agent.keyword_registry import (
+            detect_keywords,
+            detect_primary_keyword,
+            get_trigger_by_keyword,
+        )
 
-        match = keyword_detector_func(text) if keyword_detector_func else detect_primary_keyword(text)
+        if keyword_detector_func is not None:
+            match = keyword_detector_func(text)
+        else:
+            # `detect_primary_keyword` 返回的是关键词字符串（如 "ralph"），
+            # 而下方逻辑依赖 `match.skill` / `match.keyword`，因此必须转成
+            # KeywordTrigger 对象。
+            keyword = detect_primary_keyword(text)
+            match = get_trigger_by_keyword(keyword) if keyword else None
         if not match:
             return None
 
@@ -259,7 +274,7 @@ class SkillStateManager:
         matches_list = [matches] if hasattr(matches, 'skill') else matches
         has_cancel = any(getattr(entry, 'skill', None) == "cancel" for entry in matches_list)
 
-        if has_cancel and previous and previous.active and previous.skill == "deep-interview":
+        if has_cancel and previous and previous.active and previous.skill in DEEP_INTERVIEW_SKILL_ALIASES:
             state = SkillActiveState(
                 version=1,
                 active=False,
@@ -281,6 +296,7 @@ class SkillStateManager:
             extracted_state.keyword = state.keyword
             extracted_state.phase = state.phase
             extracted_state.active = state.active
+            extracted_state.activated_at = state.activated_at
             extracted_state.updated_at = state.updated_at
             extracted_state.session_id = state.session_id
             extracted_state.input_lock = state.input_lock
@@ -288,11 +304,18 @@ class SkillStateManager:
                 return extracted_state
             return None
 
-        same_skill = previous and previous.active and previous.skill == match.skill
+        # 关键词注册表登记名与状态文件读取方期望名不一致（见
+        # DEEP_INTERVIEW_SKILL_ALIASES 注释），统一写成规范名，
+        # 否则深度面试输入锁写入后无人能识别。
+        skill_name = (
+            "deep-interview" if match.skill in DEEP_INTERVIEW_SKILL_ALIASES else match.skill
+        )
+
+        same_skill = previous and previous.active and previous.skill == skill_name
         same_keyword = previous and previous.keyword and previous.keyword.lower() == match.keyword.lower()
 
         deep_interview_lock = None
-        if match.skill == "deep-interview":
+        if skill_name == "deep-interview":
             deep_interview_lock = create_deep_interview_input_lock(
                 now_iso,
                 previous.input_lock if previous else None
@@ -301,7 +324,7 @@ class SkillStateManager:
         state = SkillActiveState(
             version=1,
             active=True,
-            skill=match.skill,
+            skill=skill_name,
             keyword=match.keyword,
             phase="planning",
             activated_at=(same_skill and same_keyword and previous.activated_at) or now_iso,
@@ -317,6 +340,7 @@ class SkillStateManager:
         extracted_state.keyword = state.keyword
         extracted_state.phase = state.phase
         extracted_state.active = state.active
+        extracted_state.activated_at = state.activated_at
         extracted_state.updated_at = state.updated_at
         extracted_state.session_id = state.session_id
         extracted_state.input_lock = state.input_lock
@@ -520,7 +544,13 @@ class ModeStateManager:
     def can_resume(self, mode: str) -> bool:
         """检查是否可以恢复模式"""
         state = self.read_state(mode)
-        return state is not None and "cancelled" not in state.current_phase and state.started_at
+        # 必须显式 bool()：`and` 链条最后一项是 str（started_at），
+        # 直接被 `and` 短路成字符串返回，违反 `-> bool` 声明。
+        return bool(
+            state is not None
+            and "cancelled" not in state.current_phase
+            and state.started_at
+        )
 
     def check_mode_conflict(self, mode: str) -> str | None:
         """

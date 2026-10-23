@@ -15,13 +15,13 @@
 | 指标 | 2026-10-23 实测 | 命令 |
 |:---|:---|:---|
 | 声明版本 | 0.60.6 | `venv/Scripts/python.exe -m src --version` |
-| 源码规模 | 642 模块 / 137,468 行 / 187 测试文件 | `py -3.10 scripts/baseline.py --quick` |
+| 源码规模 | **634 模块**（v0.60.9 删 8 个死模块后）/ 137,151 行 / 192 测试文件 | `py -3.10 scripts/baseline.py --quick` |
 | 用例收集 | **3261 / 0 errors**（热缓存 4~5s） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | Ruff 硬指标 | F821/F811/E9 **All checks passed** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL = 0 / IMPORT-EXIT = 0**（642 模块 / 635 OK / DEP-MISSING 7 为可选 extras） | `venv/Scripts/python.exe scripts/import_sweep.py --strict-exit` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8**（2026-10-23 实跑，退出码 0） | `venv/Scripts/python.exe scripts/e2e_*.py` |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配（纯本地状态机，不打真实模型） | `venv/Scripts/python.exe scripts/stress_test.py --n 200` |
-| 生产可达 | **443** / 不可达 199（完全不可达 134 / 24,667 行）<br>※ 442→443 是补入 `src.__main__` 种子的**口径修正**，非新增功能 | `py scripts/reachability.py --min-reachable 443` |
+| 生产可达 | **443** / 不可达 191（完全不可达 **126** / 24,260 行）<br>※ 442→443 是补入 `src.__main__` 种子的**口径修正**，非新增功能 | `py scripts/reachability.py --min-reachable 443` |
 | 覆盖率 | **47.44%**（26,861 / 56,624），数据 2026-10-23 11:51 | `coverage.json` totals |
 | 覆盖率门禁 | `fail_under = 47` **已生效**（原 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | `py -3.10 -m pytest tests/scripts -q --cov=src` → FAIL 提示 |
 | 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI `--fail-over 172` | `py -3.10 scripts/check_silent_except.py --fail-over 172` |

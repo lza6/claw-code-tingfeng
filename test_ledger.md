@@ -221,3 +221,71 @@
 | Docker / 生产部署热更新 | 通过 | **not_run** | 本机无 docker、无部署目标与凭证 |
 | GitHub Release | 创建 | **not_run** | 无 `gh`；已建本地 tag 与 CHANGELOG 条目 |
 
+---
+
+## 2026-10-23 第三轮（v0.60.9）：死代码第一批删除
+
+> 这是第一次**真正删除**代码。前几轮只出判定报告，因为"按名字删"已经误判过一次（ADR-0001）。
+
+### 删除清单（8 模块 / 407 行）
+
+| 模块 | 行数 | 三方核验 |
+|:---|---:|:---|
+| `src/core/config/validator.py` | 74 | 全限定导入 0 / 父包 `__init__` 相对导入 0 / 同级模块相对导入 0 |
+| `src/core/snapshot.py` | 68 | 同上 |
+| `src/workflow/mode_context.py` | 63 | 同上 |
+| `src/core/telemetry/tracer.py` | 53 | 同上 |
+| `src/core/durable/schemas/schema_validator.py` | 50 | 同上 |
+| `src/core/lease.py` | 44 | 同上 |
+| `src/core/parallel_executor.py` | 43 | 同上 |
+| `src/tools_runtime/diff_utils.py` | 12 | 同上（与存活 `src/utils/diff_utils.py` 职责不同：前者是 tools 层包装） |
+
+### 不变量（删前 → 删后）
+
+| 项 | 删前 | 删后 | 命令 |
+|:---|:---|:---|:---|
+| 生产可达 | 443 | **443** | `py -3.10 scripts/reachability.py` |
+| 模块数 | 642 | 634 | 同上 |
+| 完全不可达 | 134 | 126 | 同上 |
+| 导入缺陷 | 0 | **0** | `import_sweep.py --strict-exit` |
+| 用例收集 | 3558 / 0 errors | 3558 / 0 errors | `pytest --collect-only -q` |
+| 静态硬指标 | All passed | **All passed** | `ruff --select F821,F811,E9` |
+| 定向回归 | — | **1289 passed / 0 failed**（47.63s） | `pytest tests/{core,workflow,tools_runtime,contracts} -q -m "not slow"` |
+
+### 门禁抓住我自己的误判（本轮最重要的记录）
+
+首轮按旧判据删了 **10** 个，`import_sweep --strict-exit` 立刻返回 **1**，报 4 个 IMPORT-FAIL：
+
+```
+src.core.secrets.vault            -> ModuleNotFoundError: No module named 'src.core.secrets.base'
+src.workflow.pipeline_stages      -> ModuleNotFoundError: No module named 'src.workflow.pipeline_stages.types'
+src.workflow.pipeline_stages.ralph_verify -> 同上
+src.workflow.pipeline_stages.team_exec    -> 同上
+```
+
+根因：`src/core/secrets/vault.py:11  from .base import SecretStore`、
+`src/workflow/pipeline_stages/ralph_verify.py:11  from .types import StageContext, StageResult`
+—— 是**同级**相对导入，而判据当时只查父包 `__init__.py`。
+
+处置：恢复 `base.py` / `types.py`（2 个），其余 8 个保留删除；复验 FAIL=0、可达数 443。
+
+**判据三版演进**：
+
+| 版本 | 判据 | NO_REFS |
+|:---|:---|---:|
+| v1 | 末段标识符匹配 | 135/135 全判"有引用"（误报） |
+| v2 | + 父包 `__init__` 相对导入 | 112（仍有假阴性） |
+| v3（本轮） | + **同包内任意模块**的相对导入 | **55** |
+
+### 剩余
+
+完全不可达 **126** 个；三问判定 **NO_REFS 55 / DOC_ONLY 6 / HAS_REFS 65**。
+第二批待办：每批 ≤20 模块 + 同一套不变量验证 + 逐批 revert 能力。
+
+### 未运行（本轮）
+
+| 项 | 状态 | 原因 |
+|:---|:---|:---|
+| 真实 E2E | not_run | 本轮改动是删除不可达模块，不触碰 LLM/工具链路；上次运行于 v0.60.7（5/5 + 8/8） |
+| 压测 | not_run | 同上（未触碰并发基础设施） |
+| 移除 55 个候选中的第二批 | not_run | 需逐条三方核验 + 每批全量验证 |

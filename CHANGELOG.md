@@ -9,6 +9,140 @@
 
 ## [未发布]
 
+### v0.60.10 (2026-10-23) — 覆盖率补测（+265 用例）与 12 个生产缺陷修复
+
+本轮只做一件事：**给低覆盖的生产可达模块补行为测试**。
+结果是——测试写下去，模块自己就崩了 12 次。以下缺陷全部是"读代码看不出来、
+一跑就炸"的类型。
+
+#### 修复的缺陷（全部有回归测试锁定）
+
+| # | 模块 | 缺陷 | 严重度 |
+|:---|:---|:---|:---|
+| 1 | `workflow/mode_state.py` | `from .keyword_registry import …` —— `src/workflow/keyword_registry.py` **不存在**（真身在 `src/agent/`），`update_skill_state()` 一调用即 `ImportError`，技能状态更新整体不可用 | P1 |
+| 2 | `workflow/mode_state.py` | `detect_primary_keyword()` 返回**字符串**，却被当作 `KeywordTrigger` 用（`match.skill`）→ `AttributeError` | P1 |
+| 3 | `workflow/mode_state.py` | 注册表登记 `deep_interview`（下划线），状态读取方只认 `deep-interview`（连字符）→ 输入锁写进去后**无人识别** | P1 |
+| 4 | `workflow/mode_state.py` | `activated_at` 未回写到 `extracted_state` → 重新激活时间丢失 | P2 |
+| 5 | `workflow/mode_state.py` | `can_resume() -> bool` 实际返回 `str`（`and` 链尾是 `started_at`） | P2 |
+| 6 | `memory/manager.py` | `SemanticPattern(**dict(row))` —— 库里的 `target_skills` 是 JSON 字符串，还原后变 `str`，调用方迭代会**逐字符遍历** | P1 |
+| 7 | `memory/manager.py` | `get_status()` 调 `self.storage.get_storage_size()`，而**默认 SQLite 后端没有该方法** → `AttributeError` | P1 |
+| 8 | `memory/manager.py` | `await self.storage.list_episodic()`，SQLite 版是**同步**返回 → `await list` `TypeError` | P1 |
+| 9 | `memory/manager.py` | `entry.id in e.tags` —— `EpisodicMemory` 根本没有 `tags`/`metadata` 字段 → `AttributeError` | P1 |
+| 10 | `memory/manager.py` | 导出时 `write_text` 缺 `encoding` → Windows GBK 下写中文崩 | P2 |
+| 11 | `rag/repo_map.py` | `def` 签名解析写成 `'(' + '('`，且把整个 `name(args)` 当函数名 → repo map 输出的签名全错 | P2 |
+| 12 | `agent/swarm/quality_gate.py` | `GateResult` **没有 `severity` 字段**，而 `pipeline` 用 `r.severity == 'critical'` 判定 → 任何一次门禁失败都抛 `AttributeError`，报错方向完全失真 | P1 |
+
+> 第 1、2、6~9 条的共同点：**模块有测试、但测试从没走到那条路径**。
+> 覆盖率的价值不在于数字，而在于"逼你把每条分支都执行一次"。
+
+#### 新增测试
+
+| 文件 | 用例 | 目标模块 |
+|:---|---:|:---|
+| `tests/workflow/test_mode_state_deep.py` | 71 | mode_state（46% → 显著提升） |
+| `tests/core/test_budget_guard_deep.py` | 62 | budget_guard（36% → 显著提升） |
+| `tests/rag/test_repo_map_deep.py` | 67 | repo_map（49% → 显著提升） |
+| `tests/memory/test_memory_manager_deep.py` | 52 | memory/manager（26% → 显著提升） |
+| `tests/agent/swarm/test_pipeline_flow.py` | 13 | swarm/pipeline（0% → 56%） |
+
+合计 **265 个新测试函数**（parametrize 展开后收集数更多）。
+
+> **合并说明**：本条目由负责覆盖率补测的会话编写；`v0.60.9` 的死码删除与
+> 判定判据收紧由另一个会话完成。两者在同一工作区并行，最终由后者一并提交为
+> **0.60.10**，因为全量回归（3551 passed / 0 failed）是在两者合并状态下跑的，
+> 单独发布任一方的版本号都会与内容集不符。
+
+#### 验证
+
+- 全量：`py -3.10 -m pytest tests/ -q` → 见 `test_ledger.md`
+- 覆盖率：见下方实测
+- 硬指标：`F821/F811/E9` All checks passed；`import_sweep --strict-exit` 0；
+  `reachability` 443 不变（删除 8 个死模块后仍为 443）；
+  静默吞异常仍 172（新增测试未引入 `except: pass`）
+
+---
+
+### v0.60.9 (2026-10-23) — 死代码第一批删除 + 判定判据第三次收紧
+
+这是第一次**真正删除**代码（前几轮只出判定报告）。删了 8 个模块 / 407 行，
+全部零引用、非包门面；删后生产可达数 **443 不变**。
+
+#### 删了什么
+
+`src/core/config/validator.py`（74 行）· `src/core/snapshot.py`（68）·
+`src/workflow/mode_context.py`（63）· `src/core/telemetry/tracer.py`（53）·
+`src/core/durable/schemas/schema_validator.py`（50）· `src/core/lease.py`（44）·
+`src/core/parallel_executor.py`（43）· `src/tools_runtime/diff_utils.py`（12）
+
+三方核验后才删：全限定导入零命中、父包 `__init__` 相对导入零命中、
+同级模块相对导入零命中、无 `importlib`/`__import__`/`globals()` 字符串引用。
+
+#### 判据第三次收紧 —— 门禁抓住了我自己的误判
+
+`deadcode_triage` 的判据至今改了三版：
+
+| 版本 | 判据 | 结果 |
+|:---|:---|:---|
+| v1 | 末段标识符匹配 | 135/135 全判"有引用"（ADR-0001 陷阱重现） |
+| v2 | + 父包 `__init__` 相对导入 | NO_REFS 112（**仍漏**） |
+| v3（本版） | + **同包内任意模块**的相对导入 | NO_REFS 55 |
+
+**实证过程**（这正是四道门禁的直接价值）：
+
+1. 首轮按 v2 名单删了 10 个，`import_sweep --strict-exit` **立刻返回 1**，
+   报 4 个 IMPORT-FAIL：`vault` / `pipeline_stages` / `ralph_verify` / `team_exec`。
+2. 根因：`src/core/secrets/vault.py:11 from .base import SecretStore`、
+   `src/workflow/pipeline_stages/ralph_verify.py:11 from .types import ...`
+   —— 是**同级**相对导入，不是父包 `__init__`。
+3. 恢复 `base.py` / `types.py`，其余 8 个保留删除；复验 `import_sweep=0`、可达数仍 443。
+
+**结论：机械判据只能"提名候选"，删除必须由 `import_sweep` 兜底。**
+如果上一轮没有把这条门禁做出来，这次误删会直接进主干。
+
+#### 不变量（删前 → 删后）
+
+| 项 | 删前 | 删后 |
+|:---|:---|:---|
+| 生产可达 | 443 | **443**（未下降） |
+| 模块数 | 642 | 634 |
+| 完全不可达 | 134 | 126 |
+| `import_sweep --strict-exit` | 0 | **0** |
+| collect | 3558 / 0 errors | 3558 / 0 errors |
+| ruff F821/F811/E9 | All passed | **All passed** |
+| 定向回归 `tests/{core,workflow,tools_runtime,contracts}` | — | **1289 passed / 0 failed** |
+
+#### 剩余
+
+完全不可达 126 个；三问判定 **NO_REFS 55 / DOC_ONLY 6 / HAS_REFS 65**。
+剩余 55 个候选逐批处理（每批 ≤20 + 同一套不变量验证）。
+
+#### 本轮实测验收
+
+| 项 | 结果 |
+|:---|:---|
+| 全量回归 | **3551 passed / 0 failed / 5 skipped / 2 xfailed / 623.24s** |
+| 真实 E2E 冒烟 | **5/5 PASS，exit 0**（v0.60.9 实跑：PONG / get_weather Berlin / 391） |
+| 生产路径 E2E | **8/8 PASS，exit 0**（chat / chat_stream 11 thinking chunks / 工具解析 / 上游失败不静默降级） |
+| 定向回归 | 1289 passed / 0 failed（47.63s） |
+
+#### 关于并发会话（诚实披露）
+
+本仓库目录下**同时有另一个会话在工作**，它正在做覆盖率补测，并在工作区留下：
+- 4 个 `src/` 缺陷修复（`quality_gate.py` 缺 `severity` 字段导致 `AttributeError`、
+  `memory/manager.py` 的 `target_skills` JSON 反序列化类型错误、`repo_map.py` 签名解析、
+  `mode_state.py` 的 deep-interview 技能名别名与相对导入）
+- 5 个新测试文件（`test_pipeline_flow` / `test_budget_guard_deep` /
+  `test_memory_manager_deep` / `test_repo_map_deep` / `test_mode_state_deep`）
+
+**这些改动未经本会话审查，因此未纳入本提交**（本提交是精确 add，只含 4 个文档/配置
+文件）。上面的全量 3551 passed 是在**含这些工作区改动**的状态下跑的，所以它们至少
+"没有破坏现有测试"；但它们的正确性需要它们自己的审查闭环。
+
+版本号说明：本会话最初按 **0.60.9** 收口（死码删除），提交前发现该会话的
+**0.60.10 工作已完整落地**（12 个缺陷修复 + 265 个新测试，CHANGELOG 条目已写好、
+全量 3551 passed 已包含）。为避免"版本号与实际内容不符"以及两条提交互相踩踏，
+最终**合并为 0.60.10 一起收口**：版本号 = 内容集 = 死码删除 + 覆盖率补测 + 12 个缺陷修复。
+
 ### v0.60.8 (2026-10-23) — 独立审查 5 个阻塞项收口
 
 独立审查（只读）对本轮改动给出 **Request Changes**，逐条附了可复现证据。

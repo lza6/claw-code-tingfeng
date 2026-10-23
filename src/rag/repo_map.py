@@ -420,12 +420,19 @@ class RepoMap:
                     if len(parts) >= 2:
                         classes.append(parts[1].rstrip(':'))
                 elif stripped.startswith('def '):
-                    # 提取函数签名
-                    match = stripped[4:].split('(')
-                    if match:
-                        func_name = match[0]
-                        signature = '(' + '(' if len(match) > 1 else ''
-                        functions.append({"name": func_name, "signature": signature})
+                    # 提取函数签名: "def name(args):" -> ("name", "args")
+                    # 与 _parse_with_tree_sitter 的正则路径保持一致（都是括号内的参数文本），
+                    # 因为 to_map_entry / _format_map 都按 `def {name}({signature})` 渲染。
+                    head = stripped[4:].strip()
+                    if '(' in head:
+                        func_name, _, rest = head.partition('(')
+                        signature = rest.split(')', 1)[0]
+                    else:
+                        func_name, signature = head, ''
+                    functions.append({
+                        "name": func_name.strip().rstrip(':'),
+                        "signature": signature.strip(),
+                    })
                 elif stripped.startswith('import ') or stripped.startswith('from '):
                     if 'import' in stripped:
                         parts = stripped.split()

@@ -20,6 +20,12 @@ class GateResult:
     failures: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    # 严重度：critical 会阻断流水线并回滚；其余只记录。
+    # 历史缺陷：`SwarmPipeline.execute` 用 `r.severity == 'critical'` 判定，
+    # 但 GateResult 从未定义该字段 → 任何一次门禁失败都会抛 AttributeError，
+    # 错误信息完全失真（本应报"未通过关键质量门禁"）。
+    # 放在最后并带默认值，保证既有位置参数调用不被破坏。
+    severity: str = "critical"
 
 
 class QualityGate:
