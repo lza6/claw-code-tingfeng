@@ -152,12 +152,17 @@
 | 导入完整性 | `import_sweep.py --strict-exit` | exit 0（探针负向 0→1→0 已验证） |
 | 生产可达 | `reachability.py` | exit 0，443（删 8 模块后不变） |
 | 静默异常 | `check_silent_except.py` | exit 0，172（未因 +265 用例上升） |
-| 覆盖率 | `coverage.json` | 47.44%（26,861 / 56,624） |
+| 覆盖率 | `pytest --cov=src` → `coverage-final2.json` | **49.89%**（28,175 / 56,469）—— 删除 8 个死模块后的最终实测；本轮起点 47.44% |
 | 版本一致性 | cli / pyproject / dist-info | 均 0.60.10 |
 | CI YAML | `yaml.safe_load` | OK，4 jobs / 11 steps |
 | 文档断言 | `rg` 复核 | 无残留 |
 
 **未运行**：远端 CI（无 gh）、Docker 构建（无 docker）、staging/生产部署、浏览器路径（无 Web UI）、第 2 轮独立审查（未回传）。
+
+> 上表覆盖率一栏为**收口补充实测**（`coverage-final2.json`，13:5x 生成）：
+> 另一会话提交 `e32d341` 时的 `coverage.json` 仍停在 47.44%，本轮 +265 用例
+> 与 8 个死模块删除后重算为 **49.89%**。两个数字都对，只是测量时点不同——
+> 这也是本项目反复踩的坑：**数字必须带时点**。
 
 ---
 
@@ -197,7 +202,7 @@ gh release create v0.60.10 --notes-file CHANGELOG.md
 | 项 | 值 |
 |:---|:---|
 | 仓库 | `https://github.com/lza6/claw-code-tingfeng` |
-| 提交（本会话全部） | `aa8bf14` → `8767727` → `3fe484c` → `7de27ac` → `f28da46` → `c107d08` → `1b08c76` → `e32d341` |
+| 提交（本会话全部） | `aa8bf14` → `8767727` → `3fe484c` → `7de27ac` → `f28da46` → `c107d08` → `1b08c76` → `e32d341` → `c4775e1` → `1f3f326` |
 | 推送 | `c107d08..e32d341 main -> main` ✅ |
 | tag | `v0.60.7` · `v0.60.8` · `v0.60.10`（均已推送） |
 | GitHub Release | ⛔ **BLOCKED**：无 `gh` / `GITHUB_TOKEN` / `~/.config/gh/hosts.yml` |
@@ -220,7 +225,7 @@ gh release create v0.60.10 --notes-file CHANGELOG.md
 | # | 风险 | 现状 | 建议 |
 |:---|:---|:---|:---|
 | R1 | 远端 CI 未实跑 | 本地等价命令全过 | 有 gh/token 后立即触发，重点看新增 4 个 step |
-| R2 | 覆盖率 47.44% vs 60% | 阈值 47 真实生效 | 分批 47→50→55→60，每批记 `covered_lines` |
+| R2 | 覆盖率 **49.89%** vs 60% | 阈值 47 真实生效；+265 用例带来 +2.45pp | 分批 50→55→60，每批记 `covered_lines`（防分母缩小造成的假象） |
 | R3 | 死模块 126（55 个零引用候选） | 第一批已删 8 个 | 每批 ≤20 + 可达数 443 不变 + `import_sweep` 0 |
 | R4 | 快速层 233s vs 180s | slow 层已剥离 410s | 继续按 `--durations` 剥离，或接受 233s 为新基线 |
 | R5 | **并发会话仍在同仓库工作** | 本轮已合并其成果 | 每批收口前 `git status` + mtime 核对，否则证据归属会糊 |
@@ -246,7 +251,7 @@ gh release create v0.60.10 --notes-file CHANGELOG.md
 **仅部分闭环**
 - CI 门禁：本地/YAML 闭环，远端未跑
 - 死代码：126 个，第一批删 8 个，55 个候选待逐批
-- 覆盖率：47.44% vs 60%
+- 覆盖率：**49.89%** vs 60%（还需约 +5,700 行覆盖）
 - 测试分层：233s vs 180s
 - 独立审查：第 1 轮闭环，第 2 轮未回传
 
