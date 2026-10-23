@@ -22,10 +22,10 @@
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8**（2026-10-23 实跑，退出码 0） | `venv/Scripts/python.exe scripts/e2e_*.py` |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配（纯本地状态机，不打真实模型） | `venv/Scripts/python.exe scripts/stress_test.py --n 200` |
 | 生产可达 | **443** / 不可达 191（完全不可达 **126** / 24,260 行）<br>※ 442→443 是补入 `src.__main__` 种子的**口径修正**，非新增功能 | `py scripts/reachability.py --min-reachable 443` |
-| 覆盖率 | **47.44%**（26,861 / 56,624），数据 2026-10-23 11:51 | `coverage.json` totals |
+| 覆盖率 | **49.89%**（28,175 / 56,469），数据 2026-10-23 13:5x（删 8 死模块后重算；11:51 时为 47.44%） | `pytest --cov=src` → `coverage-final2.json` |
 | 覆盖率门禁 | `fail_under = 47` **已生效**（原 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | `py -3.10 -m pytest tests/scripts -q --cov=src` → FAIL 提示 |
 | 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI `--fail-over 172` | `py -3.10 scripts/check_silent_except.py --fail-over 172` |
-| 全量回归 | **3254 passed / 0 failed / 5 skipped / 2 xfailed / 639.98s**（单进程一次跑完，2026-10-23 收口确认）；首轮曾出现 1 个 flaky 并发用例，已按 ADR-0005 改为强契约断言，连续 5 次 30 passed | `py -3.10 -m pytest tests/ -q` |
+| 全量回归 | **3551 passed / 0 failed / 5 skipped / 2 xfailed / 663.17s**（2026-10-23 13:5x 最终收口，含 +265 新用例）；此前 3254/639.98s 为 v0.60.9 时点 | `py -3.10 -m pytest tests/ -q` |
 | 快速层（不含 slow） | **3245 passed / 237.23s**（slow 层 9 个用例占 410s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
 | CI 门禁 | 新增 collect-only / import_sweep --strict-exit / reachability --min-reachable 443 / silent-except --fail-over 172 四步 | `.github/workflows/ci.yml`（YAML 已 `yaml.safe_load` 校验） |
 
@@ -35,7 +35,7 @@
 现已把导入期主动退出单列为 `IMPORT-EXIT`（不计入缺陷），且 `surface_viewer`
 不再在导入期杀进程。复跑结果：`IMPORT-FAIL = 0`。
 
-**当前未闭环**：覆盖率 46.15%（目标 60%）、死模块 200（目标 ≤20）、
+**当前未闭环**：覆盖率 49.89%（目标 60%）、死模块 126（目标 ≤20）、
 GitHub Release / Docker（本机无 `gh` / 无 `docker`，非代码问题）。
 
 **下一阶段计划**：`计划书/下一步改进指南.md`（v2 实测版，W0'-W8）。
@@ -60,7 +60,7 @@ GitHub Release / Docker（本机无 `gh` / 无 `docker`，非代码问题）。
 | 压测 | 200 并发 5/5，128 req/s | ✅ | `test_ledger.md` §D |
 | 回归修复 | `test_acquire_release_thread_safe` flaky（契约写错）→ 改强契约 | ✅ | 连续 5 次 30 passed |
 
-**仍未闭环**：覆盖率 60%（47.44%）、死模块 ≤20（134，需产品决策）、
+**仍未闭环**：覆盖率 60%（49.89%）、死模块 ≤20（126，第一批已删 8 个）、
 远端 CI / Docker / GitHub Release（本机无 `gh`/`docker`，非代码问题）、
 快速层 <180s（237s）。
 
@@ -81,7 +81,9 @@ GitHub Release / Docker（本机无 `gh` / 无 `docker`，非代码问题）。
 `import_sweep` 642 / OK 635 / FAIL 0 / DEP-MISSING 7（均为可选 extras）；
 定向回归 58 passed。
 
-**下一步**：W2（覆盖率 Top10）/ W3（CI 门禁）/ W4（死码判定），见新计划 §11.2。
+**下一步**：覆盖率 49.89% → 50% → 55% → 60%（分批，每批记 `covered_lines`）；
+死码第二批（55 个零引用候选，每批 ≤20 + 可达数 443 不变）；
+远端 CI 实跑（需 `gh`）；Docker/部署（需容器运行时）。
 
 ---
 
