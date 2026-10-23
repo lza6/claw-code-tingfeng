@@ -286,6 +286,23 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 
 | 项 | 状态 | 原因 |
 |:---|:---|:---|
-| 真实 E2E | not_run | 本轮改动是删除不可达模块，不触碰 LLM/工具链路；上次运行于 v0.60.7（5/5 + 8/8） |
-| 压测 | not_run | 同上（未触碰并发基础设施） |
+| 真实 E2E | ✅ **已复跑**（v0.60.10）：`e2e_smoke` **5/5 PASS / exit 0**、`e2e_production` **8/8 PASS / exit 0** | `venv/Scripts/python.exe scripts/e2e_*.py` |
+| 压测 | not_run | 本轮未触碰并发基础设施（线程池/审批/熔断）；上次运行于 v0.60.7（200 并发 5/5，128 req/s） |
 | 移除 55 个候选中的第二批 | not_run | 需逐条三方核验 + 每批全量验证 |
+
+### v0.60.10 合并收口实测（2026-10-23 13:45）
+
+| 项 | 命令 | 结果 |
+|:---|:---|:---|
+| 全量回归 | `py -3.10 -m pytest tests/ -q` | **3551 passed / 0 failed / 5 skipped / 2 xfailed / 623.24s** |
+| 真实 E2E 冒烟 | `venv/Scripts/python.exe scripts/e2e_smoke.py` | **5/5 PASS / exit 0**（PONG 18.02s / get_weather Berlin 5.57s / 391 6.58s） |
+| 生产路径 E2E | `venv/Scripts/python.exe scripts/e2e_production.py` | **8/8 PASS / exit 0**（chat / chat_stream 11 thinking chunks / 工具解析 / 上游失败不静默降级） |
+| 静态硬指标 | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` | All checks passed |
+| 导入完整性 | `import_sweep.py --strict-exit` | exit 0 |
+| 生产可达 | `scripts/reachability.py` | exit 0（443，删 8 模块后不变） |
+| 静默吞异常 | `scripts/check_silent_except.py` | exit 0（172，未因新增 265 用例上升） |
+| 全指标基线 | `scripts/baseline.py --quick` | exit 0，`consistent=true` |
+| 版本一致性 | cli / pyproject / dist-info | 均 **0.60.10** |
+
+> 本轮合并了另一个并行会话的成果（12 个生产缺陷修复 + 265 个新测试）。
+> 该会话自行完成了缺陷清单与 CHANGELOG 条目，本会话代为收口提交（e32d341）。
