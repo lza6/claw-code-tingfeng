@@ -15,16 +15,26 @@
 >
 > **最短验证路径**（改动涉及 LLM / 工具 / 配置 / 导入结构时）：
 > ```bash
-> python scripts/e2e_smoke.py          # 真实端点 E2E，退出码 0 才算通过
-> pytest tests/contracts/ -q           # 公共 API 契约
-> pytest tests/ --collect-only -q      # 期望 0 errors
-> python scripts/import_sweep.py       # 期望 IMPORT-FAIL = 0（可达 ≠ 可导入）
-> python -m ruff check src/ --select F821,F811   # 期望 All checks passed
-> python scripts/reachability.py       # 删代码后「生产可达数」必须不变
+> venv/Scripts/python.exe scripts/e2e_smoke.py                  # 真实端点 E2E，退出码 0 才算通过
+> py -3.10 -m pytest tests/contracts/ -q                         # 公共 API 契约
+> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 3261 / 4.6s）
+> venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
+> py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
+> venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降
+> venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 172  # 静默吞异常只降不升
 > ```
 >
-> **本项目的三条硬指标**（v0.57.0 起作为基线）：
-> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0`。
+> **日常快检**（约 4 分钟，不含 slow 层约 410s）：
+> `py -3.10 -m pytest tests/ -q -m "not slow"` · 全量 `py -3.10 -m pytest tests/ -q`（约 13 分钟）
+> **取一次全部指标**：`py -3.10 scripts/baseline.py --out .clawd/baseline.json`
+> （17 项指标一条命令出数；文档里的数字以它为准，不要手抄）
+>
+> **解释器矩阵**（本机 `python` 命令不存在，别照抄）：
+> `venv/Scripts/python.exe` = 运行依赖 + **已装 pytest/ruff/coverage**（首选）；
+> `py -3.10` = 测试与 lint 工具齐全；`py`（默认 3.14）缺 `loguru`，**不要用**。
+>
+> **本项目的硬指标**（v0.57.0 起作为基线，现已全部接入 CI）：
+> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0` · `IMPORT-EXIT = 0` · 生产可达 ≥ 443 · 静默吞异常 ≤ 172。
 > 任何一项回升都视为回归，先修再谈其他。
 
 ## Project Overview
@@ -83,9 +93,10 @@ Clawd Code is a comprehensive AI-powered coding agent framework written in Pytho
 
 - **Language:** Python 3.10+
 - **Package Manager:** pip / pyproject.toml
-- **Testing:** pytest（2,857 收集用例；实测覆盖率 **19.5%**，目标 60% —— 见 `pyproject.toml` 的 `fail_under`）
+- **Testing:** pytest（2026-10-23 实测：**3171 收集用例 / 0 errors / 29.31s**；覆盖率 **46.15%**，目标 60% —— 见 `pyproject.toml` 的 `fail_under`）
   > 注：覆盖率数字请以 `pytest --cov=src` 的实际输出为准。历史上此处长期
-  > 虚报为 "1414 用例 / ~50%"，与实测相差 2.5 倍。指标不要写死在文档里。
+  > 虚报为 "1414 用例 / ~50%"、后来又写成 "2857 用例 / 19.5%"，
+  > 与实测相差 2 倍以上。指标不要写死在文档里。
 - **Linting:** ruff
 - **Type Checking:** mypy (optional)
 - **Containerization:** Docker + docker-compose

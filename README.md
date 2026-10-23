@@ -220,19 +220,27 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 「属性名漂移」类缺陷。v0.51.0 修复的 11 个阻塞问题中，有 5 个只有在把
 真实请求完整打通时才会逐层暴露。
 
-### 质量基线（v0.60.5，实测）
+### 质量基线（2026-10-23 实测）
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3165 passed / 5 skipped / 1 xfailed / 0 failed** | 全量 `pytest tests/ -q`（2806s） |
-| 契约测试 | 39 passed | `pytest tests/contracts -q` |
-| 覆盖率 | **46.15%**（25,877 / 56,072 行） | 仍低于 `fail_under = 60`，需独立批次提升 |
-| Ruff `F821` / `F811` | **0 / 0** | `ruff check src/ --select F821,F811` |
-| 导入期缺陷 | **0**（642 模块，636 OK） | `python scripts/import_sweep.py` |
-| 生产可达模块 | **442**（基线 431，未下降） | `python scripts/reachability.py` |
-| 死模块 | 200 | 需逐一读源码，不可按名字删 |
-| 真实 E2E | `e2e_smoke` 5/5 · `e2e_production` 8/8 | 真实端点 |
-| 并发压测 | 200 并发 5/5 | `scripts/stress_test.py --n 200` |
+| 测试用例 | **3254 passed / 0 failed / 5 skipped / 2 xfailed**（单进程一次跑完 639.98s） | `py -3.10 -m pytest tests/ -q` |
+| 快速层（不含 slow） | **3245 passed / 237.23s**（slow 层 9 个用例占 410s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **3261 / 0 errors**（含新增用例；热缓存 3.6s） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 契约测试 | 39 passed | `pytest tests/contracts -q`（历史值，本轮含在全量内） |
+| 覆盖率 | **47.44%**（26,861 / 56,624 行），数据 2026-10-23 | `py -3.10 -m pytest tests/ -q --cov=src` |
+| 覆盖率门禁 | `fail_under = 47`（**已生效**；原先 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | 见 `pyproject.toml` 注释 |
+| Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
+| 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（642 模块，635 OK，DEP-MISSING 7 均为可选 extras） | `scripts/import_sweep.py --strict-exit` |
+| 生产可达模块 | **443**（补入 `src.__main__` 种子后的口径修正；此前 442） | `scripts/reachability.py --min-reachable 443` |
+| 死模块 | 199（完全不可达 134 / 24,667 行）；三问判定：NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 | `计划书/死代码判定-2026-10-23.md`，**删除需产品决策** |
+| Ruff 全量违规 | **433**（W293 132 / F401 35 / E402 34 / RUF012 30 / B904 23 …） | `py -3.10 -m ruff check src/ --statistics`；硬指标只看 F821/F811/E9 |
+| 第三方依赖缺失 | 7（celery / opentelemetry / pathspec 等可选 extras） | `scripts/import_sweep.py` 的 DEP-MISSING，属环境非缺陷 |
+| 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI 门禁 `--fail-over 172` | `scripts/check_silent_except.py --fail-over 172` |
+| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 2026-10-23 实跑，退出码 0 |
+| 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
+
+> 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。
 
 > 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南.md`。
 > **注意**：删死代码会让覆盖率*百分比*上升但绝对覆盖行数不变，

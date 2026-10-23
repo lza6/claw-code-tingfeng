@@ -1,0 +1,219 @@
+{
+  "task_id": "W0P-W3-v0.60.7",
+  "title": "度量自洽 + 测试分层 + CI 门禁 + 真实 E2E + 压测（2026-10-23）",
+  "status": "partial",
+  "status_note": "P0/P1 清零；覆盖率 60% / 死码删除 / 远端 CI / Docker / Release 未达成，原因见 limitations",
+  "timestamp": "2026-10-23T12:00:00+08:00",
+  "environment": {
+    "os": "Windows 10 Pro (Git Bash)",
+    "interpreter_runtime": "venv/Scripts/python.exe (3.10.9)",
+    "interpreter_test": "py -3.10 (3.10.9)",
+    "note": "本机 python 命令不存在；py 默认 3.14 缺 loguru，不可用于测试"
+  },
+  "commands_executed": [
+    {
+      "id": "C-01",
+      "cmd": "py -3.10 -m pytest tests/ -q",
+      "exit_code": null,
+      "status": "see C-02",
+      "raw_output_tail": ["见 C-02（带 --cov 的完整运行）"]
+    },
+    {
+      "id": "C-02",
+      "cmd": "py -3.10 -m pytest tests/ -q --cov=src --cov-report=json:coverage.json --cov-fail-under=0",
+      "exit_code": null,
+      "status": "failed_1_case_then_fixed",
+      "duration_s": 767.19,
+      "raw_output_tail": [
+        "slowest 40 durations: test_heal_increments_error_count 128.67s; test_unified_scanner_performance 85.49s; test_execute_with_healing_with_retry 39.49s",
+        "FAILED tests/test_state/test_authority.py::TestConcurrency::test_acquire_release_thread_safe",
+        "1 failed, 3200 passed, 5 skipped, 1 xfailed, 1 warning in 767.19s (0:12:47)"
+      ]
+    },
+    {
+      "id": "C-03",
+      "cmd": "py -3.10 -m pytest tests/test_state/test_authority.py -q  (×5)",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["30 passed in 5.01s", "30 passed in 4.95s", "30 passed in 4.98s", "30 passed in 5.02s", "30 passed in 5.27s"]
+    },
+    {
+      "id": "C-04",
+      "cmd": "py -3.10 -m pytest tests/ -q -m \"not slow\"",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_s": 237.23,
+      "raw_output_tail": ["3245 passed, 5 skipped, 9 deselected, 2 xfailed in 237.23s (0:03:57)"]
+    },
+    {
+      "id": "C-05",
+      "cmd": "py -3.10 -m pytest tests/scripts -q --cov=src",
+      "exit_code": 2,
+      "status": "passed_as_expected_failure",
+      "raw_output_tail": ["FAIL Required test coverage of 60.0% not reached. Total coverage: 0.00%", "34 passed in 4.17s"],
+      "note": "证明 fail_under 已从死配置变为真实生效（此命令在修 fail_under 位置之后、改为 47 之前执行）"
+    },
+    {
+      "id": "C-06",
+      "cmd": "venv/Scripts/python.exe scripts/e2e_smoke.py",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": [
+        "[PASS] 0. 读取 .env 配置 0.38s -> base=https://token.54421666.xyz/v1 model=step-5-preview key=***fc764d",
+        "[PASS] 2. 项目 LLM 栈真实对话 12.14s -> content='PONG' tokens(prompt=17, completion=46)",
+        "[PASS] 3. 工具调用 6.28s -> tool=get_weather args={\"city\": \"Berlin\"}",
+        "[PASS] 4. 推理内容解析 7.35s -> answer='391'",
+        "合计 5 项通过 5，失败 0"
+      ]
+    },
+    {
+      "id": "C-07",
+      "cmd": "venv/Scripts/python.exe scripts/e2e_production.py",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": [
+        "[PASS] 1. create_llm_provider() 构造成功 -> OpenAIProvider model=step-5-preview",
+        "[PASS] 2. 生产路径真实对话 (chat) 12.46s -> content='PONG' tokens=49",
+        "[PASS] 3. 生产路径真实流式 (chat_stream) 9.16s -> text='1, 2, 3, 4, 5' thinking_chunks=12",
+        "[PASS] 7. 上游失败不静默降级 -> 抛出 RuntimeError，原始错误已保留",
+        "合计 8 项通过 8，失败 0"
+      ]
+    },
+    {
+      "id": "C-08",
+      "cmd": "venv/Scripts/python.exe scripts/stress_test.py --n 200",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": [
+        "[PASS] 工具执行 200 并发 -> 200 任务全部成功且结果无错配，耗时 1.56s（128 req/s）",
+        "[PASS] 线程池未泄漏 -> 5 轮 × 50 并发，无泄漏",
+        "[PASS] 审批门禁并发正确 -> 拒绝=100 只读=100 YOLO=100 错=0",
+        "[PASS] 熔断器 200 事件无丢失，状态正确 OPEN",
+        "合计 5 项，通过 5，失败 0"
+      ]
+    },
+    {
+      "id": "C-09",
+      "cmd": "venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  (含 sys.exit 探针负向验证)",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": [
+        "baseline_exit=0",
+        "with_probe_exit=1 (临时投放 src/_tmp_exit_probe.py: sys.exit(1))",
+        "after_cleanup_exit=0 (探针已删除)"
+      ]
+    },
+    {
+      "id": "C-10",
+      "cmd": "py -3.10 scripts/reachability.py --min-reachable 442 / 443",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["min442_exit=0", "min443_exit=1", "src 模块总数 642 / 生产入口可达 443 / 完全不可达 134（24,667 行）"]
+    },
+    {
+      "id": "C-11",
+      "cmd": "venv/Scripts/python.exe scripts/check_silent_except.py --write-baseline .clawd/baseline-silent.json --fail-over 172",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["静默吞异常（AST 口径）: 172", "内部基线: 172", "基线文件已写入 .clawd/baseline-silent.json（total=172）"]
+    },
+    {
+      "id": "C-12",
+      "cmd": "py -3.10 scripts/baseline.py --quick",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": [
+        "\"version\": {\"cli\": \"0.60.6\", \"pyproject\": \"0.60.6\", \"dist_info\": \"0.60.6\", \"consistent\": true}",
+        "\"ruff\": {\"hard_exit_code\": 0, \"full_total\": 433}",
+        "\"coverage\": {\"percent_covered\": 46.15, ...}",
+        "\"code_base\": {\"modules\": 642, \"lines\": 137453, \"test_files\": 184}"
+      ]
+    },
+    {
+      "id": "C-13",
+      "cmd": "py -3.10 scripts/deadcode_triage.py --md 计划书/死代码判定-2026-10-23.md",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["完全不可达模块: 134 个 / 24667 行", "NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 / DYNAMIC 0", "判定报告已写入 计划书/死代码判定-2026-10-23.md"]
+    },
+    {
+      "id": "C-14",
+      "cmd": "py -3.10 -c \"import yaml;yaml.safe_load(open('.github/workflows/ci.yml',encoding='utf-8'))\"",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["yaml OK, jobs: ['lint-and-type-check', 'test', 'security-scan', 'docker-build']", "steps: 11"]
+    },
+    {
+      "id": "C-15",
+      "cmd": "py -3.10 -m pytest tests/scripts -q",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["34 passed in 0.25s"]
+    },
+    {
+      "id": "C-16",
+      "cmd": "py -3.10 -m ruff check src/ tests/ --select F821,F811,E9",
+      "exit_code": 0,
+      "status": "passed",
+      "raw_output_tail": ["All checks passed!"]
+    }
+  ],
+  "files_changed": [
+    {"path": "pyproject.toml", "change": "fail_under 从 [tool.coverage.run] 移到 [tool.coverage.report] 并设为 47；依赖补充（litellm/mcp/psutil/fastapi，由并发会话完成）"},
+    {"path": ".github/workflows/ci.yml", "change": "新增 4 道门禁 step（collect / import_sweep --strict-exit / reachability --min-reachable 443 / silent-except --fail-over 172）；覆盖率阈值改为单一来源"},
+    {"path": "scripts/import_sweep.py", "change": "新增 --strict-exit"},
+    {"path": "scripts/reachability.py", "change": "新增 --min-reachable；PROD_SEED_MODULES + prod_seeds() + compute_reachability() 口径单一来源"},
+    {"path": "scripts/check_silent_except.py", "change": "新增 --fail-over / --write-baseline / --baseline-file"},
+    {"path": "scripts/baseline.py", "change": "新增：单一取数入口（17 项指标）"},
+    {"path": "scripts/deadcode_triage.py", "change": "新增：死代码三问机械筛查（只判定不删除）"},
+    {"path": "tests/scripts/test_gate_scripts.py", "change": "新增：门禁行为测试 18 例（strict-exit、阈值优先级、baseline 解析）"},
+    {"path": "tests/test_state/test_authority.py", "change": "修复 flaky 并发测试为强契约断言（ADR-0005）"},
+    {"path": "tests/self_healing/test_engine.py, test_regression.py, tests/workflow/test_heal_executor_evolution.py, tests/performance/test_rag_pressure.py, tests/cli/test_repl.py, tests/core/test_cache.py", "change": "9 个慢用例加 @pytest.mark.slow（按实测耗时）"},
+    {"path": "README.md / CLAUDE.md / docs/MAINTENANCE.md / skills/clawd-change-workflow/SKILL.md / .agent/memory/verified-scope.md / workflow_status.md / test_ledger.md / CHANGELOG.md", "change": "文档与实测数字对齐；新增本轮验收段"},
+    {"path": "计划书/下一步改进指南.md", "change": "重写为 v2 实测版（旧版归档到 计划书/archive/）"},
+    {"path": "计划书/死代码判定-2026-10-23.md", "change": "新增：134 个完全不可达模块的三问判定"}
+  ],
+  "tests": {
+    "full_suite": {"status": "passed", "passed": 3254, "failed": 0, "skipped": 5, "xfailed": 2, "duration_s": 639.98, "note": "首轮 3200 passed / 1 flaky failed（767.19s），修复后收口确认 0 failed"},
+    "quick_layer": {"status": "passed", "passed": 3245, "skipped": 5, "deselected": 9, "xfailed": 2, "duration_s": 237.23},
+    "gate_scripts": {"status": "passed", "passed": 34},
+    "targeted_regression": {"status": "passed", "passed": 953, "duration_s": 33.12, "scope": "tests/{scripts,core,contracts,cli}"},
+    "contracts": {"status": "passed", "passed": 39},
+    "added": [
+      {"name": "tests/scripts/test_gate_scripts.py", "type": "unit", "cases": 18, "status": "passed"},
+      {"name": "tests/test_state/test_authority.py::test_acquire_release_thread_safe", "type": "concurrency", "status": "passed", "note": "改为强契约；连续 5 次 30 passed"}
+    ]
+  },
+  "coverage_summary": {
+    "percent_covered": 47.44,
+    "covered_lines": 26861,
+    "num_statements": 56624,
+    "previous": {"percent_covered": 46.15, "covered_lines": 25877, "generated_at": "2026-10-18T17:56:38"},
+    "threshold": {"fail_under": 47, "enforced": true, "note": "此前 60 写在 [tool.coverage.run] 被忽略，从未生效"}
+  },
+  "seams_touched": [
+    "CLI -> scripts（新增 3 个脚本参数、1 个新脚本）",
+    "CI YAML -> 脚本（4 道门禁）",
+    "pytest -> coverage 配置节（阈值生效路径变化）",
+    "LLM provider -> 真实端点（e2e_smoke / e2e_production 全链路）",
+    "并发基础设施 -> 线程池/审批/熔断（压力测试）"
+  ],
+  "mock_scenarios_covered": {
+    "note": "本轮真实 E2E 使用真实端点；mock 场景仅出现在 stress_test（本地状态机）与 e2e_production 的上游失败注入",
+    "upstream_failure": "e2e_production 第 7 步注入 simulated upstream failure，验证抛 RuntimeError 而非静默降级"
+  },
+  "browser_validation": {
+    "status": "not_applicable",
+    "reason": "本项目为 CLI/TUI，无 Web UI"
+  },
+  "limitations": [
+    "覆盖率 60% 目标未达（47.44%）：需补 7,766 行，属多批次工程",
+    "死模块 134 个未删：判定报告已出（112 个零引用候选），但删除等于砍掉约 2 万行能力代码，需产品决策；ADR-0001 记录过按名字删除的误判",
+    "快速层 237s 未达 180s 目标：slow 层已剥离 410s，剩余耗时分散在 3245 个用例",
+    "远端 CI 未实跑：本机无 gh CLI",
+    "Docker / 生产部署热更新未执行：本机无 docker、无部署目标与凭证",
+    "GitHub Release 未创建：无 gh；仅有本地 tag + CHANGELOG",
+    "全量回归运行期间有并发会话在修改仓库（CHANGELOG/requirements/src/core/git_integration.py/udiff_parser.py），最终结果需以提交后的快照复跑为准",
+    "真实 E2E 共发起 11 次模型请求，在 policy §2 的 20 次预算内"
+  ]
+}

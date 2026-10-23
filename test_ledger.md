@@ -48,10 +48,176 @@
 | 项 | 状态 | 原因 |
 |:---|:---|:---|
 | 覆盖率 60% | **未达成**（基线 46.15%） | 需要数百条针对生产可达模块的测试，非单轮可完成；本轮未降低覆盖率 |
-| 测试收集 <120s | **未达成**（基线 561.55s） | 主要成本是 200 个测试文件的导入；已禁用无关 pytest 插件（langsmith/seleniumbase/faker/flask），全量收集仍需数分钟 |
+| 测试收集 <120s | **✅ 已达成**（2026-10-23 实测 29.31s 冷 / 5.09s 热） | 原基线 561.55s；v0.57.0 的导入期惰性化（D-19）是主要原因 |
 | 死模块 ≤20 | **未达成**（200 不可达） | 需人工逐条读源码复核，禁止按名称删除 |
 | GitHub Actions 实跑 | **not_run** | 本机无 `gh` CLI，无法触发/观察远端 CI |
 | GitHub Release | **not_run** | `gh` 不可用 |
 | Docker 构建/部署/热更新 | **not_run** | 本机 `where docker` 无结果；无部署目标与凭证 |
 | 流式原生工具调用 | **未实现** | 流式路径仍走文本协议；原生调用仅在非流式路径启用 |
 | 浏览器真实路径 | **not_run** | 本项目为 CLI，无 Web UI；未引入 Playwright |
+
+---
+
+## 2026-10-23 实测复核（W0 文档校准 + W1 环境与归因）
+
+> 本轮先复测、再动手。下表为**动手前**的基线，命令全部实际执行。
+
+### 动手前基线
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| 版本 | `venv/Scripts/python.exe -m src --version` | **v0.60.6**（pyproject 同） |
+| 规模 | `find src -name "*.py"` | 642 模块 / 137,443 行 |
+| 静态硬指标 | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` | All checks passed |
+| 全量 ruff | `py -3.10 -m ruff check src/ --statistics` | **432 errors**（W293 132 / F401 35 / E402 34 / RUF012 30 / B904 23 …） |
+| 导入扫描（venv） | `venv/Scripts/python.exe scripts/import_sweep.py` | 642 / OK 601 / **FAIL 1**（`src.cli.surface_viewer`）/ DEP-MISSING 40 |
+| 导入扫描（py 默认 3.14） | `py scripts/import_sweep.py` | 642 / OK 395 / FAIL 1 / **DEP-MISSING 246** |
+| 生产可达 | `py scripts/reachability.py` | **443 可达** / 199 不可达（完全不可达 134 / 24,667 行）※修复 D-09 后 |
+| 用例收集（py -3.10） | `py -3.10 -m pytest tests/ --collect-only -q` | **3171 collected / 0 errors / 29.31s**（修复前） |
+| 用例收集（py 默认 3.14） | `py -m pytest tests/ --collect-only -q` | **2007 collected / 68 errors / 7.62s**（环境缺 loguru 等） |
+| 覆盖率 | `coverage.json` totals | 46.15%（25,877 / 56,072），文件生成于 2026-10-18 |
+| 静默吞异常 | `py -3.10 scripts/check_silent_except.py` | **172**（AST 口径） |
+
+### W1 实施后（本轮）
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| 环境收敛 | `venv/Scripts/python.exe -m pip install -e ".[dev]"` | pytest 9.1.1 / ruff 0.17.2 / coverage 7.16.2；clawd-code **0.60.6** |
+| 导入扫描 | `venv/Scripts/python.exe scripts/import_sweep.py` | **IMPORT-FAIL 0** / OK 602 / DEP-MISSING 40 |
+| 归因单测 | `py -3.10 -m pytest tests/scripts -q` | **17 passed**（10 归因 + 7 口径） |
+| 版本一致性 | `py -3.10 -m pytest tests/core/test_version_consistency.py -q` | **2 passed** |
+| 导入行为 | `venv/Scripts/python.exe -c "import src.cli.surface_viewer"` | 无异常（此前 `SystemExit: 1`） |
+| 静默吞异常 | `py -3.10 scripts/check_silent_except.py --baseline 172` | 退出码 0 |
+
+### 本轮全量回归（2026-10-23）
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| **全量测试** | `py -3.10 -m pytest tests/ -q` | ✅ **3165 passed, 5 skipped, 1 xfailed, 0 failed in 425.29s（7:05）** |
+
+> 3165 + 5 + 1 = 3171，与 `--collect-only` 的收集数完全吻合。
+> 历史记录为 2806s，「全量要跑 47 分钟」的结论在新环境下不成立（快 6.6 倍）。
+
+### 依赖声明修复（本批收口，2026-10-23）
+
+真实 E2E 逼出 4 个未声明的生产依赖，修复后复测：
+
+| 步骤 | 命令 | 结果 |
+|:---|:---|:---|
+| 修复前 E2E | `venv/Scripts/python.exe scripts/e2e_smoke.py` | ❌ 通过 2 / 失败 3（`litellm` 未安装） |
+| 补 `litellm` | 加入 `pyproject.toml` dependencies | — |
+| 第二次 E2E | 同上 | ❌ 通过 4 / 失败 1（`mcp` 未安装） |
+| 补 `mcp` | `pip install mcp` + 写入 pyproject/requirements | — |
+| 第三次 E2E | 同上 | ✅ **5/5 PASS**，退出码 0 |
+| 生产路径 E2E | `venv/Scripts/python.exe scripts/e2e_production.py` | ✅ **8/8 PASS**，退出码 0 |
+| 补 `psutil`/`fastapi`/`uvicorn` | 均为生产路径硬 import 但从未声明 | — |
+| 导入扫描（最终） | `venv/Scripts/python.exe scripts/import_sweep.py` | **642 / OK 635 / FAIL 0 / DEP-MISSING 7**（celery/opentelemetry/pathspec，均为可选 extras） |
+| 定向回归 | `py -3.10 -m pytest tests/scripts tests/core/test_version_consistency.py tests/contracts -q` | **58 passed** |
+| 依赖变更后全量 | `py -3.10 -m pytest tests/ -q` | 见下方「收口全量」 |
+
+### 收口全量（依赖变更后）
+
+> ⚠️ 单进程全量出现**挂起**（两次：58% 处进程消失 / 51%→58% 停滞 5 分钟），
+> 改为按目录分批执行，四批全部 0 failed。
+
+| 批次 | 范围 | 结果 |
+|:---|:---|:---|
+| 1 | `agent core cli llm tools_runtime scripts` | **1801 passed, 1 xfailed**（96.89s） |
+| 2 | `brain cli_handlers contracts integration memory notification performance rag runtime self_healing server` | **308 passed**（249.73s） |
+| 3 | `tests/test_*.py` | **270 passed, 1 skipped**（9.86s） |
+| 4 | `test_security test_state utils workflow` | **822 passed, 4 skipped**（40.12s） |
+| 合计 | — | **3201 passed / 5 skipped / 1 xfailed / 0 failed** |
+
+**未解问题（D-10）**：单进程全量在 58%（约第 1836 个用例，
+`tests/runtime/test_engine.py` 与 `tests/scripts/` 交界）挂起，顺序相关，
+疑似前序测试泄漏后台线程/事件循环（对应 `ADR-0006`）。CI 单进程跑全量会超时。
+定位方法：二分目录 + 固定随机种子，找到泄漏点补 `finally` 清理。
+
+### 本轮未执行
+
+| 项 | 状态 | 原因 |
+|:---|:---|:---|
+| 覆盖率重跑 | **not_run** | 需全量带 `--cov`，安排在 W2 |
+| 远端 CI | **not_run** | 本机无 `gh` |
+
+---
+
+## 2026-10-23 本轮落地验收（W0' 文档自洽 + W1' 度量自洽 + W2 分层 + W3 CI 门禁）
+
+> 全部命令实际执行，输出可在 `.clawd/logs/full-run-20261023-1135.log` 复核。
+> 解释器：`py -3.10`（测试/lint）· `venv/Scripts/python.exe`（CLI/脚本/E2E）。
+
+### A. 全量回归（本轮唯一一次完整运行）
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| 全量 + 覆盖率 | `py -3.10 -m pytest tests/ -q --cov=src --cov-report=json:coverage.json --cov-fail-under=0` | **3200 passed / 1 failed / 5 skipped / 1 xfailed / 767.19s**（首轮，失败项见下） |
+| 全量（最终确认，改动收口后） | `py -3.10 -m pytest tests/ -q` | **3254 passed / 0 failed / 5 skipped / 2 xfailed / 639.98s** ✅ |
+| 快速层（不含 slow） | `py -3.10 -m pytest tests/ -q -m "not slow"` | **3245 passed / 5 skipped / 9 deselected / 2 xfailed / 237.23s** |
+| slow 层规模 | `py -3.10 -m pytest tests/ --collect-only -q -m slow` | 9 个用例（合计约 410s，占首轮全量 53%） |
+
+**唯一失败项与处置**：`tests/test_state/test_authority.py::TestConcurrency::test_acquire_release_thread_safe`
+- 根因：测试断言 `len(errors) == 0`，即"10 线程并发 acquire 同一租约都应成功"。
+  但 `AuthorityLease` 是 **Exactly-One 互斥租约**，竞争者必然被 `LeaseAcquisitionFailed` 拒绝。
+  该测试只有在"acquire/release 恰好被调度成串行"时通过 → **靠运气变绿的 flaky**。
+- 判定：**非本轮引入**（本轮未触碰 `src/core/state/authority.py` 与 `tests/test_state/`）；
+  单独串行跑 3 次均 passed，高负载下必现。
+- 修复（符合 ADR-0005，不放宽断言而是改为更强契约）：
+  改为断言「恰好 1 个成功 + 9 个被 `LeaseAcquisitionFailed` 拒绝 + 0 个非预期异常 +
+  释放后可再次获取」，用 `threading.Barrier` 最大化竞态窗口，成功者**故意不释放**保证确定性。
+- 复验：`pytest tests/test_state/test_authority.py -q` **连续 5 次 30 passed**。
+
+### B. 覆盖率（本轮重取，替换 10-18 的旧数据）
+
+| 项 | 旧值 | 本轮实测 |
+|:---|:---|:---|
+| 覆盖率 | 46.15%（25,877 / 56,072），数据 2026-10-18 | **47.44%（26,861 / 56,624）**，数据 2026-10-23 11:51 |
+| `fail_under` | 写在 `[tool.coverage.run]` → **coverage 不识别，从未生效** | 移到 `[tool.coverage.report]`，**已验证生效**（小范围跑出 `FAIL Required test coverage of 60.0% not reached`） |
+| 阈值 | `pyproject` 60（不生效）+ CI 硬编码 45（生效） | 收敛为单一来源 `fail_under = 47`；CI 不再传参 |
+
+> **为什么不直接设 60**：60 从未生效，真实生效的是 45。设 47 是相对 45 的**提高**且可执行；
+> 分批提阈值 47 → 50 → 55 → 60（见 `计划书/下一步改进指南.md` W5）。
+
+### C. 真实 E2E（已按 policy §2 授权，调用总量 11 次模型请求）
+
+| 脚本 | 命令 | 结果 |
+|:---|:---|:---|
+| 冒烟 5 步 | `venv/Scripts/python.exe scripts/e2e_smoke.py` | **5/5 PASS，退出码 0**；`content='PONG'`、`tool=get_weather {"city":"Berlin"}`、`answer='391'` |
+| 生产路径 8 步 | `venv/Scripts/python.exe scripts/e2e_production.py` | **8/8 PASS，退出码 0**；`chat` 12.46s、`chat_stream` 9.16s（thinking_chunks=12）、工具解析、上游失败降级均通过 |
+| 端点 | `.env` | `base=https://token.54421666.xyz/v1` · `model=step-5-preview` · key 已打码 |
+
+### D. 并发压测（纯本地状态机，不调用真实模型）
+
+| 项 | 命令 | 结果 |
+|:---|:---|:---|
+| 200 并发 | `venv/Scripts/python.exe scripts/stress_test.py --n 200` | **5/5 PASS，退出码 0**；200 任务全成功无错配（1.56s，**128 req/s**）；线程池无泄漏；审批混合 拒绝100/只读100/YOLO100/错0；熔断 200 事件无丢失、状态正确 OPEN |
+
+### E. 门禁脚本（新增/加固，均有自测）
+
+| 脚本 | 新增能力 | 验证方式（真实执行） |
+|:---|:---|:---|
+| `scripts/import_sweep.py` | `--strict-exit`：`IMPORT-EXIT > 0` 即失败 | 临时投放 `sys.exit(1)` 探针 → 退出码 **1**；删除后 → **0**（探针已清理） |
+| `scripts/reachability.py` | `--min-reachable N`；`PROD_SEED_MODULES` + `compute_reachability()` 单一口径 | `--min-reachable 442` → 0；`--min-reachable 443` → 1（443 为修正后真实值） |
+| `scripts/check_silent_except.py` | `--fail-over` / `--write-baseline` / `--baseline-file` | 写入 `.clawd/baseline-silent.json`（total=172）；阈值优先级有 4 条单测 |
+| `scripts/baseline.py`（新） | 一条命令输出全部指标 JSON | `--quick` 输出 17 项；`consistent=true`；`--out` 落盘 |
+| `scripts/deadcode_triage.py`（新） | 死代码三问机械筛查 | 134 个完全不可达 → NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 |
+
+### F. 度量口径修正（3 处，影响历史数字可比性）
+
+| # | 修正 | 影响 |
+|:---|:---|:---|
+| 1 | `reachability` 生产入口种子漏了 `src.__main__`（`python -m src` 的规范入口） | 可达 442 → **443**；完全不可达 135 → **134**。**不是新增功能，是口径修正** |
+| 2 | `deadcode_triage` 初版自己复制了一份种子列表，把 `src.__main__` 判成"死代码" | 已改为复用 `reachability.compute_reachability()`，禁止各处复制口径 |
+| 3 | `deadcode_triage` 初版用"末段标识符"匹配引用，135/135 全判 HAS_REFS | 收紧为"全限定名 + 确切导入语句"，得 112/6/16 |
+
+### G. 本轮仍未达成（如实披露）
+
+| 项 | 目标 | 实际 | 原因 |
+|:---|:---|:---|:---|
+| 快速层 < 180s | 180s | **237.23s** | slow 层已剥离 410s（占 53%）；剩余耗时分散在 3245 个用例（Top40 之后单项 <4s） |
+| 覆盖率 60% | 60% | **47.44%** | 需补 7,766 行覆盖，属 W4/W5 多批次工程 |
+| 死模块 ≤20 | 20 | **134** | 判定报告已出（112 个零引用候选），**删除需产品决策**（砍 2 万行能力，不可逆） |
+| 远端 CI 实跑 | 通过 | **not_run** | 本机无 `gh` CLI |
+| Docker / 生产部署热更新 | 通过 | **not_run** | 本机无 docker、无部署目标与凭证 |
+| GitHub Release | 创建 | **not_run** | 无 `gh`；已建本地 tag 与 CHANGELOG 条目 |
+

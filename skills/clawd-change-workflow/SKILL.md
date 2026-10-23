@@ -7,8 +7,8 @@ description: Guides safe changes to the Clawd Code codebase by reading the doc/m
 
 ## Overview
 
-这个仓库的真实约束不是"代码难写"，而是**代码量远超测试覆盖**（截止 v0.57.0：
-约 147K 行源码，覆盖率约 20%）。这意味着：
+这个仓库的真实约束不是"代码难写"，而是**代码量远超测试覆盖**（截止 v0.60.6 /
+2026-10-23 实测：**642 模块 / 137,453 行源码，覆盖率 46.15%**）。这意味着：
 
 - 静态检查抓不住大部分真实缺陷。`ruff` 的 `F821` 只检查**名称**是否存在，
   不检查**对象属性**是否存在；`mypy` 未启用。
@@ -24,10 +24,10 @@ description: Guides safe changes to the Clawd Code codebase by reading the doc/m
 
 | 工具 | 回答的问题 | 命令 |
 |:---|:---|:---|
-| `scripts/reachability.py` | 从生产入口**能否走到**某模块 | `python scripts/reachability.py --prod --list` |
-| `scripts/import_sweep.py` | 走到了**会不会 import 就炸** | `python scripts/import_sweep.py` |
-| `ruff --select F821,F811` | 有没有未定义名称 / 重复定义 | `python -m ruff check src/ --select F821,F811` |
-| `scripts/coverage_gap.py` | 哪些**生产可达**模块覆盖率低 | `python scripts/coverage_gap.py` |
+| `scripts/reachability.py` | 从生产入口**能否走到**某模块 | `venv/Scripts/python.exe scripts/reachability.py --prod --list` |
+| `scripts/import_sweep.py` | 走到了**会不会 import 就炸** | `venv/Scripts/python.exe scripts/import_sweep.py` |
+| `ruff --select F821,F811` | 有没有未定义名称 / 重复定义 | `py -3.10 -m ruff check src/ --select F821,F811` |
+| `scripts/coverage_gap.py` | 哪些**生产可达**模块覆盖率低 | `venv/Scripts/python.exe scripts/coverage_gap.py` |
 
 **三者必须一起用**。只跑任何一个都会漏掉另外两类缺陷：
 - 只跑可达性 → 漏掉"能走到但导入即崩"
@@ -80,11 +80,11 @@ grep -rn "def X\|class X" src/
 ls src/path/to/file.py
 
 # 文档声称"覆盖率约 N%" → 不要信，看 coverage.json 的 totals
-python -c "import json; t=json.load(open('coverage.json'))['totals']; print(t['percent_covered'])"
+py -3.10 -c "import json; t=json.load(open('coverage.json'))['totals']; print(t['percent_covered'])"
 
 # 文档给定的版本号 → 与 pyproject.toml / src.__version__ 比对
 grep -m1 '^version' pyproject.toml
-python -c "import src; print(src.__version__)"
+py -3.10 -c "import src; print(src.__version__)"
 ```
 
 **判定规则**：
@@ -182,7 +182,7 @@ except Exception as e:  # noqa: BLE001 - 指纹仅影响增量索引效率
 ### 第 1 层：真实 E2E（最灵敏的探针）
 
 ```bash
-python scripts/e2e_smoke.py     # 需要 .env 配好可用端点
+venv/Scripts/python.exe scripts/e2e_smoke.py     # 需要 .env 配好可用端点
 ```
 
 五步：读配置 → 应用可导入 → 真实对话 → 工具调用 → 推理内容。
@@ -213,14 +213,14 @@ pytest tests/ --collect-only -q 2>&1 | tail -2      # 期望 "0 errors"
 ### 第 5 层：导入完整性（改导入 / 删模块 / 改包结构后必跑）
 
 ```bash
-python scripts/import_sweep.py
+venv/Scripts/python.exe scripts/import_sweep.py
 # 期望：IMPORT-FAIL 0；DEP-MISSING 只应包含环境未装的第三方包
 ```
 
 ### 第 6 层：交付物验证（产出 HTML / 报告 / 交互页面时）
 
 ```bash
-python scripts/verify_html_report.py 计划书/变更报告-v0.57.0.html
+venv/Scripts/python.exe scripts/verify_html_report.py 计划书/变更报告-v0.57.0.html
 # 真实浏览器驱动：答对全部题 → 判定通过；错一题 → 判定未通过
 ```
 
@@ -254,7 +254,7 @@ python scripts/verify_html_report.py 计划书/变更报告-v0.57.0.html
 | 并发迭代原字典 | `RuntimeError: dictionary changed size` | 后台线程会改的容器，迭代时取快照 `list(d)` |
 | 同步调用 async 函数 | 只得到协程，`RuntimeWarning`，功能静默失效 | 看 `inspect.iscoroutinefunction()` |
 | Windows 控制台 GBK | `UnicodeEncodeError` + 满屏乱码 | 输出前 `reconfigure(encoding='utf-8', errors='replace')` |
-| **editable 安装的版本元数据滞后** | `python -m src --version` 与 pyproject 不一致 | bump 后重跑 `pip install -e . --no-deps --no-build-isolation` |
+| **editable 安装的版本元数据滞后** | `venv/Scripts/python.exe -m src --version` 与 pyproject 不一致 | bump 后重跑 `pip install -e . --no-deps --no-build-isolation` |
 | **测试文件从初始提交起就没通过** | 没人把它当信号，缺陷长期隐藏 | 见到长期红的文件，先查它引用的 API 是否真实存在 |
 
 ---

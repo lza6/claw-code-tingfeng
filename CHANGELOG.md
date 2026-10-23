@@ -9,6 +9,118 @@
 
 ## [未发布]
 
+### v0.60.7 (2026-10-23) — 把度量从"人工纪律"变成"CI 门禁"
+
+主题不是加功能，而是**让"它到底好不好"这件事可被自动判定**。
+本轮之前：四条硬指标里两条靠人记着跑、覆盖率阈值是死配置、全量回归数周没在单轮内跑完、
+三份文档对同一版本给出三个数字。
+
+#### 新增：四道 CI 门禁（此前全靠人工纪律）
+
+| 门禁 | 命令 | 拦住的真实事故 |
+|:---|:---|:---|
+| 收集 | `pytest tests/ --collect-only -q` | 缺 `__init__.py` 导致的 import file mismatch |
+| 导入完整性 | `import_sweep.py --strict-exit` | 新增 `--strict-exit`：`IMPORT-EXIT > 0` 即失败，堵住"用 `sys.exit` 绕过红线" |
+| 生产可达 | `reachability.py --min-reachable 443` | 新增参数：删码/改 import 形式导致模块从生产图消失 |
+| 静默吞异常 | `check_silent_except.py --fail-over 172` | 新增基线文件 `.clawd/baseline-silent.json`，只降不升 |
+
+#### 修复：覆盖率阈值从未生效（v0.53.0 起的静默失效）
+
+- `fail_under = 60` 写在 `[tool.coverage.run]`，coverage 会当作未知配置项忽略
+  （实测 warning：`Unrecognized option '[tool.coverage.run] fail_under='`）。
+  真正生效的是 CI 里硬编码的 `--cov-fail-under=45`。
+- 已移到 `[tool.coverage.report]`，设为 **47**（实测基线 47.44%），CI 不再传参 →
+  **单一来源、真实生效**。相对此前真正生效的 45 是提高，目标仍为 60（分批 47→50→55→60）。
+
+#### 修复：flaky 并发测试（契约写错，不是实现缺陷）
+
+- `tests/test_state/test_authority.py::test_acquire_release_thread_safe` 断言
+  "10 线程并发 acquire 同一租约都不出错"，但 `AuthorityLease` 是 **Exactly-One 互斥租约**，
+  竞争者必然被拒。该测试只在"恰好串行调度"时通过 → 高负载下必挂。
+- 按 ADR-0005 **不放宽断言**，改为更强的真实契约：恰好 1 成功 / 9 被
+  `LeaseAcquisitionFailed` 拒绝 / 0 非预期异常 / 释放后可再获取。
+  用 `Barrier` 最大化竞态窗口，成功者不释放保证确定性。连续 5 次绿。
+
+#### 新增：单一取数入口与死代码判定工具
+
+- `scripts/baseline.py`：一条命令输出全部硬指标 JSON（版本一致性、模块数、收集数、
+  ruff 硬/全量、导入扫描、可达性、覆盖率、静默异常），任何一步失败如实记 `failed`。
+- `scripts/deadcode_triage.py`：对"完全不可达"模块做三问机械筛查
+  （静态引用 / 动态导入 / 文档引用），产出 `计划书/死代码判定-2026-10-23.md`。
+  **只判定不删除**——112 个"零引用"里仍有对外导入路径与未接线能力，删需产品决策。
+
+#### 修复：可达性口径漏算 `python -m src` 入口
+
+- `src.__main__` 是 `python -m src` 的规范入口，但不在种子列表里，被算进"完全不可达"，
+  差点被当死代码删掉。种子已收敛为 `reachability.PROD_SEED_MODULES` 单一来源 +
+  `compute_reachability()`，其他脚本禁止各自复制。
+- 影响：生产可达 442 → **443**，完全不可达 135 → **134**。属口径修正，非新增功能。
+
+#### 测试分层（按实测耗时，不按结果）
+
+- 9 个用例打 `slow`（合计约 410s，占全量 53%）：`not slow` 快速层 **237s**，
+  全量 **767s**。红线：`slow` 只能按耗时标，禁止用来隐藏失败用例。
+
+#### 本轮实测验收
+
+| 项 | 结果 |
+|:---|:---|
+| 全量回归 | **3254 passed / 0 failed / 5 skipped / 2 xfailed / 639.98s**（首轮 3200 passed + 1 flaky，已修为强契约断言） |
+| 快速层 | 3245 passed / 237.23s |
+| 覆盖率 | 46.15% → **47.44%**（26,861 / 56,624） |
+| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8**，退出码 0 |
+| 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 |
+| 静态硬指标 | F821/F811/E9 All checks passed · IMPORT-FAIL 0 · IMPORT-EXIT 0 |
+
+**未达成**：覆盖率 60%、死模块 ≤20（需产品决策）、快速层 <180s、远端 CI/Docker/Release（本机无 `gh`/`docker`）。
+
+### 未发布 (2026-10-23) — 度量真实性、依赖声明与环境收敛
+
+本批不改业务逻辑，改的是"我们怎么知道它是好的"：
+四条硬指标里有两条是失真的，而真实端点 E2E 一跑就暴露 3 个未声明的生产依赖。
+
+#### 修复：指标失真
+
+- `scripts/import_sweep.py` 的 `classify()` 把导入期 `SystemExit` 兜底判为代码缺陷，
+  导致 `IMPORT-FAIL = 0` 这条红线可被一个 `sys.exit` 轻易污染。新增 `IMPORT-EXIT`
+  分类（不计入缺陷、单独列出待复核）。
+- `src/cli/surface_viewer.py` 去掉模块级 `sys.exit(1)`。去掉后发现该模块**从未被成功导入**：
+  函数注解在模块级求值，而 `SurfaceManager` 来自可能失败的 `try` 块，
+  立即抛 `NameError`。已加 `from __future__ import annotations`。
+  —— 一个 `except` 掩盖了整块不可用，这比缺一个可选依赖严重。
+
+#### 修复：4 个生产路径依赖从未声明（`pip install -e .` 装出来的环境跑不了）
+
+| 包 | 使用者 | 后果 |
+|:---|:---|:---|
+| `litellm` | `src/llm/litellm_singleton`、`lazy_litellm`、`exception_handler` | 项目 LLM 栈完全不可用 |
+| `mcp` | litellm ≥1.100 的 function-calling 路径 | 工具调用抛 `ModuleNotFoundError` |
+| `psutil` | `src/core/resource_monitor.py`（硬 import）、`budget_guard`、`memory_guard` | `liveness`/`swarm.engine` 导入即崩 |
+| `fastapi` / `uvicorn` | `src/cli/web_config.py`（硬 import） | `clawd config` 的 Web 界面崩溃 |
+
+均已补进 `pyproject.toml`，`mcp` 同时补进 `requirements.txt`。
+修复后：`e2e_smoke` 5/5、`e2e_production` 8/8、`import_sweep` FAIL 0 / DEP-MISSING 7（全为可选 extras）。
+
+#### 新增：护栏
+
+- `tests/scripts/test_import_sweep_classify.py`（10 例）：锁定归因语义。
+- `tests/scripts/test_check_silent_except.py`（7 例）：锁定静默吞异常口径。
+- `tests/core/test_version_consistency.py`（2 例）：pyproject / dist-info / `src.__version__` 三者一致。
+- `scripts/check_silent_except.py`：AST 口径统计（实测 172），`--baseline` 可做趋势断言。
+
+#### 文档校准
+
+10 处过时断言已修（版本号、用例数、覆盖率、收集耗时、命令解释器）。
+`workflow_status.md` 顶部新增"当前状态"区块，历史轮次数据全部标注为快照。
+新增 `计划书/下一阶段执行计划-2026-10-23.md`（W0-W6）。
+
+#### 环境
+
+`venv` 补装 `.[dev]`：pytest 9.1.1 / ruff 0.17.2 / coverage 7.16.2，dist-info 同步到 0.60.6。
+本机 `python` 命令不存在，测试统一用 `py -3.10`（同一份测试在 `py` 默认 3.14 下会报 68 个假错误）。
+
+---
+
 ### v0.60.6 (2026-10-20) — 第三轮审查收口：生产持久化、测试强度、证据修正
 
 第三轮独立审查（reviewer-round3）判定 Request Changes，阻塞点为 C1（修复落在

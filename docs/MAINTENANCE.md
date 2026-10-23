@@ -9,15 +9,27 @@
 
 ```bash
 # 1) 读
-#    workflow_status.md          —— 上一轮改了什么、验证到哪一步
+#    workflow_status.md                       —— 顶部「当前状态」区块
 #    skills/clawd-change-workflow/SKILL.md
-#    计划书/下一步改进指南.md     —— 剩余路线图（含"已完成/未完成"实跑状态表）
+#    计划书/下一阶段执行计划-2026-10-23.md     —— 当前计划（W0-W6）
 
 # 2) 建立事实基线（3 分钟，别信文档里的数字）
-python scripts/reachability.py                 # 生产可达数
-python scripts/import_sweep.py                 # 导入期缺陷数
-python -m ruff check src/ --select F821,F811   # 静态缺陷数
+py scripts/reachability.py                                   # 生产可达数
+venv/Scripts/python.exe scripts/import_sweep.py              # 导入期缺陷数
+py -3.10 -m ruff check src/ --select F821,F811               # 静态缺陷数
 ```
+
+### 0.1 解释器矩阵（本机 `python` 命令不存在）
+
+| 解释器 | 版本 | 运行依赖 | pytest / ruff | 用途 |
+|:---|:---|:---|:---|:---|
+| `venv/Scripts/python.exe` | 3.10.9 | ✅（缺 jsonschema/psutil 等可选包） | ✅ pytest 9.1.1 / ruff 0.17.2 / pytest-cov 7.1.0 | **首选**：跑 CLI、E2E、脚本、测试、ruff（与 CI 的 `pip install -e ".[dev]"` 一致） |
+| `py -3.10` | 3.10.9 | ✅ | ✅ | **跑测试、跑 ruff** |
+| `py`（默认） | 3.14 | ❌ 缺 loguru | ✅ | **不要用**：收集会报 68 个假错误 |
+
+> 实测：同一份测试，`py` 得 `68 errors`，`py -3.10` 得 `0 errors`。
+> 混用解释器是本项目"指标互相矛盾"的头号原因。
+
 
 **判定规则**：文档里的每条具体断言（"X 未实现"、"覆盖率约 N%"、"文件在 Y"），
 先用上面的命令或 `grep` 核实。文档过时是常态。

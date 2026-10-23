@@ -3,7 +3,89 @@
 > 任务契约、验收台账与阻塞项。**只记录事实与证据**。
 > 开始时间：2026-10-16
 > 基线版本：`main` @ `7ebd096`（v0.45.0）
-> 当前版本：**v0.60.2**
+> 当前版本：**v0.60.6**（2026-10-23 实测）
+
+---
+
+## 当前状态（2026-10-23 实测复核）
+
+> 本节是**唯一有效的当前状态**。下文 `## 0-0` 及其后所有 `## 0-x` 章节均为
+> **历史轮次快照**（v0.51.0 → v0.60.6），其中的数字只代表当时，不代表现在。
+
+| 指标 | 2026-10-23 实测 | 命令 |
+|:---|:---|:---|
+| 声明版本 | 0.60.6 | `venv/Scripts/python.exe -m src --version` |
+| 源码规模 | 642 模块 / 137,443 行 | `find src -name "*.py"` |
+| 用例收集 | **3190 / 0 errors / 5.09s**（`py -3.10`，热缓存） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| Ruff 硬指标 | F821/F811/E9 **All checks passed** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
+| 导入期缺陷 | **IMPORT-FAIL = 0 / IMPORT-EXIT = 0**（642 模块 / 635 OK / DEP-MISSING 7 为可选 extras） | `venv/Scripts/python.exe scripts/import_sweep.py --strict-exit` |
+| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8**（2026-10-23 实跑，退出码 0） | `venv/Scripts/python.exe scripts/e2e_*.py` |
+| 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配（纯本地状态机，不打真实模型） | `venv/Scripts/python.exe scripts/stress_test.py --n 200` |
+| 生产可达 | **443** / 不可达 199（完全不可达 134 / 24,667 行）<br>※ 442→443 是补入 `src.__main__` 种子的**口径修正**，非新增功能 | `py scripts/reachability.py --min-reachable 443` |
+| 覆盖率 | **47.44%**（26,861 / 56,624），数据 2026-10-23 11:51 | `coverage.json` totals |
+| 覆盖率门禁 | `fail_under = 47` **已生效**（原 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | `py -3.10 -m pytest tests/scripts -q --cov=src` → FAIL 提示 |
+| 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI `--fail-over 172` | `py -3.10 scripts/check_silent_except.py --fail-over 172` |
+| 全量回归 | **3254 passed / 0 failed / 5 skipped / 2 xfailed / 639.98s**（单进程一次跑完，2026-10-23 收口确认）；首轮曾出现 1 个 flaky 并发用例，已按 ADR-0005 改为强契约断言，连续 5 次 30 passed | `py -3.10 -m pytest tests/ -q` |
+| 快速层（不含 slow） | **3245 passed / 237.23s**（slow 层 9 个用例占 410s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| CI 门禁 | 新增 collect-only / import_sweep --strict-exit / reachability --min-reachable 443 / silent-except --fail-over 172 四步 | `.github/workflows/ci.yml`（YAML 已 `yaml.safe_load` 校验） |
+
+**已修复的指标失真**（W1，2026-10-23）：复核时 `IMPORT-FAIL = 1` 并非真实代码缺陷——
+`scripts/import_sweep.py` 的 `classify()` 把导入期 `SystemExit` 兜底判为缺陷，
+而 `src/cli/surface_viewer.py` 因 venv 缺 `jsonschema` 在导入期 `sys.exit(1)`。
+现已把导入期主动退出单列为 `IMPORT-EXIT`（不计入缺陷），且 `surface_viewer`
+不再在导入期杀进程。复跑结果：`IMPORT-FAIL = 0`。
+
+**当前未闭环**：覆盖率 46.15%（目标 60%）、死模块 200（目标 ≤20）、
+GitHub Release / Docker（本机无 `gh` / 无 `docker`，非代码问题）。
+
+**下一阶段计划**：`计划书/下一步改进指南.md`（v2 实测版，W0'-W8）。
+
+### 2026-10-23 本轮批次（v0.60.7）：度量自洽 + 分层 + CI 门禁 + 真实 E2E
+
+> 逐项命令与原始输出见 `test_ledger.md` 的「2026-10-23 本轮落地验收」段；
+> 全量日志 `.clawd/logs/full-run-20261023-1135.log`。
+
+| 批次 | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| W0' | 文档自洽：N-1~N-14 漂移逐条核实并修正；`README`/`CLAUDE`/`MAINTENANCE`/`SKILL`/`verified-scope` 全部对齐实测 | ✅ | `rg` 断言无遗留；`CHANGELOG` 经查**本就完整**（我上一轮误判为落后 4 版，已自纠） |
+| W1'-1 | `import_sweep --strict-exit`：堵住"用 sys.exit 绕过红线" | ✅ | 探针实测 0→1→0；`tests/scripts/test_gate_scripts.py` |
+| W1'-2 | `check_silent_except --fail-over/--write-baseline/--baseline-file` | ✅ | 基线文件 total=172；4 条优先级单测 |
+| W1'-3 | `scripts/baseline.py`：单一取数入口（17 项指标） | ✅ | `--quick` 输出含 `consistent=true` |
+| W1'-4 | `reachability --min-reachable` + 种子口径收敛为单函数 | ✅ | 442→0 / 443→1；修出"漏算 `src.__main__`" |
+| W2 | `slow` marker 分层（只按耗时，9 个用例 410s） | ✅ | 快速层 237.23s（全量 767.19s） |
+| W3 | CI 四道门禁 + 覆盖率阈值单一来源（`fail_under=47` 真正生效） | ✅（远端待验证） | YAML `safe_load` 通过；本机无 `gh` → 远端 not_run |
+| W4 | 覆盖率重取 46.15% → **47.44%**；`fail_under` 从"死配置"改为生效 | ✅ | `pytest --cov=src` 小范围触发 FAIL 提示 |
+| W6 | 死代码三问判定报告（134 个完全不可达） | ✅ 判定；删除 ⛔ 待决策 | `计划书/死代码判定-2026-10-23.md`：NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 |
+| E2E | 真实端点 5/5 + 8/8，退出码 0 | ✅ | `test_ledger.md` §C |
+| 压测 | 200 并发 5/5，128 req/s | ✅ | `test_ledger.md` §D |
+| 回归修复 | `test_acquire_release_thread_safe` flaky（契约写错）→ 改强契约 | ✅ | 连续 5 次 30 passed |
+
+**仍未闭环**：覆盖率 60%（47.44%）、死模块 ≤20（134，需产品决策）、
+远端 CI / Docker / GitHub Release（本机无 `gh`/`docker`，非代码问题）、
+快速层 <180s（237s）。
+
+### 2026-10-23 执行记录（W0 文档校准 + W1 环境与归因，已完成）
+
+| ID | 事项 | 状态 | 证据 |
+|:---|:---|:---|:---|
+| W0 | 文档校准：10 处过时断言、历史/当前分区、解释器矩阵 | ✅ | 本节 + README / CLAUDE.md / MAINTENANCE.md / 两份计划书 |
+| W1-1 | `import_sweep.classify()` 新增 `IMPORT-EXIT`，不再把 `SystemExit` 当缺陷 | ✅ | `tests/scripts/test_import_sweep_classify.py` 10 passed |
+| W1-2 | `src/cli/surface_viewer.py` 去掉导入期 `sys.exit`；顺带修出被掩盖的 `NameError` | ✅ | 导入不再杀进程；运行时给可读错误 |
+| W1-3 | venv 安装 `.[dev]`：pytest 9.1.1 / ruff 0.17.2 / coverage 7.16.2 | ✅ | dist-info 0.60.6 |
+| W1-4 | 版本一致性护栏（pyproject / dist-info / `src.__version__`） | ✅ | `tests/core/test_version_consistency.py` 2 passed |
+| W1-5 | 静默吞异常 AST 口径脚本 + 趋势断言 | ✅ | `scripts/check_silent_except.py` → 172；7 passed |
+| W1-6 | **补 4 个未声明的生产依赖**（litellm / mcp / psutil / fastapi+uvicorn） | ✅ | E2E 由 2/5 → 5/5；production 8/8 |
+| W1-7 | `reachability.py` 入口补 `src.__main__`（原判为死代码） | ✅ | 可达 442 → 443 |
+
+**本轮实测**：`e2e_smoke` 5/5、`e2e_production` 8/8（退出码 0）；
+`import_sweep` 642 / OK 635 / FAIL 0 / DEP-MISSING 7（均为可选 extras）；
+定向回归 58 passed。
+
+**下一步**：W2（覆盖率 Top10）/ W3（CI 门禁）/ W4（死码判定），见新计划 §11.2。
+
+---
+
+## 历史轮次（以下章节为快照，数字仅代表当时）
 
 ---
 
