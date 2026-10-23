@@ -53,6 +53,7 @@ class TestSelfHealingRegression:
         assert result.error_category == ErrorCategory.RUNTIME
 
     @pytest.mark.asyncio
+    @pytest.mark.slow  # 2026-10-23 实测 27.74s
     async def test_heal_retry_on_verification_failure(self, engine, mock_llm_engine):
         """Regression: Verify that the engine retries if the first fix fails verification."""
         error_msg = "RuntimeError: something went wrong"
@@ -76,6 +77,7 @@ class TestSelfHealingRegression:
         assert result.verification_passed is True
 
     @pytest.mark.asyncio
+    @pytest.mark.slow  # 2026-10-23 实测 22.93s
     async def test_heal_max_attempts_exhausted(self, engine, mock_llm_engine):
         """Regression: Verify that heal returns failure after max_attempts are exhausted."""
         error_msg = "RuntimeError: persistent error"

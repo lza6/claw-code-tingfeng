@@ -59,6 +59,7 @@ class TestHandleVersion:
 class TestHandleDoctor:
     """_handle_doctor 测试"""
 
+    @pytest.mark.slow  # 2026-10-23 实测 25.89s（真实跑一遍 doctor 全部检查）
     def test_runs_diagnostics(self, capsys):
         from src.cli.repl import _handle_doctor
         _handle_doctor()

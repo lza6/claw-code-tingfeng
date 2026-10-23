@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.60.6"
+version = "0.60.7"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,6 +27,20 @@ classifiers = [
 dependencies = [
     "openai>=2.30.0",
     "anthropic>=0.40.0",
+    # 生产 LLM 栈直接 import（src/llm/litellm_singleton、lazy_litellm、
+    # exception_handler、src/utils/voice.py、src/tools_runtime/voice_tool.py）。
+    # 此前只写在 requirements.txt、漏在 pyproject，导致 `pip install -e .`
+    # 装出的环境一跑 E2E 就 ImportError（2026-10-23 实测）。
+    "litellm>=1.40.0",
+    # litellm >= 1.100 的 function-calling 路径会 import mcp；
+    # 未声明时工具调用直接抛 ModuleNotFoundError（2026-10-23 E2E 实测，步骤 3 失败）。
+    "mcp>=1.0.0",
+    # 以下三个在生产路径上被硬 import，但历史上从未声明（import_sweep 的
+    # DEP-MISSING 列表暴露）：resource_monitor.py、liveness.py、swarm/engine.py
+    # 用 psutil；cli/web_config.py 用 fastapi + uvicorn（由 `clawd config` 触发）。
+    "psutil>=5.9",
+    "fastapi>=0.104",
+    "uvicorn>=0.30",
     "websockets>=15.0.1",
     "tiktoken>=0.7.0",
     "httpx>=0.27.0",
@@ -114,10 +128,20 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["src"]
 omit = ["tests/*", "*/__pycache__/*"]
-# 从 oh-my-codex 汲取：强制覆盖率阈值，确保代码质量
-fail_under = 60
 
 [tool.coverage.report]
+# 覆盖率门禁：**必须放在 [tool.coverage.report]**，放在 [tool.coverage.run] 会被
+# coverage 当成未知配置项忽略（2026-10-23 实测 warning：
+# "Unrecognized option '[tool.coverage.run] fail_under='"）。
+# 也就是说 v0.53.0 起这条 60% 阈值从未真正生效过 —— 真正生效的是 CI 里
+# 硬编码的 --cov-fail-under=45。
+#
+# 2026-10-23 修正为**唯一来源 + 真实可执行**：
+#   - 实测基线 47.44%（26,861 / 56,624），阈值设为 47 留出跨平台波动余量；
+#   - CI 不再传 --cov-fail-under（避免两处阈值打架）；
+#   - 相对"此前真正生效的 45"是**提高**，不是降低标准；
+#   - 目标仍是 60（见 计划书/下一步改进指南.md W5），分批提阈值：47 → 50 → 55 → 60。
+fail_under = 47
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

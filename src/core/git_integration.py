@@ -112,10 +112,22 @@ class GitManager:
                 logger.info(f"[Git] 初始化新仓库: {self.workdir}")
 
                 # 配置默认 user
+                #
+                # 注意：GitPython 的 `get_value(key, default)` 在 **section 不存在** 时
+                # 抛 `NoSectionError`，而不是返回 default。新建的空仓库里
+                # `[user]` section 根本不存在，所以这里必须显式兜住异常，
+                # 否则整个 `_ensure_repo` 会失败、Git 功能静默不可用（2026-10-23 实测）。
                 config = self._repo.config_writer()
-                if not config.get_value("user", "name", None):
+
+                def _has(section: str, option: str) -> bool:
+                    try:
+                        return bool(config.get_value(section, option, ""))
+                    except Exception:  # NoSectionError / NoOptionError / 其他
+                        return False
+
+                if not _has("user", "name"):
                     config.set_value("user", "name", "Clawd User")
-                if not config.get_value("user", "email", None):
+                if not _has("user", "email"):
                     config.set_value("user", "email", "user@clawd.ai")
                 config.release()
 

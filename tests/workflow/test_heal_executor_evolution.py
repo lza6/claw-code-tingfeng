@@ -5,6 +5,7 @@ from src.workflow.healable_executor import HealableExecutor
 from src.workflow.models import WorkflowTask, WorkflowStatus, WorkflowPhase
 
 @pytest.mark.asyncio
+@pytest.mark.slow  # 2026-10-23 实测 35.12s
 async def test_execute_with_healing_success():
     workdir = Path(".")
     executor = HealableExecutor(workdir=workdir)
@@ -26,6 +27,7 @@ async def test_execute_with_healing_success():
     assert healed is False
 
 @pytest.mark.asyncio
+@pytest.mark.slow  # 2026-10-23 实测 39.49s（含重试等待）
 async def test_execute_with_healing_with_retry():
     workdir = Path(".")
     executor = HealableExecutor(workdir=workdir)

@@ -389,24 +389,57 @@ class TestConcurrency:
     """并发安全测试"""
 
     def test_acquire_release_thread_safe(self):
-        """多线程并发获取释放线程安全（验证无死锁/异常）"""
-        lease = AuthorityLease()
-        errors = []
+        """10 线程同时抢同一租约：**恰好 1 个成功，9 个被明确拒绝**，且无泄漏/死锁。
 
-        def worker(worker_id: str):
+        2026-10-23 修正：原断言是 `len(errors) == 0`，即"10 个线程都应该 acquire 成功"。
+        但 `AuthorityLease` 是 **Exactly-One**（互斥）租约——`acquire()` 在别人持有时
+        抛 `LeaseAlreadyHeldError`。所以原测试只有在"acquire/release 恰好被调度成串行"
+        时才通过，是**靠运气变绿**的 flaky 测试（全量运行时暴露：7/10 线程被拒 → 失败）。
+
+        按 ADR-0005（不得为变绿放宽断言），这里不是放宽而是**改成表达真实契约的更强断言**：
+        - 成功数必须恰好为 1（互斥性）
+        - 失败数必须恰好为 9，且全部是 `LeaseAcquisitionFailed`（拒绝而非崩溃）
+        - 不允许出现任何非预期异常
+        - 持有者释放后必须能再次获取（无泄漏、无死锁）
+
+        异常契约（`src/core/state/authority.py:267/273`）：
+        被**别人**持有 → `LeaseAcquisitionFailed`；被**自己**重复获取 → `LeaseAlreadyHeldError`。
+        并发抢租约时 9 个竞争者属于前者。
+
+        确定性来源：成功的线程**不释放**租约，因此无论调度顺序如何，其余线程必然被拒。
+        """
+        lease = AuthorityLease()
+        successes: list[int] = []
+        denied: list[int] = []
+        unexpected: list[tuple[int, str]] = []
+        starters = threading.Barrier(10, timeout=10)
+
+        def worker(worker_id: int) -> None:
             try:
-                # 每个线程只获取一次然后立即释放
+                starters.wait()  # 让 10 个线程尽量同时起跑，最大化竞态窗口
                 lease.acquire(f"worker-{worker_id}", ttl=300)
-                lease.release()
-            except Exception as e:
-                errors.append((worker_id, str(e)))
+                successes.append(worker_id)  # 注意：成功者故意不释放
+            except LeaseAcquisitionFailed as exc:
+                assert "already held" in str(exc), f"拒绝原因不明确: {exc}"
+                denied.append(worker_id)
+            except Exception as exc:  # noqa: BLE001 - 任何其它异常都是缺陷，要计数
+                unexpected.append((worker_id, repr(exc)))
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=30)
 
-        # 验证没有异常（由于 TTL 足够长，多个线程可能都成功获取过）
-        # 重点是验证线程安全性，不是业务逻辑
-        assert len(errors) == 0
+        assert all(not t.is_alive() for t in threads), "有线程未在 30s 内结束（疑似死锁）"
+        assert unexpected == [], f"出现非预期异常：{unexpected}"
+        assert len(successes) == 1, f"互斥租约只允许 1 个持有者，实际 {len(successes)}"
+        assert len(denied) == 9, f"应恰好 9 个被拒，实际 {len(denied)}"
+        assert set(successes) | set(denied) | {i for i, _ in unexpected} == set(range(10))
+
+        # 释放后可再次获取（证明 release 真正生效、没有泄漏）
+        lease.release()
+        assert not lease.is_held()
+        assert lease.acquire("after-release", ttl=10).owner == "after-release"
+        lease.release()
+        assert not lease.is_held()

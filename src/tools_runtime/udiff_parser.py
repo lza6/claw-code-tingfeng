@@ -92,7 +92,10 @@ def _process_fenced_block(
             hunk = []
             keeper = False
 
-            fname = line[4:].strip()
+            # 同一 fence 内的第 2..N 个文件段：这里也要剥离 `b/` 前缀，
+            # 否则文件名会变成 `b/b.py`，写入时落到错误路径。
+            next_fname = line[4:].strip()
+            fname = next_fname[2:] if next_fname.startswith('b/') else next_fname
             continue
 
         op = line[0]

@@ -42,6 +42,28 @@ jobs:
         run: |
           ruff format --check src/ tests/
 
+      # ---- 度量门禁（2026-10-23 加入）：把四条硬指标从"人工纪律"变成 CI 强制 ----
+      # 背景：H-3（IMPORT-FAIL=0）与 H-4（生产可达数不下降）此前全靠人记着跑，
+      # 2026-10-23 实测发现 import_sweep 的归因缺陷让 H-3 失真了整整一轮。
+
+      - name: Collect gate (pytest --collect-only must have 0 errors)
+        run: |
+          pytest tests/ --collect-only -q
+
+      - name: Import integrity gate (IMPORT-FAIL = 0, IMPORT-EXIT = 0)
+        run: |
+          python scripts/import_sweep.py --strict-exit
+
+      - name: Reachability gate (production-reachable modules must not drop)
+        run: |
+          # 基线 443 = 2026-10-23 修正入口种子后的实测值
+          # （修正前 442，差值来自把 src.__main__ 计入生产入口，不是新增功能）
+          python scripts/reachability.py --min-reachable 443
+
+      - name: Silent-exception trend gate (must not exceed baseline)
+        run: |
+          python scripts/check_silent_except.py --fail-over 172
+
       - name: Type check with MyPy
         run: |
           mypy src/ --ignore-missing-imports --no-error-summary || true
@@ -69,13 +91,14 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          # 覆盖率门禁分阶段：当前实测基线 46.15%，目标 60%（见 pyproject.toml）。
-          # 阈值先设在基线之下，避免 CI 长期必红；提升覆盖率是独立批次。
+          # 覆盖率阈值**单一来源** = pyproject.toml 的 [tool.coverage.report] fail_under。
+          # 此处刻意不传 --cov-fail-under：2026-10-23 前 pyproject 的 fail_under 被放在
+          # [tool.coverage.run] 而被 coverage 忽略（从未生效），真正生效的是本文件里
+          # 硬编码的 45。现在阈值收敛到 pyproject（47，实测基线 47.44%）。
           pytest tests/ -v --tb=short \
             --cov=src \
             --cov-report=xml \
-            --cov-report=term-missing \
-            --cov-fail-under=45
+            --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'

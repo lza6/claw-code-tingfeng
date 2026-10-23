@@ -163,24 +163,62 @@ def test_modules() -> list[str]:
     return out
 
 
+# 生产入口种子（**唯一来源**）。
+#
+# 2026-10-23 教训：`scripts/deadcode_triage.py` 一开始自己硬编码了一份简化列表，
+# 漏掉 `src.__main__`，于是 `python -m src` 的规范入口被算进"完全不可达"，
+# 差点被当成死代码。任何需要生产可达集的脚本都必须复用本函数，
+# 禁止各自复制一份列表。
+#
+# 另注：`src.main` 是历史 argparse 入口（`python -m src.main`），
+# `src.cli.entrypoint` 是 `clawd` console script 与 `python -m src` 的共同实现。
+PROD_SEED_MODULES: tuple[str, ...] = (
+    "src.__init__",
+    "src.__main__",  # `python -m src` 的规范入口（= src.cli.entrypoint.main）
+    "src.main",  # 历史 argparse 入口，保留兼容
+    "src.cli.entrypoint",
+    "src.cli.__init__",
+)
+
+
+def prod_seeds(table: dict[str, Path]) -> list[str]:
+    """返回在模块表中真实存在的生产入口种子。"""
+    return [s for s in PROD_SEED_MODULES if s in table]
+
+
+def compute_reachability(
+    table: dict[str, Path],
+) -> tuple[set[str], set[str], set[str]]:
+    """返回 (生产可达, 全部可达, 完全不可达)。所有脚本共用同一口径。"""
+    prod_reach = reachable_from(prod_seeds(table), table)
+
+    test_seeds = [m for m in test_modules() if m in table]
+    extra: set[str] = set()
+    for p in (REPO / "tests").rglob("*.py"):
+        extra |= extract_imports(p)
+    test_seeds += [c for c in extra if c in table]
+    test_reach = reachable_from(test_seeds, table)
+
+    all_reach = prod_reach | test_reach
+    fully_unreachable = set(table) - all_reach
+    return prod_reach, all_reach, fully_unreachable
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true", help="列出不可达模块")
     ap.add_argument("--prod", action="store_true", help="只统计『连测试都到不了』的模块")
+    ap.add_argument(
+        "--min-reachable",
+        type=int,
+        default=None,
+        help="生产可达模块数低于该值时以 1 退出（删码/重构后防倒退，CI 用）",
+    )
     args = ap.parse_args()
 
     table = build_module_table()
 
-    # 生产入口
-    prod_seeds = [
-        "src.__init__" if "src.__init__" in table else None,
-        "src.main",
-        "src.cli.entrypoint",
-        "src.cli.__init__" if "src.cli.__init__" in table else None,
-    ]
-    prod_seeds = [s for s in prod_seeds if s and s in table]
-
-    prod_reach = reachable_from(prod_seeds, table)
+    prod_reach = reachable_from(prod_seeds(table), table)
 
     # 测试种子（测试文件本身 + 它们 import 的）
     test_seeds = [m for m in test_modules() if m in table]
@@ -218,6 +256,17 @@ def main() -> int:
             print(f"{n:5d} 行  {m}")
     else:
         print("（加 --list 查看明细）")
+
+    # 门禁：删码批次必须证明"生产可达数没下降"。2026-10-23 实测基线 = 442。
+    # 只在启动器 import 形式保持为显式语句时有效（importlib 字符串导入会从图中消失，
+    # 见 skills/clawd-change-workflow 的 AST 建图陷阱）。
+    if args.min_reachable is not None and len(prod_reach) < args.min_reachable:
+        print()
+        print(
+            f"FAILED: 生产可达 {len(prod_reach)} < 要求 {args.min_reachable}。"
+            "删码/改导入后可达数下降，说明有模块从生产图中消失了。"
+        )
+        return 1
     return 0
 
 

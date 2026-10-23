@@ -6,6 +6,7 @@
 openai>=2.30.0
 anthropic>=0.40.0
 litellm>=1.40.0  # 参考 Onyx LLM 集成
+mcp>=1.0.0  # litellm >= 1.100 的 function-calling 路径会 import mcp（工具调用必需）
 loguru>=0.7.0  # 核心模块直接 import（api_key_manager/health_check/middleware 等）
 toml>=0.10.2  # config/generator.py 与 hooks_config.py 直接 import
 

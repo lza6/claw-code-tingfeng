@@ -98,3 +98,4 @@ tmp/
 
 # 覆盖率产物（可重新生成，体积 3MB+）
 /coverage.json
+coverage*.json

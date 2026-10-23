@@ -182,6 +182,7 @@ class TestRedisCache:
         cache._ensure_client()
         assert cache._client is None
 
+    @pytest.mark.slow  # 2026-10-23 实测 9.35s（等 Redis 连接超时）
     def test_get_without_client(self, cache):
         """无客户端 get 返回 None"""
         assert cache.get("key") is None

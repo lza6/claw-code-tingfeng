@@ -76,12 +76,14 @@ class TestSelfHealingEngine:
         assert engine.stats.avg_elapsed_seconds == 1.5
         assert "syntax" in engine.stats.error_categories
 
+    @pytest.mark.slow  # 2026-10-23 实测 128.67s：真实重试等待，非缺陷
     async def test_heal_increments_error_count(self, tmp_path):
         engine = SelfHealingEngine(workdir=tmp_path)
         before = engine.stats.total_errors_detected
         await engine.heal("test error")
         assert engine.stats.total_errors_detected == before + 1
 
+    @pytest.mark.slow  # 2026-10-23 实测 20.88s
     async def test_heal_with_syntax_error(self, tmp_path):
         """Test with a syntax error that should match a known pattern"""
         engine = SelfHealingEngine(

@@ -4,6 +4,8 @@ Surface Viewer - Diagnostic tool for Durable Surfaces
 Allows humans to inspect the persistent state of Swarm runs.
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
@@ -13,7 +15,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-# Optional import, fail gracefully if not run within the project context
+# 可选依赖：缺包时**不在导入期退出**（否则任何 import 本模块的调用方进程都会被杀掉，
+# 例如 scripts/import_sweep.py 会把这里误报成"项目代码缺陷"）。推迟到 main() 报错。
+_IMPORT_ERROR: Exception | None = None
 try:
     from src.core.durable.surface_manager import SurfaceManager
     from src.core.durable.surfaces.assurance_plan import AssurancePlan
@@ -21,9 +25,8 @@ try:
     from src.core.durable.surfaces.evidence_log import EvidenceLog
     from src.core.durable.surfaces.obligation_model import ObligationModel
     from src.core.durable.surfaces.status_summary import StatusSummary
-except ImportError:
-    print("Error: Must be run from the root of the claw-code-tingfeng project.")
-    sys.exit(1)
+except ImportError as _exc:  # 记录原因，由 main() 统一处理
+    _IMPORT_ERROR = _exc
 
 console = Console()
 
@@ -111,6 +114,13 @@ def view_obligations(manager: SurfaceManager):
         console.print(f"[yellow]Could not load Obligation Model: {e}[/yellow]")
 
 def main():
+    if _IMPORT_ERROR is not None:
+        console.print(
+            f"[bold red]Error: 无法导入 Durable Surfaces 依赖:[/bold red] {_IMPORT_ERROR}"
+        )
+        console.print("请在项目根目录运行，并确认已安装可选依赖（如 jsonschema）。")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="View Durable Surfaces for a Swarm Run")
     parser.add_argument("--run-id", type=str, help="Specific Run ID to inspect. Defaults to latest.")
     parser.add_argument("--workdir", type=str, default=".", help="Project working directory.")

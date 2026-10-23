@@ -46,6 +46,7 @@ def function_{i}(x: int, y: int) -> int:
         file_path.write_text(content, encoding='utf-8')
 
 @pytest.mark.asyncio
+@pytest.mark.slow  # 2026-10-23 实测 85.49s（压力扫描，非缺陷）
 async def test_unified_scanner_performance():
     """测试 UnifiedScanner 在大规模文件下的性能"""
     with tempfile.TemporaryDirectory() as tmp_dir:
