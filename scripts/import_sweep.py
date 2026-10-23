@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -53,26 +54,59 @@ def discover_modules() -> list[str]:
     return mods
 
 
-def classify(exc: BaseException) -> str:
+def _declared_distributions() -> set[str]:
+    """从 pyproject.toml 收集**已声明**的第三方依赖名（小写、去版本号）。
+
+    用途：区分"缺一个已声明的第三方包"（环境问题）与"项目内路径写错"（真缺陷）。
+    没有这一步时，`src/mcp/` 这类**与第三方包同名**的目录会让 `import mcp` 失败
+    被判成 IMPORT-FAIL，方向完全相反（2026-10-23 审查实测：
+    `classify(ModuleNotFoundError('mcp')) -> IMPORT-FAIL`，而 mcp 本批刚写进依赖）。
+    """
+    try:
+        text = (SRC.parent / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    names: set[str] = set()
+    # 只取引号里的 "pkg>=x" / "pkg[extra]>=x" 形式，足够覆盖本项目写法
+    for raw in re.findall(r'"([A-Za-z0-9_.\-]+)(?:\[[^\]]*\])?\s*[><=!~]*[^"]*"', text):
+        names.add(raw.lower().replace("-", "_"))
+    return names
+
+
+def classify(exc: BaseException, declared: set[str] | None = None) -> str:
     """把异常分成 '代码缺陷' / '环境缺依赖' / '导入期退出'。
 
-    判断依据：缺失的顶层包名是否存在于 src/ 下。
-    指向 src.* 的是项目内路径配错 —— 真缺陷。
-    指向第三方的是环境问题 —— 不是本仓库的代码问题。
+    判断顺序（**先排除误报方向，再判缺陷**）：
 
-    `SystemExit` 单列：它常常是"缺可选依赖 → 模块级 sys.exit(1)"的结果，
-    真实成因被掩盖。归入 IMPORT-FAIL 会让红线永久失真（见 2026-10-23 复核：
-    `src.cli.surface_viewer` 因 venv 缺 jsonschema 被误判为代码缺陷）。
+    1. 缺失名的顶层是 `src` → 项目内路径配错，真缺陷。
+    2. 缺失名在 pyproject 已声明的依赖里 → 环境问题（没装），不是缺陷。
+    3. `src/<top>` 存在 → 项目内存在同名包，是"绝对导入写错"，判缺陷。
+    4. 其余 → 第三方未声明，按环境问题处理。
+
+    第 2 步是 2026-10-23 补的：`src/mcp/`、`src/config/`、`src/runtime/` 与常见
+    第三方包同名，缺了 `mcp` 时会被第 3 步误判成代码缺陷，而 `--strict-exit`
+    会把它升级成"构建失败"，文案方向完全错误。
+
+    `SystemExit` 单列（`IMPORT-EXIT`）：它常是"缺可选依赖 → 模块级 sys.exit(1)"
+    的结果，归入 IMPORT-FAIL 会让红线永久失真。
     """
     if isinstance(exc, (SystemExit, KeyboardInterrupt)):
         return "IMPORT-EXIT"
     if isinstance(exc, ModuleNotFoundError):
         name = getattr(exc, "name", "") or ""
         top = name.split(".")[0] if name else ""
-        # 项目内模块缺失 → 真缺陷
-        if top == "src" or (SRC / top).exists():
+        if not top:
+            return "DEP-MISSING"
+        # 1) 明确的项目内路径
+        if top == "src":
             return "IMPORT-FAIL"
-        # 第三方依赖缺失 → 环境问题
+        # 2) 已声明的第三方依赖 → 环境问题
+        known = declared if declared is not None else _declared_distributions()
+        if top.lower().replace("-", "_") in known:
+            return "DEP-MISSING"
+        # 3) 项目内存在同名包 → 绝对导入写错
+        if (SRC / top).exists():
+            return "IMPORT-FAIL"
         return "DEP-MISSING"
     if isinstance(exc, ImportError):
         return "IMPORT-FAIL"

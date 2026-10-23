@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.60.7"
+version = "0.60.8"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -67,6 +67,10 @@ dev = [
     "pytest-cov>=5.0",
     "coverage>=7.0",
     "ruff>=0.6.0",
+    # 测试期依赖：tests/memory/test_faiss_store.py 顶层 import numpy。
+    # 未声明时干净环境 `pytest --collect-only` 直接 1 error（2026-10-23 CI 门禁实测），
+    # 而本机因为系统 Python 装过 numpy 所以看不见这个失败。
+    "numpy>=1.24",
 ]
 voice = [
     "pydub>=0.25",

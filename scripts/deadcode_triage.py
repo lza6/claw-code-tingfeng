@@ -2,7 +2,7 @@
 
 ## 为什么需要它
 
-`计划书/下一步改进指南.md` §9.8 的 W6 要求对 135 个"连测试都到不了"的模块
+`计划书/下一步改进指南.md` §9.8 的 W6 要求对 134 个"连测试都到不了"的模块
 逐条判定，每条回答三问。人工逐条读源码约需 11 小时，本脚本把**可机械化的部分**
 （引用搜索、动态导入搜索）一次性做掉，剩下的"语义是否已被替换"留给人工，
 并在报告里显式标 `需人工确认`。
@@ -47,7 +47,7 @@ assert _spec and _spec.loader
 reach = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(reach)
 
-SEARCH_DIRS = ["src", "tests", "scripts", "docs"]
+SEARCH_DIRS = ["src", "tests", "scripts", "docs", "skills", "prompts", "hooks", "references", ".claude"]
 SEARCH_ROOT_MD = ["*.md"]
 SEARCH_CONFIG = [".clawd", "pyproject.toml", "skills-lock.json", "opencode.json"]
 
@@ -91,18 +91,50 @@ def _module_file(module: str) -> Path | None:
 _DYNAMIC_PATTERNS = [
     re.compile(r"import_module\(\s*[\"']([^\"']+)[\"']"),
     re.compile(r"__import__\(\s*[\"']([^\"']+)[\"']"),
-    re.compile(r"[\"']([a-zA-Z_][\w.]*)[\"']\s*\)"),  # globals()["x"] / getattr(o,"x")
+    re.compile(r"globals\(\)\[\s*[\"']([^\"']+)[\"']"),
 ]
 
 # `src.a.b` 形式的模块 token（用于一次性抽取每个文件引用了哪些模块）
 SRC_TOKEN = re.compile(r"\bsrc(?:\.[A-Za-z_]\w*)+")
 
 
+def _parent_package_references_leaf(parent_init: Path, leaf: str) -> bool:
+    """父包的 `__init__.py` 是否以**相对导入**引用了叶子模块。
+
+    2026-10-23 审查实测：初版只认全限定名（`src.a.b`）与 `import src.a.b`，
+    完全没覆盖相对导入。于是 `src/agent/modes/__init__.py:17` 的
+    `from .architect import ArchitectMode` 不被算作引用，
+    `src.agent.modes.architect` 被判成 NO_REFS——按那份名单删会让
+    `import src.agent.modes` 直接 ImportError。112 个 NO_REFS 里有 39 个属于此类。
+
+    覆盖两种写法：
+        from .architect import X          （from .<leaf> ...）
+        from . import architect           （from . import <leaf>）
+    """
+    try:
+        text = parent_init.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if re.search(rf"^\s*from\s+\.{re.escape(leaf)}\b", text, re.MULTILINE):
+        return True
+    if re.search(
+        rf"^\s*from\s+\.\s+import\b[^\n]*\b{re.escape(leaf)}\b", text, re.MULTILINE
+    ):
+        return True
+    # from .architect.xxx import Y  也等于引用了 leaf 包
+    return re.search(rf"^\s*from\s+\.{re.escape(leaf)}\.", text, re.MULTILINE) is not None
+
+
 def _scan_dynamic(files: list[Path]) -> dict[str, list[str]]:
     """返回 {被动态引用的字符串: [出现位置]}。"""
+    self_path = Path(__file__).resolve()
     hits: dict[str, list[str]] = {}
     for path in files:
         if path.suffix != ".py":
+            continue
+        # 跳过本文件：它自己的 docstring 里写着 `from .architect import X` 这类
+        # 示例，会被自己的正则命中，把所有样本模块污染成 DYNAMIC。
+        if path.resolve() == self_path:
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -111,8 +143,12 @@ def _scan_dynamic(files: list[Path]) -> dict[str, list[str]]:
         for pat in _DYNAMIC_PATTERNS:
             for m in pat.finditer(text):
                 target = m.group(1)
-                if not target.startswith("src"):
-                    continue
+                if not target or target.startswith("."):
+                    # 相对动态导入（import_module(".architect", package)）由
+                    # `_parent_package_references_leaf` 从另一个方向覆盖；
+                    # 这里记录原始串，便于人工看到"存在动态导入"这一事实。
+                    if not target:
+                        continue
                 with contextlib.suppress(ValueError):
                     line = text[: m.start()].count("\n") + 1
                     hits.setdefault(target, []).append(f"{path.relative_to(REPO)}:{line}")
@@ -172,7 +208,22 @@ def triage() -> list[dict]:
             else:
                 code_refs.append(rel)
 
-        dyn = [loc for key, locs in dynamic.items() if key == module or key.endswith("." + leaf) for loc in locs]
+        dyn = [
+            loc
+            for key, locs in dynamic.items()
+            if key == module or key.endswith("." + leaf) or key == leaf
+            for loc in locs
+        ]
+
+        # 父包 __init__.py 的相对导入（2026-10-23 审查补口：39/112 假阴性来自这里）
+        parent_init = _module_file(parent)
+        if (
+            parent_init is not None
+            and parent_init.name == "__init__.py"
+            and parent_init != own_file
+            and _parent_package_references_leaf(parent_init, leaf)
+        ):
+            code_refs.append(f"{parent_init.relative_to(REPO)}（父包相对导入）")
 
         if dyn:
             verdict = "DYNAMIC"

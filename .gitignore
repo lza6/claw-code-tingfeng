@@ -99,3 +99,6 @@ tmp/
 # 覆盖率产物（可重新生成，体积 3MB+）
 /coverage.json
 coverage*.json
+
+# 并发覆盖率分片（pytest-cov 并行产物）
+.coverage.*

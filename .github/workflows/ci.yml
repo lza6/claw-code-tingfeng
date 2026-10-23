@@ -56,13 +56,13 @@ jobs:
 
       - name: Reachability gate (production-reachable modules must not drop)
         run: |
-          # 基线 443 = 2026-10-23 修正入口种子后的实测值
-          # （修正前 442，差值来自把 src.__main__ 计入生产入口，不是新增功能）
-          python scripts/reachability.py --min-reachable 443
+          # 阈值不在此处硬编码：默认值来自 scripts/hard_metrics.py 的 MIN_REACHABLE
+          python scripts/reachability.py
 
       - name: Silent-exception trend gate (must not exceed baseline)
         run: |
-          python scripts/check_silent_except.py --fail-over 172
+          # 默认阈值来自 scripts/hard_metrics.py 的 MAX_SILENT_EXCEPT
+          python scripts/check_silent_except.py
 
       - name: Type check with MyPy
         run: |

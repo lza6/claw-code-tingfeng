@@ -8,10 +8,10 @@
 | 静态硬错误（src+tests） | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` | ✅ All checks passed |
 | Ruff 全量（仅记录，不作门禁） | `py -3.10 -m ruff check src/ --statistics` | 433 errors（W293 132 / F401 35 / E402 34 …） |
 | 导入完整性（strict） | `venv/Scripts/python.exe scripts/import_sweep.py --strict-exit` | ✅ 642 模块 / OK 635 / **IMPORT-FAIL 0** / **IMPORT-EXIT 0** / DEP-MISSING 7 |
-| 生产可达 | `py -3.10 scripts/reachability.py --min-reachable 443` | ✅ 443 可达 / 生产不加载 199 / 完全不可达 134（24,667 行）<br>（442 → 443 是入口种子口径修正：补入 `src.__main__`，非新增功能） |
+| 生产可达 | `py -3.10 scripts/reachability.py`（默认阈值 443，来自 hard_metrics.py） | ✅ 443 可达 / 生产不加载 199 / 完全不可达 134（24,667 行）<br>（442 → 443 是入口种子口径修正：补入 `src.__main__`，非新增功能） |
 | 测试收集 | `py -3.10 -m pytest tests/ --collect-only -q` | **3190 collected / 0 errors / 5.09s**（热缓存） |
 | 版本一致性 | `py -3.10 scripts/baseline.py --quick` → version | cli / pyproject / dist-info 均 0.60.6，consistent=true |
-| 静默吞异常（趋势） | `venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 172` | 172（基线文件 `.clawd/baseline-silent.json`，只降不升） |
+| 静默吞异常（趋势） | `venv/Scripts/python.exe scripts/check_silent_except.py`（默认阈值 172，来自 hard_metrics.py） | 172（基线文件 `.clawd/baseline-silent.json`，只降不升） |
 | 覆盖率 | `coverage.json` totals | 46.15%（25,877 / 56,072）；数据时间以 `baseline.py` 的 `file_mtime` 为准 |
 | 状态持久化 | `pytest tests/core/test_state_persistence_windows_safe.py -q` | 2 passed（Windows 保存 + 并发 40 条） |
 | 生产状态并发 | `pytest tests/core/test_run_state_concurrency.py -q` | 2 passed（4 线程不丢 + 40 行 JSONL 合法） |

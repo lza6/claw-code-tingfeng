@@ -39,10 +39,36 @@ TESTS = ROOT / "tests"
 VENV_PY = ROOT / "venv" / "Scripts" / "python.exe"
 INTERP_TEST = [sys.executable]  # 本脚本由 py -3.10 或 venv 启动，沿用同一解释器
 
+# 硬指标基线（**唯一来源**：scripts/hard_metrics.py；CI 与文档都从这里取语义）
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hard_metrics import (  # noqa: E402 - 需先插入 scripts/ 到 sys.path
+    MAX_SILENT_EXCEPT,
+    MIN_COVERAGE_PERCENT,
+    MIN_REACHABLE,
+)
+
+__all__ = ["MAX_SILENT_EXCEPT", "MIN_COVERAGE_PERCENT", "MIN_REACHABLE", "main"]
+
+
+def _interp_runtime() -> str:
+    """运行环境解释器：优先 venv，缺失则回退当前解释器。
+
+    硬编码 `venv/Scripts/python.exe` 在 ubuntu CI 上不存在，会被 `_run` 吞成
+    `status:"error" / exit_code:None`，而旧版 hard_fail 不看 collect/reachability，
+    于是"什么都没测到"也能 exit=0（2026-10-23 审查实测）。
+    """
+    return str(VENV_PY) if VENV_PY.exists() else sys.executable
+
 
 def _run(cmd: list[str], timeout: int = 900) -> dict:
-    """执行命令并记录真实退出码与输出尾部。失败不抛异常，如实记录。"""
+    """执行命令并记录真实退出码与输出尾部。失败不抛异常，如实记录。
+
+    强制 UTF-8 环境：本机默认 GBK，子进程输出中文会让 `text=True` 解出乱码，
+    下游一旦去解析 stdout 就会得到 None（2026-10-23 审查实测：
+    `reachable` 恒为 null 就是因为按中文锚点解析 GBK 输出）。
+    """
     started = time.perf_counter()
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     try:
         proc = subprocess.run(
             cmd,
@@ -52,6 +78,7 @@ def _run(cmd: list[str], timeout: int = 900) -> dict:
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            env=env,
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         return {
@@ -59,7 +86,7 @@ def _run(cmd: list[str], timeout: int = 900) -> dict:
             "exit_code": proc.returncode,
             "status": "ok" if proc.returncode == 0 else "failed",
             "duration_s": round(time.perf_counter() - started, 2),
-            "output_tail": out.strip().splitlines()[-6:],
+            "output_tail": out.strip().splitlines()[-20:],
         }
     except subprocess.TimeoutExpired:
         return {
@@ -77,6 +104,28 @@ def _run(cmd: list[str], timeout: int = 900) -> dict:
             "duration_s": round(time.perf_counter() - started, 2),
             "output_tail": [f"{type(exc).__name__}: {exc}"],
         }
+
+
+def _run_to_json(cmd: list[str], json_path: Path, timeout: int = 900) -> tuple[dict, dict]:
+    """跑一个支持 `--json <path>` 的门禁脚本，返回 (执行记录, 解析后的 JSON)。
+
+    为什么走 JSON 而不是解析 stdout：stdout 里混着 642 次 import 的 loguru 日志，
+    按中文锚点 + 尾部行数去抠数字，一旦环境编码或日志量变化就静默变成 None，
+    而 None 又被当成"通过"（2026-10-23 审查实测 `fail/import_exit/dep_missing` 全 null）。
+    """
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    if json_path.exists():
+        json_path.unlink()
+    run = _run([*cmd, "--json", str(json_path)], timeout=timeout)
+    parsed: dict = {}
+    if json_path.exists():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            parsed = {"_parse_error": f"{type(exc).__name__}: {exc}"}
+    else:
+        parsed = {"_parse_error": "脚本未产出 JSON 文件"}
+    return run, parsed
 
 
 def _count_modules() -> tuple[int, int]:
@@ -195,6 +244,67 @@ def _parse_kv(tail: list[str], key: str) -> int | None:
     return None
 
 
+def _hard_fail_reasons(data: dict) -> list[str]:
+    """返回硬门禁失败原因列表；空列表 = 通过。
+
+    关键原则（2026-10-23 审查教训）：**`None`（没测到）必须算失败，不能算通过**。
+    旧版写 `fail not in (0, None)`，于是解析失败得到 None 时判为通过，
+    实测出现过"collect exit_code=2 但脚本 exit=0"——一份会说谎的单一取数入口
+    比手抄数字更危险。
+    """
+    reasons: list[str] = []
+
+    if data["ruff"]["hard_exit_code"] != 0:
+        reasons.append(f"ruff 硬指标失败（exit={data['ruff']['hard_exit_code']}）")
+    if not data["version"]["consistent"]:
+        reasons.append(
+            f"版本不一致（cli={data['version']['cli']} / pyproject={data['version']['pyproject']}"
+            f" / dist-info={data['version']['dist_info']}）"
+        )
+
+    collect = data.get("collect")
+    if collect is not None:
+        if collect.get("exit_code") != 0:
+            reasons.append(f"pytest 收集失败（exit={collect.get('exit_code')}, errors={collect.get('errors')}）")
+        if collect.get("collected") is None:
+            reasons.append("pytest 收集数解析失败（collected=None）")
+
+    sweep = data.get("import_sweep")
+    if sweep is not None:
+        if sweep.get("status") != "ok":
+            reasons.append(f"import_sweep 未正常结束（status={sweep.get('status')}）")
+        for key, label in (("fail", "IMPORT-FAIL"), ("import_exit", "IMPORT-EXIT")):
+            value = sweep.get(key)
+            if value is None:
+                reasons.append(f"{label} 未能解析（None 视为失败，不当作通过）")
+            elif value != 0:
+                reasons.append(f"{label} = {value}（必须为 0）")
+        if sweep.get("dep_missing") is None:
+            reasons.append("DEP-MISSING 未能解析（None 视为失败）")
+
+    reach = data.get("reachability")
+    if reach is not None:
+        prod = reach.get("prod_reachable")
+        if prod is None:
+            reasons.append("生产可达数未能解析（None 视为失败）")
+        elif prod < MIN_REACHABLE:
+            reasons.append(f"生产可达 {prod} < 基线 {MIN_REACHABLE}")
+
+    cov = data.get("coverage") or {}
+    if cov.get("status") == "ok" and cov.get("percent_covered") is not None:
+        if cov["percent_covered"] < MIN_COVERAGE_PERCENT:
+            reasons.append(
+                f"覆盖率 {cov['percent_covered']}% < 阈值 {MIN_COVERAGE_PERCENT}%"
+            )
+
+    if reasons:
+        data["hard_fail_reasons"] = reasons
+        print("\n[baseline] HARD FAIL：")
+        for r in reasons:
+            print(f"  - {r}")
+
+    return reasons
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=None, help="把 JSON 写入该路径")
@@ -220,23 +330,38 @@ def main() -> int:
 
     if not args.quick:
         data["collect"] = _collect_metrics()
-        sweep = _run([str(VENV_PY), "scripts/import_sweep.py", "--strict-exit"], timeout=900)
+
+        sweep_run, sweep_json = _run_to_json(
+            [_interp_runtime(), "scripts/import_sweep.py", "--strict-exit"],
+            ROOT / ".clawd" / "_baseline_import_sweep.json",
+            timeout=900,
+        )
+        fail_list = sweep_json.get("fail")
+        exit_list = sweep_json.get("import_exit")
+        dep_list = sweep_json.get("dep_missing")
         data["import_sweep"] = {
-            "exit_code": sweep["exit_code"],
-            "status": sweep["status"],
-            "fail": _parse_kv(sweep["output_tail"], "IMPORT-FAIL"),
-            "import_exit": _parse_kv(sweep["output_tail"], "IMPORT-EXIT"),
-            "dep_missing": _parse_kv(sweep["output_tail"], "DEP-MISSING"),
-            "output_tail": sweep["output_tail"],
+            "exit_code": sweep_run["exit_code"],
+            "status": sweep_run["status"],
+            "fail": len(fail_list) if isinstance(fail_list, list) else None,
+            "import_exit": len(exit_list) if isinstance(exit_list, list) else None,
+            "dep_missing": len(dep_list) if isinstance(dep_list, list) else None,
+            "parse_error": sweep_json.get("_parse_error"),
+            "output_tail": sweep_run["output_tail"],
         }
-        reach = _run([*INTERP_TEST, "scripts/reachability.py"], timeout=900)
-        joined = "\n".join(reach["output_tail"])
-        m = re.search(r":\s*(\d+)\s*$", joined.split("生产入口可达")[-1], re.MULTILINE) if "生产入口可达" in joined else None
+
+        reach_run, reach_json = _run_to_json(
+            [*INTERP_TEST, "scripts/reachability.py"],
+            ROOT / ".clawd" / "_baseline_reachability.json",
+            timeout=900,
+        )
         data["reachability"] = {
-            "exit_code": reach["exit_code"],
-            "status": reach["status"],
-            "output_tail": reach["output_tail"],
-            "reachable": int(m.group(1)) if m else None,
+            "exit_code": reach_run["exit_code"],
+            "status": reach_run["status"],
+            "prod_reachable": reach_json.get("prod_reachable"),
+            "fully_unreachable": reach_json.get("fully_unreachable"),
+            "fully_unreachable_lines": reach_json.get("fully_unreachable_lines"),
+            "parse_error": reach_json.get("_parse_error"),
+            "output_tail": reach_run["output_tail"],
         }
 
     if args.with_tests:
@@ -251,6 +376,11 @@ def main() -> int:
             "output_tail": tests["output_tail"],
         }
 
+    # 门禁必须在序列化**之前**算，否则 hard_fail_reasons 进不了 JSON
+    reasons = _hard_fail_reasons(data)
+    if reasons:
+        data["hard_fail_reasons"] = reasons
+
     payload = json.dumps(data, ensure_ascii=False, indent=2)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -259,14 +389,11 @@ def main() -> int:
     else:
         print(payload)
 
-    # 硬门禁：任何一项硬指标失败则以 1 退出，便于 CI 直接使用
-    hard_fail = (
-        data["ruff"]["hard_exit_code"] != 0
-        or not data["version"]["consistent"]
-        or data.get("import_sweep", {}).get("fail") not in (0, None)
-        or data.get("import_sweep", {}).get("import_exit") not in (0, None)
-    )
-    return 1 if hard_fail else 0
+    if reasons:
+        print("\n[baseline] HARD FAIL：")
+        for r in reasons:
+            print(f"  - {r}")
+    return 1 if reasons else 0
 
 
 if __name__ == "__main__":

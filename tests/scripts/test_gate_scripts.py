@@ -127,10 +127,41 @@ class TestSilentExceptThreshold:
             == 0
         )
 
-    def test_no_threshold_never_fails(self, monkeypatch, tmp_path):
-        """没有阈值时纯统计，退出码 0（供人工查看）。"""
+    def test_no_gate_is_pure_statistics(self, monkeypatch, tmp_path):
+        """`--no-gate` 是纯统计模式：数量暴涨也不失败（供人工查看）。"""
         monkeypatch.setattr(silent_mod, "ROOT", tmp_path)  # 不存在的基线文件
-        assert _run_silent(monkeypatch, [], total=999) == 0
+        assert _run_silent(monkeypatch, ["--no-gate"], total=999) == 0
+
+    def test_default_threshold_falls_back_to_hard_metrics(self, monkeypatch, tmp_path):
+        """基线文件缺失时，阈值回退到 hard_metrics 的 MAX_SILENT_EXCEPT。
+
+        2026-10-23 审查：原先"不传参 = 不门禁"，导致 CI 忘写参数就静默全绿。
+        """
+        missing = tmp_path / "does-not-exist.json"
+        assert (
+            _run_silent(
+                monkeypatch, ["--baseline-file", str(missing)], total=silent_mod.BASELINE + 1
+            )
+            == 1
+        )
+        assert (
+            _run_silent(monkeypatch, ["--baseline-file", str(missing)], total=silent_mod.BASELINE)
+            == 0
+        )
+
+    def test_committed_baseline_file_matches_hard_metrics(self):
+        """入库的 scripts/baseline-silent.json 必须与 hard_metrics 常量一致。
+
+        基线文件放在 `.clawd/`（gitignore）里时不可审计；移入 `scripts/` 后
+        这个测试保证"文件里的数字"与"代码里的数字"不会悄悄分叉。
+        """
+        baseline_path = silent_mod.Path(__file__).resolve().parents[2] / "scripts" / "baseline-silent.json"
+        assert baseline_path.exists(), f"缺少入库的基线文件 {baseline_path}"
+        payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+        assert payload["total"] == silent_mod.BASELINE, (
+            f"基线文件 total={payload['total']} 与 hard_metrics.MAX_SILENT_EXCEPT="
+            f"{silent_mod.BASELINE} 不一致"
+        )
 
 
 # --------------------------------------------------------------------------

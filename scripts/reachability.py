@@ -30,10 +30,16 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
+import json
+import sys
 from collections import deque
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+# 阈值唯一来源（2026-10-23 审查：此前同一阈值散落 4 处、两处不同值）
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hard_metrics import MIN_REACHABLE  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -209,27 +215,25 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="列出不可达模块")
     ap.add_argument("--prod", action="store_true", help="只统计『连测试都到不了』的模块")
     ap.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        help="把结果写成 JSON（供 scripts/baseline.py 等下游消费，避免解析中文 stdout）",
+    )
+    ap.add_argument(
         "--min-reachable",
         type=int,
-        default=None,
-        help="生产可达模块数低于该值时以 1 退出（删码/重构后防倒退，CI 用）",
+        default=MIN_REACHABLE,
+        help=f"生产可达模块数低于该值时以 1 退出（删码/重构后防倒退）。"
+        f"默认 {MIN_REACHABLE}，来自 scripts/hard_metrics.py；传 0 可关闭门禁",
     )
     args = ap.parse_args()
 
     table = build_module_table()
-
-    prod_reach = reachable_from(prod_seeds(table), table)
-
-    # 测试种子（测试文件本身 + 它们 import 的）
-    test_seeds = [m for m in test_modules() if m in table]
-    extra = set()
-    for p in (REPO / "tests").rglob("*.py"):
-        extra |= extract_imports(p)
-    test_seeds += [c for c in extra if c in table]
-    test_reach = reachable_from(test_seeds, table)
-
-    all_reach = prod_reach | test_reach
-    unreachable = sorted(set(table) - all_reach)
+    # 复用唯一口径函数（2026-10-23 审查：本文件曾有两套实现——compute_reachability()
+    # 与 main() 内联重算，注释却声称"所有脚本共用同一口径"）
+    prod_reach, all_reach, fully_unreachable = compute_reachability(table)
+    unreachable = sorted(fully_unreachable)
     # 「生产不加载」= 从生产入口走不到，不管测试有没有覆盖它。
     # 这是判断"这段代码用户跑应用时会不会被执行"的正确口径。
     not_prod = sorted(set(table) - prod_reach)
@@ -241,10 +245,21 @@ def main() -> int:
                 total += len(table[m].read_text(encoding="utf-8", errors="ignore").splitlines())
         return total
 
-    print(f"src 模块总数                    : {len(table)}")
-    print(f"从生产入口可达                  : {len(prod_reach)}")
-    print(f"生产不加载（含仅测试可达）      : {len(not_prod)}   行数 {lines(not_prod)}")
-    print(f"   其中『连测试都到不了』       : {len(unreachable)}   行数 {lines(unreachable)}")
+    metrics = {
+        "total_modules": len(table),
+        "prod_reachable": len(prod_reach),
+        "not_prod": len(not_prod),
+        "not_prod_lines": lines(not_prod),
+        "fully_unreachable": len(unreachable),
+        "fully_unreachable_lines": lines(unreachable),
+        "prod_seeds": prod_seeds(table),
+        "min_reachable": args.min_reachable,
+    }
+
+    print(f"src 模块总数                    : {metrics['total_modules']}")
+    print(f"从生产入口可达                  : {metrics['prod_reachable']}")
+    print(f"生产不加载（含仅测试可达）      : {metrics['not_prod']}   行数 {metrics['not_prod_lines']}")
+    print(f"   其中『连测试都到不了』       : {metrics['fully_unreachable']}   行数 {metrics['fully_unreachable_lines']}")
     print()
 
     target = not_prod if args.prod else unreachable
@@ -254,10 +269,17 @@ def main() -> int:
         for m in target:
             n = len(table[m].read_text(encoding="utf-8", errors="ignore").splitlines())
             print(f"{n:5d} 行  {m}")
+        metrics["modules"] = target
     else:
         print("（加 --list 查看明细）")
 
-    # 门禁：删码批次必须证明"生产可达数没下降"。2026-10-23 实测基线 = 442。
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\nJSON 已写入 {args.json}")
+
+    # 门禁：删码批次必须证明"生产可达数没下降"。2026-10-23 实测基线 = 443
+    # （442 → 443 是补入 src.__main__ 入口种子的口径修正，不是新增功能）。
     # 只在启动器 import 形式保持为显式语句时有效（importlib 字符串导入会从图中消失，
     # 见 skills/clawd-change-workflow 的 AST 建图陷阱）。
     if args.min_reachable is not None and len(prod_reach) < args.min_reachable:

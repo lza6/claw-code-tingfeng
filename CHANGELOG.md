@@ -9,6 +9,75 @@
 
 ## [未发布]
 
+### v0.60.8 (2026-10-23) — 独立审查 5 个阻塞项收口
+
+独立审查（只读）对本轮改动给出 **Request Changes**，逐条附了可复现证据。
+这一版把它们全部关闭——其中 C-2/C-3 是"我自己的度量工具在说谎"，
+C-5 是"归因方向完全相反且会被 CI 升级成阻断"。
+
+#### C-1 干净环境 `pytest --collect-only` 直接失败（CI 新门禁首跑必红）
+
+`tests/memory/test_faiss_store.py` 顶层 `import numpy`，但 `numpy` 从未在任何
+依赖清单里声明。本机因系统 Python 装过 numpy 而看不见；venv / ubuntu 干净环境
+实测 `3259 collected, 1 error, exit=2` → 新增的 collect 门禁第一次推送就会红，
+且报错方向错误（说是"1 个收集错误"，实际是"缺依赖"）。
+**修复**：`numpy>=1.24` 进 `[project.optional-dependencies].dev`。
+
+#### C-2 / C-3 `baseline.py` 在说谎：三个指标恒 `null`，而 `null` 被判为通过
+
+- `import_sweep` 的 `IMPORT-FAIL / IMPORT-EXIT / DEP-MISSING` **永远解析成 None**：
+  汇总行在 stdout 顶部，642 次 import 的 loguru 日志在 stderr，拼接后取末 6 行
+  只剩噪音。实测 `fail/import_exit/dep_missing` 全 null，真实值是 `0/0/7`。
+- `reachable` **恒 None**：按中文锚点解析 GBK 输出的子进程 stdout。
+- 旧 `hard_fail` 写 `fail not in (0, None)` → **None 算通过**；且不含 collect /
+  reachability / 覆盖率。实测出现过 `collect exit_code=2` 但脚本 `exit=0`。
+- 在 ubuntu 上 `venv/Scripts/python.exe` 不存在 → 被吞成 `status:"error"`，
+  此时只剩 pyproject 一个版本来源 → `consistent` 变成同义反复的 True。
+
+**修复**：
+- `reachability.py` 新增 `--json`；`baseline.py` 改为**消费 JSON**而非抠中文 stdout；
+- `_run` 强制 `PYTHONUTF8=1 / PYTHONIOENCODING=utf-8`，输出尾部 6 → 20 行；
+- 门禁语义重写为 `_hard_fail_reasons()`：**`None`（没测到）一律算失败**，
+  并把 collect 退出码、reachability 缺失、覆盖率低于阈值全部纳入；
+- `_interp_runtime()`：venv 不在时回退当前解释器，不再静默 error；
+- 新增 `tests/scripts/test_baseline_gate.py`（14 例）锁死"None = 失败"。
+
+#### C-4 `deadcode_triage` 的 NO_REFS 有 35% 假阴性（不认相对导入）
+
+判据只认全限定名与 `import src.a.b`，没覆盖 `from .architect import X`。
+`src/agent/modes/__init__.py:17` 就有一行，于是 `src.agent.modes.architect`
+被判成"零引用"——按那份名单删会让 `import src.agent.modes` 直接 ImportError。
+**修复**：新增 `_parent_package_references_leaf()` 覆盖三种相对导入写法；
+搜索范围补 `skills/ prompts/ hooks/ references/ .claude/`；并排除脚本自身
+（它 docstring 里的示例会把自己扫描成"动态引用"）。
+**结果**：NO_REFS **112 → 71**，HAS_REFS 16 → 57。
+
+#### C-5 `classify()` 把与 `src/` 子目录同名的第三方包判成代码缺陷
+
+`(SRC / top).exists()` 这条启发式让 `mcp` / `config` / `runtime` 全部判成
+`IMPORT-FAIL`——而 `mcp` 正是本批刚写进依赖的第三方包。叠加 `--strict-exit`
+后，"没装 mcp"会变成"构建失败：项目内有代码缺陷"，方向完全相反。
+**修复**：新增 `_declared_distributions()` 读 pyproject 的已声明依赖，
+判定顺序改为「`src.` 前缀 → 已声明依赖 → `src/<top>` 存在 → 其余」。
+实测：`mcp/numpy/pathspec/loguru → DEP-MISSING`，`config/runtime/src.nope → IMPORT-FAIL`。
+
+#### 其他收口
+
+- 阈值**唯一来源** `scripts/hard_metrics.py`（此前同一阈值散落 4 处、两处不同值）：
+  `reachability` / `check_silent_except` / `baseline` 全部 import，CI 不再传数值；
+  `check_silent_except` 不传参即门禁（新增 `--no-gate` 走纯统计），
+  避免"CI 忘写参数就静默全绿"。
+- `reachability.main()` 改为复用 `compute_reachability()`（此前有两套实现，
+  注释却声称"所有脚本共用同一口径"）。
+- `requirements.txt` 补 `psutil / fastapi / uvicorn`（此前只在 pyproject，
+  按 CHANGELOG 自己的"硬 import"论证，`pip install -r` 的用户仍会崩）。
+- 文档残留：`workflow_status` 的 `137,443→137,468` 与 `3190→3261`；
+  README 的 Ruff 全量数字改为"跑 --statistics 看当前值"（它已连续三次漂移）；
+  `.agent/memory/verified-scope.md` 的旧阈值写法。
+
+**验证**：`pytest tests/scripts` 49 passed；`py -3.10 -m ruff check src/ tests/ --select F821,F811,E9`
+All checks passed；`venv collect` **3261 / 0 errors**（修 C-1 前为 3259 / 1 error）。
+
 ### v0.60.7 (2026-10-23) — 把度量从"人工纪律"变成"CI 门禁"
 
 主题不是加功能，而是**让"它到底好不好"这件事可被自动判定**。

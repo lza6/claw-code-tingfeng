@@ -234,7 +234,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（642 模块，635 OK，DEP-MISSING 7 均为可选 extras） | `scripts/import_sweep.py --strict-exit` |
 | 生产可达模块 | **443**（补入 `src.__main__` 种子后的口径修正；此前 442） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | 199（完全不可达 134 / 24,667 行）；三问判定：NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 | `计划书/死代码判定-2026-10-23.md`，**删除需产品决策** |
-| Ruff 全量违规 | **433**（W293 132 / F401 35 / E402 34 / RUF012 30 / B904 23 …） | `py -3.10 -m ruff check src/ --statistics`；硬指标只看 F821/F811/E9 |
+| Ruff 全量违规 | 会随批次波动（2026-10-23 实测 **432**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | 7（celery / opentelemetry / pathspec 等可选 extras） | `scripts/import_sweep.py` 的 DEP-MISSING，属环境非缺陷 |
 | 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI 门禁 `--fail-over 172` | `scripts/check_silent_except.py --fail-over 172` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 2026-10-23 实跑，退出码 0 |

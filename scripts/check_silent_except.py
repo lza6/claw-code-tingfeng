@@ -24,15 +24,19 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 
-# 从 v0.60.6 起作为趋势基线（2026-10-23 AST 实测 172）：只允许下降，不允许上升。
-# 注：正则口径（`except ...:` 换行 `pass`）同期为 163，两者差异来自
-# 「except 体只有 pass 但中间夹注释」与「... 占位」的计法不同。以本脚本为准。
-BASELINE = 172
+# 阈值唯一来源（2026-10-23 审查：此前与 baseline.py / ci.yml / 文档四处不同步）
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hard_metrics import MAX_SILENT_EXCEPT  # noqa: E402
+
+# 从 v0.60.6 起作为趋势基线：只允许下降，不允许上升。
+# 注：正则口径（`except ...:` 换行 `pass`）与 AST 口径不同，以本脚本为准。
+BASELINE = MAX_SILENT_EXCEPT
 
 
 def _is_silent(handler: ast.ExceptHandler) -> bool:
@@ -52,7 +56,7 @@ def scan_file(path: Path) -> list[dict]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError as exc:  # 语法错误本身应由 ruff/pytest 报，这里只跳过
-        return [{"file": str(path.relative_to(ROOT)), "line": 0, "error": str(exc)}]
+        return [{"file": path.relative_to(ROOT).as_posix(), "line": 0, "error": str(exc)}]
 
     hits: list[dict] = []
     for node in ast.walk(tree):
@@ -63,7 +67,9 @@ def scan_file(path: Path) -> list[dict]:
                 if _is_silent(handler):
                     hits.append(
                         {
-                            "file": str(path.relative_to(ROOT)),
+                            # as_posix()：基线文件要入库并在 CI(linux) 上比对，
+                            # Windows 反斜杠会让同一文件在两边算成不同 key
+                            "file": path.relative_to(ROOT).as_posix(),
                             "line": handler.lineno,
                         }
                     )
@@ -84,7 +90,12 @@ def main() -> int:
         "--fail-over",
         type=int,
         default=None,
-        help="同 --baseline，CI 门禁语义更明确：静默吞异常数量超过该值即失败",
+        help=f"同 --baseline，CI 门禁语义更明确：超过该值即失败。默认 {BASELINE}（来自 hard_metrics.py）",
+    )
+    ap.add_argument(
+        "--no-gate",
+        action="store_true",
+        help="只统计不门禁（退出码恒 0），供人工查看",
     )
     ap.add_argument(
         "--write-baseline",
@@ -105,9 +116,16 @@ def main() -> int:
     hits = scan()
     total = len(hits)
 
-    # 阈值来源优先级：显式参数 > 基线文件 > 内置常量
+    # 阈值来源优先级：显式参数 > 基线文件 > hard_metrics 常量
     threshold = args.fail_over if args.fail_over is not None else args.baseline
-    baseline_file = args.baseline_file or (ROOT / ".clawd" / "baseline-silent.json")
+    if args.no_gate:
+        threshold = None
+    # 基线文件**入库**（scripts/baseline-silent.json），否则"基线"不可审计：
+    # 2026-10-23 审查指出，放在 `.clawd/`（被 .gitignore 忽略）里的基线文件
+    # 既不会随代码走，也无法在 PR 里 review 阈值变化。
+    baseline_file = args.baseline_file or (
+        Path(__file__).resolve().parent / "baseline-silent.json"
+    )
     file_baseline: int | None = None
     if args.baseline_file is not None or baseline_file.exists():
         try:
@@ -116,8 +134,8 @@ def main() -> int:
             )
         except (OSError, KeyError, ValueError, json.JSONDecodeError):
             file_baseline = None
-    if threshold is None:
-        threshold = file_baseline
+    if threshold is None and not args.no_gate:
+        threshold = file_baseline if file_baseline is not None else BASELINE
 
     by_file: dict[str, int] = {}
     for h in hits:

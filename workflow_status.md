@@ -15,8 +15,8 @@
 | 指标 | 2026-10-23 实测 | 命令 |
 |:---|:---|:---|
 | 声明版本 | 0.60.6 | `venv/Scripts/python.exe -m src --version` |
-| 源码规模 | 642 模块 / 137,443 行 | `find src -name "*.py"` |
-| 用例收集 | **3190 / 0 errors / 5.09s**（`py -3.10`，热缓存） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 源码规模 | 642 模块 / 137,468 行 / 187 测试文件 | `py -3.10 scripts/baseline.py --quick` |
+| 用例收集 | **3261 / 0 errors**（热缓存 4~5s） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | Ruff 硬指标 | F821/F811/E9 **All checks passed** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL = 0 / IMPORT-EXIT = 0**（642 模块 / 635 OK / DEP-MISSING 7 为可选 extras） | `venv/Scripts/python.exe scripts/import_sweep.py --strict-exit` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8**（2026-10-23 实跑，退出码 0） | `venv/Scripts/python.exe scripts/e2e_*.py` |
