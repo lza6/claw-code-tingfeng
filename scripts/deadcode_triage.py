@@ -98,6 +98,47 @@ _DYNAMIC_PATTERNS = [
 SRC_TOKEN = re.compile(r"\bsrc(?:\.[A-Za-z_]\w*)+")
 
 
+def _sibling_relative_references(module: str, table: dict[str, Path]) -> list[str]:
+    """同包内**任意模块**（不止 `__init__.py`）是否相对导入了本模块。
+
+    2026-10-23 第二次实证：第一版只查父包 `__init__.py`，漏掉同级模块的
+    `from .<leaf> import X`。删除 `src/core/secrets/base.py` 与
+    `src/workflow/pipeline_stages/types.py` 后，`import_sweep` 立刻报 4 个
+    IMPORT-FAIL（vault / pipeline_stages / ralph_verify / team_exec）——
+    **三级判据缺口**（全限定 → 父包 `__init__` → 同级模块）说明：
+    机械判据只能"提名候选"，删除必须由 `import_sweep` 兜底验证。
+
+    返回命中位置列表（相对仓库根的 posix 路径 + 行号）。
+    """
+    parent = module.rsplit(".", 1)[0] if "." in module else ""
+    leaf = module.rsplit(".", 1)[-1]
+    own = table.get(module)
+    pkg_dir = (REPO / parent.replace(".", "/")) if parent else REPO
+    if not pkg_dir.is_dir():
+        return []
+
+    hits: list[str] = []
+    patterns = (
+        re.compile(rf"^\s*from\s+\.{re.escape(leaf)}\b", re.MULTILINE),
+        re.compile(rf"^\s*from\s+\.{re.escape(leaf)}\.", re.MULTILINE),
+        re.compile(rf"^\s*from\s+\.\s+import\b[^\n]*\b{re.escape(leaf)}\b", re.MULTILINE),
+    )
+    for path in sorted(pkg_dir.glob("*.py")):
+        if own is not None and path.resolve() == own.resolve():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for pat in patterns:
+            m = pat.search(text)
+            if m:
+                lineno = text[: m.start()].count("\n") + 1
+                hits.append(f"{path.relative_to(REPO).as_posix()}:{lineno}（同级相对导入）")
+                break
+    return hits
+
+
 def _parent_package_references_leaf(parent_init: Path, leaf: str) -> bool:
     """父包的 `__init__.py` 是否以**相对导入**引用了叶子模块。
 
@@ -224,6 +265,11 @@ def triage() -> list[dict]:
             and _parent_package_references_leaf(parent_init, leaf)
         ):
             code_refs.append(f"{parent_init.relative_to(REPO)}（父包相对导入）")
+
+        # 同包内任意模块的相对导入（2026-10-23 第二次实证：删 base.py / types.py
+        # 造成 4 个 IMPORT-FAIL，说明只查父包 __init__ 不够）
+        for hit in _sibling_relative_references(module, table):
+            code_refs.append(hit)
 
         if dyn:
             verdict = "DYNAMIC"
