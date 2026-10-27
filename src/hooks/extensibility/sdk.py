@@ -6,6 +6,8 @@ Hook SDK - 钩子插件 SDK
 """
 
 import json
+import sys
+
 from pathlib import Path
 from typing import Any
 
@@ -69,8 +71,8 @@ def create_hook_plugin_state_api(cwd: str, plugin_name: str) -> dict:
             try:
                 with open(file_path) as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook state read failed for {file_path.name}: {e}", file=sys.stderr)
         return fallback
 
     async def state_write(key: str, value: Any) -> None:
@@ -89,8 +91,8 @@ def create_hook_plugin_state_api(cwd: str, plugin_name: str) -> dict:
             try:
                 with open(f) as f:
                     result[f.stem] = json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook state read failed for {f.name}: {e}", file=sys.stderr)
         return result
 
     return {
@@ -109,8 +111,8 @@ def create_hook_plugin_omx_api(cwd: str) -> dict:
             try:
                 with open(session_file) as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook omx state read failed: {e}", file=sys.stderr)
         return None
 
     async def read_hud() -> dict | None:
@@ -119,8 +121,8 @@ def create_hook_plugin_omx_api(cwd: str) -> dict:
             try:
                 with open(hud_file) as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook omx state read failed: {e}", file=sys.stderr)
         return None
 
     async def read_notify_fallback() -> dict | None:
@@ -129,8 +131,8 @@ def create_hook_plugin_omx_api(cwd: str) -> dict:
             try:
                 with open(notify_file) as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook omx state read failed: {e}", file=sys.stderr)
         return None
 
     async def read_update_check() -> dict | None:
@@ -139,8 +141,8 @@ def create_hook_plugin_omx_api(cwd: str) -> dict:
             try:
                 with open(update_file) as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"hook omx state read failed: {e}", file=sys.stderr)
         return None
 
     return {

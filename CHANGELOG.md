@@ -7,6 +7,26 @@
 
 ---
 
+## [v0.61.1] (2026-10-28) — 收口修复：红线回归 + 测试环境治理 + 计划文档清理
+
+### 修复
+- **静默吞异常回归**：`src/hooks/extensibility/sdk.py` 6 处裸 `except Exception: pass` 窄化为 `(OSError, json.JSONDecodeError)` 并输出 stderr 日志；静默吞异常计数 **174 → 168**（红线 ≤172），门禁 `check_silent_except --fail-over 172` exit 0
+- **测试收集错误清零**：`py -3.10` 环境补装 `mcp` 包，`tests/mcp/` 2 个收集错误消除；收集 **3702 / 0 errors / 5.6s**
+
+### 验证（2026-10-28 实测）
+- E2E 冒烟 **5/5 PASS**（exit 0，base=step-5-preview）
+- ruff 硬指标（F821,F811,E9）All passed；IMPORT-FAIL 0 / IMPORT-EXIT 0；生产可达 455 ≥ 443
+- 快速回归 `pytest -m "not slow"` 全绿（见 workflow_status.md 验证日志）
+
+### 文档清理（用户确认后执行）
+- 删除 2 份已归档历史计划文档：`参考的结果计划指南.md`、`reports/plan-audit-2026-10-19.md`
+  （归档副本 `docs/archive/plans/20261028/` 经 diff 逐字节一致验证，manifest 已更新删除执行记录与回滚方式）
+
+### 依赖
+- `py -3.10` 测试环境补装 `mcp`（MCP 官方 SDK，tests/mcp 收集依赖；venv 已有）
+
+---
+
 ## [v0.61.0] (2026-10-28) — 超级智能体增强 + DSH 式桌面端全链路
 
 ### 新增

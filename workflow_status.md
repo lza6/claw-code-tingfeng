@@ -1,6 +1,6 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **桌面端阶段 1-4 COMPLETE**（2026-10-28）；整体 205 测试全绿
+> 状态: **v0.61.1 收口完成**（2026-10-28）：红线修复（静默异常 168）+ E2E 5/5 + 收集 0 errors + 计划文档清理完毕；桌面端阶段 1-5 COMPLETE
 
 ## 桌面端进度（DSH 模式 + Electron）
 | 阶段 | 内容 | 状态 |
@@ -29,6 +29,11 @@
 | A8 | 硬指标不回归 | done — ruff All passed；collect 0 errors；IMPORT-FAIL=0 |
 
 ## 验证日志
+- 2026-10-28（v0.61.1 收口）: 静默吞异常修复 src/hooks/extensibility/sdk.py 6 处裸 except（窄化+stderr 日志）→ 174→168，门禁 exit 0
+- 2026-10-28: py -3.10 补装 mcp → 收集 3702/0 errors；venv 补装 redis（requirements.txt 已声明）→ 5 个 redis 测试环境失败消除
+- 2026-10-28: E2E 冒烟 5/5 PASS exit 0（上轮 2/5 的模型配置问题已闭环）
+- 2026-10-28: ruff 硬指标 All passed；IMPORT 0/0；可达 455≥443；版本三处一致 v0.61.1
+- 2026-10-28: 删除 2 份已归档计划文档（用户确认"审查后删除"；删前 diff 与归档副本逐字节一致）
 - 2026-10-27: 新增测试 156 passed（mcp/reasoning/security/reverse_tools/engine装配/reason CLI/契约39）
 - 2026-10-27: reason CLI 实跑 E2E：reflexion --json / reflexion 人读 / plan-execute 三种调用 exit 0
 - 2026-10-27: 主控实跑复核修复 P1 bug：conclusion 参数误传非 debate 模式导致 TypeError（测试未覆盖 CLI 分发层）
