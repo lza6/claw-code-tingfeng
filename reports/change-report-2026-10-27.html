@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>变更报告 — 超级智能体增强（2026-10-27）</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222}
+h1{border-bottom:3px solid #2563eb;padding-bottom:.5rem}
+h2{border-left:5px solid #2563eb;padding-left:.6rem;margin-top:2rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #cbd5e1;padding:.5rem .7rem;text-align:left}
+th{background:#eff6ff}
+code,pre{background:#f1f5f9;border-radius:4px}
+pre{padding:.8rem;overflow-x:auto}
+.pass{color:#16a34a;font-weight:bold}.warn{color:#d97706;font-weight:bold}
+details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.8rem;margin:.5rem 0}
+</style>
+</head>
+<body>
+<h1>变更报告 — 超级智能体增强（逆向/反推/工具集成）</h1>
+<p><b>日期:</b> 2026-10-27 · <b>项目:</b> claw-code-tingfeng · <b>结论:</b> <span class="pass">COMPLETE（8/8 验收标准达成）</span></p>
+
+<h2>1. 上下文</h2>
+<p>目标：把 clawd 增强为具备强逆向/反推能力与混合工具集成（自研内核 + MCP 桥接）的超级智能体。参考 D:\参考项目 中 24 个优秀项目调研后选定移植/桥接清单。</p>
+
+<h2>2. 做了什么</h2>
+<table>
+<tr><th>模块</th><th>文件</th><th>测试</th></tr>
+<tr><td>MCP Client（stdio+HTTP）</td><td>src/mcp/client.py</td><td>19</td></tr>
+<tr><td>MCP 工具适配（BaseTool）</td><td>src/mcp/tool_bridge.py</td><td>6</td></tr>
+<tr><td>工具签名+检疫审批（防投毒）</td><td>src/mcp/governance.py</td><td>10</td></tr>
+<tr><td>4 推理模式（reflexion/plan-execute/lats/debate）</td><td>src/reasoning/patterns.py</td><td>17</td></tr>
+<tr><td>上下文工程（截断+历史压缩）</td><td>src/reasoning/context_engineering.py</td><td>12</td></tr>
+<tr><td>安全工具目录（scope 门禁）</td><td>src/security/catalog.py + recon.yaml</td><td>15</td></tr>
+<tr><td>逆向原生工具 ×8</td><td>src/reverse_tools/</td><td>32</td></tr>
+<tr><td>reason CLI（Typer + argparse 双入口）</td><td>src/cli/entrypoint.py + src/cli_handlers/</td><td>6</td></tr>
+<tr><td>Agent 引擎扩展工具装配</td><td>src/agent/engine.py（+62 行纯新增）</td><td>6</td></tr>
+<tr><td>逆向知识资产（51 个场景 skill）</td><td>skills/reverse/</td><td>—</td></tr>
+</table>
+
+<h2>3. 架构链路</h2>
+<pre>
+用户 → clawd reason CLI ─┐
+                          ├→ src/reasoning/patterns.py → LLM(litellm) + ToolRegistry（含 mcp__* 桥接工具）
+用户 → AgentEngine.run() ─┤
+                          ├→ _load_extended_tools()
+                          │   ├─ reverse_tools.get_all_tools() → 8 个逆向工具
+                          │   └─ .clawd/mcp_servers.json → ToolGovernor 检疫审批 → MCP Client(stdio/HTTP) → tool_bridge
+外部 MCP server (GhidraMCP/x64dbg) ← Streamable HTTP / stdio
+</pre>
+
+<h2>4. 验证证据</h2>
+<table>
+<tr><th>验证项</th><th>命令</th><th>结果</th></tr>
+<tr><td>新增模块测试</td><td>pytest tests/{mcp,reasoning,security,reverse_tools,agent/test_engine_extended_tools.py,cli_handlers/test_reason_handler.py} -q</td><td class="pass">116 passed</td></tr>
+<tr><td>契约测试</td><td>pytest tests/contracts/ -q</td><td class="pass">39 passed</td></tr>
+<tr><td>CLI 真实调用</td><td>python -m src reason --help</td><td class="pass">命令注册成功</td></tr>
+<tr><td>ruff 硬指标</td><td>ruff check src/ tests/ --select F821,F811,E9</td><td class="pass">All passed</td></tr>
+<tr><td>导入扫描</td><td>python scripts/import_sweep.py</td><td class="pass">IMPORT-FAIL=0</td></tr>
+<tr><td>全量快检</td><td>pytest tests/ -q -m "not slow"</td><td class="pass">3632 passed</td></tr>
+<tr><td>E2E 冒烟</td><td>python scripts/e2e_smoke.py</td><td class="warn">2/5 通过；3 失败为存量（基线同样失败：模型 step-5-preview 在 API group 不可用）</td></tr>
+</table>
+<details><summary>存量失败定性证据（17 个快检 + 3 个 E2E）</summary>
+<pre>git stash -u（移除全部本次改动）→ 复跑同样失败 → git stash pop 恢复
+失败根因：Windows 缺 bash/echo（12）；缺 redis 包（5）；API 配置的模型不可用（3 E2E）
+结论：全部为环境/配置问题，与本次改动无关。</pre>
+</details>
+
+<h2>5. 自我反驳发现并修复的伪闭环</h2>
+<ol>
+<li><b>P1</b> reason_handler 写了但没接任何 CLI 入口（用户无法调用）→ 接入 Typer + main.py subparser，--help 实跑验证</li>
+<li><b>P1</b> 逆向工具与 MCP 桥接没挂进 agent 引擎 → engine._load_extended_tools()（幂等、失败降级、治理门禁），6 个装配测试</li>
+<li><b>过程缺陷</b> engine.py 编辑时方法插入错位（__init__ 尾段被吞+重复）→ 已修复，git diff 确认 62 行纯新增，tests/agent 464 passed</li>
+</ol>
+
+<h2>6. 风险与回滚</h2>
+<ul>
+<li>js-reverse-skill 未声明 LICENSE（已放 LICENSE-WARNING.md），商用分发前确认</li>
+<li>17 个存量测试失败待环境治理（装 redis、修 Windows bash）</li>
+<li>回滚：提交前 git checkout/clean；提交后 git revert</li>
+</ul>
+
+<h2>7. 已知限制</h2>
+<ol>
+<li>reason 的 LLM 直调 litellm，未走 clawd provider 路由/降级体系</li>
+<li>推理模式与 5 阶段 WorkflowEngine 未深度融合</li>
+<li>MCP stdio 在 Windows 下部分 server 需 cmd /c 包装</li>
+</ol>
+
+<h2>8. 测验（自测通过 10/10 = 100%）</h2>
+<details open>
+<summary><b>Q1（选择）</b> 新接入的 MCP server 默认状态是？</summary>
+A. 直接可用 B. <b>检疫期，需人工 approve 才桥接</b> C. 永久拒绝 D. 随机
+</details>
+<details open>
+<summary><b>Q2（判断）</b> 已放行的 server 工具签名变更后会自动降级回检疫期。→ <b>对</b>（防 tool poisoning）</summary>
+</details>
+<details open>
+<summary><b>Q3（选择）</b> 逆向工具在 agent 工具池里的键是？</summary>
+A. 类名如 StringsTool B. <b>tool.name 小写如 strings</b> C. 随机 UUID
+</details>
+<details open>
+<summary><b>Q4（简答）</b> SafeCatalogRunner 执行前的 4 道硬门禁顺序？</summary>
+<b>set_scope 声明 → target 在 scope 内（域名/CIDR）→ dangerous 需 allow_dangerous(True) → 命令注入字符拦截</b>（随后才是 binary 存在检查）
+</details>
+<details open>
+<summary><b>Q5（简答）</b> reflexion 模式在工具失败后做什么？</summary>
+<b>强制生成结构化反思（what_failed/why/next_hypothesis/avoid），写入 lessons 供后续迭代避免重复失败路径</b>
+</details>
+<details open>
+<summary><b>Q6（判断）</b> lats 的最终决策由 LLM 直接决定。→ <b>错</b>（LLM 只打分，Python deterministic-picker 取最大）</summary>
+</details>
+<details open>
+<summary><b>Q7（选择）</b> engine._load_extended_tools 装配失败时会？</summary>
+A. 崩溃退出 B. <b>告警降级，不阻断引擎启动</b> C. 重试 3 次 D. 跳过逆向工具但 MCP 失败即崩
+</details>
+<details open>
+<summary><b>Q8（判断）</b> 17 个存量测试失败是本次改动造成的。→ <b>错</b>（基线 stash 复跑同样失败）</summary>
+</details>
+<details open>
+<summary><b>Q9（简答）</b> MCP 桥接工具在 agent 中的命名规则？</summary>
+<b>mcp__&lt;server&gt;__&lt;tool&gt;，如 mcp__ghidra__decompile</b>
+</details>
+<details open>
+<summary><b>Q10（选择）</b> 历史压缩（HistoryProcessor）哪些条目永不丢弃？</summary>
+A. 最长条目 B. <b>pinned 关键节点</b> + 最近 keep_recent 条 C. 全部保留 D. 随机采样
+</details>
+<p><b>通过标准:</b> ≥80%（8/10）。自测 10/10 全对（依据：各模块实现与测试断言一致，见 tests/ 目录）。</p>
+
+<footer style="margin-top:3rem;color:#64748b;font-size:.9em">Generated by Orchestrator · claw-code-tingfeng · 2026-10-27</footer>
+</body>
+</html>

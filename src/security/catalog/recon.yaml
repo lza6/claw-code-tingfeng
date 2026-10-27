@@ -1,0 +1,50 @@
+# 被动侦察工具目录（仅限授权测试目标）
+# 字段: name/description/category/command(模板)/tags/requires_approval/dangerous
+# 模板占位符: {target} {port} {extra} {output}
+# dangerous: true 表示主动攻击类，需 allow_dangerous(True) 才能执行
+
+- name: dns-lookup
+  description: DNS 解析查询目标域名
+  category: recon
+  command: nslookup {target}
+  tags: [dns, passive]
+
+- name: whois-query
+  description: WHOIS 域名注册信息查询
+  category: recon
+  command: whois {target}
+  tags: [whois, passive]
+
+- name: http-headers
+  description: 获取目标 HTTP 响应头（curl -I）
+  category: recon
+  command: curl -sSI --max-time 15 {target}
+  tags: [http, passive]
+
+- name: robots-txt
+  description: 抓取 robots.txt 了解站点结构
+  category: recon
+  command: curl -sS --max-time 15 {target}/robots.txt
+  tags: [http, passive]
+
+- name: cert-info
+  description: 查看 TLS 证书信息（openssl s_client）
+  category: recon
+  command: echo | openssl s_client -connect {target}:{port} 2>nul | openssl x509 -noout -subject -dates -issuer
+  tags: [tls, passive]
+
+- name: port-scan-tcp
+  description: TCP 端口连通性探测（nc，需授权）
+  category: scan
+  command: nc -zv -w 3 {target} {port}
+  tags: [network, active]
+  dangerous: true
+  requires_approval: true
+
+- name: dir-brute
+  description: 目录暴力枚举（gobuster，需授权）
+  category: scan
+  command: gobuster dir -u {target} -w {extra}
+  tags: [web, active]
+  dangerous: true
+  requires_approval: true

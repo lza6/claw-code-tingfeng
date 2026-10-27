@@ -102,3 +102,13 @@ coverage*.json
 
 # 并发覆盖率分片（pytest-cov 并行产物）
 .coverage.*
+
+desktop/node_modules/
+desktop/shell.log
+desktop/package-lock.json
+.clawd_host_port
+desktop/host/
+desktop/dist/
+desktop/build/
+hermes-agent-tmp/
+参考的结果计划指南.md

@@ -126,6 +126,7 @@ COMMAND_GROUPS: dict[str, list[str]] = {
     '交互模式': ['chat', 'doctor'],
     '显示执行': ['cost-report'],
     '工作流引擎': ['workflow'],
+    '智能推理': ['reason'],
 }
 
 # 命令帮助文本映射
@@ -135,6 +136,8 @@ COMMAND_HELP: dict[str, str] = {
     'evolve': '启动自主迭代优化引擎（持续改进代码库）',
     'cost-report': '显示 LLM 调用成本估算报告',
     'workflow': 'Workflow 工作流引擎（版本管理/热修复/5阶段执行管道）',
+    'reason': '推理模式（reflexion/plan-execute/lats/debate）',
+    'serve': '启动本地 Host 服务（桌面端/Web 端连接）',
 }
 
 
@@ -224,6 +227,24 @@ def build_parser() -> argparse.ArgumentParser:
     # workflow recover
     workflow_sub.add_parser('recover', help='从上次中断的状态恢复工作流')
 
+    # reason 命令 — 推理模式（reflexion/plan-execute/lats/debate）
+    reason_parser = subparsers.add_parser('reason', help=COMMAND_HELP['reason'])
+    reason_parser.add_argument('reason_pattern', choices=['reflexion', 'plan-execute', 'lats', 'debate'])
+    reason_parser.add_argument('reason_task', help='任务描述')
+    reason_parser.add_argument('--conclusion', dest='reason_conclusion', default=None, help='debate 待审查结论')
+    reason_parser.add_argument('--branching', dest='reason_branching', type=int, default=3, help='lats 分支数')
+    reason_parser.add_argument('--depth', dest='reason_depth', type=int, default=2, help='lats 深度')
+    reason_parser.add_argument('--rounds', dest='reason_rounds', type=int, default=2, help='debate 轮数')
+    reason_parser.add_argument('--max-iterations', dest='reason_max_iterations', type=int, default=8)
+    reason_parser.add_argument('--json', dest='reason_json', action='store_true', help='输出 JSON')
+
+    # serve 命令 — 本地 Host 服务（桌面端/Web 端）
+    serve_parser = subparsers.add_parser('serve', help=COMMAND_HELP['serve'])
+    serve_parser.add_argument('--port', type=int, default=None, help='WS 端口（默认走配置）')
+    serve_parser.add_argument('--workdir', type=str, default=None)
+    serve_parser.add_argument('--env-file', dest='env_file', default=None,
+                              help='额外加载的 .env（桌面壳传入）')
+
     return parser
 
 
@@ -296,6 +317,18 @@ def main(argv: list[str] | None = None) -> int:
         from .cli.repl_commands import _handle_doctor
         _handle_doctor()
         return 0
+
+    # serve 命令 — 本地 Host 服务（桌面端/Web 端）
+    if args.command == 'serve':
+        from .server.host_entry import cmd_serve
+        argv = []
+        if getattr(args, 'port', None) is not None:
+            argv += ['--port', str(args.port)]
+        if getattr(args, 'workdir', None):
+            argv += ['--workdir', args.workdir]
+        if getattr(args, 'env_file', None):
+            argv += ['--env-file', args.env_file]
+        return cmd_serve(argv)
 
     # evolve 命令 — 启动自主迭代优化
     if args.command == 'evolve':

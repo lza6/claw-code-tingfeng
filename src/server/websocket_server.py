@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from typing import TYPE_CHECKING, Any
@@ -39,6 +40,8 @@ class ClawdWebSocketServer:
         max_iterations: int = 10,
         developer_mode: bool = False,
         enable_cost_tracking: bool = True,
+        static_dir: str | None = None,
+        static_token: str | None = None,
     ) -> None:
         self.logger = get_logger('server.websocket')
         self._shutting_down = False
@@ -83,9 +86,15 @@ class ClawdWebSocketServer:
             router=self._router,
             engine_factory=self._engine_factory,
             heartbeat_interval=heartbeat_interval,
+            event_bus=self._event_bus,
         )
 
         self._ws_server: WsServer | None = None
+        # 桌面端/Web 端静态托管（DSH 模式：Host 同端口托管 Web UI，壳只 loadURL）
+        self._static_dir = static_dir
+        # index.html 服务时注入的 token（app.js 从 URL ?token= 读取）
+        self._static_token_inject = static_token
+        self._static_cache: dict[str, tuple[bytes, str]] = {}
 
     @property
     def is_running(self) -> bool:
@@ -102,11 +111,13 @@ class ClawdWebSocketServer:
         self._start_time = time.time()
         self._shutting_down = False
 
+        process_request = self._serve_static if self._static_dir else None
         self._ws_server = await serve(
             self._manager.handle_connection,
             self.host,
             self.port,
             ping_interval=self._manager.heartbeat_interval if self._manager.heartbeat_interval > 0 else None,
+            process_request=process_request,
         )
 
         # 获取实际端口
@@ -125,6 +136,175 @@ class ClawdWebSocketServer:
         ))
 
         return (self.host, self.port)
+
+    def _collect_plugins(self) -> dict[str, Any]:
+        """插件市场数据源：已加载插件 + 内置工具包（逆向/安全等能力模块）"""
+        plugins: list[dict[str, Any]] = []
+
+        # 1. PluginManager 加载的插件（若 Host 持有）
+        pm = getattr(self, "_plugin_manager", None)
+        if pm is not None:
+            for name, manifest in pm._loaded.items():
+                plugins.append({
+                    "name": name,
+                    "version": manifest.version,
+                    "description": manifest.description or "（无描述）",
+                    "status": "loaded",
+                    "capabilities": [
+                        cap for cap, flag in (
+                            ("工具", manifest.provides_tools),
+                            ("Prompt", manifest.provides_prompt),
+                            ("UI", manifest.provides_ui),
+                        ) if flag
+                    ] or ["插件"],
+                })
+
+        # 2. 内置能力包（逆向工具/安全目录/MCP 桥接 — 让市场不为空）
+        try:
+            from ..reverse_tools import get_all_tools
+
+            n = len(get_all_tools())
+            plugins.append({
+                "name": "逆向工具集",
+                "version": "1.0.0",
+                "description": f"内置 {n} 个逆向分析工具：Ghidra 桥、strings、熵分析、hexdump、objdump、binwalk 等",
+                "status": "builtin",
+                "capabilities": ["逆向", "静态分析", "CLI 包装"],
+            })
+        except Exception:  # noqa: BLE001
+            pass
+        plugins.append({
+            "name": "安全工具目录",
+            "version": "1.0.0",
+            "description": "YAML 数据驱动的安全工具目录：scope 授权门禁、命令注入拦截、危险工具双重确认",
+            "status": "builtin",
+            "capabilities": ["侦察", "安全审计"],
+        })
+        plugins.append({
+            "name": "MCP 桥接",
+            "version": "1.0.0",
+            "description": "外部 MCP server 接入（stdio/HTTP），工具签名+检疫审批防投毒",
+            "status": "builtin",
+            "capabilities": ["MCP", "工具扩展"],
+        })
+        plugins.append({
+            "name": "推理模式",
+            "version": "1.0.0",
+            "description": "四种反推推理循环：reflexion / plan-execute / lats / debate（clawd reason 命令）",
+            "status": "builtin",
+            "capabilities": ["推理", "反推"],
+        })
+        return {"plugins": plugins, "count": len(plugins)}
+
+    def _serve_static(self, connection, request):
+        """websockets 的 process_request 回调：托管静态 Web UI
+
+        - GET / 与 /index.html → index.html
+        - GET /<file> → 静态文件（仅白名单后缀，防路径穿越）
+        - 其余（/ws 等 upgrade 请求）返回 None 走正常 WS 握手
+        """
+        import mimetypes
+        from pathlib import Path as _Path
+
+        from websockets.http11 import Response as _WsResponse
+
+        def _resp(status: int, body: bytes, ctype: str) -> _WsResponse:
+            from websockets.datastructures import Headers as _H
+
+            reason = {200: 'OK', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed'}.get(status, '?')
+            return _WsResponse(
+                status, reason,
+                _H([
+                    ('Content-Type', ctype),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close'),
+                ]),
+                body,
+            )
+
+        path = request.path.split('?')[0]
+        if request.headers.get('Upgrade', '').lower() != 'websocket':
+            try:
+                # websockets 16 的 Request 无 method 属性；进入此回调的
+                # 非 upgrade 请求按 GET 处理（loopback-only 服务，可接受）
+                return self._handle_static_http(path)
+            except Exception as exc:  # noqa: BLE001 — 静态托管异常不应炸掉服务进程
+                import traceback
+
+                self.logger.error(f"静态托管处理失败: {path} — {type(exc).__name__}: {exc}")
+                self.logger.error(traceback.format_exc())
+                from websockets.http11 import Response as _WsResponse
+                from websockets.datastructures import Headers as _H
+
+                return _WsResponse(
+                    500, 'Internal Server Error',
+                    _H([('Content-Type', 'text/plain; charset=utf-8'),
+                        ('Content-Length', '21'),
+                        ('Connection', 'close')]),
+                    b'Internal Server Error',
+                )
+        return None  # WS 握手走默认流程
+
+    def _handle_static_http(self, path: str):
+        """静态 HTTP 处理主体（返回 websockets Response）"""
+        import mimetypes
+        from pathlib import Path as _Path
+
+        from websockets.datastructures import Headers as _H
+        from websockets.http11 import Response as _WsResponse
+
+        # API 端点：插件市场数据（JSON）
+        if path == '/api/plugins':
+            body = json.dumps(self._collect_plugins(), ensure_ascii=False).encode('utf-8')
+            return _WsResponse(
+                200, 'OK',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
+        def _resp(status: int, body: bytes, ctype: str) -> _WsResponse:
+            reason = {200: 'OK', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed'}.get(status, '?')
+            return _WsResponse(
+                status, reason,
+                _H([
+                    ('Content-Type', ctype),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close'),
+                ]),
+                body,
+            )
+
+        root = _Path(self._static_dir).resolve()
+        if path in ('/', '/index.html'):
+            target = root / 'index.html'
+        else:
+            target = (root / path.lstrip('/')).resolve()
+            # 防路径穿越
+            if not str(target).startswith(str(root)):
+                return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
+        if not target.is_file():
+            return _resp(404, b'Not Found', 'text/plain; charset=utf-8')
+        try:
+            body = target.read_bytes()
+        except OSError:
+            return _resp(405, b'Read Error', 'text/plain; charset=utf-8')
+        # index.html：注入 token（app.js 优先读 window.__CLAWD_TOKEN__）
+        if target.name == 'index.html' and self._static_token_inject:
+            inject = (
+                '<script>window.__CLAWD_TOKEN__='
+                + json.dumps(self._static_token_inject)
+                + ';</script>'
+            ).encode('utf-8')
+            marker = b'</title>'
+            if marker in body:
+                body = body.replace(marker, marker + inject, 1)
+        ctype = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+        return _resp(200, body, ctype)
 
     async def stop(self) -> None:
         """停止服务器"""

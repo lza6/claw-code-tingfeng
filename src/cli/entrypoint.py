@@ -183,6 +183,68 @@ def doctor():
     from ..cli.repl_commands import _handle_doctor
     _handle_doctor()
 
+@app.command(name="reason")
+def reason(
+    pattern: str = typer.Argument(..., help="推理模式: reflexion | plan-execute | lats | debate"),
+    task: str = typer.Argument(..., help="任务描述"),
+    conclusion: str | None = typer.Option(None, "--conclusion", help="debate 模式待审查结论"),
+    branching: int = typer.Option(3, "--branching", help="lats 分支数"),
+    depth: int = typer.Option(2, "--depth", help="lats 深度"),
+    rounds: int = typer.Option(2, "--rounds", help="debate 轮数"),
+    max_iterations: int = typer.Option(8, "--max-iterations", help="最大迭代数"),
+    json_output: bool = typer.Option(False, "--json", help="输出 JSON 全量结果"),
+):
+    """
+    推理模式 — 反推/逆向分析推理循环
+
+    reflexion:   假设→执行→反思→修正（逆向核心循环）
+    plan-execute: 计划分解→逐步执行→按结果重规划
+    lats:        多分支假设树并行评估，择优展开
+    debate:      多立场对抗审查结论，防误报
+    """
+    from ..cli_handlers.reason_handler import cmd_reason
+
+    argv = [pattern, task]
+    if conclusion:
+        argv += ["--conclusion", conclusion]
+    if branching != 3:
+        argv += ["--branching", str(branching)]
+    if depth != 2:
+        argv += ["--depth", str(depth)]
+    if rounds != 2:
+        argv += ["--rounds", str(rounds)]
+    if max_iterations != 8:
+        argv += ["--max-iterations", str(max_iterations)]
+    if json_output:
+        argv += ["--json"]
+    code = cmd_reason(argv)
+    if code != 0:
+        raise typer.Exit(code)
+
+@app.command(name="serve")
+def serve(
+    port: int | None = typer.Option(None, "--port", help="WS 端口（默认走配置）"),
+    workdir: str | None = typer.Option(None, "--workdir", help="工作目录"),
+    env_file: str | None = typer.Option(None, "--env-file", help="额外加载的 .env（桌面壳传入）"),
+):
+    """
+    启动本地 Host 服务 — 桌面端(Electron)/Web 端连接的权威运行时
+
+    启动后写 .clawd_host_port 端口文件（含 token），壳与浏览器据此发现服务。
+    """
+    from ..server.host_entry import cmd_serve
+
+    argv = []
+    if port is not None:
+        argv += ["--port", str(port)]
+    if workdir:
+        argv += ["--workdir", workdir]
+    if env_file:
+        argv += ["--env-file", env_file]
+    code = cmd_serve(argv)
+    if code != 0:
+        raise typer.Exit(code)
+
 @app.command(name="explore")
 def explore(
     goal: str = typer.Argument(..., help="探索目标描述"),

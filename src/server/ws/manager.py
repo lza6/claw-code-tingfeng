@@ -27,12 +27,56 @@ class WSManager:
         router: MessageRouter,
         engine_factory: EngineFactory,
         heartbeat_interval: float = 30.0,
+        event_bus: Any | None = None,
     ) -> None:
         self.auth_manager = auth_manager
         self.router = router
         self.engine_factory = engine_factory
         self.heartbeat_interval = heartbeat_interval
         self._sessions: dict[str, ConnectionSession] = {}
+        # 引擎事件 → WS 广播（工具调用/阶段进度实时推给前端）
+        if event_bus is not None:
+            self._subscribe_engine_events(event_bus)
+
+    def _subscribe_engine_events(self, event_bus: Any) -> None:
+        """订阅引擎事件总线，把关键事件实时广播给已认证客户端"""
+        from ...core.events import EventType
+
+        # 需要实时推送的事件类型
+        watch = {
+            EventType.AGENT_TASK_STARTED,
+            EventType.AGENT_TASK_COMPLETED,
+            EventType.AGENT_TASK_ERROR,
+        }
+        # 其余事件类型统一按 step 推送（工具调用/LLM 轮次等）
+        try:
+            other = {t for t in EventType if t not in watch and t.name.startswith('AGENT')}
+        except Exception:  # noqa: BLE001 — EventType 结构变化时兜底
+            other = set()
+
+        def _make_handler(ev_type: EventType):
+            def _handler(event: Any) -> None:
+                # engine 的 event_bus.publish() 是同步调用，在引擎的事件循环线程内。
+                # 把广播调度回该 loop（sync handler 里拿到的 running loop 即服务 loop）。
+                payload = {
+                    'type': 'event',
+                    'event': ev_type.name,
+                    'data': event.data if hasattr(event, 'data') else str(event),
+                }
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.broadcast(payload))
+                except RuntimeError:
+                    # 无 running loop（罕见）：跳过广播，不阻断引擎
+                    logger.debug(f"事件广播跳过（无事件循环）: {ev_type.name}")
+
+            return _handler
+
+        for ev_type in (watch | other):
+            try:
+                event_bus.subscribe(ev_type, _make_handler(ev_type))
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"事件订阅失败 {ev_type}: {e}")
 
     @property
     def session_count(self) -> int:

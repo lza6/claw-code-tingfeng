@@ -167,6 +167,8 @@ class AgentEngine:
             developer_mode=self.developer_mode,
             skills=self.skills,
         )
+        # 异步装配扩展工具（MCP 桥接 + 逆向工具），不阻断引擎启动
+        self._extended_tools_loaded = False
 
         # 原子补丁引擎
         self.patcher = AtomicPatcher(base_path=self.workdir)
@@ -184,6 +186,64 @@ class AgentEngine:
 
         # 初始化核心组件 (EventPublisher, LifecycleManager, etc.)
         self._init_components(rag_index=rag_index, world_model=world_model, enable_events=enable_events, event_bus=event_bus)
+
+    async def _load_extended_tools(self) -> None:
+        """惰性装配扩展工具池：逆向原生工具 + 外部 MCP server 桥接
+
+        失败降级：单个来源失败只告警，不阻断 agent 启动。
+        幂等：重复调用无副作用。
+        """
+        if self._extended_tools_loaded:
+            return
+        self._extended_tools_loaded = True
+
+        # 1. 逆向原生工具（纯本地，无外部依赖）
+        try:
+            from ..reverse_tools import get_all_tools
+
+            count_before = len(self.tools)
+            for tool_def in get_all_tools():
+                self.tools[tool_def.name] = tool_def
+            self.logger.info(
+                f"逆向工具已装配: {len(self.tools) - count_before} 个"
+            )
+        except Exception as e:  # noqa: BLE001 — 扩展工具失败不阻断主引擎
+            self.logger.warning(f"逆向工具装配失败（降级运行）: {e}")
+
+        # 2. 外部 MCP server 桥接（配置驱动，未配置则跳过）
+        mcp_servers_cfg = self.workdir / ".clawd" / "mcp_servers.json"
+        if not mcp_servers_cfg.exists():
+            return
+        try:
+            import json as _json
+
+            from ..mcp.client import MCPClientConfig, get_mcp_manager
+            from ..mcp.governance import ToolGovernor
+            from ..mcp.tool_bridge import bridge_server_tools
+
+            data = _json.loads(mcp_servers_cfg.read_text(encoding="utf-8"))
+            manager = get_mcp_manager()
+            governor = ToolGovernor()
+            bridged_total = 0
+            for item in data.get("servers", []):
+                cfg = MCPClientConfig.from_dict(item)
+                # 治理门禁：检疫期/被拒绝的 server 不桥接
+                if governor.status_of(cfg.name) != "approved":
+                    self.logger.info(
+                        f"MCP server {cfg.name} 未通过治理审批，跳过桥接"
+                        f"（状态: {governor.status_of(cfg.name)}）"
+                    )
+                    continue
+                manager.register(cfg)
+                tools = await bridge_server_tools(
+                    manager, cfg.name, registry=None
+                )
+                for t in tools:
+                    self.tools[t.name] = t
+                bridged_total += len(tools)
+            self.logger.info(f"MCP 桥接工具已装配: {bridged_total} 个")
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning(f"MCP 桥接装配失败（降级运行）: {e}")
 
     def _init_config_systems(self) -> None:
         """初始化配置系统。
@@ -330,10 +390,11 @@ class AgentEngine:
     def _build_tool_schemas(self) -> list[dict[str, Any]] | None:
         """为原生 function calling 生成工具 schema。
 
-        默认关闭；设置 `CLAWD_NATIVE_TOOLS=1` 后启用。关闭时返回 None，
-        Agent 继续使用文本 `<tool>{json}</tool>` 协议（既有行为不变）。
+        默认**开启**（原生 tools 协议是现代 OpenAI 兼容模型的正确姿势：
+        文本 <tool> 协议对部分模型会被无视，实测 step-5-preview 直接声称
+        "没有工具"。设 `CLAWD_NATIVE_TOOLS=0` 可显式回退文本协议。
         """
-        if os.environ.get('CLAWD_NATIVE_TOOLS', '').lower() not in ('1', 'true', 'yes'):
+        if os.environ.get('CLAWD_NATIVE_TOOLS', '1').lower() in ('0', 'false', 'no'):
             return None
 
         type_map = {
@@ -425,6 +486,8 @@ class AgentEngine:
         self.system_prompt = build_system_prompt(self.tools)
 
     async def run(self, goal: str, on_step: Callable | None = None) -> AgentSession:
+        # 装配扩展工具（幂等，失败降级）
+        await self._load_extended_tools()
         result = await self._run_agent_core(goal=goal, is_stream=False, on_step=on_step)
         return result['session']
 

@@ -1,23 +1,18 @@
-# Audit History
+# 审计历史
 
-## 2026-10-19 — 参考对标 Phase A
-- 全量扫描 `D:\参考项目`：1468 顶层条目 / 1464 目录 / 1309 git 仓库。
-- 深度分析 45 个候选（编码代理、编排、记忆/RAG、Skills、UX、路由/安全）。
-- 产出 `参考的结果计划指南.md`（含全量清单）。
-- 关键发现：文本式工具调用、RAG 默认关闭、9 个 Durable Surfaces 仅 2 个可达、WebSocket 无入口、CI 必红。
-
-## 2026-10-19 — Phase B 实施
-- 落地 P0/P1：CI、tracing、能力可见性、状态持久化、工具风险、SSRF、Skill 注入、server 入口、原生工具调用。
-- 全量 3148 passed；E2E 5/5 + 8/8；压测 5/5。
-- 提交 `4a17288`，tag v0.60.0。
-
-## 2026-10-19 — 审查轮 1
-- reviewer-round1：Request Changes（CI tests lint、dev 依赖、原生调用悬空 id、SSRF 事后校验、tracing 伪初始化、锁只覆盖写）。
-- 修复后提交 `7a83cd5`，tag v0.60.1；全量 3158 passed。
-
-## 2026-10-19 — 审查轮 2
-- reviewer-round2：Request Changes（过滤调用悬空 id、cancel_mode/team 读改写无锁、安全测试复制逻辑、证据数字/版本不一致、并发测试未测生产函数）。
-- 修复后提交 `b0b4ac3`，tag v0.60.2；全量 3162 passed；E2E 5/5 + 8/8；压测 5/5。
-
-## 2026-10-19 — 终局审计
-- 技能/记忆/计划文档审计；无可删除计划文档（均含未闭环项或为维护依据）。
+## 2026-10-27 超级智能体增强收口审计
+- 范围: src/mcp(client/tool_bridge/governance) src/reasoning src/security src/reverse_tools src/cli_handlers/reason_handler src/cli/entrypoint(reason) src/agent/engine(_load_extended_tools) src/main.py(reason subparser)
+- 方法: 自我反驳审计 → 修复 → 独立 reviewer 审查 → 验证矩阵
+- 自我反驳发现的伪闭环（已修）:
+  1. reason_handler 未接入任何 CLI 入口（P1）→ 已接 Typer + main.py subparser，--help 实跑验证
+  2. 逆向工具/MCP 桥接未挂入 agent 引擎工具池（P1）→ engine._load_extended_tools + run() 挂接，6 个装配测试
+  3. engine.py 曾出现方法插入错位（__init__ 尾段被吞+重复）→ 已修复，git diff 确认 62 行纯新增
+- 主控实跑复核发现的 bug（测试未覆盖，已修）:
+  4. cmd_reason 给非 debate 模式传 conclusion → TypeError 崩溃（P1，CLI 真实路径）
+     → 修复：conclusion 仅 debate 传入；新增防回归测试 test_conclusion_not_passed_to_non_debate
+     → 教训：CLI 层参数分发逻辑必须有"实跑 E2E"，单测直接调 run_reasoning 覆盖不到参数包装层
+- 存量失败定性: 17 个（12 Windows 缺 bash/echo，5 缺 redis），基线 stash 复跑同样失败，与本次无关
+- 独立 reviewer/explorer 子代理: 异常终止无产出（等待 35+ 分钟输出为空）。
+  按停止条件以主控复核兜底收口：全链路 import 复核 + CLI 层实跑 E2E（3 种调用 exit 0）
+  + 基线 stash 对照 + 156 测试 + ruff/collect/import_sweep 全过
+- 结论: 见 workflow_status.md（A1-A8 全 done）

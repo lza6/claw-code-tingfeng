@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawd Desktop</title>
+<style>
+/* ===== DSH 设计规范复刻 =====
+   三阶深灰背景 / #536dfe 品牌蓝 / 13px 基准 / 6-8-10-12-24px 圆角梯度
+   用户气泡(20px) vs 助手平铺 / 工具调用折叠单行 / 市场毛玻璃弹窗 */
+:root{
+  --bg-base:#181818; --bg-layer-1:#232323; --bg-layer-2:#2a2a2a; --bg-layer-3:#303030;
+  --label-primary:#ededed; --label-secondary:#b0b0b0; --label-tertiary:#8a8a8a;
+  --border-l1:#303030; --border-l2:#383838;
+  --hover:#ffffff0f; --brand:#536dfe; --error:#ff8080; --ok:#4ade80;
+  --radius-s:6px; --radius-m:8px; --radius-c:10px; --radius-l:12px; --radius-xl:24px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{font-size:13px}
+body{background:var(--bg-base);color:var(--label-primary);font-family:"Segoe UI","Microsoft YaHei",sans-serif;height:100vh;display:flex;overflow:hidden;line-height:1.5}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font-family:inherit;color:var(--label-primary)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-l2);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== 布局：侧栏 300px + 主区 ===== */
+.frame{display:grid;grid-template-columns:300px 1fr;height:100vh;width:100%}
+.sidebar{background:var(--bg-layer-1);border-right:1px solid var(--border-l1);display:flex;flex-direction:column;padding:12px}
+.logo-row{display:flex;align-items:center;gap:8px;padding:4px 6px 14px}
+.logo-mark{width:26px;height:26px;border-radius:var(--radius-m);background:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:14px}
+.logo-name{font-weight:600;font-size:14px}
+.badge{font-size:10px;letter-spacing:.5px;color:var(--label-tertiary);border:1px solid var(--border-l2);border-radius:10px;padding:1px 7px}
+.new-chat{height:42px;border-radius:var(--radius-l);background:var(--bg-layer-2);color:var(--label-primary);text-align:center;font-size:13px;width:100%;transition:background .15s}
+.new-chat:hover{background:var(--hover);outline:1px solid var(--border-l2)}
+.group-head{display:flex;align-items:center;justify-content:space-between;margin:16px 6px 8px;color:var(--label-tertiary);font-size:12px}
+.session-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.session-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-c);color:var(--label-secondary);cursor:pointer}
+.session-item:hover{background:var(--hover)}
+.session-item.active{background:var(--hover);color:var(--label-primary)}
+.session-item .time{margin-left:auto;font-size:11px;color:var(--label-tertiary)}
+.sidebar-footer{border-top:1px solid var(--border-l1);padding-top:10px;display:flex;flex-direction:column;gap:2px}
+.side-entry{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-c);color:var(--label-secondary);font-size:13px;width:100%;text-align:left}
+.side-entry:hover{background:var(--hover);color:var(--label-primary)}
+.side-entry .ico{width:16px;text-align:center}
+
+/* ===== 主区 ===== */
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border-l1);flex-shrink:0}
+.topbar .title{font-size:14px;font-weight:600}
+.mode-tag{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--label-secondary);border:1px solid var(--border-l2);border-radius:var(--radius-s);padding:2px 8px}
+.conn{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--label-tertiary)}
+.conn .dot{width:8px;height:8px;border-radius:50%;background:var(--error)}
+.conn.ok .dot{background:var(--ok)}
+
+/* tab 行 */
+.tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--border-l1);flex-shrink:0}
+.tab{padding:10px 14px;font-size:13px;color:var(--label-secondary);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--label-primary);border-bottom-color:var(--brand)}
+
+/* ===== 对话区 ===== */
+.view{flex:1;overflow-y:auto;min-height:0}
+#chat{padding:20px 28px;display:flex;flex-direction:column;gap:18px}
+.msg-user{margin-left:auto;max-width:70%;padding:10px 16px;border-radius:20px;background:var(--bg-layer-2);white-space:pre-wrap;word-break:break-word}
+.msg-assistant{padding:4px 0;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.msg-assistant .who{font-size:11px;color:var(--label-tertiary);margin-bottom:4px}
+.msg-err{color:var(--error);padding:6px 0;font-size:13px}
+/* 工具调用/事件：轻量单行折叠（DSH 式） */
+.tool-row{display:flex;align-items:center;gap:8px;color:var(--label-tertiary);font-size:12px;padding:3px 0;cursor:pointer;max-width:100%}
+.tool-row .t-ico{flex-shrink:0;width:14px;height:14px;border-radius:4px;background:var(--bg-layer-3);display:inline-flex;align-items:center;justify-content:center;font-size:9px}
+.tool-row .t-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tool-row .t-detail{display:none;margin:6px 0 0 22px;padding:10px 12px;background:var(--bg-layer-2);border-radius:var(--radius-m);font-family:Consolas,monospace;font-size:12px;color:var(--label-secondary);white-space:pre-wrap;max-height:300px;overflow-y:auto;border:1px solid var(--border-l1)}
+.tool-row.open .t-detail{display:block}
+.tool-row.degraded .t-detail{font-size:11px}
+/* 消息操作栏（hover 显形） */
+.msg-actions{display:flex;gap:6px;margin-top:6px;opacity:0;transition:opacity .15s}
+.msg-assistant:hover .msg-actions{opacity:1}
+.msg-actions button{font-size:11px;color:var(--label-tertiary);padding:2px 6px;border-radius:var(--radius-s)}
+.msg-actions button:hover{background:var(--hover);color:var(--label-primary)}
+
+/* ===== 输入区 ===== */
+.composer-wrap{padding:12px 20px 8px;flex-shrink:0}
+.composer{border-radius:16px;background:var(--bg-layer-2);border:1px solid var(--border-l1);padding:12px 14px;transition:border-color .15s}
+.composer:focus-within{border-color:var(--brand)}
+.composer textarea{width:100%;background:none;border:none;outline:none;resize:none;font-size:13px;color:var(--label-primary);min-height:20px;max-height:160px}
+.composer-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.perm{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--label-secondary)}
+.model-tag{margin-left:auto;font-size:12px;color:var(--label-tertiary)}
+.send-btn{width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.send-btn:hover:not(:disabled){filter:brightness(1.1)}
+.stats{padding:4px 24px 10px;font-size:11px;color:var(--label-tertiary);display:flex;gap:14px}
+.banner{display:none;padding:6px 20px;background:#3a2a12;color:#fbbf24;font-size:12px;text-align:center}
+
+/* ===== 插件市场（24px 圆角毛玻璃弹窗） ===== */
+.overlay{display:none;position:fixed;inset:0;background:rgb(0 0 0 / 50%);backdrop-filter:blur(8px);z-index:100;align-items:center;justify-content:center}
+.overlay.show{display:flex}
+.market-panel{width:min(800px,100%);height:min(700px,100%);border-radius:var(--radius-xl);background:var(--bg-layer-2);box-shadow:0 24px 64px rgb(0 0 0 / .5);display:flex;flex-direction:column;overflow:hidden}
+.market-head{padding:20px 24px 14px;border-bottom:1px solid var(--border-l1)}
+.market-head h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.market-head p{font-size:13px;color:var(--label-secondary)}
+.viewbar{display:flex;align-items:center;gap:6px;padding:12px 24px}
+.viewbar .vb{padding:5px 12px;border-radius:var(--radius-m);font-size:12px;color:var(--label-secondary)}
+.viewbar .vb.active{background:var(--hover);color:var(--label-primary)}
+.market-search{margin-left:auto;width:220px;height:30px;border-radius:var(--radius-m);border:1px solid var(--border-l2);background:var(--bg-base);padding:0 10px;font-size:12px;outline:none}
+.market-search:focus{border-color:var(--brand)}
+.market-body{flex:1;overflow-y:auto;padding:4px 24px 20px}
+.market-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.market-card{min-height:150px;padding:15px;border-radius:var(--radius-c);border:1px solid var(--border-l2);background:var(--bg-layer-3);display:flex;flex-direction:column;transition:all .15s;cursor:pointer}
+.market-card:hover{border-color:#4a4a4a;background:var(--hover);box-shadow:0 2px 8px rgb(0 0 0/.3)}
+.mc-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.mc-icon{width:34px;height:34px;border-radius:var(--radius-m);background:#2a3550;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.mc-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-sub{font-size:12px;color:var(--label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-desc{font-size:13px;line-height:19px;color:var(--label-secondary);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mc-tags{display:flex;gap:5px;margin-top:auto;padding-top:10px;flex-wrap:wrap}
+.mc-tag{font-size:11px;color:var(--label-tertiary);border:1px solid var(--border-l2);border-radius:10px;padding:1px 8px}
+.mc-status{margin-left:auto;font-size:11px;color:var(--ok)}
+.market-empty{padding:60px 0;text-align:center;color:var(--label-tertiary);font-size:13px;grid-column:1/-1}
+.market-close{margin-left:auto;width:28px;height:28px;border-radius:var(--radius-m);display:flex;align-items:center;justify-content:center;color:var(--label-secondary)}
+.market-close:hover{background:var(--hover)}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- 侧栏 -->
+  <aside class="sidebar">
+    <div class="logo-row">
+      <div class="logo-mark">C</div>
+      <div class="logo-name">clawd</div>
+      <div class="badge">DESKTOP</div>
+    </div>
+    <button class="new-chat" id="newChat">＋ 新会话</button>
+    <div class="group-head"><span>工作区</span><span style="font-size:11px">本地</span></div>
+    <div class="session-list" id="sessionList"></div>
+    <div class="sidebar-footer">
+      <button class="side-entry" id="btnMarket"><span class="ico">◉</span> 插件市场</button>
+      <button class="side-entry" id="btnSettings"><span class="ico">⚙</span> 设置</button>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <main class="main">
+    <div class="topbar">
+      <span class="title" id="sessionTitle">新会话</span>
+      <span class="mode-tag">⚡ 标准模式</span>
+      <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="chat">对话</button>
+      <button class="tab" data-tab="trace">轨迹</button>
+    </div>
+    <div class="view"><div id="chat"></div><div id="trace" style="display:none;padding:20px 28px"></div></div>
+    <div class="banner" id="banner"></div>
+    <div class="composer-wrap">
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="给智能体发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+        <div class="composer-row">
+          <span class="perm">🛡 Full access</span>
+          <span class="model-tag" id="modelTag">clawd · 本地 Host</span>
+          <button class="send-btn" id="send">↑</button>
+        </div>
+      </div>
+    </div>
+    <div class="stats" id="stats"><span id="stTurns">0 轮</span><span id="stCalls">工具 0 次</span></div>
+  </main>
+</div>
+
+<!-- 插件市场弹窗 -->
+<div class="overlay" id="marketOverlay">
+  <div class="market-panel">
+    <div class="market-head" style="display:flex;align-items:flex-start">
+      <div style="flex:1">
+        <h1>插件市场</h1>
+        <p>发现、安装和管理 clawd 插件 —— 万物皆插件</p>
+      </div>
+      <button class="market-close" id="marketClose">✕</button>
+    </div>
+    <div class="viewbar">
+      <button class="vb active" data-view="installed">已安装</button>
+      <button class="vb" data-view="available">可安装</button>
+      <input class="market-search" id="marketSearch" placeholder="搜索插件…">
+    </div>
+    <div class="market-body"><div class="market-grid" id="marketGrid"></div></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -33,9 +33,38 @@ def build_system_prompt(
     按需读取，避免把所有技能正文常驻上下文。
     """
 
-    tool_descriptions = '\n'.join(
-        f'- {name}: {tool.description}' for name, tool in tools.items()
-    )
+    # 工具描述带参数 schema（模型据此生成正确的参数名，而非猜测）
+    desc_lines = []
+    for name, tool in tools.items():
+        params = ""
+        try:
+            schemas = getattr(tool, "parameter_schemas", ()) or ()
+            if schemas:
+                parts = []
+                for ps in schemas:
+                    req = "必填" if ps.required else "可选"
+                    pdesc = getattr(ps, "description", "") or ""
+                    parts.append(f"{ps.name}({ps.param_type},{req}): {pdesc}".rstrip(": "))
+                params = " 参数: " + "; ".join(parts)
+            else:
+                # 兼容 tool_interface 体系的 _definition.parameters
+                schema = getattr(tool, "_definition", None)
+                raw = getattr(schema, "parameters", None) if schema else None
+                if isinstance(raw, dict) and raw:
+                    if "properties" in raw:
+                        required = set(raw.get("required", []))
+                        parts = []
+                        for pname, pinfo in raw["properties"].items():
+                            req = "必填" if pname in required else "可选"
+                            ptype = pinfo.get("type", "") if isinstance(pinfo, dict) else ""
+                            parts.append(f"{pname}({ptype},{req})")
+                        params = " 参数: " + "; ".join(parts)
+                    else:
+                        params = " 参数: " + "; ".join(f"{k}: {v}" for k, v in raw.items())
+        except Exception:  # noqa: BLE001 — schema 提取失败不阻断 prompt 构建
+            params = ""
+        desc_lines.append(f'- {name}: {tool.description}{params}')
+    tool_descriptions = '\n'.join(desc_lines)
     tool_names = ', '.join(tools.keys())
 
     # 检查功能开关 (ClawGod v2 整合)
@@ -82,6 +111,12 @@ def build_system_prompt(
 
 工具调用格式（使用 JSON，必须包裹在 <tool> 标签中）：
 <tool>{{"name": "工具名", "args": {{"参数1": "值1", "参数2": "值2"}}}}</tool>
+
+【严格约束】
+- 参数名必须与上面列出的"参数"完全一致，禁止自造参数名
+- <tool> 标签内必须是单个合法 JSON 对象（双引号、无注释、无尾逗号）
+- 每轮回复要么包含工具调用（可附简短说明），要么给出最终答复；
+  不要输出未包裹标签的工具调用片段
 
 示例：
 <tool>{{"name": "BashTool", "args": {{"command": "ls -la"}}}}</tool>

@@ -69,8 +69,19 @@ def test_extract_native_tool_calls_shape():
     }]
 
 
-def test_build_tool_schemas_is_off_by_default(monkeypatch):
+def test_build_tool_schemas_on_by_default(monkeypatch):
+    """v0.61: 原生工具调用默认**开启**（实测 step-5-preview 等现代模型
+    无视文本 <tool> 协议，原生 tools 协议才是正确姿势）。"""
     monkeypatch.delenv('CLAWD_NATIVE_TOOLS', raising=False)
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.tools = {'BashTool': _BashLike()}
+    schemas = engine._build_tool_schemas()
+    assert schemas and schemas[0]['type'] == 'function'
+
+
+def test_build_tool_schemas_opt_out(monkeypatch):
+    """显式回退文本协议: CLAWD_NATIVE_TOOLS=0"""
+    monkeypatch.setenv('CLAWD_NATIVE_TOOLS', '0')
     engine = AgentEngine.__new__(AgentEngine)
     engine.tools = {'BashTool': _BashLike()}
     assert engine._build_tool_schemas() is None

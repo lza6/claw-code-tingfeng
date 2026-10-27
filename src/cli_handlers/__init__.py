@@ -19,7 +19,41 @@ CommandHandler = Callable[[argparse.Namespace], CommandResult]
 COMMAND_REGISTRY: dict[str, CommandHandler] = {
     'cost-report': handle_cost_report,
     'workflow': handle_workflow,
+    'reason': lambda args: _handle_reason_wrapper(args),
 }
+
+
+def _handle_reason_wrapper(args: argparse.Namespace) -> "CommandResult":
+    """reason 命令包装：reason_handler 的 cmd_reason 输出文本，转 CommandResult"""
+    import io
+    import contextlib
+
+    from .reason_handler import cmd_reason
+
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            # cmd_reason 接收 argv 列表；从 Namespace 还原
+            argv = [args.command]
+            if getattr(args, "reason_pattern", None):
+                argv = [args.reason_pattern, args.reason_task]
+                if getattr(args, "reason_conclusion", None):
+                    argv += ["--conclusion", args.reason_conclusion]
+                if getattr(args, "reason_branching", 3) != 3:
+                    argv += ["--branching", str(args.reason_branching)]
+                if getattr(args, "reason_depth", 2) != 2:
+                    argv += ["--depth", str(args.reason_depth)]
+                if getattr(args, "reason_rounds", 2) != 2:
+                    argv += ["--rounds", str(args.reason_rounds)]
+                if getattr(args, "reason_max_iterations", 8) != 8:
+                    argv += ["--max-iterations", str(args.reason_max_iterations)]
+                if getattr(args, "reason_json", False):
+                    argv += ["--json"]
+            code = cmd_reason(argv[1:] if len(argv) > 1 else argv)
+        return CommandResult(output=buf.getvalue(), exit_code=code)
+    except SystemExit as e:
+        # argparse 错误
+        return CommandResult(output=buf.getvalue(), exit_code=int(e.code or 1))
 
 
 def get_command_handler(command: str) -> CommandHandler | None:

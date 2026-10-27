@@ -1,0 +1,11 @@
+[project]
+name = "clawd-sample-plugin"
+version = "0.1.0"
+
+[tool.clawd.plugin]
+name = "sample-echo"
+entry = "clawd_sample_plugin:setup"
+version = "0.1.0"
+description = "示例：echo 工具 + prompt 注入 + expose 服务"
+provides_tools = true
+provides_prompt = true
