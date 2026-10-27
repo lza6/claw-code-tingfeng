@@ -126,6 +126,9 @@ class ClawdWebSocketServer:
             addr, port = sockets[0].getsockname()[:2]
             self.host, self.port = str(addr), int(port)
 
+        # 记录服务 loop（事件广播 threadsafe 目标；engine 线程 publish 时回此 loop）
+        self._manager.set_service_loop(asyncio.get_running_loop())
+
         uri = f'ws://{self.host}:{self.port}'
         self.logger.info(f'WebSocket 服务器已启动: {uri}')
 

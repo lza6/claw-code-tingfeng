@@ -129,13 +129,19 @@ class MCPClient:
                 env=env,
             )
             self._stdio_cm = stdio_client(params)
-            read_stream, write_stream = await self._stdio_cm.__aenter__()
-            self._session = ClientSession(read_stream, write_stream)
-            await self._session.__aenter__()
-            await asyncio.wait_for(
-                self._session.initialize(),
-                timeout=self.config.timeout_seconds,
-            )
+            try:
+                read_stream, write_stream = await self._stdio_cm.__aenter__()
+                self._session = ClientSession(read_stream, write_stream)
+                await self._session.__aenter__()
+                await asyncio.wait_for(
+                    self._session.initialize(),
+                    timeout=self.config.timeout_seconds,
+                )
+            except BaseException:
+                # 半途失败：回滚已进入的 context manager，防 stdio 子进程泄漏
+                logger.warning(f"MCP 连接失败，回滚会话: {self.config.name}")
+                await self.disconnect()
+                raise
         else:
             raise MCPClientError(
                 f"HTTP 传输暂由 MCPHttpClient 处理: {self.config.name}"

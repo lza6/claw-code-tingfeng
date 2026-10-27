@@ -56,19 +56,19 @@ class WSManager:
 
         def _make_handler(ev_type: EventType):
             def _handler(event: Any) -> None:
-                # engine 的 event_bus.publish() 是同步调用，在引擎的事件循环线程内。
-                # 把广播调度回该 loop（sync handler 里拿到的 running loop 即服务 loop）。
+                # 线程模型: 引擎子线程同步调 publish，本 handler 在引擎线程执行。
+                # get_running_loop 可能拿到引擎自己的 loop，其上 create_task 会
+                # 从非归属线程并发调 ws.send（协议对象非线程安全，帧交错风险）。
+                # 必须显式 threadsafe 调度回 WS 服务 loop。
+                loop = getattr(self, "_service_loop", None)
+                if loop is None or loop.is_closed():
+                    return  # 服务未起/已停：静默丢弃（不阻断引擎）
                 payload = {
                     'type': 'event',
                     'event': ev_type.name,
                     'data': event.data if hasattr(event, 'data') else str(event),
                 }
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(self.broadcast(payload))
-                except RuntimeError:
-                    # 无 running loop（罕见）：跳过广播，不阻断引擎
-                    logger.debug(f"事件广播跳过（无事件循环）: {ev_type.name}")
+                asyncio.run_coroutine_threadsafe(self.broadcast(payload), loop)
 
             return _handler
 
@@ -81,6 +81,10 @@ class WSManager:
     @property
     def session_count(self) -> int:
         return len(self._sessions)
+
+    def set_service_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """记录 WS 服务事件循环（事件广播的 threadsafe 目标）"""
+        self._service_loop = loop
 
     async def handle_connection(self, ws: ServerProtocol) -> None:
         """处理新进入的连接"""

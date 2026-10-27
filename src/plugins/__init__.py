@@ -212,24 +212,37 @@ class PluginManager:
         if not module_name or not func_name:
             raise PluginError(f"entry 格式须为 'module:function': {manifest.entry}")
 
-        # 把插件目录加入 sys.path（隔离于 plugins 目录，避免污染全局）
-        plugin_dir_str = str(plugin_dir)
-        added = plugin_dir_str not in sys.path
-        if added:
-            sys.path.insert(0, plugin_dir_str)
+        # 用 spec_from_file_location 隔离加载，不污染 sys.path
+        # （插件目录里的 json.py/logging.py 不得劫持宿主 import）
+        init_py = plugin_dir / module_name.replace(".", "/") / "__init__.py"
+        if not init_py.exists():
+            init_py = plugin_dir / f"{module_name}.py"
+        if not init_py.exists():
+            raise PluginError(f"入口模块文件不存在: {module_name}（找 {init_py}）")
+        unique_name = f"clawd_plugin_{manifest.name}_{module_name}"
+        spec = importlib.util.spec_from_file_location(unique_name, init_py)
+        if spec is None or spec.loader is None:
+            raise PluginError(f"无法构建 import spec: {init_py}")
+        module = importlib.util.module_from_spec(spec)
+        # 插件目录注册为该命名空间的子模块搜索路径（支持插件内部自引用，
+        # 如 from my_plugin.service import X），但不污染全局 sys.path
+        submodule_search = plugin_dir / module_name.replace(".", "/")
+        if submodule_search.is_dir():
+            module.__path__ = [str(submodule_search)]
+        sys.modules[unique_name] = module
+        # 插件内部 "from <module_name>.x import y" 走全局解析：临时注册别名
+        alias_key = f"__clawd_plugin_alias_{module_name}"
+        sys.modules[module_name] = module
         try:
-            module = importlib.import_module(module_name)
+            spec.loader.exec_module(module)
             setup_fn = getattr(module, func_name, None)
             if setup_fn is None or not callable(setup_fn):
                 raise PluginError(f"入口函数不可调用: {manifest.entry}")
         except PluginError:
             raise
         except Exception as e:  # noqa: BLE001 — 导入失败转结构化错误
-            raise PluginError(f"插件模块导入失败 {module_name}: {e}") from e
-        finally:
-            if added:
-                # 保持 sys.path（模块可能被后续依赖），标记即可
-                pass
+            sys.modules.pop(unique_name, None)
+            raise PluginError(f"插件模块加载失败 {module_name}: {e}") from e
 
         ctx = PluginContext(
             plugin_name=manifest.name,

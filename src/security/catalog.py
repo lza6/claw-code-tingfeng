@@ -176,10 +176,8 @@ class SafeCatalogRunner:
         t = target.lower().strip()
         for s in self._scope:
             s = s.lower().strip()
-            if t == s or t.endswith("." + s) or t.endswith(s):
-                return True
-            # CIDR
             if "/" in s:
+                # CIDR 精确匹配
                 try:
                     import ipaddress
 
@@ -188,4 +186,8 @@ class SafeCatalogRunner:
                         return True
                 except ValueError:
                     continue
+            else:
+                # 域名：必须有 . 边界（evil.com 不能匹配 notevil.com）
+                if t == s or t.endswith("." + s):
+                    return True
         return False

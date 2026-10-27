@@ -20,6 +20,8 @@ class TestEventBroadcast:
                 auth_manager=auth, router=router,
                 engine_factory=None, event_bus=bus,
             )
+            # 记录服务 loop（真实场景由 server.start() 设置）
+            mgr.set_service_loop(asyncio.get_running_loop())
 
             # fake ws
             class FakeWS:
