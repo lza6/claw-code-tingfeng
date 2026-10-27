@@ -7,7 +7,39 @@
 
 ---
 
-## [未发布]
+## [v0.61.0] (2026-10-28) — 超级智能体增强 + DSH 式桌面端全链路
+
+### 新增
+- **MCP Client 桥接层**（stdio+HTTP 双传输）+ 工具签名检疫审批（防 tool poisoning）
+- **4 推理模式**（reflexion/plan-execute/lats/debate）+ `clawd reason` CLI
+- **8 个逆向原生工具**（Ghidra 桥/strings/熵/hexdump/objdump/binwalk 等）
+- **安全工具 YAML catalog**（scope 授权门禁 + 注入拦截 + dangerous 双重确认）
+- **51 个逆向场景 SKILL.md** 知识库 + 4 个 Ghidra 分析脚本
+- **插件体系**（manifest/DI Context/工具与 Prompt 接入面/插件市场 API）
+- **上下文工程**（观察截断引导 + 历史滑动窗口压缩）
+
+### 桌面端（DSH 模式，Electron）
+- Python Host（`clawd serve`）：WS + 端口文件 + 同端口 Web UI 托管
+- DSH 设计规范 UI（三阶深灰/#536dfe/侧栏工作台/插件市场毛玻璃弹窗）
+- Electron 壳（spawn Host/托盘/单实例/崩溃自愈/TF 定制图标）
+- **NSIS + Portable 双产物** + electron-updater 自动更新 + 首次配置引导窗
+- **安装版真机终测 PASS**（配置引导→连接→真实 LLM 对话→工具调用）
+
+### 修复（含独立审查 4 项阻塞问题）
+- system prompt 注入工具参数 schema（修模型猜参数名）
+- 原生 function calling 默认开启（文本协议被现代模型无视）
+- 事件实时广播（sync handler + 服务 loop threadsafe 调度）
+- scope 门禁后缀绕过（域名加 `.` 边界）
+- MCP stdio connect 半途失败子进程泄漏（回滚 context manager）
+- 插件 sys.path 污染（spec_from_file_location 隔离命名空间）
+
+### 验证
+- 205+ 测试全绿 · 契约 39 passed · ruff All passed · IMPORT-FAIL=0
+- 真实 API E2E 双 PASS · Playwright UI E2E PASS
+- 压测 200 并发：QPS 1418 / P95 10.5ms / 错误率 0%
+- 安装版真机终测 PASS（提交 `1261b64` → 审查修复 `f02321e`）
+
+---
 
 ### v0.60.10 (2026-10-23) — 覆盖率补测（+265 用例）与 12 个生产缺陷修复
 
