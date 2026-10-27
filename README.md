@@ -2,10 +2,39 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.60.6 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.61.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
+
+---
+
+## 🖥️ Clawd Desktop（桌面端，v0.61.0 新增）
+
+DSH 式桌面客户端，**双击即用**：
+
+| 形态 | 获取 |
+|------|------|
+| NSIS 安装程序（带自动更新） | [GitHub Release](https://github.com/lza6/claw-code-tingfeng/releases/tag/v0.61.0) → `Clawd Desktop Setup 0.1.0.exe` |
+| Portable 免安装 | 同 Release → `ClawdDesktop-Portable-0.1.0.exe` |
+| 开发模式 | `cd desktop && npm run dev` |
+
+- **DSH 设计规范 UI**：三阶深灰 + 品牌蓝，侧栏工作台、插件市场（毛玻璃弹窗）、工具调用实时折叠行
+- **架构**：Electron 壳（窗口/托盘/单实例/崩溃自愈）→ spawn Python Host（`clawd serve`）→ WS 同端口托管 Web UI；壳内不造 IPC
+- **插件体系**：万物皆插件 —— 放进 `.clawd/plugins/` 即出现在市场（manifest + DI Context + 工具/Prompt 接入面）
+- **首次启动**：图形化引导配置 LLM API（OpenAI 兼容），配置存本机 userData
+- 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）与 `docs/RELEASE_UPDATES.md`（发布/更新）
+
+## ⚡ 超级智能体能力（v0.61.0 新增）
+
+| 能力 | 入口 | 说明 |
+|------|------|------|
+| 推理模式 | `clawd reason reflexion\|plan-execute\|lats\|debate "任务"` | 四种反推循环：反思修正/计划重排/假设树/对抗审查 |
+| MCP 桥接 | `.clawd/mcp_servers.json` + `ToolGovernor().approve()` | 外部 MCP server 工具自动进 Agent 工具池；签名+检疫审批防投毒 |
+| 逆向工具 | Agent 内直接调用 | Ghidra HTTP 桥、strings/熵/hexdump、objdump/binwalk 等 8 个 |
+| 安全工具 | `SafeCatalogRunner` | YAML 目录 + scope 授权门禁 + 注入拦截（仅限授权测试目标） |
+| 逆向知识库 | `skills/reverse/` | 51 个场景 SKILL.md（固件/Ghidra/IDA/恶意软件/协议/pwn/CTF） |
+| 插件开发 | `.agent/skills/clawd-extension-sop.md` | 四件套 SOP（manifest/DI/接入面/CLI） |
 
 ---
 
