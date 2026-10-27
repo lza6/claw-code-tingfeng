@@ -30,3 +30,12 @@
 - 决策：硬错误（F821/F811/E9）阻塞；全量报告非阻塞。
 - 理由：全量 1,697 条历史违规（W293/F401/I001）需独立批次清理，不能为变绿弱化检查。
 - 代价：风格类问题暂不阻断。
+
+## 2026-10-28 v0.61.0 关键决策
+1. **原生 function calling 默认开启**（原 CLAWD_NATIVE_TOOLS 默认关）：实测 step-5-preview 等现代模型无视文本 <tool> 协议并声称"没有工具"；原生 tools 协议一次通过。回退开关保留（=0）。
+2. **桌面壳选 Electron**（调研推荐 Tauri 体积小 90%）：用户点名 EL 框架；壳可替换原则下日后迁移不亏。
+3. **Host 同端口托管 Web UI**（websockets process_request 静态处理）：DSH 同构，壳只需 loadURL 一个地址，免 CORS。
+4. **bundle 白名单复制**（AST import 扫描 + pip show 递归闭包）：venv 有 500MB+ 遗留垃圾包（bitsandbytes/cv2/cmake），黑名单法 5127MB → 白名单 269MB。
+5. **内嵌 Python 用系统解释器**（非 venv python.exe）：venv 的 python.exe 是启动器硬依赖 pyvenv.cfg，不可便携。
+6. **LLM 配置走 userData/.env + --env-file**：安装目录只读且不应含密钥；首次启动图形引导创建。
+7. **事件广播用 run_coroutine_threadsafe**（审查发现）：publish 在引擎线程，get_running_loop 会拿到错误 loop；必须显式 threadsafe 回 WS 服务 loop。
