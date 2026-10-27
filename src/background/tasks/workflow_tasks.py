@@ -5,8 +5,8 @@ import logging
 from celery import shared_task
 from celery.signals import task_revoked
 
-from ..workflow.engine import WorkflowEngine
-from .celery_app import ClawdTask
+from src.workflow.engine import WorkflowEngine
+from ..celery_app import ClawdTask
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +59,10 @@ def schedule_periodic_tasks():
 
 # 任务撤销信号
 @task_revoked.connect
-def on_task_revoked(request, terminated, signum, expiration):
-    logger.warning(f"Task {request.id} was revoked")
+def on_task_revoked(**kwargs):
+    request = kwargs.get("request")
+    if request is not None:
+        logger.warning(f"Task {request.id} was revoked")
 
 
 __all__ = [

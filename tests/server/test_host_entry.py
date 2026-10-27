@@ -195,6 +195,54 @@ class TestStaticHosting:
 class TestPluginsApi:
     """插件市场 API（/api/plugins）"""
 
+    def test_mime_whitelist_mapping(self, tmp_path, web_dir):
+        """NR-3: 静态托管 Content-Type 走显式白名单，不依赖 mimetypes/注册表"""
+        import urllib.request
+
+        from src.server import create_server
+        from src.server.websocket_server import ClawdWebSocketServer
+
+        def _http_get(port, path):
+            req = urllib.request.Request(f"http://127.0.0.1:{port}{path}")
+            try:
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    return r.status, dict(r.headers), r.read()
+            except urllib.error.HTTPError as e:
+                return e.code, dict(e.headers), e.read()
+
+        (web_dir / "app.js").write_text("console.log(1)", encoding="utf-8")
+        (web_dir / "style.css").write_text("body{}", encoding="utf-8")
+        (web_dir / "logo.svg").write_text("<svg/>", encoding="utf-8")
+        (web_dir / "data.bin").write_bytes(b"\x00\x01")  # 白名单外后缀
+
+        async def scenario():
+            server = create_server(
+                host="127.0.0.1", port=0, token="t",
+                static_dir=str(web_dir), static_token=None,
+            )
+            host, port = await server.start()
+            try:
+                results = {}
+                for p in ("/app.js", "/style.css", "/logo.svg", "/data.bin"):
+                    results[p] = await asyncio.to_thread(_http_get, port, p)
+                return results
+            finally:
+                await server.stop()
+
+        results = asyncio.run(scenario())
+        assert results["/app.js"][0] == 200
+        assert results["/app.js"][1]["Content-Type"].startswith("application/javascript")
+        assert results["/style.css"][0] == 200
+        assert results["/style.css"][1]["Content-Type"].startswith("text/css")
+        assert results["/logo.svg"][0] == 200
+        assert results["/logo.svg"][1]["Content-Type"] == "image/svg+xml"
+        # 白名单外后缀拒绝服务（403），不是 application/octet-stream
+        assert results["/data.bin"][0] == 403
+        # 映射表本身的关键条目
+        assert ClawdWebSocketServer._guess_static_mime("a.HTML") == "text/html; charset=utf-8"
+        assert ClawdWebSocketServer._guess_static_mime("a.JSON") == "application/json; charset=utf-8"
+        assert ClawdWebSocketServer._guess_static_mime("noext") is None
+
     def test_api_returns_json(self, tmp_path, web_dir):
         import urllib.request
         from src.server import create_server

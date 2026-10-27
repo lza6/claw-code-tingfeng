@@ -4,7 +4,7 @@ import logging
 
 from celery import shared_task
 
-from .celery_app import ClawdTask
+from ..celery_app import ClawdTask
 
 logger = logging.getLogger(__name__)
 

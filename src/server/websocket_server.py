@@ -199,11 +199,41 @@ class ClawdWebSocketServer:
         })
         return {"plugins": plugins, "count": len(plugins)}
 
+    # 静态托管 mime 白名单（NR-3）：显式映射，不依赖 mimetypes/注册表
+    # （Windows 上 guess_type 会读注册表，可能返回错误或 None 类型）
+    _STATIC_MIME_TYPES = {
+        '.html': 'text/html; charset=utf-8',
+        '.htm': 'text/html; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+        '.mjs': 'application/javascript; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.json': 'application/json; charset=utf-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.ico': 'image/x-icon',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf',
+        '.map': 'application/json',
+        '.txt': 'text/plain; charset=utf-8',
+        '.webp': 'image/webp',
+    }
+
+    @classmethod
+    def _guess_static_mime(cls, path) -> str | None:
+        """按扩展名查 mime 白名单；非白名单后缀返回 None（拒绝服务）"""
+        from pathlib import Path as _Path
+
+        return cls._STATIC_MIME_TYPES.get(_Path(path).suffix.lower())
+
     def _serve_static(self, connection, request):
         """websockets 的 process_request 回调：托管静态 Web UI
 
         - GET / 与 /index.html → index.html
-        - GET /<file> → 静态文件（仅白名单后缀，防路径穿越）
+        - GET /<file> → 静态文件（仅 mime 白名单后缀，防路径穿越）
         - 其余（/ws 等 upgrade 请求）返回 None 走正常 WS 握手
         """
         import mimetypes
@@ -306,7 +336,10 @@ class ClawdWebSocketServer:
             marker = b'</title>'
             if marker in body:
                 body = body.replace(marker, marker + inject, 1)
-        ctype = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+        ctype = self._guess_static_mime(target)
+        if ctype is None:
+            # mime 白名单外后缀：拒绝服务（与注释声称的白名单行为一致）
+            return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
         return _resp(200, body, ctype)
 
     async def stop(self) -> None:
