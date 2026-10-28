@@ -16,7 +16,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from .client import MCPClientConfig, MCPToolInfo
+from .client import MCPToolInfo
 
 logger = logging.getLogger(__name__)
 

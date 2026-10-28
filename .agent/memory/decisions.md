@@ -39,3 +39,17 @@
 5. **内嵌 Python 用系统解释器**（非 venv python.exe）：venv 的 python.exe 是启动器硬依赖 pyvenv.cfg，不可便携。
 6. **LLM 配置走 userData/.env + --env-file**：安装目录只读且不应含密钥；首次启动图形引导创建。
 7. **事件广播用 run_coroutine_threadsafe**（审查发现）：publish 在引擎线程，get_running_loop 会拿到错误 loop；必须显式 threadsafe 回 WS 服务 loop。
+
+## 2026-10-28 工程卫生批次踩坑（必须记住）
+
+**教训：`ruff --fix --unsafe-fixes` 会删 `# noqa` 注释，进而让后续 F401 修复删除"故意保留的向后兼容 re-export"。**
+
+- 现象：`src/cli/repl.py` 末尾 `# ─── 向后兼容导出 (测试文件和其他模块依赖这些) ───` 块被整体删除，
+  导致 `tests/cli/test_repl_core.py` 收集期 `ImportError: cannot import name '_print'`。
+- 根因：RUF100（unused-noqa）先删掉 `# noqa: E402, F401, I001`，F401 随后判定该块为未使用导入并清除。
+- 正确做法：
+  1. **禁止**对 `src/` 全量跑 `--fix --unsafe-fixes`；`--unsafe-fixes` 只用于单一规则（如 `--select W293`）。
+  2. 修 ruff 严格分批：先 whitespace（W291/W292/W293）→ 再 F401（非 unsafe）→ RUF100 **不自动修**（会解除保护）。
+  3. 每批后必须：`import_sweep --strict-exit` + `pytest tests/cli tests/server -q`。
+- 本轮实际成果（安全口径）：src ruff 433 → 319（-114，仅空白 101 + 安全未用导入 11 + 2）；剩余 319 条
+  （RUF100 39 / E402 34 / F401 31 / RUF012 23 / E741 21 / B904 20）多为 re-export 兼容块纠缠，需逐文件人工判断。

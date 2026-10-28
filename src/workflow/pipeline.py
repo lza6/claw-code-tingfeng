@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PipelineModeState:
     """Pipeline 模式状态（持久化用）
-    
+
     用于跨会话恢复和状态查询。保存 pipeline 执行的完整状态，
     包括当前阶段、已完成的阶段结果、artifacts 等。
     """
@@ -83,9 +83,9 @@ class PipelineModeState:
 
 class PipelineOrchestrator:
     """Pipeline 编排器
-    
+
     负责阶段式顺序执行、状态持久化、恢复支持和 artifact 传递。
-    
+
     特性:
     - 可配置阶段序列
     - 自动跳过满足条件的阶段
@@ -102,7 +102,7 @@ class PipelineOrchestrator:
         enable_persistence: bool = True,
     ) -> None:
         """初始化 Pipeline 编排器
-        
+
         Args:
             workdir: 工作目录（默认当前目录）
             event_bus: 事件总线（可选）
@@ -130,13 +130,13 @@ class PipelineOrchestrator:
 
     def configure(self, stages: list[PipelineStage]) -> PipelineOrchestrator:
         """配置执行阶段序列
-        
+
         Args:
             stages: 阶段列表，按执行顺序排列
-            
+
         Returns:
             self（支持链式调用）
-            
+
         Example:
             >>> orchestrator = PipelineOrchestrator()
             >>> orchestrator.configure([
@@ -161,19 +161,19 @@ class PipelineOrchestrator:
         resume: bool = False,
     ) -> dict[str, Any]:
         """执行 Pipeline
-        
+
         Args:
             task: 任务描述
             initial_artifacts: 初始 artifacts（用于传递上下文）
             resume: 是否从上次中断处恢复
-            
+
         Returns:
             最终 artifacts 集合（包含所有阶段的产出）
-            
+
         Raises:
             ClawdError: 配置错误或阶段执行失败
             Exception: 未捕获的执行异常
-            
+
         Note:
             - 如果 resume=True，会尝试从 .clawd/state/pipeline.json 恢复
             - 恢复后会跳过已完成的阶段
@@ -320,7 +320,7 @@ class PipelineOrchestrator:
 
     async def _execute_stages(self) -> dict[str, Any]:
         """顺序执行所有阶段
-        
+
         Returns:
             最终 artifacts 集合
         """
@@ -399,7 +399,7 @@ class PipelineOrchestrator:
 
     def get_status(self) -> dict[str, Any]:
         """获取当前 pipeline 状态
-        
+
         Returns:
             状态字典，包含：
             - active: 是否正在运行
@@ -472,12 +472,12 @@ class PipelineOrchestrator:
 
 def create_ralplan_stage() -> PipelineStage:
     """创建 RALPLAN 共识规划阶段
-    
+
     该阶段集成 Planner、Architect、Critic 三方博弈，生成:
     - 实施计划 (plan)
     - 产品需求文档 (prd)
     - 测试规范 (test_spec)
-    
+
     Returns:
         配置好的 RALPLAN 阶段实例
     """
@@ -531,13 +531,13 @@ def create_team_exec_stage(
     agent_type: str = "executor",
 ) -> PipelineStage:
     """创建 Team 执行阶段
-    
+
     该阶段使用 Swarm 引擎并行执行任务。
-    
+
     Args:
         worker_count: worker 数量（并发度）
         agent_type: agent 类型（executor/architect/auditor）
-        
+
     Returns:
         配置好的 Team 执行阶段实例
     """
@@ -680,10 +680,10 @@ def create_ralph_verify_stage(
 
 def create_precontext_intake_stage() -> PipelineStage:
     """创建 Pre-context Intake 阶段
-    
+
     该阶段在任务执行前自动收集上下文，创建快照。
     如果任务模糊，会触发澄清流程。
-    
+
     Returns:
         配置好的 Intake 阶段实例
     """
@@ -759,16 +759,16 @@ def create_autopilot_pipeline_config(
     enable_intake: bool = True,
 ) -> dict[str, Any]:
     """创建 Autopilot Pipeline 配置
-    
+
     默认管道: Precontext Intake → RALPLAN → team-exec → ralph-verify
-    
+
     Args:
         task: 任务描述
         stages: 自定义阶段列表（为 None 则使用默认）
         worker_count: Team 执行阶段的工作器数量
         max_ralph_iterations: Ralph 验证阶段的最大迭代次数
         enable_intake: 是否启用 Pre-context Intake 阶段
-        
+
     Returns:
         包含 stages、session_id 等信息的配置字典
     """
@@ -816,14 +816,14 @@ async def run_pipeline(
     **kwargs,
 ) -> dict[str, Any]:
     """快速执行 Pipeline（单函数入口）
-    
+
     Args:
         task: 任务描述
         workdir: 工作目录
         worker_count: worker 数量
         max_iterations: Ralph 最大迭代次数
         **kwargs: 传递给 PipelineOrchestrator 的其他参数
-        
+
     Returns:
         执行结果 artifacts
     """

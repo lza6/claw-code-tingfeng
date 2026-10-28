@@ -236,7 +236,6 @@ class ClawdWebSocketServer:
         - GET /<file> → 静态文件（仅 mime 白名单后缀，防路径穿越）
         - 其余（/ws 等 upgrade 请求）返回 None 走正常 WS 握手
         """
-        from pathlib import Path as _Path
 
         from websockets.http11 import Response as _WsResponse
 

@@ -35,7 +35,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .verifier import (
-    VerificationEvidence,
     VerificationResult,
     create_verification_result_from_evidence,
 )

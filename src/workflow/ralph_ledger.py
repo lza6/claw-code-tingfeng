@@ -300,7 +300,7 @@ def migrate_legacy_progress(
 class RalphAggregateStats:
     """
     RALPH 迭代聚合统计
-    
+
     提供趋势分析、效率指标和常见问题统计。
     用于可视化反馈和性能优化建议。
     """
@@ -328,12 +328,12 @@ class RalphAggregateStats:
 def compute_aggregate_stats(ledger: RalphProgressLedger) -> RalphAggregateStats:
     """
     计算 RALPH 迭代的聚合统计
-    
+
     分析所有视觉反馈条目，提取趋势、效率和常见问题。
-    
+
     Args:
         ledger: RALPH 进度账本
-        
+
     Returns:
         RalphAggregateStats 聚合统计结果
     """
@@ -405,10 +405,10 @@ def compute_aggregate_stats(ledger: RalphProgressLedger) -> RalphAggregateStats:
 def format_stats_summary(stats: RalphAggregateStats) -> str:
     """
     格式化统计摘要为人类可读的文本
-    
+
     Args:
         stats: 聚合统计结果
-        
+
     Returns:
         格式化的统计摘要文本
     """

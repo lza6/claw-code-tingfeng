@@ -13,11 +13,11 @@ T = TypeVar('T')
 
 def safe_json_parse(raw: str, fallback: T) -> T:
     """Safely parse JSON string, returning fallback on error.
-    
+
     Args:
         raw: JSON string to parse
         fallback: Value to return if parsing fails
-        
+
     Returns:
         Parsed JSON value or fallback
     """
@@ -37,13 +37,13 @@ def safe_json_dump(
     default: Callable[[Any], Any] | None = None,
 ) -> str:
     """Safely serialize object to JSON string.
-    
+
     Args:
         obj: Object to serialize
         indent: Indentation level
         ensure_ascii: Whether to escape non-ASCII characters
         default: Custom serializer for non-serializable objects
-        
+
     Returns:
         JSON string
     """
@@ -90,11 +90,11 @@ class SafeJSONEncoder(json.JSONEncoder):
 
 def safe_json_parse_with_type(raw: str, fallback: T) -> T:
     """Parse JSON with type preservation (for generic use).
-    
+
     Args:
         raw: JSON string
         fallback: Fallback value with desired type
-        
+
     Returns:
         Parsed value with type matching fallback
     """

@@ -21,7 +21,6 @@ PATTERN_HELP = "reflexion | plan-execute | lats | debate"
 
 def build_llm_adapter() -> Any:
     """从 clawd 现有 LLM 体系（litellm）构造推理用的 LLMFn"""
-    import os
 
     from ..llm.config import LLMConfig
     from ..llm.lazy_litellm import get_litellm

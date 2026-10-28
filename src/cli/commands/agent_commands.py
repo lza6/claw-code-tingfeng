@@ -15,7 +15,6 @@ from rich.table import Table
 from ...agent.definitions import AGENT_DEFINITIONS, get_agent
 from ...agent.keyword_registry import (
     KEYWORD_TRIGGER_DEFINITIONS,
-    get_all_keywords,
 )
 
 app = typer.Typer(help="Agent 管理和执行命令")

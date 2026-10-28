@@ -517,7 +517,7 @@ def create_team_worker_worktree(
 class WorkerShutdownMergeReport:
     """
     Worker 关闭时的合并结果报告
-    
+
     记录每个 Worker 的变更如何合并到 Leader workspace。
     支持四种合并状态：merged, conflict, noop, skipped
     """
@@ -542,14 +542,14 @@ def create_merge_report(
 ) -> WorkerShutdownMergeReport:
     """
     创建合并报告的便捷函数
-    
+
     Args:
         worker_name: Worker 名称
         merge_result: 合并结果 (merged/conflict/noop/skipped)
         commit_sha: 合并后的 commit SHA
         conflict_files: 冲突文件列表
         message: 附加说明
-        
+
     Returns:
         WorkerShutdownMergeReport 实例
     """

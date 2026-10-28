@@ -26,7 +26,7 @@ class StageStatus(Enum):
 @dataclass
 class StageContext:
     """阶段执行上下文
-    
+
     传递给每个阶段的执行上下文，包含任务信息、已产生的 artifacts
     以及前一阶段的结果。
     """
@@ -45,7 +45,7 @@ class StageContext:
 @dataclass
 class PipelineConfig:
     """Pipeline 配置
-    
+
     用于配置和启动一个可配置阶段式执行管道。
     """
     name: str
@@ -79,7 +79,7 @@ class PipelineConfig:
 @dataclass
 class StageResult:
     """阶段执行结果
-    
+
     阶段执行完成后返回的结果，包含状态、产出物和执行统计。
     """
     status: StageStatus
@@ -96,7 +96,7 @@ class StageResult:
 @dataclass
 class PipelineResult:
     """Pipeline 执行结果
-    
+
     整个 pipeline 运行完成后的最终结果。
     """
     status: str
@@ -124,7 +124,7 @@ class PipelineResult:
 
 class PipelineStage:
     """管道阶段抽象基类
-    
+
     所有 Pipeline 阶段必须继承此类并实现 run() 方法。
     可选择性地重写 can_skip() 以支持条件跳过优化。
     """
@@ -132,7 +132,7 @@ class PipelineStage:
     @property
     def name(self) -> str:
         """阶段唯一标识符
-        
+
         Returns:
             阶段的短名称，用于日志和状态记录
         """
@@ -140,13 +140,13 @@ class PipelineStage:
 
     async def run(self, ctx: StageContext) -> StageResult:
         """执行阶段逻辑
-        
+
         Args:
             ctx: 执行上下文，包含任务、artifacts 和配置
-            
+
         Returns:
             阶段执行结果
-            
+
         Raises:
             Exception: 执行失败时应抛出异常或返回 FAILED 状态
         """
@@ -154,13 +154,13 @@ class PipelineStage:
 
     def can_skip(self, ctx: StageContext) -> bool:
         """检查阶段是否可跳过（优化执行）
-        
+
         如果阶段的前置条件已满足，可以跳过执行以提升效率。
         默认返回 False（不跳过）。
-        
+
         Args:
             ctx: 执行上下文
-            
+
         Returns:
             True 表示可以跳过，False 表示必须执行
         """
@@ -168,10 +168,10 @@ class PipelineStage:
 
     def _skip(self, reason: str) -> StageResult:
         """生成跳过结果（内部辅助方法）
-        
+
         Args:
             reason: 跳过原因描述
-            
+
         Returns:
             SKIPPED 状态的 StageResult
         """
@@ -187,7 +187,7 @@ class PipelineStage:
 
 class ConditionalStage(PipelineStage):
     """条件阶段基类
-    
+
     提供基于 artifacts 中特定键是否存在来自动判断跳过的便利类。
     子类只需设置 `skip_if_artifact_key` 即可。
     """

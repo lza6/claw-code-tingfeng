@@ -306,3 +306,29 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 
 > 本轮合并了另一个并行会话的成果（12 个生产缺陷修复 + 265 个新测试）。
 > 该会话自行完成了缺陷清单与 CHANGELOG 条目，本会话代为收口提交（e32d341）。
+
+## v0.61.2 收口批次（2026-10-28，全部实跑）
+
+| 范围 | 命令 | 结果 | 证据 |
+|:---|:---|:---|:---|
+| 导入完整性 | `venv/Scripts/python.exe scripts/import_sweep.py --strict-exit` | **602/602 OK / IMPORT-FAIL 0 / DEP-MISSING 0**（原 642+3fail+7missing） | 本轮 |
+| 测试收集 | `py -3.10 -m pytest tests/ --collect-only -q` | **3710 collected / 0 errors** | 本轮 |
+| ruff 硬指标 | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` | All checks passed | 本轮 |
+| ruff 全量（src） | `py -3.10 -m ruff check src/` | **433 → 319**（仅空白 101 + 安全未用导入 11，禁用 unsafe 全量） | 本轮 |
+| 静默吞异常 | `scripts/check_silent_except.py --fail-over 172` | **156**（≤172 门禁过，较 174 下降） | 本轮 |
+| 生产可达 | `scripts/reachability.py --min-reachable 443` | **455 可达 / 79 不可达**（删码后不变） | 本轮 |
+| 快速回归 | `pytest tests/ -q -m "not slow"` | **3692 passed / 0 failed** | 本轮 |
+| 真实 E2E | `venv/Scripts/python.exe scripts/e2e_smoke.py` | **5/5 PASS，exit 0** | evidence/T-090 |
+| 契约 | `pytest tests/workflow tests/server -q` | **345 passed** | 本轮 |
+| 压测 WS Host | `scripts/stress_host.py --n 100 --rounds 10` | QPS 3839 / P95 14.4ms / 错误率 0% | evidence/T-090 |
+| 压测 WS Host 加重 | `scripts/stress_host.py --n 300 --rounds 5` | QPS 1265 / P95 10.8ms / 错误率 0% | evidence/T-090 |
+| 环境诊断 | `python -m src doctor` | **0 FAIL**，版本三处一致 0.61.2 | 本轮 |
+| 快速启动脚本 | `cmd //c .\start.bat` | 正常启动 REPL（v0.61.2 / openai / 正常退出） | 本轮 |
+
+### 新增接缝（Seam Registry 补充）
+
+| 接缝 | 模块A | 模块B | 契约描述 | 最后验证 | 状态 |
+|:---|:---|:---|:---|:---|:---|
+| static-mime | src/server/websocket_server.py | tests/server/test_host_entry.py | 静态托管 18 后缀 mime 白名单；白名单外 403；路径穿越 is_relative_to 拒绝 | 2026-10-28 | locked |
+| ralplan-approved-hint | src/workflow/stages/ralplan.py | tests/workflow/test_ralplan_approved_hint.py | .omx/plans/prd-*.md 中 $team/$ralph 命令解析（slug 过滤 spec）；7 用例锁定 | 2026-10-28 | locked |
+| background-tasks | src/background/tasks/*.py | src/background/celery_app.py | 相对导入 `..celery_app`；task_revoked 接收 **kwargs | 2026-10-28 | locked |

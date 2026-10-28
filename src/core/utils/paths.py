@@ -12,9 +12,9 @@ from typing import Any
 
 def codex_home() -> str:
     """Get Codex CLI home directory (~/.codex/).
-    
+
     Uses CODEX_HOME environment variable or defaults to ~/.codex.
-    
+
     Returns:
         Absolute path to Codex home directory
     """
@@ -69,12 +69,12 @@ class InstalledSkillDirectory:
 
 def list_installed_skills(project_root: str | None = None) -> list[InstalledSkillDirectory]:
     """List all installed skill directories.
-    
+
     Checks both user-level and project-level skill directories.
-    
+
     Args:
         project_root: Project root directory (default: cwd)
-        
+
     Returns:
         List of InstalledSkillDirectory objects
     """
@@ -109,7 +109,7 @@ def list_installed_skills(project_root: str | None = None) -> list[InstalledSkil
 
 def find_skill_root_overlap() -> list[dict[str, Any]]:
     """Find overlapping skill roots between user and project scopes.
-    
+
     Returns:
         List of overlap reports with canonical_dir and overlapping dirs
     """
@@ -159,7 +159,7 @@ def omx_logs_dir(project_root: str | None = None) -> str:
 
 def package_root() -> str:
     """Get the package root directory (where agents/, skills/, prompts/ live).
-    
+
     Returns:
         Path to the installed package root
     """

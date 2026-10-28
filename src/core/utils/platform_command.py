@@ -42,10 +42,10 @@ class ProbedPlatformCommand:
 
 def classify_spawn_error(error: Exception | None) -> SpawnErrorKind | None:
     """Classify an exception from subprocess into a SpawnErrorKind.
-    
+
     Args:
         error: Exception from subprocess execution
-        
+
     Returns:
         SpawnErrorKind or None if no error
     """
@@ -66,12 +66,12 @@ def resolve_command_path_for_platform(
     path_env: str | None = None,
 ) -> str | None:
     """Resolve the full path to a command executable.
-    
+
     Args:
         command: Command name or path
         env: Environment variables (defaults to os.environ)
         path_env: PATH environment variable to search
-        
+
     Returns:
         Full path to executable or None if not found
     """
@@ -101,12 +101,12 @@ def build_platform_command_spec(
     options: dict[str, Any] | None = None,
 ) -> PlatformCommandSpec:
     """Build a PlatformCommandSpec from command and arguments.
-    
+
     Args:
         command: Command to execute
         args: Arguments (string or list)
         options: Additional options
-        
+
     Returns:
         PlatformCommandSpec
     """
@@ -134,7 +134,7 @@ def spawn_platform_command_sync(
     check: bool = False,
 ) -> subprocess.CompletedProcess:
     """Synchronously spawn a platform command with proper error handling.
-    
+
     Args:
         command: Command to execute
         args: Arguments (string or list)
@@ -144,10 +144,10 @@ def spawn_platform_command_sync(
         timeout: Timeout in seconds
         capture_output: Whether to capture stdout/stderr
         check: Whether to raise exception on non-zero exit
-        
+
     Returns:
         CompletedProcess instance
-        
+
     Raises:
         subprocess.TimeoutExpired: If timeout exceeded
         subprocess.CalledProcessError: If check=True and non-zero exit
@@ -188,7 +188,7 @@ async def spawn_platform_command_async(
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess:
     """Asynchronously spawn a platform command.
-    
+
     Args:
         command: Command to execute
         args: Arguments (string or list)
@@ -196,7 +196,7 @@ async def spawn_platform_command_async(
         env: Environment variables
         cwd: Working directory
         timeout: Timeout in seconds
-        
+
     Returns:
         CompletedProcess instance
     """
@@ -255,12 +255,12 @@ def probe_platform_command(
     path_env: str | None = None,
 ) -> ProbedPlatformCommand | None:
     """Probe for a platform command and return resolved path.
-    
+
     Args:
         command: Command to probe
         env: Environment variables
         path_env: PATH to search
-        
+
     Returns:
         ProbedPlatformCommand if found, None otherwise
     """
@@ -274,10 +274,10 @@ def probe_platform_command(
 
 def which(command: str) -> str | None:
     """Python implementation of 'which' command.
-    
+
     Args:
         command: Command to find
-        
+
     Returns:
         Full path to command or None if not found
     """
@@ -286,10 +286,10 @@ def which(command: str) -> str | None:
 
 def is_command_available(command: str) -> bool:
     """Check if a command is available in PATH.
-    
+
     Args:
         command: Command to check
-        
+
     Returns:
         True if command is available, False otherwise
     """
@@ -303,12 +303,12 @@ def run_command(
     **kwargs
 ) -> subprocess.CompletedProcess:
     """Run a command and return CompletedProcess.
-    
+
     Args:
         command: Command to run
         args: Command arguments
         **kwargs: Additional arguments to spawn_platform_command_sync
-        
+
     Returns:
         CompletedProcess
     """
@@ -321,12 +321,12 @@ def run_command_check(
     **kwargs
 ) -> subprocess.CompletedProcess:
     """Run a command and raise on non-zero exit.
-    
+
     Args:
         command: Command to run
         args: Command arguments
         **kwargs: Additional arguments to spawn_platform_command_sync
-        
+
     Returns:
         CompletedProcess
     """

@@ -164,15 +164,15 @@ class PipelineState:
     [DEPRECATED] 向后兼容的 PipelineState 适配器。
 
     警告: 此类已废弃，请直接使用 ModeStateManager 管理状态。
-    
+
     旧版 API 用于与原有测试和调用代码兼容，内部通过 ModeStateManager
     实现状态持久化。文件格式符合 oh-my-codex 的 PipelineModeStateExtension。
-    
+
     迁移指南:
         # 旧代码
         state = PipelineState(pipeline_name="my-pipeline")
         state.save()
-        
+
         # 新代码
         from .mode_state import ModeStateManager
         manager = ModeStateManager(cwd=".")
@@ -833,10 +833,10 @@ def validate_pipeline_config(config: PipelineConfig) -> None:
     验证 pipeline 配置（对标 validateConfig）
 
     检查配置的完整性和有效性，在创建 PipelineOrchestrator 前调用。
-    
+
     Args:
         config: 待验证的 PipelineConfig
-        
+
     Raises:
         ValueError: 配置无效时抛出
     """

@@ -96,13 +96,13 @@ class RalplanDescriptor:
 
 class RalplanStage(PipelineStage):
     """RALPLAN 共识规划阶段
-    
+
     执行 Planner → Architect → Critic 三方博弈流程：
     1. Planner 生成初步计划
     2. Architect 审查架构合理性
     3. Critic 挑战方案并找出弱点
     4. 整合为最终实施计划
-    
+
     产出：
     - plan: 实施计划文档
     - prd: 产品需求文档
@@ -116,7 +116,7 @@ class RalplanStage(PipelineStage):
         enable_critic_challenge: bool = True,
     ):
         """初始化 RALPLAN 阶段
-        
+
         Args:
             enable_architect_review: 是否启用 Architect 审查
             enable_critic_challenge: 是否启用 Critic 挑战

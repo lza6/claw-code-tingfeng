@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 async def sleep(ms: int, signal: asyncio.Event | None = None) -> None:
     """Asynchronous sleep for specified milliseconds.
-    
+
     Args:
         ms: Milliseconds to sleep
         signal: Optional asyncio.Event to interrupt sleep early
-        
+
     Example:
         await sleep(1000)  # Sleep for 1 second
         await sleep(5000, interrupt_event)  # Sleep up to 5s or until event set
@@ -37,12 +37,12 @@ async def sleep(ms: int, signal: asyncio.Event | None = None) -> None:
 
 def sleep_sync(ms: int) -> None:
     """Synchronous sleep for specified milliseconds.
-    
+
     Uses threading.Condition.wait() for precise timing.
-    
+
     Args:
         ms: Milliseconds to sleep
-        
+
     Example:
         sleep_sync(1000)  # Sleep for 1 second
     """
@@ -55,10 +55,10 @@ def sleep_sync(ms: int) -> None:
 
 def sleep_until(target_time: float) -> None:
     """Sleep until a specific epoch time.
-    
+
     Args:
         target_time: Target time in seconds since epoch
-        
+
     Example:
         target = time.time() + 10  # 10 seconds from now
         sleep_until(target)
@@ -77,13 +77,13 @@ async def sleep_with_progress(
     stop_event: asyncio.Event | None = None,
 ) -> bool:
     """Sleep with progress updates and early termination.
-    
+
     Args:
         total_ms: Total sleep duration in milliseconds
         check_interval_ms: How often to check for stop/update
         progress_callback: Called with (elapsed_ms, total_ms) periodically
         stop_event: Event that can interrupt sleep
-        
+
     Returns:
         True if completed normally, False if interrupted
     """
@@ -127,7 +127,7 @@ class Sleeper:
         check_interval_ms: int = 100,
     ):
         """Initialize sleeper.
-        
+
         Args:
             default_ms: Default sleep duration
             check_interval_ms: Check interval for interruptible sleeps
