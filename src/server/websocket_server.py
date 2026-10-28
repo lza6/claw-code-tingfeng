@@ -236,7 +236,6 @@ class ClawdWebSocketServer:
         - GET /<file> → 静态文件（仅 mime 白名单后缀，防路径穿越）
         - 其余（/ws 等 upgrade 请求）返回 None 走正常 WS 握手
         """
-        import mimetypes
         from pathlib import Path as _Path
 
         from websockets.http11 import Response as _WsResponse
@@ -281,7 +280,6 @@ class ClawdWebSocketServer:
 
     def _handle_static_http(self, path: str):
         """静态 HTTP 处理主体（返回 websockets Response）"""
-        import mimetypes
         from pathlib import Path as _Path
 
         from websockets.datastructures import Headers as _H
@@ -317,9 +315,13 @@ class ClawdWebSocketServer:
             target = root / 'index.html'
         else:
             target = (root / path.lstrip('/')).resolve()
-            # 防路径穿越
-            if not str(target).startswith(str(root)):
+            # 防路径穿越（is_relative_to 而非字符串前缀，C:\web 不会放行 C:\webstore）
+            if not target.is_relative_to(root):
                 return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
+        # mime 白名单先行：白名单外后缀直接 403，不做无效 IO
+        ctype = self._guess_static_mime(target)
+        if ctype is None:
+            return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
         if not target.is_file():
             return _resp(404, b'Not Found', 'text/plain; charset=utf-8')
         try:
@@ -336,10 +338,6 @@ class ClawdWebSocketServer:
             marker = b'</title>'
             if marker in body:
                 body = body.replace(marker, marker + inject, 1)
-        ctype = self._guess_static_mime(target)
-        if ctype is None:
-            # mime 白名单外后缀：拒绝服务（与注释声称的白名单行为一致）
-            return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
         return _resp(200, body, ctype)
 
     async def stop(self) -> None:

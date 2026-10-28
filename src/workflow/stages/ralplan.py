@@ -12,6 +12,8 @@ RALPLAN-DR 模式:
 from __future__ import annotations
 
 import logging
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,17 +24,111 @@ from ..pipeline_stage import PipelineStage, StageContext, StageResult
 logger = logging.getLogger(__name__)
 
 
-def _read_approved_execution_launch_hint(cwd: Path, mode: str = "team"):
-    """从 .clawd/ 目录读取已批准的执行启动提示（artifacts 模块删除后的本地回退实现）。"""
-    hint_path = Path(cwd) / ".clawd" / ("approved_launch_hint.team.txt" if mode == "team" else "approved_launch_hint.txt")
+# ===== 已批准计划解析（原 src/workflow/artifacts.py 的最小本地保留版） =====
+# 供 can_skip()/run() 判断是否已有已批准计划（.omx/plans/prd-*.md 中的 $team/$ralph 命令）。
+# 2026-10-28 死码删除批次时 artifacts.py 整体不可达被删，仅 ralplan 消费此能力，故就地内联。
+
+_PRD_PATTERN = re.compile(r'^prd-.*\.md$', re.IGNORECASE)
+_TEST_SPEC_PATTERN = re.compile(r'^test-?spec-.*\.md$', re.IGNORECASE)
+_DEEP_INTERVIEW_PATTERN = re.compile(r'^deep-interview-.*\.md$', re.IGNORECASE)
+_PRD_SLUG = re.compile(r'^prd-(?P<slug>.*)\.md$', re.IGNORECASE)
+_SPEC_SLUG = re.compile(r'^test-?spec-(?P<slug>.*)\.md$', re.IGNORECASE)
+_INTERVIEW_SLUG = re.compile(r'^deep-interview-(?P<slug>.*)\.md$', re.IGNORECASE)
+
+_TEAM_CMD = re.compile(
+    r'(?P<command>(?:omx\s+team|\$team)\s+(?P<ralph>ralph\s+)?(?P<count>\d+)'
+    r'(?::(?P<role>[a-z][a-z0-9-]*))?\s+(?P<task>"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'))',
+    re.IGNORECASE,
+)
+_RALPH_CMD = re.compile(
+    r'(?P<command>(?:omx\s+ralph|\$ralph)\s+(?P<task>"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'))',
+    re.IGNORECASE,
+)
+
+
+def _read_matching_paths(dir_path: Path, pattern: re.Pattern) -> list[str]:
     try:
-        if hint_path.exists():
-            return SimpleNamespace(source_path=str(hint_path), command=hint_path.read_text(encoding="utf-8").strip(), test_spec_paths=[])
-    except OSError:
+        return sorted(
+            str(dir_path / f) for f in os.listdir(dir_path) if pattern.match(f)
+        )
+    except (OSError, PermissionError):
+        return []
+
+
+def _artifact_slug(path: str, prefix_pattern: re.Pattern) -> str | None:
+    match = prefix_pattern.match(os.path.basename(path))
+    return match.group('slug') if match else None
+
+
+def _filter_for_slug(paths: list[str], prefix_pattern: re.Pattern, slug: str | None) -> list[str]:
+    if not slug:
+        return []
+    return [p for p in paths if _artifact_slug(p, prefix_pattern) == slug]
+
+
+def _decode_quoted_value(raw: str) -> str | None:
+    """解码引号中的值（与原 artifacts.py 一致：JSON 优先，其次去引号）"""
+    import json as _json
+
+    normalized = raw.strip()
+    if not normalized:
+        return None
+    try:
+        return _json.loads(normalized)
+    except _json.JSONDecodeError:
         pass
+    if ((normalized.startswith('"') and normalized.endswith('"'))
+            or (normalized.startswith("'") and normalized.endswith("'"))):
+        return normalized[1:-1]
     return None
 
-logger = logging.getLogger(__name__)
+
+def _read_approved_execution_launch_hint(cwd: Path, mode: str = "team"):
+    """从 .omx/plans/prd-*.md 解析已批准的执行启动提示（$team/$ralph 命令）。"""
+    plans_dir = Path(cwd) / '.omx' / 'plans'
+    specs_dir = Path(cwd) / '.omx' / 'specs'
+    prd_paths = _read_matching_paths(plans_dir, _PRD_PATTERN)
+    test_spec_paths = _read_matching_paths(specs_dir, _TEST_SPEC_PATTERN)
+    interview_paths = _read_matching_paths(specs_dir, _DEEP_INTERVIEW_PATTERN)
+
+    # 规划完整性：PRD + test spec 均存在
+    if not prd_paths or not test_spec_paths:
+        return None
+
+    latest_prd = prd_paths[-1]
+    slug = _artifact_slug(latest_prd, _PRD_SLUG)
+    if not slug:
+        return None
+    try:
+        content = Path(latest_prd).read_text(encoding='utf-8')
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    ctx = SimpleNamespace(
+        source_path=latest_prd,
+        test_spec_paths=_filter_for_slug(test_spec_paths, _SPEC_SLUG, slug),
+        deep_interview_spec_paths=_filter_for_slug(interview_paths, _INTERVIEW_SLUG, slug),
+    )
+
+    pattern = _TEAM_CMD if mode == "team" else _RALPH_CMD
+    matches = list(pattern.finditer(content))
+    if not matches:
+        return None
+    groups = matches[-1].groupdict()
+    task = _decode_quoted_value(groups.get('task', ''))
+    if not task:
+        return None
+    return SimpleNamespace(
+        source_path=ctx.source_path,
+        command=groups['command'],
+        task=task,
+        test_spec_paths=ctx.test_spec_paths,
+        deep_interview_spec_paths=ctx.deep_interview_spec_paths,
+        mode=mode,
+        worker_count=int(groups['count']) if groups.get('count') else None,
+        agent_type=groups.get('role'),
+        linked_ralph=bool((groups.get('ralph') or '').strip()) if mode == "team" else False,
+    )
 
 
 # ===== 配置 =====
