@@ -38,3 +38,40 @@
 
 下一步应是**接线批次**（优先 hooks 体系 2,580 行，已有互补实现待注册进 core.hook_registry），
 而不是继续删除批次。已接线完成项：`--dimension/-d` 维度引导（原为假开关，commit 6366578）。
+
+## 挂机扫描 backlog 轮次 2（2026-10-28，主控 DIRECT 扫描）
+
+来源：`D:\参考项目` 定向抽读（deepeval / LongHorizon-Harness / anthropics__sandbox-runtime / agent-systems-benchmark-state）。
+不含轮次 1 已有 6 条（Turn 队列/会话快照/剪贴板/Change Ledger/通知抑制/热更新）。
+
+### 高适用
+
+1. **pytest 原生 LLM 评测集成**（来源 `deepeval`，DIRECT 读 README）
+   做法：`assert_test(LLMTestCase(input, actual_output, expected_output), metric)` 直接作为 pytest 用例跑；
+   metric 可组合（G-Eval 自定义评分标准 / answer-relevancy / hallucination）；数据集与用例分离，
+   基线分数落库对比。**本项目缺 eval harness（计划书 W8）**，此模式可零新框架接入现有 pytest。
+   成本：~300-400 行（metric 适配 + 数据集 loader + 基线比对）。需新依赖：可选（可先用启发式 metric 实现）。
+   注意：真实调用 LLM 计费 → 必须 mock/录制，只在显式批准下小样本真实跑。
+
+2. **轨迹录制 + 回放式 agent 回归**（来源 `LongHorizon-Harness`，DIRECT 读 README）
+   做法：把每次 run 的 (plan → action → observation → verify) 序列持久化为 trajectory，
+   回归时**回放 observation 固定模型输出**，只断言 agent 的决策分支与工具调用序列，
+   从而让非确定性 LLM 的回归可重复。本项目 workflow engine 已有 run 状态目录（.clawd/runs/<id>），
+   缺"工具调用序列断言层"。
+   成本：~250-350 行（trajectory writer + replay harness + 断言 DSL）。无新依赖。
+
+### 中适用
+
+3. **plan→act→verify→checkpoint/recover 的一等公民化**（`LongHorizon-Harness`，DIRECT）
+   本项目 5 阶段工作流已有阶段结果持久化，但 checkpoint 是"隐式"的；对方把 recover 作为显式阶段且
+   有独立评分（WeaveBench/OSWorld/Terminal-Bench 对齐）。可借鉴其"恢复成功率"作为自身指标。
+
+4. **状态文件三件套（CURRENT/PROJECT_STATE/PROVENANCE）**（`agent-systems-benchmark-state`，DIRECT 读文件列表）
+   本项目已有 `workflow_status.md` 承担 CURRENT；缺 PROVENANCE（谁在何时基于什么证据改的状态）。
+   低成本补充：在 workflow_status 每条验证记录后追加 `(证据: 命令 + exit code + 时间)`——本轮已在 test_ledger 实践。
+
+### 不适用（明确排除）
+
+- `anthropics__sandbox-runtime`：OS 级沙箱依赖 macOS `sandbox-exec` / Linux `bubblewrap`，**Windows 无对应原语**，
+  本项目本机为 Windows 10；其 proxy-based 网络过滤思路可借鉴，但落地需另建代理层，成本 > 收益。
+  本项目已有 Docker 沙箱（src/tools_runtime/sandbox/docker.py）+ MCP 检疫审批，安全边界不裸奔。
