@@ -150,16 +150,8 @@ class CodeGraph:
         # 3. 并发解析变更文件
         if parallel and len(changed_files) > 5:
             cpus = min(multiprocessing.cpu_count(), 8)
-            logger.info(f"增量扫描中: 发现 {len(changed_files)}/{len(files)} 个文件变更, 使用 {cpus} 进程")
-            with ProcessPoolExecutor(max_workers=cpus) as executor:
-                futures = [executor.submit(_parse_file_task, self.root, f) for f in changed_files]
-                for future in as_completed(futures):
-                    try:
-                        node = future.result()
-                        if node:
-                            self._add_node_to_index(node)
-                    except Exception as e:
-                        logger.error(f"解析文件失败: {e}")
+            logger.info(f"增量扫描中: 发现 {len(changed_files)}/{len(files)} 个文件变更, 使用 {cpus} 并发")
+            self._parse_batch(changed_files, cpus)
         else:
             for f in changed_files:
                 self.update_file(f)
@@ -167,6 +159,55 @@ class CodeGraph:
         # 4. 解析依赖边 (仅当有文件变更时重新解析)
         self._resolve_all_edges()
         logger.info(f"图谱更新完成, 耗时: {time.time() - start_time:.2f}s, 活跃节点数: {len(self.nodes)}")
+
+    def _parse_batch(self, changed_files: list[str], workers: int) -> None:
+        """并发解析一批文件（进程池优先，失败自动降级为线程/串行）
+
+        为什么需要降级：
+        1. 在**非主线程**里启动 ProcessPoolExecutor 在 Windows(spawn) 上会失败：
+           "An attempt has been made to start a new process before the current
+            process has finished its bootstrapping phase"
+           —— 世界模型的自动预热就跑在后台线程里，实测会因此**永久卡住不完成**。
+        2. 冻结/嵌入等无 __main__ 场景同理。
+        因此：非主线程直接用线程池；进程池异常时回退线程池；再失败则串行。
+        """
+        import threading
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _collect(futures) -> None:
+            for future in as_completed(futures):
+                try:
+                    node = future.result()
+                    if node:
+                        self._add_node_to_index(node)
+                except Exception as e:  # noqa: BLE001 — 单文件失败不中断整批
+                    logger.error(f"解析文件失败: {e}")
+
+        in_main_thread = threading.current_thread() is threading.main_thread()
+
+        if in_main_thread:
+            try:
+                with ProcessPoolExecutor(max_workers=workers) as executor:
+                    _collect([executor.submit(_parse_file_task, self.root, f) for f in changed_files])
+                return
+            except Exception as e:  # noqa: BLE001 — 进程池不可用（spawn/frozen/沙箱）→ 降级
+                logger.warning(f"进程池解析不可用，降级为线程池: {type(e).__name__}: {e}")
+
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                _collect([executor.submit(_parse_file_task, self.root, f) for f in changed_files])
+            return
+        except Exception as e:  # noqa: BLE001 — 线程池也失败 → 串行
+            logger.warning(f"线程池解析失败，降级为串行: {type(e).__name__}: {e}")
+
+        for f in changed_files:
+            try:
+                node = _parse_file_task(self.root, f)
+                if node:
+                    self._add_node_to_index(node)
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"解析文件失败: {e}")
 
     def _add_node_to_index(self, node: CodeNode):
         """将解析好的节点加入图谱和索引"""

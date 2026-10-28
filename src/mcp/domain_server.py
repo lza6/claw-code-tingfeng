@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import io
 import json
 import os
@@ -57,6 +58,7 @@ class DomainServer:
 
     def __init__(self, root: Path | None = None):
         self.root = (root or Path.cwd()).resolve()
+        self._wm = None
         self._tools = self._build_tools()
 
     # ---------- 工具定义 ----------
@@ -101,6 +103,34 @@ class DomainServer:
                 "description": "列出本项目注册的领域工具（名称/说明），便于外部引擎发现可用能力",
                 "inputSchema": {"type": "object", "properties": {}},
                 "handler": self._tool_list,
+            },
+            "clawd_world_model_context": {
+                "description": "查询世界模型：某文件的上游/下游依赖、语义关联与设计模式（架构级上下文）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "相对项目根的文件路径"},
+                    },
+                    "required": ["file_path"],
+                },
+                "handler": self._tool_world_model_context,
+            },
+            "clawd_world_model_predict": {
+                "description": "世界模型：根据当前文件预测接下来最相关的文件（用于上下文预取）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "current_file": {"type": "string", "description": "当前正在处理的文件"},
+                        "depth": {"type": "integer", "description": "依赖深度（默认 1）"},
+                    },
+                    "required": ["current_file"],
+                },
+                "handler": self._tool_world_model_predict,
+            },
+            "clawd_world_model_stats": {
+                "description": "世界模型健康度：节点数/边数/已索引文档数（判断索引是否就绪）",
+                "inputSchema": {"type": "object", "properties": {}},
+                "handler": self._tool_world_model_stats,
             },
         }
 
@@ -204,6 +234,7 @@ class DomainServer:
             )
 
     def _tool_list(self, args: dict[str, Any]) -> dict[str, Any]:
+
         import importlib
         import inspect
 
@@ -225,6 +256,90 @@ class DomainServer:
                     desc = (inspect.getdoc(obj) or "").splitlines()[0] if inspect.getdoc(obj) else ""
                     found.append(f"- {name}: {desc}")
         return _text_content("\n".join(found) if found else "(未发现工具类)")
+
+    # ---------- 世界模型 ----------
+    def _world_model(self, *, initialize: bool = True, timeout: float | None = None):
+        """惰性构造 RepositoryWorldModel
+
+        initialize=True 时会索引仓库——大仓库可能要几分钟，因此**必须有超时上限**：
+        超时就诚实报错并提示预热，绝不让 MCP 调用无限挂起（真实仓库实测 300s 未完成）。
+        """
+        if getattr(self, "_wm", None) is not None:
+            return self._wm
+        from ..brain.world_model import RepositoryWorldModel
+
+        model = RepositoryWorldModel(self.root)
+        if not initialize:
+            self._wm = model
+            return model
+
+        if timeout is None:
+            try:
+                timeout = float(os.environ.get("CLAWD_WM_TIMEOUT", "180"))
+            except ValueError:
+                timeout = 180.0
+
+        import concurrent.futures
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(asyncio.run, model.initialize())
+            future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as e:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise TimeoutError(
+                f"世界模型索引超时（>{timeout:.0f}s）——本仓库较大，全量索引不适合在单次 MCP 调用里做。"
+                f"替代方案：用 clawd_project_map / clawd_grep 获取轻量代码认知；"
+                f"确需世界模型可调大上限：环境变量 CLAWD_WM_TIMEOUT=<秒>"
+            ) from e
+        except Exception:
+            pool.shutdown(wait=False)
+            raise
+        pool.shutdown(wait=False)
+        self._wm = model
+        return model
+
+    def _tool_world_model_context(self, args: dict[str, Any]) -> dict[str, Any]:
+        rel = str(args.get("file_path") or "").strip()
+        if not rel:
+            return _error_content("file_path 不能为空")
+        try:
+            target = self._resolve(rel)
+        except ValueError as e:
+            return _error_content(str(e))
+        if not target.is_file():
+            return _error_content(f"文件不存在: {rel}")
+        try:
+            model = self._world_model()
+            ctx = model.get_context_for_file(str(target))
+        except Exception as e:  # noqa: BLE001 — 世界模型失败要显式报错，不假装有结果
+            return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
+        return _text_content(json.dumps(ctx, ensure_ascii=False, default=str, indent=2))
+
+    def _tool_world_model_predict(self, args: dict[str, Any]) -> dict[str, Any]:
+        current = str(args.get("current_file") or "").strip()
+        if not current:
+            return _error_content("current_file 不能为空")
+        depth = int(args.get("depth") or 1)
+        try:
+            model = self._world_model()
+            files = model.predict_relevant_files(current, depth=depth)
+        except Exception as e:  # noqa: BLE001
+            return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
+        return _text_content(json.dumps({"current_file": current, "depth": depth,
+                                         "predicted": files}, ensure_ascii=False, indent=2))
+
+    def _tool_world_model_stats(self, args: dict[str, Any]) -> dict[str, Any]:
+        """健康度：走快速路径（不触发全量索引），索引未就绪时如实说明"""
+        try:
+            model = self._world_model(initialize=False)
+            stats = model.stats()
+            return _text_content(json.dumps(
+                {**stats, "indexed": bool(getattr(model, "_is_initialized", False))},
+                ensure_ascii=False, default=str, indent=2,
+            ))
+        except Exception as e:  # noqa: BLE001
+            return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
 
     # ---------- JSON-RPC 分发 ----------
     def handle(self, request: dict[str, Any]) -> dict[str, Any] | None:

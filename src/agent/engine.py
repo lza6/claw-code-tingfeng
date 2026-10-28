@@ -197,6 +197,22 @@ class AgentEngine:
             return
         self._extended_tools_loaded = True
 
+        # 0. 领域原生工具（世界模型 / 项目图谱）+ 世界模型后台自动预热
+        #    注意：我们自己的 agent 走原生调用，不绕 MCP（MCP 只用于外部引擎跨进程对接）
+        try:
+            from ..brain.warmup import ensure_warm
+            from ..tools_runtime.domain_tools import get_domain_tools
+
+            count_before = len(self.tools)
+            for tool in get_domain_tools(self.workdir):
+                self.tools[tool.name] = tool
+            self.logger.info(f"领域工具已装配: {len(self.tools) - count_before} 个")
+
+            # 后台预热：非阻塞；索引在小仓库上秒级就绪，大仓库期间工具会如实返回 indexing
+            ensure_warm(self.workdir)
+        except Exception as e:  # noqa: BLE001 — 领域工具失败不阻断主引擎
+            self.logger.warning(f"领域工具装配失败（降级运行）: {e}")
+
         # 1. 逆向原生工具（纯本地，无外部依赖）
         try:
             from ..reverse_tools import get_all_tools

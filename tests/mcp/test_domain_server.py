@@ -44,10 +44,14 @@ class TestDomainServerDirect:
     def test_initialized_notification_has_no_response(self, server):
         assert server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
 
-    def test_tools_list_exposes_four_domain_tools(self, server):
+    def test_tools_list_exposes_domain_and_world_model_tools(self, server):
         res = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {t["name"] for t in res["result"]["tools"]}
-        assert names == {"clawd_read_file", "clawd_grep", "clawd_project_map", "clawd_tool_list"}
+        assert names == {
+            "clawd_read_file", "clawd_grep", "clawd_project_map", "clawd_tool_list",
+            "clawd_world_model_context", "clawd_world_model_predict",
+            "clawd_world_model_stats",
+        }
         for tool in res["result"]["tools"]:
             assert tool["inputSchema"]["type"] == "object"
 
@@ -154,3 +158,65 @@ class TestMcpClientRoundtrip:
         assert "clawd_grep" in names
         payload = json.dumps(result, ensure_ascii=False, default=str)
         assert "clawd-mcp-probe" in payload
+
+
+class TestWorldModelTools:
+    """世界模型工具：把我们的代码库认知共享给任何引擎"""
+
+    @pytest.fixture
+    def wm_server(self, tmp_path: Path):
+        from src.mcp.domain_server import DomainServer
+
+        (tmp_path / "pkg").mkdir()
+        (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+        (tmp_path / "pkg" / "core.py").write_text(
+            "def helper():\n    return 1\n\n\ndef main():\n    return helper()\n", encoding="utf-8"
+        )
+        (tmp_path / "pkg" / "user.py").write_text(
+            "from pkg.core import helper\n\n\ndef run():\n    return helper()\n", encoding="utf-8"
+        )
+        return DomainServer(tmp_path)
+
+    def _call(self, server, name, args):
+        return server.handle({
+            "jsonrpc": "2.0", "id": 99, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        })
+
+    def test_stats_returns_json(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_stats", {})
+        body = res["result"]["content"][0]["text"]
+        assert res["result"]["isError"] is False
+        data = json.loads(body)
+        assert "node_count" in data
+
+    def test_context_returns_upstream_downstream_patterns(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_context",
+                         {"file_path": "pkg/user.py"})
+        assert res["result"]["isError"] is False
+        data = json.loads(res["result"]["content"][0]["text"])
+        assert data["file"].endswith("user.py")
+        assert "upstream" in data and "downstream" in data and "patterns" in data
+
+    def test_context_rejects_missing_file(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_context",
+                         {"file_path": "pkg/nope.py"})
+        assert res["result"]["isError"] is True
+        assert "不存在" in res["result"]["content"][0]["text"]
+
+    def test_context_rejects_traversal(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_context",
+                         {"file_path": "../../etc/passwd"})
+        assert res["result"]["isError"] is True
+
+    def test_predict_returns_list(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_predict",
+                         {"current_file": "pkg/user.py", "depth": 1})
+        assert res["result"]["isError"] is False
+        data = json.loads(res["result"]["content"][0]["text"])
+        assert data["current_file"] == "pkg/user.py"
+        assert isinstance(data["predicted"], list)
+
+    def test_empty_file_path_rejected(self, wm_server):
+        res = self._call(wm_server, "clawd_world_model_predict", {"current_file": "  "})
+        assert res["result"]["isError"] is True

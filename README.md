@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.64.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.64.1 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -71,7 +71,18 @@ clawd engines --run "任务"     # 用首个可用引擎执行
 | Pi | **插件/上下文原语包**，不是引擎 | 归属能力层 |
 | Hermes | 参考库无源码 | 未集成 |
 
-**领域魔改的正解 —— 让我们自己的工具长进别人的内核里**（`src/mcp/domain_server.py`）：
+**领域能力分两条路（v0.64.1 起）**：
+
+| 调用方 | 路径 | 说明 |
+|---|---|---|
+| 我们自己的 agent | **原生工具**（`WorldModelTool` / `ProjectMapTool`） | 零进程、零序列化、共享进程内缓存；索引后台自动预热 |
+| 外部引擎（Codex/OpenCode…） | **MCP**（`src/mcp/domain_server.py`） | 跨进程只能走协议 |
+
+> 世界模型索引在引擎启动时**自动后台预热**（非阻塞，实测启动开销 0.00s）。
+> 大仓库（源文件 >300）默认跳过全量索引并如实告知原因，用 `CLAWD_WM_FORCE=1` /
+> `CLAWD_WM_MAX_FILES=<n>` 覆盖；轻量替代始终可用（`ProjectMapTool` / 原生 grep）。
+
+**让我们自己的工具长进别人的内核里**（`src/mcp/domain_server.py`）：
 
 ```bash
 # 任何支持 MCP 的引擎都能挂载（Codex 示例已内置于适配层）

@@ -7,6 +7,51 @@
 
 ---
 
+## [v0.64.1] (2026-10-28) — 领域能力改为"内置优先" + 索引自动预热（ADR-0011）
+
+### 架构纠正（推翻自己上一版的做法）
+上一版把领域能力主要做成 MCP 工具，等于让我们**自己的 agent 也绕一层进程+JSON 序列化**。
+MCP 只该用于**外部引擎**（Codex/OpenCode 在别的进程，只能走协议）。现在分层：
+
+| 调用方 | 路径 |
+|---|---|
+| 我们自己的 agent | **原生工具**（零进程、零序列化、共享进程内缓存） |
+| 外部引擎 | MCP（跨进程唯一方式） |
+
+### 新增
+- `src/tools_runtime/domain_tools.py`
+  - `WorldModelTool`：action = `stats` / `context` / `predict`，带路径穿越防护与 `wait_seconds` 控制
+  - `ProjectMapTool`：Aider 风格符号地图（轻量、秒级、不依赖世界模型索引）
+- `src/brain/warmup.py`：世界模型**后台自动预热**（`ensure_warm`，非阻塞，幂等）
+- 引擎装配 `_load_extended_tools()` 时自动注册领域工具并触发预热
+
+### 大仓库保护（实测驱动）
+实测本仓库 600+ 模块：**全量索引 >4 分钟仍未完成** → 默认跳过（`skipped_large`），
+附真实原因与替代方案；覆盖方式 `CLAWD_WM_FORCE=1` / `CLAWD_WM_MAX_FILES=<n>`。
+轻量替代始终可用：`ProjectMapTool` / 原生 grep。
+
+### 修复：多进程在非主线程必失败（真因）
+`src/rag/code_graph.py` 用 `ProcessPoolExecutor`，而预热跑在后台线程，Windows(spawn) 下报
+`An attempt has been made to start a new process before the current process has finished its
+bootstrapping phase` → **世界模型永远卡在 indexing 永不完成**。
+修复 `_parse_batch()`：非主线程用线程池 → 进程池异常回退线程池 → 再退串行，全程有日志不静默。
+
+### MCP server 同步补齐
+`src/mcp/domain_server.py` 增加 3 个世界模型工具 + 可配置超时（`CLAWD_WM_TIMEOUT`），
+并修正提示——此前错误提示里写了**不存在的命令** `clawd brain index`，已改为真实可用的替代方案。
+
+### 验证（真实执行）
+- `tests/tools_runtime/test_domain_tools.py` → **25 passed**
+- `tests/mcp + tests/backends` → **99 passed**
+- 真实仓库：`ensure_warm` **1.69s** 返回 `skipped_large`（不烧 CPU）；`stats` **0.00s** 诚实报因；
+  `project_map` **4.73s** 给 30 文件图谱
+
+### 边界
+- 大仓库默认不做世界模型索引（设计取舍非 bug）；强制需接受数分钟索引时间
+- `skipped_large` 为终态，同进程内改 `CLAWD_WM_FORCE` 需重启
+
+---
+
 ## [v0.64.0] (2026-10-28) — 多引擎整合 + MCP 领域工具反向供给
 
 ### 事实纠正（先纠正前提，再谈方案）
