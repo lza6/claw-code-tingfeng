@@ -306,18 +306,31 @@ class ToolApprovalDeniedError(ToolExecutionError):
     `recoverable=False`：重试不会改变结果。
     """
 
-    def __init__(self, tool_name: str, tool_kind: str, approval_mode: str) -> None:
-        super().__init__(
-            message=(
+    def __init__(
+        self,
+        tool_name: str,
+        tool_kind: str,
+        approval_mode: str,
+        reason: str | None = None,
+    ) -> None:
+        # reason 非空时用它作为对外文案（借鉴 Codex：拒绝必须带具体理由回灌给模型，
+        # 否则模型只会重试同样的调用）。为 None 时保持原有模式说明。
+        if reason:
+            message = f'`{tool_name}` rejected: {reason}'
+        else:
+            message = (
                 f'审批模式为 {approval_mode}（仅分析，不修改文件），拒绝执行 '
                 f'{tool_kind} 类工具 {tool_name}。如需修改文件或执行命令，'
                 f'请将 approval_mode 改为 default / auto-edit / yolo。'
-            ),
+            )
+        super().__init__(
+            message=message,
             code=ErrorCode.TOOL_APPROVAL_DENIED,
             details={
                 'tool_name': tool_name,
                 'tool_kind': tool_kind,
                 'approval_mode': approval_mode,
+                'reason': reason or '',
             },
             recoverable=False,
         )

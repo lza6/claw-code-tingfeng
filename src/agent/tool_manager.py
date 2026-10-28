@@ -5,6 +5,13 @@ from collections.abc import Callable
 from typing import Any
 
 from ..core.approval_mode import ApprovalMode
+from ..core.permissions import (
+    Effect,
+    PermissionEngine,
+    PermissionRequest,
+    current_session_id,
+    extract_target_path,
+)
 from ..core.exceptions import ToolApprovalDeniedError
 from ..llm.parsers import HeuristicToolParser
 from ..tools_runtime.base import BaseTool, ToolResult
@@ -59,6 +66,8 @@ class ToolManager:
         self._heuristic_parser = HeuristicToolParser()
         self.approval_mode = approval_mode if approval_mode is not None else self._load_approval_mode()
         self._confirm_callback = confirm_callback
+        # 权限引擎：保护路径 + 会话级授权（见 src/core/permissions.py 的借鉴说明）
+        self.permissions = PermissionEngine()
         self._warn_if_approval_unenforceable()
 
     def _warn_if_approval_unenforceable(self) -> None:
@@ -124,6 +133,24 @@ class ToolManager:
 
         mode = self.approval_mode
 
+        # 先过权限引擎：保护路径 / 会话级授权（借鉴 Pi 的边界 + OpenCode 的会话授权）
+        req = PermissionRequest(
+            tool=tool_name,
+            action=kind,
+            path=extract_target_path(tool_args),
+            session_id=current_session_id(),
+        )
+        decision = self.permissions.decide(req, approval_mode=mode.value)
+
+        if decision.effect is Effect.DENY:
+            # 拒绝必须带理由（Codex 风格），模型据此换方案而不是原地重试
+            raise ToolApprovalDeniedError(
+                tool_name, kind, mode.value,
+                reason=PermissionEngine.denial_message(req, decision.reason),
+            )
+        if decision.effect is Effect.ALLOW:
+            return
+
         if mode == ApprovalMode.PLAN:
             # 仅分析，不修改文件 —— 硬性拒绝，无需询问
             raise ToolApprovalDeniedError(tool_name, kind, mode.value)
@@ -139,9 +166,13 @@ class ToolManager:
             return  # 非交互场景：放行（既有行为不变）
 
         if self._confirm_callback(tool_name, kind, tool_args or {}):
+            # 批准后记入会话授权：同 (tool, action, 目录) 不再重复询问
+            self.permissions.grant_session(req)
             return
 
-        raise ToolApprovalDeniedError(tool_name, kind, mode.value)
+        raise ToolApprovalDeniedError(
+            tool_name, kind, mode.value, reason="用户拒绝了本次调用"
+        )
 
     def set_confirm_callback(
         self,

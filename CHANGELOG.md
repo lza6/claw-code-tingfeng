@@ -7,6 +7,42 @@
 
 ---
 
+## [v0.66.0] (2026-10-29) — 权限决策引擎：会话授权 / 拒绝理由回灌 / 写入边界（ADR-0013）
+
+延续源码级借鉴，补齐审批链路的三个真实缺口（此前只有粗粒度 `ApprovalMode`）：
+
+### 1. 会话级细粒度授权（来自 OpenCode `internal/permission/`，Go/MIT）
+- `SessionGrants`：授权键 `(session_id, tool, action, 父目录)`
+- **批准一次即记住**：同一会话内对同目录的同类写操作不再重复询问；换目录会重新问
+- 解决的真实体验问题：粒度太粗时用户会直接切 YOLO（反而更不安全）
+
+### 2. 拒绝带理由回灌给模型（来自 Codex `apply_patch.rs` / `exec_policy.rs`，Rust/Apache-2.0)
+- `ToolApprovalDeniedError` 新增 `reason`：文案变为 `` `{tool}` rejected: {reason} ``，并写入 `details`
+- 该异常是 `ToolExecutionError` 子类 → `engine_loop` 转成 `ToolResult(error=...)` **回灌模型**
+  （已验证路径 `engine_loop.py:693`），模型能看到"为什么被拒"从而换方案，而不是原样重试
+
+### 3. 写入边界（Pi `readonly-boundary.ts` 思路；其 OS 沙箱 Windows 无原语，未采纳）
+- 硬保护：`.git/` 内路径、`*.pem/*.key/*.pfx/*.p12`、`id_rsa*/*id_ed25519*`、`.clawd_host_port`
+- **默认即使 YOLO 也拒绝**（密钥与版本库不该因"全自动"就能被改）；可 `protect_even_in_yolo=False` 显式放宽
+- 有意**不**保护 `.env`（首次配置与用户脚本会合法写它）——取舍已写入 ADR
+
+### 决策顺序（先硬后软）
+`read 放行 → 保护路径拒绝(带理由) → 会话已授权放行 → 按 ApprovalMode 询问 → 通过后记入会话授权`
+
+### 验证
+- 新增 `tests/agent/test_permissions.py` **41 passed**
+  （保护路径识别/误伤、会话授权作用域、决策顺序、Codex 风格文案、路径键差异、ToolManager 集成：
+  无回调也拒保护路径、YOLO 也拒、批准一次后同目录免问、换目录重问、拒绝理由可达模型）
+- 既有审批相关 83 项测试全过（无回归）
+
+### 边界
+- 保护路径按字面片段匹配，不解析符号链接/`..`（需在工具实现层再做真实路径校验）
+- 会话授权是进程内的，重启失效（符合会话语义）
+- exec 类无明确路径时以 `cwd/_` 为作用域，粒度偏粗
+- 未做 Codex 完整的 `exec_policy` 命令前缀策略引擎
+
+---
+
 ## [v0.65.0] (2026-10-29) — 定向汲优补缺：LSP / 检查点压缩 / 笔记本（ADR-0012）
 
 三家开源项目的源码级借鉴（直接读代码提取，非转述）：
