@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.62.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.63.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -21,9 +21,25 @@ DSH 式桌面客户端，**双击即用**：
 
 - **DSH 设计规范 UI**：三阶深灰 + 品牌蓝，侧栏工作台、插件市场（毛玻璃弹窗）、工具调用实时折叠行
 - **架构**：Electron 壳（窗口/托盘/单实例/崩溃自愈）→ spawn Python Host（`clawd serve`）→ WS 同端口托管 Web UI；壳内不造 IPC
-- **插件体系**：万物皆插件 —— 放进 `.clawd/plugins/` 即出现在市场（manifest + DI Context + 工具/Prompt 接入面）
+- **插件市场**：`.clawd/plugins/*/pyproject.toml` 的插件会真实出现在市场（Host 只发现 manifest 不执行代码）；
+  内置能力包（逆向工具集/安全工具目录/MCP 桥接/推理模式）一并展示；支持搜索与状态标注
+- **设置面板**：实时显示版本 / Python / 工作目录 / API Key 状态（**不回显密钥**），
+  可改 provider / model / base_url 与 RAG、原生 function-calling 开关；保存写入 `.clawd/ui_settings.json`，
+  同时写入运行期配置（引擎立即生效，provider/model/base_url 需重启 Host）
+- **版本与更新**：侧栏显示真实版本（单一来源 `pyproject.toml`，桌面壳 `package.json` 与之同步）；
+  「检查更新」经 preload IPC 桥把状态回传 UI（检查中 / 下载中 / 已最新 / 就绪 / 出错 / 不支持）
+- **自动更新**：仅安装版支持（portable 版明确提示不支持）。更新源默认是占位地址，
+  必须用环境变量 `CLAWD_UPDATE_URL`（或改 `desktop/package.json` 的 `build.publish`）指向真实发布源，
+  否则 UI 会明确告知"更新源未配置"，不静默失败
 - **首次启动**：图形化引导配置 LLM API（OpenAI 兼容），配置存本机 userData
 - 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）与 `docs/RELEASE_UPDATES.md`（发布/更新）
+
+> **桌面端 E2E**（真实浏览器 + 真实 Electron + 真实更新源，非桩）：
+> - `cd desktop && node ui_settings_e2e.mjs` — 浏览器驱动 UI，17 项（设置/市场/版本/搜索）
+> - `node electron_bridge_e2e.mjs` — 真实 Electron 壳，10 项（preload 桥/版本一致性/各面板）
+> - `node update_feed_e2e.mjs` — 真实 electron-updater 拉本地 feed，4 项（feed 请求/版本识别/状态上报/URL 覆盖）
+>
+> 更新链路已验证到「请求 feed → 识别新版本 → 开始下载」；**静默安装**需要真实发布环境与已签名安装包，见 `docs/RELEASE_UPDATES.md`。
 
 ## ⚡ 超级智能体能力（v0.61.0 新增）
 
@@ -35,6 +51,26 @@ DSH 式桌面客户端，**双击即用**：
 | 安全工具 | `SafeCatalogRunner` | YAML 目录 + scope 授权门禁 + 注入拦截（仅限授权测试目标） |
 | 逆向知识库 | `skills/reverse/` | 51 个场景 SKILL.md（固件/Ghidra/IDA/恶意软件/协议/pwn/CTF） |
 | 插件开发 | `.agent/skills/clawd-extension-sop.md` | 四件套 SOP（manifest/DI/接入面/CLI） |
+
+## 🔌 外部内核后端：Codex（v0.63.0 新增）
+
+不自研重复造轮子——把成熟 agent 内核当后端接进来，我们只做适配与管控：
+
+```bash
+# 安装官方 Codex（Rust 内核，Apache-2.0）
+npm i -g @openai/codex
+
+# 用 Codex 内核执行任务（沙箱 + 事件流 + 用量统计）
+clawd codex "读取 readme.txt 并只回复文件里那个单词" --cd . --sandbox workspace-write
+clawd codex "只回复 PONG" --json          # 输出归一化 JSON（events/commands/usage/errors）
+```
+
+- **协议适配而非 fork**：走 `codex exec --json` 的 JSONL 事件流，Codex 升级无需改我们代码
+- **进程管控**：硬超时 + `taskkill /T /F` 进程树强杀，避免残留进程累积
+- **稳定性实测**：`scripts/soak_backend.py --iters 40` → RSS 平稳、句柄/线程无增长、残留子进程 0
+- **端点要求**：Codex 0.165 只支持 `responses` wire API（我们自有网关已支持）；
+  自定义端点在适配层注册为 `<provider>-custom`（Codex 禁止覆盖内置 provider）
+- 决策与边界见 `docs/adr/0009-adopt-codex-as-backend.md`
 
 ## 🧪 Agent 评测与回归（v0.62.0 新增）
 

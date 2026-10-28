@@ -119,6 +119,27 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .market-empty{padding:60px 0;text-align:center;color:var(--label-tertiary);font-size:13px;grid-column:1/-1}
 .market-close{margin-left:auto;width:28px;height:28px;border-radius:var(--radius-m);display:flex;align-items:center;justify-content:center;color:var(--label-secondary)}
 .market-close:hover{background:var(--hover)}
+/* 版本/更新 */
+.ver-row{display:flex;align-items:center;gap:8px;padding:8px 10px 2px;font-size:11px;color:var(--label-secondary)}
+.ver-check{margin-left:auto;background:none;border:none;color:var(--label-secondary);font-size:11px;cursor:pointer;text-decoration:underline}
+.ver-check:hover{color:var(--label-primary)}
+.update-line{font-size:11px;color:var(--label-secondary);padding:2px 10px 6px;min-height:14px}
+.update-line.ok{color:#16a34a}.update-line.warn{color:#d97706}.update-line.err{color:#dc2626}
+/* 设置面板 */
+.settings-body{padding:6px 22px 22px;overflow:auto;max-height:64vh}
+.srow{display:flex;gap:12px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--hover)}
+.srow label{width:110px;color:var(--label-secondary);flex:0 0 auto}
+.srow span{color:var(--label-primary);word-break:break-all}
+.sfield{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.sfield label{font-size:12px;color:var(--label-secondary)}
+.sfield input{height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--label-primary);padding:0 10px;font-size:13px}
+.scheck{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--label-primary);cursor:pointer}
+.snote{margin-top:14px;font-size:12px;min-height:16px;color:var(--label-secondary)}
+.snote.ok{color:#16a34a}.snote.err{color:#dc2626}
+.sactions{display:flex;gap:10px;margin-top:16px}
+.sbtn{height:34px;padding:0 16px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--label-primary);cursor:pointer;font-size:13px}
+.sbtn.primary{background:#536dfe;border-color:#536dfe;color:#fff}
+.sbtn:disabled{opacity:.5;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -136,6 +157,11 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
     <div class="sidebar-footer">
       <button class="side-entry" id="btnMarket"><span class="ico">◉</span> 插件市场</button>
       <button class="side-entry" id="btnSettings"><span class="ico">⚙</span> 设置</button>
+      <div class="ver-row">
+        <span id="verLine">v—</span>
+        <button class="ver-check" id="btnCheckUpdate" title="检查更新">检查更新</button>
+      </div>
+      <div class="update-line" id="updateLine"></div>
     </div>
   </aside>
 
@@ -182,6 +208,46 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
       <input class="market-search" id="marketSearch" placeholder="搜索插件…">
     </div>
     <div class="market-body"><div class="market-grid" id="marketGrid"></div></div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="overlay" id="settingsOverlay">
+  <div class="market-panel" style="max-width:640px">
+    <div class="market-head" style="display:flex;align-items:flex-start">
+      <div style="flex:1">
+        <h1>设置</h1>
+        <p>修改后立即生效（provider / model / base_url 需重启 Host）</p>
+      </div>
+      <button class="market-close" id="settingsClose">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="srow"><label>版本</label><span id="setVersion">—</span></div>
+      <div class="srow"><label>Python</label><span id="setPython">—</span></div>
+      <div class="srow"><label>工作目录</label><span id="setWorkdir">—</span></div>
+      <div class="srow"><label>API Key</label><span id="setApiKey">—</span></div>
+
+      <div class="sfield">
+        <label for="setProvider">Provider</label>
+        <input id="setProvider" placeholder="openai / anthropic / openrouter …">
+      </div>
+      <div class="sfield">
+        <label for="setModel">模型</label>
+        <input id="setModel" placeholder="如 gpt-4o-mini / claude-sonnet-4">
+      </div>
+      <div class="sfield">
+        <label for="setBaseUrl">Base URL（兼容 OpenAI 的端点）</label>
+        <input id="setBaseUrl" placeholder="可留空使用默认">
+      </div>
+      <label class="scheck"><input type="checkbox" id="setRag"> 启用 RAG 索引（CLAWD_ENABLE_RAG）</label>
+      <label class="scheck"><input type="checkbox" id="setNativeTools"> 原生 function calling（CLAWD_NATIVE_TOOLS）</label>
+
+      <div class="snote" id="setNote"></div>
+      <div class="sactions">
+        <button class="sbtn primary" id="setSave">保存</button>
+        <button class="sbtn" id="setReload">重新读取</button>
+      </div>
+    </div>
   </div>
 </div>
 

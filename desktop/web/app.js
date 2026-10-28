@@ -18,6 +18,21 @@
   let everConnected = false;
   let turnCount = 0;
   let callCount = 0;
+  const pending = Object.create(null);
+  let reqSeq = 0;
+
+  /** 发送请求并等待同 id 的 response/error（设置面板等一次性调用） */
+  function request(type, payload, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== 1) { reject(new Error('未连接')); return; }
+      const id = type + '-' + (++reqSeq);
+      pending[id] = { resolve, reject };
+      ws.send(JSON.stringify(Object.assign({ type: type, id: id }, payload || {})));
+      setTimeout(() => {
+        if (pending[id]) { delete pending[id]; reject(new Error('请求超时')); }
+      }, timeoutMs || 8000);
+    });
+  }
 
   const $ = (id) => document.getElementById(id);
   const $conn = $('conn'), $connText = $('connText'), $banner = $('banner');
@@ -125,6 +140,21 @@
       if (msg.code === 'E_AUTH_REQUIRED') return;
       addError(msg.message || msg.code);
       $send.disabled = false;
+      return;
+    }
+    if (msg.type === 'response' && pending[msg.id]) {
+      const { resolve } = pending[msg.id];
+      delete pending[msg.id];
+      resolve({ ok: true, data: msg.data || msg.result || {} });
+      return;
+    }
+    if (msg.type === 'error' && msg.id && pending[msg.id]) {
+      const { reject } = pending[msg.id];
+      delete pending[msg.id];
+      reject(new Error(msg.message || msg.code || '请求失败'));
+      return;
+    }
+    if (msg.type === 'error' && pending[msg.id]) {
       return;
     }
     if (msg.type === 'response') {
@@ -301,7 +331,115 @@
   $('marketSearch').addEventListener('input', renderPlugins);
 
   // —— 设置（占位：后续接入 Host 配置面） ——
-  $('btnSettings').onclick = () => addToolRow('设置', '设置面板将在后续版本提供。当前可通过 .clawd/ 目录配置 Host。');
+  // —— 设置面板 ——
+  const $setOverlay = $('settingsOverlay');
+  function openSettings() { $setOverlay.classList.add('show'); loadSettings(); }
+  function closeSettings() { $setOverlay.classList.remove('show'); }
+  $('btnSettings').onclick = openSettings;
+  $('settingsClose').onclick = closeSettings;
+  $setOverlay.addEventListener('click', (e) => {
+    if (e.target === $setOverlay) closeSettings();
+  });
+
+  function fillSettings(d) {
+    $('setVersion').textContent = 'v' + (d.version || '—');
+    $('setPython').textContent = d.python || '—';
+    $('setWorkdir').textContent = d.workdir || '—';
+    $('setApiKey').textContent = d.api_key_set ? '已配置（不回显）' : '未配置';
+    $('setProvider').value = d.provider || '';
+    $('setModel').value = d.model || '';
+    $('setBaseUrl').value = d.base_url || '';
+    $('setRag').checked = !!d.enable_rag;
+    $('setNativeTools').checked = !!d.native_tools;
+    if ($('verLine').textContent === 'v—' && d.version) {
+      $('verLine').textContent = 'v' + d.version;
+    }
+  }
+
+  async function loadSettings() {
+    const note = $('setNote');
+    note.className = 'snote';
+    note.textContent = '读取中…';
+    try {
+      const res = await request('settings_get');
+      fillSettings(res.data || {});
+      note.textContent = '';
+    } catch (e) {
+      note.className = 'snote err';
+      note.textContent = '读取失败: ' + e.message;
+    }
+  }
+
+  async function saveSettings() {
+    const note = $('setNote');
+    const btn = $('setSave');
+    btn.disabled = true;
+    note.className = 'snote';
+    note.textContent = '保存中…';
+    try {
+      const res = await request('settings_set', {
+        settings: {
+          provider: $('setProvider').value.trim(),
+          model: $('setModel').value.trim(),
+          base_url: $('setBaseUrl').value.trim(),
+          enable_rag: $('setRag').checked,
+          native_tools: $('setNativeTools').checked,
+        },
+      });
+      fillSettings(res.data || {});
+      note.className = 'snote ok';
+      note.textContent = (res.data && res.data.restart_required)
+        ? '已保存。provider/model/base_url 需重启 Host 生效。'
+        : '已保存并立即生效。';
+    } catch (e) {
+      note.className = 'snote err';
+      note.textContent = '保存失败: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  $('setSave').onclick = saveSettings;
+  $('setReload').onclick = loadSettings;
+
+  // —— 版本与更新 ——
+  async function loadInfo() {
+    try {
+      const resp = await fetch('/api/info');
+      const d = await resp.json();
+      if (d.version) $('verLine').textContent = 'v' + d.version;
+      const tag = $('modelTag');
+      if (tag && d.model) tag.textContent = (d.provider ? d.provider + ' · ' : '') + d.model;
+      if (d.version) fillSettings(d);
+    } catch (_) { /* Host 未提供 /api/info 时保持占位 */ }
+  }
+  loadInfo();
+
+  function setUpdateLine(text, cls) {
+    const el = $('updateLine');
+    el.textContent = text;
+    el.className = 'update-line' + (cls ? ' ' + cls : '');
+  }
+
+  // Electron preload 暴露的桥（浏览器直接访问时为 undefined）
+  const bridge = (typeof window !== 'undefined' && window.clawdDesktop) || null;
+  if (bridge && typeof bridge.onUpdateStatus === 'function') {
+    bridge.onUpdateStatus((status, detail) => {
+      if (status === 'checking') setUpdateLine('正在检查更新…', '');
+      else if (status === 'downloading') setUpdateLine('发现新版本，后台下载中…', 'warn');
+      else if (status === 'none') setUpdateLine('已是最新版本', 'ok');
+      else if (status === 'ready') setUpdateLine('新版本已下载，退出后自动安装', 'ok');
+      else if (status === 'error') setUpdateLine(detail || '更新检查失败', 'err');
+      else if (status === 'unsupported') setUpdateLine(detail || '当前版本不支持自动更新', 'warn');
+    });
+  }
+  $('btnCheckUpdate').onclick = () => {
+    if (bridge && typeof bridge.checkForUpdates === 'function') {
+      setUpdateLine('正在检查更新…', '');
+      bridge.checkForUpdates();
+    } else {
+      setUpdateLine('浏览器访问模式无更新通道，请在桌面安装版中使用', 'warn');
+    }
+  };
 
   // —— 启动 ——
   if (!TOKEN) showBanner('缺少 token：请通过 Host 入口访问（壳自动注入），不要直接打开文件。');

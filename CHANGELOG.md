@@ -7,6 +7,89 @@
 
 ---
 
+## [v0.63.0] (2026-10-28) — 接入 OpenAI Codex 作为外部 agent 内核后端
+
+### 决策（ADR-0009）
+`D:\参考项目` 1678 个开源项目实测评估后，采用 **OpenAI Codex**（Rust 内核 + TS 启动器，Apache-2.0）
+作为外部 agent 后端：**协议适配接入，不 fork 其循环、不搬 105k 行源码进主仓**。
+理由：独立进程边界天然隔离故障；升级 Codex 不必改我们代码；事件流可回放定位问题。
+（备选 LongHorizon-Harness / SWE-agent 均为 Python+MIT，但循环/工具层与现有实现重叠。）
+
+### 新增
+- `src/backends/codex.py`：`CodexBackend` + `parse_events`
+  - `build_argv()`：模型/提供方/端点/沙箱/额外 `-c` 覆盖的完整映射
+  - `run()`：JSONL 事件流归一化（文本/命令/用量/错误/thread_id）、硬超时、**进程树强杀**
+  - `version()` / `available()`：可用性与版本探测
+- CLI：`clawd codex "<任务>" [--cd] [--model] [--provider] [--base-url] [--sandbox] [--timeout] [--json]`
+- `scripts/soak_backend.py`：稳定性/内存泄漏检测（RSS / 句柄 / 线程 / 残留子进程）
+- `docs/adr/0009-adopt-codex-as-backend.md`：决策、许可、实测约束与边界
+
+### 实测中处理的真实约束
+1. Codex **禁止覆盖内置 provider**（`model_providers ... reserved built-in provider IDs: openai`）
+   → 自定义端点注册为 `<provider>-custom`
+2. Codex 0.165 **废弃 `wire_api="chat"`**，只支持 `responses` → 端点必须支持 Responses API
+3. Windows npm 全局装的是 `codex.cmd` → 二进制解析依次尝试 `.cmd/.exe/.bat`
+4. codex 会拉起子进程 → 超时用 `taskkill /T /F` 杀进程树，避免残留进程累积
+
+### 验证（真实 E2E + 稳定性，全部实跑）
+- `clawd codex "只回复 PONG"` → **PONG**，tokens 27,189 in / 86 out（经自有网关）
+- `clawd codex "读取 readme.txt 并只回复文件里那个单词"` → **probe**，执行 1 条命令，缓存命中 17,408
+- `scripts/soak_backend.py --iters 40` → **PASS**：RSS +0.9MB（平稳）、句柄 +3、线程 +0、残留子进程 0
+- `tests/backends` **19 passed**（假进程注入 JSONL，零网络）
+- codex CLI 版本：0.165.0；许可 Apache-2.0（未复制源码，无衍生作品义务）
+
+### 边界（未闭环，如实披露）
+- 未验证 >1h 长程连续运行（soak 只覆盖进程生命周期，不覆盖长会话上下文）
+- 未验证 `danger-full-access` 在 Windows 的真实隔离强度
+- Codex 使用**自己的工具集**，暂未与我们 ToolRegistry 互通（互通需把我们的工具暴露成 MCP server）
+
+---
+
+## [v0.62.1] (2026-10-28) — 桌面端功能真相修复：设置 / 插件市场 / 版本 / 更新
+
+### 修复（5 个"看起来有、其实不能用"的缺陷）
+
+1. **设置按钮是假按钮** → 点击只打印"设置面板将在后续版本提供"。
+   现已实现真实设置面板：版本 / Python / 工作目录 / API Key 状态（脱敏）、
+   provider / model / base_url 可编辑、RAG 与原生 function-calling 开关；
+   保存写 `.clawd/ui_settings.json` **并同步运行期配置**（引擎立即用上新值；provider/model/base_url 需重启 Host）
+2. **插件市场列不出用户插件** → `_plugin_manager` 恒 None，`.clawd/plugins/` 的插件永远不出现，
+   与 UI 承诺"放进去即可出现"矛盾。现 Host 真实发现 `.clawd/plugins/*/pyproject.toml`
+   （只读 manifest、不执行插件代码），坏 manifest 显示为 error 条目而非静默丢弃
+3. **更新状态传不到 UI** → `contextIsolation: true` 却无 preload，`webContents.send('update-status')` 无接收方。
+   新增 `desktop/electron/preload.js` 暴露 `window.clawdDesktop`（onUpdateStatus / checkForUpdates / appInfo）
+   + `ipcMain` 处理 `clawd:check-updates`、`clawd:app-info`
+4. **UI 无应用版本信息** → 新增侧栏版本栏（来源 Host `/api/info`，单一真相源 `pyproject.toml`）；
+   桌面壳 `package.json` 版本从 `0.1.0` 同步到与框架一致
+5. **更新源是占位域名且静默失败** → 默认 `https://updates.clawd.cn/desktop/` 不可用却不告知。
+   现支持 `CLAWD_UPDATE_URL` 覆盖；未配置时 UI 与日志**明确提示"更新源未配置"**并给出配置方式，
+   对 portable 版明确提示"不支持自动更新"
+
+### 新增 API / 协议
+- `GET /api/info` — 版本 / Python / 平台 / 工作目录 / provider / model / base_url / **api_key_set（布尔，绝不回显密钥）**
+- WS `settings_get` / `settings_set` — 白名单键（provider/model/base_url/enable_rag/native_tools），
+  未知键与 `api_key` 一律拒绝（密钥只能经 .env / 环境变量设置）
+- `ConfigInjector.get_runtime_override()` — 区分"用户刚保存的运行期覆盖"与".env 配置"，避免设置面板显示错值
+
+### 验证（真实 E2E，非桩）
+- **浏览器 E2E** `desktop/ui_settings_e2e.mjs`：**17/17 PASS**
+  （版本栏、设置面板打开与回填、保存→持久化→重读一致、插件市场列出用户插件 9.9.9、搜索过滤、检查更新反馈）
+- **Electron E2E** `desktop/electron_bridge_e2e.mjs`：**10/10 PASS**
+  （preload 桥注入、appInfo 版本、壳/框架版本一致、UI 版本栏、检查更新状态、设置面板、插件市场渲染）
+- `tests/server` 50 passed（新增 13 项：设置读写白名单/密钥拒绝/持久化/插件发现/坏 manifest/内置包）
+- 全量 4627 passed / 0 failed；IMPORT 607/607；ruff 硬指标 All passed；E2E 冒烟 5/5
+
+### 已知边界（未闭环，如实披露）
+- **在线下载 → 自动安装** 的完整链路只能验证到「下载开始」：本轮用真实 electron-updater 指向本地
+  真实 HTTP feed（`desktop/update_feed_e2e.mjs`），实测请求链 `latest.yml → .exe.blockmap → .exe`
+  全部命中，版本识别与状态上报均正常；**静默安装需要真实发布环境与已签名安装包**，
+  且本轮 `desktop/dist` 现有产物仍是旧版本 0.1.0 构建，需在发布时用 v0.62.1 重新打包后再验安装
+- 顺带修掉一个会让 UI 永久卡在"正在检查更新…"的缺陷：未打包状态下 electron-updater 默认
+  **不发任何请求**（需 `dev-app-update.yml` + `forceDevUpdateConfig`），且失败时无兜底事件；
+  现已自动写开发态配置并在 20s 无事件时明确报错
+
+---
+
 ## [v0.62.0] (2026-10-28) — Agent 评测 harness（W8 缺口闭环）+ 假开关接线
 
 ### 新增：`src/eval/` 评测 harness

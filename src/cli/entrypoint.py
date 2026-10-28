@@ -537,6 +537,83 @@ def _register_command_modules() -> list[str]:
 _REGISTRATION_FAILURES = _register_command_modules()
 
 
+@app.command(name="codex")
+def codex_run(
+    goal: str = typer.Argument(..., help="交给 Codex 后端执行的任务"),
+    workdir: Path | None = typer.Option(None, "--cd", help="执行目录（默认当前目录）"),
+    model: str | None = typer.Option(None, "--model", "-m", help="覆盖模型"),
+    provider: str | None = typer.Option(None, "--provider", help="模型提供方（默认沿用 Codex 配置）"),
+    base_url: str | None = typer.Option(
+        None, "--base-url", help="OpenAI 兼容端点（默认读 LLM_BASE_URL）"
+    ),
+    sandbox: str = typer.Option(
+        "workspace-write",
+        "--sandbox",
+        help="沙箱模式: read-only | workspace-write | danger-full-access",
+    ),
+    timeout: float = typer.Option(900.0, "--timeout", help="硬超时（秒）"),
+    json_out: bool = typer.Option(False, "--json", help="输出归一化后的 JSON 结果"),
+):
+    """
+    用 Codex 内核执行任务（外部成熟 agent 后端，不重复造轮子）
+
+    说明: 需要先安装 Codex CLI —— `npm i -g @openai/codex`。
+    本命令只做协议适配与进程管控，agent 循环/沙箱/工具由 Codex 自己负责。
+    """
+    from ..backends import CodexBackend
+    from ..backends.codex import CodexBackendError
+
+    import os as _os
+
+    backend = CodexBackend(
+        model=model or _os.environ.get("LLM_MODEL"),
+        provider=provider or _os.environ.get("LLM_PROVIDER"),
+        base_url=base_url or _os.environ.get("LLM_BASE_URL"),
+        sandbox=sandbox,
+        workdir=workdir or Path.cwd(),
+    )
+    if not backend.available():
+        console.print(
+            "[bold red]Codex 未安装[/bold red] —— 请先执行: npm i -g @openai/codex"
+        )
+        raise typer.Exit(code=2)
+
+    console.print(f"[dim]codex: {backend.version() or 'unknown'} · sandbox={sandbox}[/dim]")
+    try:
+        result = backend.run(goal, timeout=timeout)
+    except CodexBackendError as e:
+        console.print(f"[bold red]执行失败:[/bold red] {e}")
+        raise typer.Exit(code=2)
+
+    if json_out:
+        console.print_json(data={
+            "ok": result.ok,
+            "text": result.text,
+            "exit_code": result.exit_code,
+            "duration_s": round(result.duration_s, 2),
+            "timed_out": result.timed_out,
+            "usage": result.usage,
+            "commands": result.commands,
+            "errors": result.errors[:5],
+            "thread_id": result.thread_id,
+        })
+    else:
+        if result.text:
+            console.print(result.text)
+        if result.commands:
+            console.print(f"[dim](执行了 {len(result.commands)} 条命令)[/dim]")
+        if result.usage:
+            console.print(f"[dim]tokens: {result.usage}[/dim]")
+        if result.errors:
+            for err in result.errors[:3]:
+                console.print(f"[red]{err}[/red]")
+
+    if result.timed_out:
+        console.print(f"[bold red]超时（{timeout}s），已强杀进程树[/bold red]")
+        raise typer.Exit(code=124)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
 @app.command(name="eval")
 def eval_dataset(
     dataset: Path = typer.Argument(..., help="评测数据集 JSON 路径"),

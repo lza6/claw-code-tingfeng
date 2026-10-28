@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import json
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -149,6 +151,8 @@ class MessageRouter:
             'file_read': self._handle_file_read,
             'file_write': self._handle_file_write,
             'ping': self._handle_ping,
+            'settings_get': self._handle_settings_get,
+            'settings_set': self._handle_settings_set,
         }
 
         handler = handlers.get(msg_type)
@@ -572,6 +576,163 @@ class MessageRouter:
                 'timestamp': time.time(),
             },
         )
+
+    # ------------------------------------------------------------------
+    # 设置读写（UI 设置面板数据源）
+    # ------------------------------------------------------------------
+
+    #: 允许 UI 修改的键（白名单；api_key 刻意排除，只能经 .env / 环境变量设置）
+    UI_SETTABLE_KEYS = ('provider', 'model', 'base_url', 'enable_rag', 'native_tools')
+
+    def _settings_snapshot(self) -> dict[str, Any]:
+        """当前设置快照（不含任何密钥）"""
+        import sys as _sys
+
+        from ..core.settings import get_settings
+
+        settings = get_settings()
+        version = 'unknown'
+        try:
+            from .. import __version__
+
+            version = __version__
+        except Exception:  # noqa: BLE001
+            pass
+
+        def _flag(name: str, default: str) -> bool:
+            return os.environ.get(name, default).lower() in ('1', 'true', 'yes')
+
+        # 运行期覆盖优先（用户在设置面板刚保存的值要立刻可见），否则回落 .env/settings
+        try:
+            from ..core.config.injector import get_config_injector
+
+            injector = get_config_injector()
+            provider = injector.get_runtime_override('llm_provider', None)
+            model = injector.get_runtime_override('llm_model', None)
+            base_url = injector.get_runtime_override('llm_base_url', None)
+        except Exception:  # noqa: BLE001 — 注入器不可用时回落 settings
+            provider = model = base_url = None
+
+        def _pick(override, attr):
+            if override is not None:
+                return str(override)
+            value = getattr(settings, attr, '') or ''
+            # pydantic 枚举转成纯字符串（避免 UI 显示 LLMProviderEnum.OPENAI）
+            return str(getattr(value, 'value', value))
+
+        return {
+            'version': version,
+            'python': _sys.version.split()[0],
+            'workdir': str(Path.cwd()),
+            'provider': _pick(provider, 'llm_provider'),
+            'model': _pick(model, 'llm_model'),
+            'base_url': _pick(base_url, 'llm_base_url'),
+            'api_key_set': bool(getattr(settings, 'llm_api_key', None)),
+            'enable_rag': _flag('CLAWD_ENABLE_RAG', ''),
+            'native_tools': _flag('CLAWD_NATIVE_TOOLS', '1'),
+            'editable_keys': list(self.UI_SETTABLE_KEYS),
+        }
+
+    async def _handle_settings_get(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        _engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        """读取当前设置。
+
+        期望消息格式: {"type": "settings_get"}
+        """
+        return build_response(message.get('id'), self._settings_snapshot())
+
+    async def _handle_settings_set(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        _engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        """更新设置（白名单键 + 持久化到 .clawd/ui_settings.json）。
+
+        期望消息格式: {"type": "settings_set", "settings": {"model": "...", ...}}
+
+        安全:
+            - 仅接受白名单键，未知键返回错误（不静默忽略）
+            - api_key 不在白名单内（禁止经 WS 传输密钥）
+        """
+        payload = message.get('settings') or {}
+        if not isinstance(payload, dict) or not payload:
+            return build_error(
+                message.get('id'),
+                'E_INVALID_MESSAGE',
+                'settings 必须是非空对象',
+            )
+
+        unknown = [k for k in payload if k not in self.UI_SETTABLE_KEYS]
+        if unknown:
+            return build_error(
+                message.get('id'),
+                'E_INVALID_PARAMETER',
+                f'不支持修改的设置项: {unknown}',
+                {'editable_keys': list(self.UI_SETTABLE_KEYS)},
+            )
+
+        # 逐项应用：进程内生效（环境变量），并落盘以便重启后保持
+        persisted: dict[str, Any] = {}
+        try:
+            for key, value in payload.items():
+                if key in ('enable_rag', 'native_tools'):
+                    env_name = 'CLAWD_ENABLE_RAG' if key == 'enable_rag' else 'CLAWD_NATIVE_TOOLS'
+                    os.environ[env_name] = '1' if value else '0'
+                    persisted[key] = bool(value)
+                else:
+                    env_name = {
+                        'provider': 'LLM_PROVIDER',
+                        'model': 'LLM_MODEL',
+                        'base_url': 'LLM_BASE_URL',
+                    }[key]
+                    text = str(value or '').strip()
+                    if text:
+                        os.environ[env_name] = text
+                    persisted[key] = text
+                    # 同步写入运行期覆盖：否则 UI 显示新值但引擎仍用旧配置（假保存）
+                    try:
+                        from ..core.config.injector import set_config
+
+                        cfg_key = {
+                            'provider': 'llm_provider',
+                            'model': 'llm_model',
+                            'base_url': 'llm_base_url',
+                        }[key]
+                        set_config(cfg_key, text)
+                    except Exception as exc:  # noqa: BLE001 — 记录但不阻断落盘
+                        self.logger.warning(f'写入运行期配置失败 {key}: {exc}')
+
+            settings_file = Path.cwd() / '.clawd' / 'ui_settings.json'
+            settings_file.parent.mkdir(parents=True, exist_ok=True)
+            existing: dict[str, Any] = {}
+            if settings_file.is_file():
+                try:
+                    existing = json.loads(settings_file.read_text(encoding='utf-8'))
+                except (OSError, json.JSONDecodeError):
+                    existing = {}
+            existing.update(persisted)
+            settings_file.write_text(
+                json.dumps(existing, ensure_ascii=False, indent=2), encoding='utf-8'
+            )
+        except Exception as exc:  # noqa: BLE001 — 落盘失败要让调用方知道，不能假成功
+            return build_error(
+                message.get('id'),
+                'E_SETTINGS_WRITE_FAILED',
+                f'设置应用失败: {exc}',
+            )
+
+        self.logger.info(f'设置已更新: {sorted(persisted)}')
+        snapshot = self._settings_snapshot()
+        snapshot['applied'] = persisted
+        snapshot['restart_required'] = any(
+            k in persisted for k in ('provider', 'model', 'base_url')
+        )
+        return build_response(message.get('id'), snapshot)
 
 
 # ------------------------------------------------------------------

@@ -151,6 +151,15 @@ class ConfigInjector:
 
         logger.debug(f"配置已设置: {key} = {value} (source: {source})")
 
+    def get_runtime_override(self, key: str, default: Any = None) -> Any:
+        """只读取运行期覆盖值（不回落 env/yaml/默认值）。
+
+        用途：UI 设置面板需要区分"用户刚在界面里保存的值"与".env 里的值"，
+        避免把环境配置误当成运行时覆盖展示。
+        """
+        override = self._runtime_overrides.get(key)
+        return override.value if override is not None else default
+
     def get(self, key: str, default: Any = None) -> Any:
         """
         获取配置值

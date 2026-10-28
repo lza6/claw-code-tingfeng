@@ -8,7 +8,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..core.events import Event, EventBus, EventType, get_event_bus
@@ -140,6 +142,50 @@ class ClawdWebSocketServer:
 
         return (self.host, self.port)
 
+    def _collect_info(self) -> dict[str, Any]:
+        """宿主信息（UI 版本栏 / 设置面板数据源）
+
+        安全: 只回传 provider/model/base_url 与布尔开关，**绝不回传任何 API Key**。
+        """
+        info: dict[str, Any] = {
+            "version": "unknown",
+            "python": sys.version.split()[0],
+            "platform": sys.platform,
+            "workdir": str(self._workdir()),
+            "host": self.host,
+            "port": self.port,
+            "uptime_seconds": round(self.uptime, 1),
+        }
+        try:
+            from .. import __version__
+
+            info["version"] = __version__
+        except Exception:  # noqa: BLE001 — 版本读不到不影响其他信息
+            pass
+
+        try:
+            info["provider"] = getattr(self._settings, "llm_provider", None)
+            info["model"] = getattr(self._settings, "llm_model", None)
+            info["base_url"] = getattr(self._settings, "llm_base_url", None)
+            info["api_key_set"] = bool(getattr(self._settings, "llm_api_key", None))
+        except Exception:  # noqa: BLE001
+            info["provider"] = None
+            info["model"] = None
+            info["api_key_set"] = False
+
+        info["features"] = {
+            "rag": os.environ.get("CLAWD_ENABLE_RAG", "").lower() in ("1", "true", "yes"),
+            "native_tools": os.environ.get("CLAWD_NATIVE_TOOLS", "1").lower()
+            not in ("0", "false", "no"),
+            "static_ui": bool(self._static_dir),
+        }
+        return info
+
+    def _workdir(self) -> Path:
+        """宿主工作目录（插件发现基准）"""
+        wd = getattr(self._settings, "workdir", None)
+        return Path(wd).resolve() if wd else Path.cwd().resolve()
+
     def _collect_plugins(self) -> dict[str, Any]:
         """插件市场数据源：已加载插件 + 内置工具包（逆向/安全等能力模块）"""
         plugins: list[dict[str, Any]] = []
@@ -161,6 +207,42 @@ class ClawdWebSocketServer:
                         ) if flag
                     ] or ["插件"],
                 })
+
+        # 1. 用户插件（<workdir>/.clawd/plugins/*/pyproject.toml）
+        #    只发现 manifest，不执行插件代码（GET 端点不得触发任意代码执行）；
+        #    实际加载走 WS `plugins_load`（需已认证）。
+        try:
+            from ..plugins import PluginManager, load_manifest_from_dir
+
+            pm = PluginManager(workdir=self._workdir())
+            for plugin_dir in pm.discover():
+                try:
+                    manifest = load_manifest_from_dir(plugin_dir)
+                    plugins.append({
+                        "name": manifest.name,
+                        "version": manifest.version,
+                        "description": manifest.description or "（无描述）",
+                        "status": "available",
+                        "source": str(plugin_dir),
+                        "capabilities": [
+                            cap for cap, flag in (
+                                ("工具", manifest.provides_tools),
+                                ("Prompt", manifest.provides_prompt),
+                                ("UI", manifest.provides_ui),
+                            ) if flag
+                        ] or ["插件"],
+                    })
+                except Exception as exc:  # noqa: BLE001 — 单个 manifest 坏了不影响其他插件
+                    plugins.append({
+                        "name": plugin_dir.name,
+                        "version": "?",
+                        "description": f"manifest 读取失败: {exc}",
+                        "status": "error",
+                        "source": str(plugin_dir),
+                        "capabilities": ["插件"],
+                    })
+        except Exception as exc:  # noqa: BLE001 — 插件子系统不可用不影响内置列表
+            self.logger.debug(f"插件发现失败: {exc}")
 
         # 2. 内置能力包（逆向工具/安全目录/MCP 桥接 — 让市场不为空）
         try:
@@ -283,6 +365,18 @@ class ClawdWebSocketServer:
 
         from websockets.datastructures import Headers as _H
         from websockets.http11 import Response as _WsResponse
+
+        # API 端点：宿主信息（版本/运行环境/模型配置 — 供 UI 显示，绝不含密钥）
+        if path == '/api/info':
+            body = json.dumps(self._collect_info(), ensure_ascii=False).encode('utf-8')
+            return _WsResponse(
+                200, 'OK',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
 
         # API 端点：插件市场数据（JSON）
         if path == '/api/plugins':
