@@ -7,6 +7,33 @@
 
 ---
 
+## [v0.69.0] (2026-10-29) — 会话续跑打通（prior_messages 注入 + `session resume`）
+
+### 补齐 ADR-0015 里如实标注的边界
+上一版明确写了"`clawd chat --resume` 未接通：`_run_agent_core` 固定 `messages=[]`"。
+本轮把它接上：
+
+- `AgentLoopConfig.prior_messages`：续跑时把历史消息**插在 system 与本轮新目标之间**
+  （构造逻辑抽成 `build_initial_messages()`，可单测，不必真跑 LLM）
+- `AgentEngine.run(goal, prior_messages=...)`：接受字典或 LLMMessage 列表；
+  `_normalize_prior_messages()` 做归一化——旧格式的 `unknown` 角色按 `user` 处理，
+  空内容条目直接丢弃（不因一条脏历史炸掉整轮续跑）
+- 新命令 **`clawd session resume <会话ID> "<本次目标>"`**：载入历史 → 注入 → 继续执行
+
+### 验证
+- `tests/agent/test_session_resume.py` **10 passed**
+  （无历史时 [system,user]；有历史时 [system,*prior,user] 顺序正确；空 prior 条目跳过；
+   字典→LLMMessage 转换；unknown 角色归一；None/空列表返回 None；
+   **CLI resume 确实把历史传进 engine.run(prior_messages=...)**；缺失会话 exit 1）
+- 全量回归见下；IMPORT / ruff 硬指标通过
+
+### 边界（继续如实标注）
+- `clawd chat`（交互式 REPL）尚未暴露 `--resume`：它的任务路径在 `repl_task.py`，
+  接续需要每轮维护消息列表，比一次性 `session resume` 复杂；本轮只做非交互续跑
+- 续跑会把整段历史塞进上下文，长会话需配合 ADR-0012 的检查点压缩（已实现，未自动串联）
+
+---
+
 ## [v0.68.0] (2026-10-29) — 会话真正落盘 + 会话管理 CLI
 
 ### 发现并修复的连环缺口（三个叠在一起）

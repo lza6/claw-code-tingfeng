@@ -41,6 +41,34 @@ if TYPE_CHECKING:
     from ..tools_runtime.base import BaseTool
     from .engine_session_data import AgentSession
 
+def _normalize_prior_messages(raw: Any) -> list[Any] | None:
+    """把 {role, content} 字典或已是 LLMMessage 的列表统一成 LLMMessage 列表
+
+    会话存储里是字典（便于 JSON 持久化），循环里要 LLMMessage，这里做转换。
+    无效项直接跳过（不因为一条脏历史炸掉整轮续跑）。
+    """
+    if not raw:
+        return None
+    from ..llm.config import LLMMessage
+
+    out = []
+    for item in raw:
+        if item is None:
+            continue
+        if hasattr(item, 'role') and hasattr(item, 'content'):
+            out.append(item)
+            continue
+        if isinstance(item, dict):
+            role = str(item.get('role') or 'user')
+            if role not in ('system', 'user', 'assistant', 'tool'):
+                role = 'user'  # 旧格式的 'unknown' 等一律按用户输入对待
+            content = str(item.get('content') or '')
+            if not content:
+                continue
+            out.append(LLMMessage(role=role, content=content))
+    return out or None
+
+
 class AgentEngine:
     """代理循环引擎
 
@@ -510,10 +538,24 @@ class AgentEngine:
         self.tool_manager.remove_tool(name)
         self.system_prompt = build_system_prompt(self.tools)
 
-    async def run(self, goal: str, on_step: Callable | None = None) -> AgentSession:
+    async def run(
+        self,
+        goal: str,
+        on_step: Callable | None = None,
+        prior_messages: list[Any] | None = None,
+    ) -> AgentSession:
+        """执行一次 agent 任务
+
+        Args:
+            goal: 本次目标
+            on_step: 步骤回调
+            prior_messages: 续跑时注入的历史消息（LLMMessage 或 {role, content} 字典）
+        """
         # 装配扩展工具（幂等，失败降级）
         await self._load_extended_tools()
-        result = await self._run_agent_core(goal=goal, is_stream=False, on_step=on_step)
+        result = await self._run_agent_core(
+            goal=goal, is_stream=False, on_step=on_step, prior_messages=prior_messages
+        )
         self._persist_session(result['session'])
         return result['session']
 
@@ -552,6 +594,9 @@ class AgentEngine:
         from .engine_loop import AgentLoopConfig, _run_agent_loop
         from .engine_session_data import AgentSession
 
+        # kwargs 末尾会 **展开进 AgentLoopConfig，先取出 prior_messages 避免重复传参
+        prior_raw = kwargs.pop('prior_messages', None)
+
         self.session_manager.record_user_goal(goal)
         session = AgentSession(goal=goal)
 
@@ -567,6 +612,7 @@ class AgentEngine:
             goal=goal,
             llm_provider=self.llm_provider,
             messages=[],
+            prior_messages=_normalize_prior_messages(prior_raw),
             max_iterations=self.max_iterations,
             system_prompt=self.system_prompt,
             tools=self.tools,

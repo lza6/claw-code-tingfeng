@@ -97,6 +97,28 @@ class AgentLoopConfig:
     patcher: Any | None = None
 
 
+    #: 续跑时注入的历史消息（置于 system 之后、本次新目标之前）
+    prior_messages: list[LLMMessage] | None = None
+
+def build_initial_messages(config: AgentLoopConfig, user_content: str) -> list[LLMMessage]:
+    """构造初始消息序列
+
+    普通运行：[system, user]
+    续跑（config.prior_messages 非空）：[system, *prior, user]
+    —— prior 必须夹在 system 与本次新目标之间，模型才能看到"接着上次做"。
+    """
+    messages: list[LLMMessage] = [
+        LLMMessage(role='system', content=config.system_prompt),
+    ]
+    for prior in (config.prior_messages or []):
+        role = getattr(prior, 'role', None) or 'user'
+        content = getattr(prior, 'content', '')
+        if content:
+            messages.append(LLMMessage(role=role, content=content))
+    messages.append(LLMMessage(role='user', content=user_content))
+    return messages
+
+
 async def _run_agent_loop(
     *,
     config: AgentLoopConfig,
@@ -151,10 +173,7 @@ async def _run_agent_loop(
     user_content += '\n\n请开始执行。'
 
     if not config.messages:
-        config.messages = [
-            LLMMessage(role='system', content=config.system_prompt),
-            LLMMessage(role='user', content=user_content),
-        ]
+        config.messages = build_initial_messages(config, user_content)
 
     _audit_retry_count = 0
     _reflection_count = 0

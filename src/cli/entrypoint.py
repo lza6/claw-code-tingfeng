@@ -627,6 +627,41 @@ def session_title(
     console.print(f"[green]标题已更新:[/green] {updated.session_id} → {updated.title}")
 
 
+@session_app.command("resume")
+def session_resume(
+    session_id: str = typer.Argument(..., help="要续跑的会话 ID"),
+    goal: str = typer.Argument(..., help="本次要接着做的事"),
+    sessions_dir: Path | None = typer.Option(None, "--dir"),
+    max_iterations: int = typer.Option(10, "--max-iterations", "-i"),
+):
+    """在已有会话上下文里继续执行（历史消息会注入到本轮之前）"""
+    import asyncio
+
+    from ..agent.engine import AgentEngine
+    from ..core.session_bridge import load as load_view
+
+    try:
+        view = load_view(session_id, sessions_dir)
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[bold red]读取失败:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    if not view.messages:
+        console.print("[yellow]该会话没有历史消息，将按新任务执行[/yellow]")
+    else:
+        console.print(f"[dim]已载入 {len(view.messages)} 条历史消息（{view.title or '无标题'}）[/dim]")
+
+    engine = AgentEngine(workdir=Path.cwd(), max_iterations=max_iterations)
+    try:
+        session = asyncio.run(engine.run(goal, prior_messages=view.messages or None))
+    except Exception as e:  # noqa: BLE001 — CLI 层要把错误讲清楚
+        console.print(f"[bold red]执行失败:[/bold red] {type(e).__name__}: {e}")
+        raise typer.Exit(code=1)
+
+    console.print(session.final_result or "(无输出)")
+    raise typer.Exit(code=0)
+
+
 app.add_typer(session_app, name="session")
 
 # 注册模块化命令
