@@ -56,6 +56,7 @@ class ToolManager:
         tools: dict[str, BaseTool],
         approval_mode: ApprovalMode | None = None,
         confirm_callback: Callable[[str, str, dict[str, Any]], bool] | None = None,
+        autonomy: Any = None,
     ) -> None:
         """
         Args:
@@ -75,6 +76,8 @@ class ToolManager:
                 Path.cwd() / ".clawd" / "exec_policy.json"
             )
         )
+        # 挂机自主决策引擎（None = 不启用，保持原有交互语义）
+        self.autonomy = autonomy
         self._warn_if_approval_unenforceable()
 
     def _warn_if_approval_unenforceable(self) -> None:
@@ -170,6 +173,24 @@ class ToolManager:
             return
 
         # 剩余情形：DEFAULT 的 write/exec，AUTO_EDIT 的 exec —— 需要审批
+        # 挂机模式：由自主决策引擎按规则自决（没人可批时不能默认放行，也不能卡死）
+        if self.autonomy is not None:
+            from ..agent.autonomy import Action as _AutoAction
+
+            auto = self.autonomy.decide_permission(
+                req, decision.effect, decision.reason,
+                approval_mode=mode.value,
+                policy=getattr(decision, 'policy', '') or '',
+            )
+            if auto.action is _AutoAction.PROCEED:
+                self.permissions.grant_session(req)
+                return
+            if auto.action in (_AutoAction.SKIP, _AutoAction.ABORT):
+                raise ToolApprovalDeniedError(
+                    tool_name, kind, mode.value, reason=auto.reason
+                )
+            # ASK → 继续走人工确认（若没有回调则按原有语义处理）
+
         if self._confirm_callback is None:
             return  # 非交互场景：放行（既有行为不变）
 

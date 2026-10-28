@@ -398,7 +398,17 @@ class AgentEngine:
 
     def _init_components(self, rag_index: Any, world_model: Any, enable_events: bool, event_bus: EventBus | None) -> None:
         """初始化辅助组件"""
-        self.tool_manager = ToolManager(self.tools)
+        # 挂机自主决策：默认 supervised（有人盯）→ 行为与之前完全一致；
+        # CLAWD_AUTONOMY=semi|unattended 时启用自决（详见 src/agent/autonomy.py）
+        try:
+            from .autonomy import AutonomyEngine, level_from_env
+
+            autonomy_engine = AutonomyEngine(level_from_env(), workdir=self.workdir)
+        except Exception as e:  # noqa: BLE001 — 自决引擎失败不影响主流程，但必须留痕
+            self.logger.warning(f'挂机自决引擎初始化失败（回退为有人盯模式）: {e}')
+            autonomy_engine = None
+        self.autonomy = autonomy_engine
+        self.tool_manager = ToolManager(self.tools, autonomy=autonomy_engine)
         self.rag_index = rag_index
         self.world_model = world_model
         self.enable_events = enable_events
@@ -564,6 +574,22 @@ class AgentEngine:
         self._persist_session(result['session'])
         return result['session']
 
+    def _system_prompt_with_autonomy_hint(self) -> str:
+        """挂机模式下把"能用什么命令"的清单塞进系统提示
+
+        真实 E2E 教训：不告诉模型可用清单，它会不断尝试复合/管道命令，
+        这些在挂机时会被保守跳过，白烧迭代且任务完不成。
+        """
+        base = self.system_prompt or ''
+        autonomy = getattr(self, 'autonomy', None)
+        if autonomy is None:
+            return base
+        try:
+            hint = autonomy.allowed_command_hint()
+        except Exception:  # noqa: BLE001 — 提示注入失败不影响主流程
+            return base
+        return f'{base}{hint}' if hint else base
+
     def _persist_session(self, session: Any) -> None:
         """把本次运行落盘到 .clawd/sessions/（此前两套会话存储都没人写，CLI 永远是空的）
 
@@ -613,8 +639,9 @@ class AgentEngine:
             llm_provider=self.llm_provider,
             messages=[],
             prior_messages=_normalize_prior_messages(prior_raw),
+            autonomy=getattr(self, 'autonomy', None),
             max_iterations=self.max_iterations,
-            system_prompt=self.system_prompt,
+            system_prompt=self._system_prompt_with_autonomy_hint(),
             tools=self.tools,
             rag_index=self.rag_index,
             world_model=self.world_model,

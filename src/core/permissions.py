@@ -20,12 +20,24 @@ from pathlib import Path
 from typing import Any
 
 
+#: 权限结论的中文名（对外一律中文，避免用户看不懂 allow/deny/ask）
+EFFECT_LABELS: dict[str, str] = {
+    "allow": "放行",
+    "deny": "拒绝",
+    "ask": "需确认",
+}
+
+
 class Effect(str, Enum):
     """决策结果"""
 
     ALLOW = "allow"     # 放行
     DENY = "deny"       # 拒绝（带理由，回灌给模型）
     ASK = "ask"         # 需要人确认
+
+    @property
+    def label(self) -> str:
+        return EFFECT_LABELS.get(self.value, self.value)
 
 
 #: 任何模式下都不允许写入/执行的目标（相对项目根的 glob 片段）
@@ -60,6 +72,9 @@ class PermissionRequest:
 class Decision:
     effect: Effect
     reason: str = ""
+    #: 命令前缀策略的判决（allow / prompt / forbidden / ""）
+    #: 挂机自决需要它来区分"策略允许但模式要问"与"策略要求审批"——两者天差地别
+    policy: str = ""
 
     @property
     def allowed(self) -> bool:
@@ -151,19 +166,23 @@ class PermissionEngine:
         if req.action == "read":
             return Decision(Effect.ALLOW, "只读操作")
 
+        # 注意：这两个变量必须在策略分支**之前**初始化，否则后面会被重置成空值，
+        # 导致"策略明确允许"的判决丢失（挂机自决就分不清 allow 与 prompt）
+        exec_allowed_reason = ""
+        exec_policy_verdict = ""
+
         # exec 类：过命令前缀策略（Codex execpolicy 语义，比"写/执行"分类更具体）
         if req.action == "exec" and self.exec_policy is not None and req.command:
             evaluation = self.exec_policy.evaluate(req.command)
             if evaluation.decision.value == "forbidden":
-                return Decision(Effect.DENY, evaluation.reason)
+                return Decision(Effect.DENY, evaluation.reason, policy="forbidden")
             if evaluation.decision.value == "prompt":
                 # 策略要求审批：跳过会话授权（命令级 prompt 每次确认更安全）
-                return Decision(Effect.ASK, evaluation.reason)
+                return Decision(Effect.ASK, evaluation.reason, policy="prompt")
             # ALLOW 只表示"策略不禁止"，不越过 ApprovalMode 的询问语义
             #（否则 AUTO_EDIT/DEFAULT 下 echo 之类就永不再问，与既有契约冲突）
             exec_allowed_reason = evaluation.reason
-
-        exec_allowed_reason = ""
+            exec_policy_verdict = "allow"
 
         if self.enforce_protected:
             reason = protected_reason(req.path)
@@ -174,9 +193,10 @@ class PermissionEngine:
             return Decision(
                 Effect.ALLOW,
                 exec_allowed_reason or "本会话内已授权同类操作",
+                policy=exec_policy_verdict,
             )
 
-        return Decision(Effect.ASK, "")
+        return Decision(Effect.ASK, exec_allowed_reason, policy=exec_policy_verdict)
 
     # ------------------------------------------------------------------
     @staticmethod

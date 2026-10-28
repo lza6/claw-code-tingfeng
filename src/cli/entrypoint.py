@@ -82,6 +82,11 @@ def workflow_run(
     recover: bool = typer.Option(False, "--recover", help="从上次中断的状态恢复"),
     intent: str = typer.Option("implement", "--intent", help="执行意图: implement (实现), debate (辩论/设计), explore (探索)"),
     dimensions: list[str] = typer.Option([], "--dimension", "-d", help="启用维度引导 (如: creative, adversarial, audit)"),
+    autonomy: str = typer.Option(
+        "",
+        "--autonomy",
+        help="挂机级别：supervised(有人盯) / semi(只问高风险) / unattended(不打扰自决)",
+    ),
 ):
     """
     执行自动化工作流 (识别 -> 规划 -> 执行 -> 审查 -> 发现)
@@ -97,6 +102,20 @@ def workflow_run(
     from ..workflow.engine import WorkflowEngine
 
     workdir = Path.cwd()
+
+    # 挂机级别：显式 --autonomy 优先，其次沿用环境变量（CLAWD_AUTONOMY）
+    if autonomy:
+        from ..agent.autonomy import AutonomyLevel
+
+        try:
+            level = AutonomyLevel(autonomy.strip().lower())
+        except ValueError:
+            valid = " / ".join(m.value for m in AutonomyLevel)
+            console.print(f"[bold red]--autonomy 取值无效:[/bold red] {autonomy}（可选: {valid}）")
+            raise typer.Exit(code=2)
+        os.environ["CLAWD_AUTONOMY"] = level.value
+        console.print(f"[dim]挂机级别：{level.label}[/dim]")
+
     engine = WorkflowEngine(workdir=workdir, max_iterations=iterations, budget_str=budget)
     engine._use_isolation = isolation
 
@@ -678,6 +697,56 @@ app.add_typer(session_app, name="session")
 
 # 注册模块化命令
 _REGISTRATION_FAILURES = _register_command_modules()
+
+
+@app.command(name="permissions")
+def permissions_explain(
+    rules: bool = typer.Option(False, "--rules", help="额外列出命令策略规则明细"),
+):
+    """
+    权限与挂机的中文说明：审批模式 / 挂机级别 / 拒绝结论 / 受保护路径
+
+    不需要记英文枚举，这里全部用中文讲清楚"会发生什么、风险在哪"。
+    """
+    from ..agent.autonomy import AutonomyLevel
+    from ..core.approval_mode import describe_approval_modes
+    from ..core.exec_policy import Decision as ExecDecision
+    from ..core.exec_policy import ExecPolicy
+    from ..core.permissions import Effect, protected_reason
+
+    console.print("[bold]一、审批模式（人盯着的时候用）[/bold]")
+    for line in describe_approval_modes().splitlines()[1:]:
+        console.print(line)
+
+    console.print(chr(10) + "[bold]二、挂机级别（让 Agent 自己跑完时用）[/bold]")
+    for level in AutonomyLevel:
+        console.print(f"- {level.label}（{level.value}）")
+
+    console.print(chr(10) + "[bold]三、权限结论的含义[/bold]")
+    for effect in Effect:
+        console.print(f"- {effect.label}（{effect.value}）")
+
+    console.print(chr(10) + "[bold]四、命令策略结论[/bold]")
+    for decision in ExecDecision:
+        console.print(f"- {decision.label}（{decision.value}）")
+
+    console.print(chr(10) + "[bold]五、无论如何都不许工具改动的路径[/bold]")
+    for sample, desc in (
+        (".git/config", "版本控制目录内（会破坏可回滚性）"),
+        ("server.pem", "证书文件"),
+        ("id_rsa", "私钥文件"),
+        (".clawd_host_port", "含运行时令牌"),
+    ):
+        reason = protected_reason(sample)
+        console.print(f"- {sample}：{reason or desc}")
+
+    if rules:
+        console.print(chr(10) + "[bold]六、内置命令规则（前缀匹配，最长匹配优先）[/bold]")
+        policy = ExecPolicy()
+        for rule in policy.rules:
+            prefix = " ".join(rule.prefix)
+            console.print(f"- [cyan]{rule.decision.label}[/cyan] `{prefix}`"
+                          + (f" —— {rule.justification}" if rule.justification else ""))
 
 
 @app.command(name="engines")

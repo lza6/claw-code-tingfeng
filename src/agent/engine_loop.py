@@ -99,6 +99,8 @@ class AgentLoopConfig:
 
     #: 续跑时注入的历史消息（置于 system 之后、本次新目标之前）
     prior_messages: list[LLMMessage] | None = None
+    #: 挂机自主决策引擎（None = 有人盯，行为不变）
+    autonomy: object | None = None
 
 def build_initial_messages(config: AgentLoopConfig, user_content: str) -> list[LLMMessage]:
     """构造初始消息序列
@@ -179,6 +181,23 @@ async def _run_agent_loop(
     _reflection_count = 0
 
     for iteration in range(config.max_iterations):
+        # 挂机护栏：预算/失败/空转达上限就停，返回阶段性结论（而不是无限跑）
+        if config.autonomy is not None:
+            try:
+                stop, why = config.autonomy.check_stop(
+                    iterations=iteration,
+                    consecutive_failures=_audit_retry_count,
+                    cost_usd=float(getattr(config.session, 'total_cost', 0.0) or 0.0),
+                )
+            except Exception as e:  # noqa: BLE001 — 护栏自身异常不能阻断任务
+                warn(f'挂机护栏检查异常（忽略本次检查）: {e}')
+                stop, why = False, ''
+            if stop:
+                warn(f'挂机护栏触发：{why}')
+                config.session.final_result = f'已按挂机护栏停止：{why}'
+                config.session.is_complete = False
+                break
+
         if _shutdown or (config._shutdown_requested_getter and config._shutdown_requested_getter()):
             warn('用户请求关闭，提前终止代理循环')
             config.session.final_result = '用户请求关闭，任务已终止。'

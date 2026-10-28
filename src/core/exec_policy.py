@@ -24,10 +24,22 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 
+#: 命令策略结论的中文名
+DECISION_LABELS: dict[str, str] = {
+    "allow": "允许执行",
+    "prompt": "需审批",
+    "forbidden": "禁止执行",
+}
+
+
 class Decision(str, Enum):
     ALLOW = "allow"
     PROMPT = "prompt"
     FORBIDDEN = "forbidden"
+
+    @property
+    def label(self) -> str:
+        return DECISION_LABELS.get(self.value, self.value)
 
 
 @dataclass(frozen=True)
@@ -102,6 +114,23 @@ BUILTIN_RULES: tuple[Rule, ...] = (
     Rule(("rg",), Decision.ALLOW, ""),
     Rule(("pwd",), Decision.ALLOW, ""),
     Rule(("echo",), Decision.ALLOW, ""),
+    # 只读探查类（挂机时模型需要这些来了解现状，否则寸步难行）
+    Rule(("find",), Decision.ALLOW, ""),
+    Rule(("head",), Decision.ALLOW, ""),
+    Rule(("tail",), Decision.ALLOW, ""),
+    Rule(("wc",), Decision.ALLOW, ""),
+    Rule(("sort",), Decision.ALLOW, ""),
+    Rule(("uniq",), Decision.ALLOW, ""),
+    Rule(("tree",), Decision.ALLOW, ""),
+    Rule(("du",), Decision.ALLOW, ""),
+    Rule(("df",), Decision.ALLOW, ""),
+    Rule(("which",), Decision.ALLOW, ""),
+    Rule(("whoami",), Decision.ALLOW, ""),
+    Rule(("date",), Decision.ALLOW, ""),
+    Rule(("git", "branch"), Decision.ALLOW, ""),
+    Rule(("git", "rev-parse"), Decision.ALLOW, ""),
+    Rule(("python", "--version"), Decision.ALLOW, ""),
+    Rule(("mkdir",), Decision.ALLOW, "只创建目录，可回滚"),
     Rule(("python", "-c"), Decision.PROMPT, "任意代码执行需确认"),
     Rule(("node", "-e"), Decision.PROMPT, "任意代码执行需确认"),
 )
