@@ -53,3 +53,14 @@
   3. 每批后必须：`import_sweep --strict-exit` + `pytest tests/cli tests/server -q`。
 - 本轮实际成果（安全口径）：src ruff 433 → 319（-114，仅空白 101 + 安全未用导入 11 + 2）；剩余 319 条
   （RUF100 39 / E402 34 / F401 31 / RUF012 23 / E741 21 / B904 20）多为 re-export 兼容块纠缠，需逐文件人工判断。
+
+## ruff 自动修复的第二条红线（2026-10-28）
+
+**`I001`（import 排序）在本项目会引入循环导入。** 实测：对 src/ 跑 `--select I001 --fix`（15 处）后，
+`tests/server/test_auth.py` 等 4 个模块收集期报
+`ImportError: cannot import name 'get_logger' from partially initialized module 'src.utils' (circular import)`。
+已全量回退（工作区 0 改动，319 条 ruff 恢复原状）。
+
+结论：本项目 ruff 可安全自动化只到「纯空白（W291/W292/W293）+ 非 unsafe 的 F401」。
+**禁止自动修**：I001（顺序敏感，有循环导入）、RUF100（会解除 noqa 保护，进而让 F401 删掉兼容 re-export）、
+B904/RUF012/E741（本版 ruff 无 autofix，需逐点人工判断）。
