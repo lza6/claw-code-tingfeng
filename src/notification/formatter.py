@@ -172,9 +172,22 @@ def build_footer(payload: FullNotificationPayload, markdown: bool = True) -> str
     return " | ".join(parts)
 
 
+def _parse_timestamp(value: str) -> datetime:
+    """解析 payload.timestamp：兼容 epoch 数字串与 ISO-8601（notifier 传 isoformat）"""
+    text = str(value).strip()
+    try:
+        return datetime.fromtimestamp(float(text))
+    except (TypeError, ValueError):
+        pass
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return datetime.now()
+
+
 def format_session_start(payload: FullNotificationPayload) -> str:
     """Format session start notification."""
-    time = datetime.fromtimestamp(float(payload.timestamp)).strftime("%H:%M:%S")
+    time = _parse_timestamp(payload.timestamp).strftime("%H:%M:%S")
     project = project_display(payload)
 
     lines = [

@@ -486,7 +486,7 @@ class WatchTool(BaseTool):
                     exit_code=1,
                 )
             watcher = self._watchers[path]
-            changes = watcher.get_changes()
+            changes = list(watcher.get_changes())
         else:
             # 获取所有监控器的变化
             changes = {}

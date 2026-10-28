@@ -181,7 +181,7 @@ class PipelineOrchestrator:
         """
         if not self._stages:
             raise ClawdError(
-                ErrorCode.INVALID_PARAMETER,
+                ErrorCode.CONFIG_MISSING,
                 "Pipeline stages not configured. Call configure() first."
             )
 
@@ -211,6 +211,9 @@ class PipelineOrchestrator:
 
             # 执行阶段循环
             final_artifacts = await self._execute_stages()
+
+            # 回写 artifacts 到状态（否则 get_artifact() 恒 None、状态文件 artifacts 恒空）
+            self._state.artifacts = dict(final_artifacts)
 
             # 标记完成
             self._state.active = False
@@ -387,7 +390,7 @@ class PipelineOrchestrator:
                 error_msg = f"Stage '{stage.name}' failed: {result.error}"
                 self._logger.error(error_msg)
                 raise ClawdError(
-                    ErrorCode.TASK_FAILED,
+                    ErrorCode.WORKFLOW_EXECUTION_ERROR,
                     error_msg,
                 )
 

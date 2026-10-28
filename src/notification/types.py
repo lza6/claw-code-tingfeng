@@ -417,6 +417,10 @@ class FullNotificationPayload:
     question: str | None = None
     incomplete_tasks: int | None = None
     tmux_pane: str | None = None
+    # formatter 消费的字段（2026-10-28 补：此前缺失导致 20/38 事件类型 AttributeError）
+    tmux_tail: str | None = None
+    agent_name: str | None = None
+    agent_type: str | None = None
 
 
 @dataclass
