@@ -16,7 +16,8 @@ def _make_plan(tmp_path: Path, prd_content: str, with_spec: bool = True, slug: s
     specs.mkdir(parents=True)
     (plans / f"prd-{slug}.md").write_text(prd_content, encoding="utf-8")
     if with_spec:
-        (specs / f"test-spec-{slug}.md").write_text("# spec", encoding="utf-8")
+        # 原实现语义：test spec 与 PRD 同在 .omx/plans/ 目录
+        (plans / f"test-spec-{slug}.md").write_text("# spec", encoding="utf-8")
     return plans, specs
 
 
@@ -64,8 +65,8 @@ def test_returns_none_on_empty_dir(tmp_path):
 
 def test_takes_last_match_and_filters_specs_by_slug(tmp_path):
     plans, specs = _make_plan(tmp_path, '$team 1 "旧任务"\n$team 5 "新任务"\n', slug="auth")
-    (specs / "test-spec-other.md").write_text("# other", encoding="utf-8")
+    (plans / "test-spec-other.md").write_text("# other", encoding="utf-8")
     hint = _read_approved_execution_launch_hint(tmp_path, mode="team")
     assert hint is not None
     assert hint.task == "新任务"
-    assert hint.test_spec_paths == [str(specs / "test-spec-auth.md")]
+    assert hint.test_spec_paths == [str(plans / "test-spec-auth.md")]

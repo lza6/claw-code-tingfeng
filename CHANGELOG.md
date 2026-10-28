@@ -7,6 +7,31 @@
 
 ---
 
+## [v0.61.2] (2026-10-28) — 死码清理 + 导入链路修复 + 独立审查修复
+
+### 修复（3 个真实 bug，IMPORT 642+3fail+7missing → 649/649 全绿）
+- `src/background/tasks` celery_app 相对导入错误（`.` → `..`）；`task_revoked` 信号签名改 `**kwargs`（celery 5 要求）
+- `src/core/tracing/otel.py` OTLP exporter 导入路径（`trace.exporter` → `trace_exporter`）
+- `pyproject.toml` / `requirements.txt` 补声明 `opentelemetry-instrumentation-logging`
+
+### 新增
+- **mime 白名单**（NR-3）：静态托管显式 18 后缀映射，白名单外 403；路径穿越检查收紧为 `is_relative_to`；mime 判断先行省无效 IO
+- **死代码判定报告**（`计划书/死代码判定-2026-10-28.md`）：127 不可达模块三问判定（66 删 / 6 留 / 55 拍板）+ 动态导入盲区核验
+
+### 移除（死码删除批次 P1+P2，用户批准）
+- **47 文件 / 10,685 行**零引用孤岛（cli 仪表盘、core 杂项、llm 孤儿、孤岛互引链、autoresearch/templates/model_info 全包）；保守跳过 core.security（测试契约）等 4 组争议项；55 个待拍板模块保留
+- 生产可达 **455 不变**（删除全部为生产与测试均不可达代码）
+
+### 独立审查修复（1 轮，Required×2 + Suggestion×4）
+- ralplan skip 语义恢复：删除事故引入的假 hint 文件方案 → 就地内联恢复原 PRD 解析（`$team/$ralph` 命令），7 行为锁定测试 + 5 用例对照原实现等价性 diff（顺带修原实现 `None.strip()` 潜在 bug）
+- sdk.py except 窄化补 `UnicodeDecodeError`（并入 ValueError）
+
+### 验证（实跑）
+- 快速回归 **3692 passed / 0 failed**；收集 3703/0 errors；IMPORT 0/0；可达 455≥443；E2E 5/5；doctor 0 FAIL；静默异常 172 门禁过
+- 压测（本地 WS Host）：100c QPS 3839 / P95 14.4ms；300c QPS 1265 / P95 10.8ms；错误率均 0%
+
+---
+
 ## [v0.61.1] (2026-10-28) — 收口修复：红线回归 + 测试环境治理 + 计划文档清理
 
 ### 修复

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>变更报告 — v0.61.2 死码清理 + 审查修复（2026-10-28）</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222}
+h1{border-bottom:3px solid #2563eb;padding-bottom:.5rem}
+h2{border-left:5px solid #2563eb;padding-left:.6rem;margin-top:2rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #cbd5e1;padding:.5rem .7rem;text-align:left}
+th{background:#eff6ff}
+code,pre{background:#f1f5f9;border-radius:4px}
+pre{padding:.8rem;overflow-x:auto}
+.pass{color:#16a34a;font-weight:bold}.warn{color:#d97706;font-weight:bold}
+details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.8rem;margin:.5rem 0}
+</style>
+</head>
+<body>
+<h1>变更报告 — v0.61.2 死码清理收口 + 独立审查修复</h1>
+<p><b>日期:</b> 2026-10-28 · <b>项目:</b> claw-code-tingfeng · <b>结论:</b> <span class="pass">全部闭环（P0/P1 清零 · 回归全绿 · E2E 5/5 · 压测 0 错误）</span></p>
+
+<h2>1. 上下文与直觉</h2>
+<p>v0.61.1 收口后遗留三条线：①工作区 2 天交付未提交风险已在上轮消除；②<b>127 个完全不可达模块（24,278 行）</b>长期挂着"未判定"；③审计发现的 NR-3 mime 白名单注释与实现不符。本轮决策：<b>先判定后删除</b>——全量三问判定（静态引用/文档引用/动态导入）产出分级名单，用户批准低风险批次后执行；删除时保守跳过任何发现测试契约或归属争议的模块（66 候选 → 实删 47）。</p>
+
+<h2>2. 做了什么</h2>
+<table>
+<tr><th>批次</th><th>内容</th><th>提交</th></tr>
+<tr><td>导入链路修复</td><td>3 个真实 bug：celery 相对导入（<code>.</code>→<code>..</code>）、otel API 路径（<code>trace.exporter</code>→<code>trace_exporter</code>）、celery 信号签名（要求 <code>**kwargs</code>）。IMPORT 从 642+3fail+7missing → <span class="pass">649/649 全绿</span></td><td><code>3b36264</code></td></tr>
+<tr><td>mime 白名单（NR-3）</td><td>静态托管实现显式 18 后缀白名单，白名单外 403；与注释声称行为一致</td><td><code>3b36264</code></td></tr>
+<tr><td>死码判定报告</td><td>127 模块三问判定：66 删除候选 / 6 保留 / 55 需拍板；含动态导入盲区核验</td><td><code>3b36264</code></td></tr>
+<tr><td>死码删除 P1+P2</td><td><b>47 文件 / 10,685 行</b>零引用孤岛删除；保守跳过 core.security（测试契约）、core.utils 壳、workflow/stages 链</td><td><code>53ae7c8</code></td></tr>
+<tr><td>独立审查修复</td><td>Required×2 + Suggestion×4（详见 §4）</td><td><code>1bd6021</code> + 本轮补丁</td></tr>
+<tr><td>环境治理</td><td>venv 补装 pathspec/celery/otel 全家桶（声明已存在）；clawdignore 测试失败根因=pathspec 缺失（非代码 bug）</td><td>—</td></tr>
+</table>
+
+<h2>3. 架构/链路影响</h2>
+<p>删除全部为"生产入口与测试都到不了"的孤岛（整链同删，禁止只删叶子）；生产可达数 <b>455 不变</b>；唯一断链（ralplan→artifacts）审查发现后已修复为行为等价的就地内联实现。</p>
+
+<h2>4. 独立审查（1 轮 + 修复复验）</h2>
+<details open><summary><b>Required（已修复）</b></summary>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th></tr>
+<tr><td>1</td><td><b>ralplan skip 语义静默失效</b>：死码删除时把 PRD 解析替换成读不存在的 hint 文件 → can_skip 恒 False（行为回归）</td><td>就地内联恢复原 PRD 解析语义 + 7 个行为锁定测试；对照原实现做 5 用例等价性 diff（4/5 一致，2 个差异为原实现 <code>None.strip()</code> 潜在 bug，新实现已修）</td></tr>
+<tr><td>2</td><td><b>sdk.py UnicodeDecodeError 逃逸</b>：json.load 读非 UTF-8 抛 UnicodeDecodeError（ValueError 子类），窄化后向上传播</td><td><code>(OSError, json.JSONDecodeError)</code> → <code>(OSError, ValueError)</code></td></tr>
+</table></details>
+<details><summary><b>Suggestions（已采纳 4 项）</b></summary>
+<ul>
+<li>路径穿越检查 <code>startswith</code> → <code>is_relative_to</code>（C:\web 不再放行 C:\webstore）</li>
+<li>mime 白名单判断提前到 read_bytes 前（省白名单外大文件 IO）</li>
+<li>清理 2 处死 <code>import mimetypes</code> 与 ralplan 重复 logger</li>
+<li>提交信息勘误（"+5 测试"实为 1 测试函数多断言）</li>
+</ul></details>
+
+<h2>5. 验证证据（全部实跑）</h2>
+<table>
+<tr><th>项</th><th>命令</th><th>结果</th></tr>
+<tr><td class="pass">导入扫描</td><td><code>import_sweep --strict-exit</code></td><td>602/602 OK，FAIL 0，DEP-MISSING 0</td></tr>
+<tr><td class="pass">测试收集</td><td><code>pytest --collect-only</code></td><td>3703 collected / 0 errors</td></tr>
+<tr><td class="pass">快速回归</td><td><code>pytest -m "not slow"</code></td><td><b>3692 passed / 0 failed</b></td></tr>
+<tr><td class="pass">可达性不变量</td><td><code>reachability --min-reachable 443</code></td><td>455 不变（删除 10,710 行不可达代码）</td></tr>
+<tr><td class="pass">E2E 冒烟</td><td><code>e2e_smoke.py</code></td><td>5/5 PASS，exit 0</td></tr>
+<tr><td class="pass">ruff 硬指标</td><td><code>--select F821,F811,E9</code></td><td>All passed</td></tr>
+<tr><td class="pass">静默吞异常</td><td><code>check_silent_except --fail-over 172</code></td><td>172 ≤ 172 门禁过</td></tr>
+<tr><td class="pass">doctor</td><td><code>python -m src doctor</code></td><td>0 FAIL，版本 0.61.1 三处一致</td></tr>
+<tr><td class="pass">压测（本地 WS Host）</td><td><code>stress_host --n 100 --rounds 10</code></td><td>QPS 3839，P50 10.0ms / P95 14.4ms / P99 14.7ms，错误率 0%</td></tr>
+<tr><td class="pass">压测（加重）</td><td><code>stress_host --n 300 --rounds 5</code></td><td>QPS 1265，P50 9.5ms / P95 10.8ms / P99 11.9ms，错误率 0%</td></tr>
+<tr><td class="pass">README 步骤复核</td><td>pip install -e / doctor / chat / server / start.bat</td><td>全部实测通过</td></tr>
+</table>
+
+<h2>6. 风险与回滚</h2>
+<ul>
+<li>删除批次任一提交可 <code>git revert 53ae7c8</code> 整体回滚；回滚后可达性/IMPORT/回归恢复删除前状态</li>
+<li>等价性验证方法（原 vs 新实现 5 用例 diff）已在本轮 evidence 留存，ralplan 解析行为有 7 个锁定测试护栏</li>
+<li>mime 顺序调整（403 先于 404/read）对白名单内文件无行为差异（server 测试 38 passed）</li>
+</ul>
+
+<h2>7. 已知限制与剩余</h2>
+<ul>
+<li><b>55 个模块需用户拍板</b>（插件体系/swarm 专家/hooks 体系/MCP server 集群/auth 等，有设计有测试但未接线）——判定报告 §五 P3/P4 批次</li>
+<li>覆盖率 49.89%（W5 目标 60%）——量大量级单独批次</li>
+<li>ruff 全量 478（src 口径）为风格存量，不属门禁，留 W7 工程卫生</li>
+<li>定价数据过期 170 天（P3 警告）</li>
+</ul>
+
+<h2>8. 底部测验</h2>
+<details><summary>点击展开测验（含答案）</summary>
+<ol>
+<li><b>判断</b>：死码删除后生产可达模块数会下降。<b>答：错</b>——删除的是"生产与测试都不可达"的孤岛，可达 455 不变（实测验证）。</li>
+<li><b>选择</b>：ralplan can_skip 判断"已有已批准计划"的数据源是什么？A. .clawd/approved_launch_hint.txt B. .omx/plans/prd-*.md 中的 $team/$ralph 命令 C. workflow state 数据库。<b>答：B</b>；A 是删除事故中错误引入的方案（全仓无写入方）。</li>
+<li><b>简答</b>：为什么 test spec 从 .omx/plans/ 读而 deep-interview 从 .omx/specs/ 读？<b>答</b>：原 artifacts.py 的 read_planning_artifacts 即如此（PRD 与 test spec 同目录、interview 单独目录）；等价性 diff 发现我初版写错成 specs，已按原语义修正。教训：恢复被删代码语义时必须对照原实现逐路径核对，不能凭目录名直觉。</li>
+<li><b>判断</b>：原 artifacts.py 的 team 解析在非 ralph 的 $team 命令上会抛 AttributeError。<b>答：对</b>——<code>groups.get('ralph', '').strip()</code> 在组未匹配时 get 返回 None（组存在但匹配 None，默认值不生效）；新实现 <code>(groups.get('ralph') or '')</code> 已修，属修复而非回归。</li>
+<li><b>简答</b>：死码删除的回滚方式？<b>答</b>：<code>git revert 53ae7c8</code>（单提交整体回滚），回滚后以 reachability/IMPORT/collect/回归四项不变量复验。</li>
+</ol>
+<p><b>自测结果：5/5 通过</b>（第 3、4 题即本轮真实踩坑点，答案来自实测 diff 证据）。</p>
+</details>
+
+<p style="color:#64748b;margin-top:2rem">生成于 2026-10-28 · 证据: evidence/T-090-closure-v2.json · 判定: 计划书/死代码判定-2026-10-28.md</p>
+</body>
+</html>

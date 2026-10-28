@@ -88,7 +88,8 @@ def _read_approved_execution_launch_hint(cwd: Path, mode: str = "team"):
     plans_dir = Path(cwd) / '.omx' / 'plans'
     specs_dir = Path(cwd) / '.omx' / 'specs'
     prd_paths = _read_matching_paths(plans_dir, _PRD_PATTERN)
-    test_spec_paths = _read_matching_paths(specs_dir, _TEST_SPEC_PATTERN)
+    # 注意：原实现 test spec 与 PRD 同目录（.omx/plans），仅 deep-interview 在 .omx/specs
+    test_spec_paths = _read_matching_paths(plans_dir, _TEST_SPEC_PATTERN)
     interview_paths = _read_matching_paths(specs_dir, _DEEP_INTERVIEW_PATTERN)
 
     # 规划完整性：PRD + test spec 均存在
