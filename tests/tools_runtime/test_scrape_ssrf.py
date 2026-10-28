@@ -104,12 +104,26 @@ def test_urllib_redirect_handler_blocks_private_target():
         handler.redirect_request(req, None, 302, 'Found', {}, 'http://169.254.169.254/latest/meta-data/')
 
 
-def test_urllib_redirect_handler_allows_public_target():
+def test_urllib_redirect_handler_allows_public_target(monkeypatch):
+    """公网目标应放行。
+
+    注意：这里必须 mock DNS。原实现依赖真实 getaddrinfo，全量跑测试时
+    会因 DNS 抖动/超时而随机失败（实测在全量回归里偶发 1 failed，单独跑又通过）。
+    """
+    import socket as _socket
     import urllib.request
 
-    from src.tools_runtime.scrape_tool import SafeRedirectHandler
+    from src.tools_runtime import scrape_tool
 
-    handler = SafeRedirectHandler()
+    # 固定解析到公网 IP，杜绝网络抖动导致的不稳定
+    monkeypatch.setattr(
+        scrape_tool.socket, 'getaddrinfo',
+        lambda host, port, *a, **kw: [
+            (_socket.AF_INET, _socket.SOCK_STREAM, 6, '', ('93.184.216.34', 0))
+        ],
+    )
+
+    handler = scrape_tool.SafeRedirectHandler()
     req = urllib.request.Request('https://example.com/')
     # 不实际发请求，只验证不会因安全校验被拒绝（返回 Request 对象）
     redirected = handler.redirect_request(req, None, 302, 'Found', {}, 'https://example.org/next')

@@ -356,3 +356,118 @@ class TestSemiRefinedByPolicy:
     def test_normal_write_proceeds_in_semi(self, tmp_path: Path):
         engine = AutonomyEngine(AutonomyLevel.SEMI, workdir=tmp_path, audit=False)
         assert engine.decide_permission(_req(path="src/a.py"), Effect.ASK).action is Action.PROCEED
+
+
+class TestUserPreApproval:
+    """挂机前用 `clawd autonomy allow` 预授权，避免挂机中途被跳过"""
+
+    def test_preapproved_command_proceeds(self, tmp_path: Path):
+        (tmp_path / ".clawd" / "autonomy").mkdir(parents=True)
+        (tmp_path / ".clawd" / "autonomy" / "allow.json").write_text(
+            '{"commands": ["pytest -q", "npm test"]}', encoding="utf-8"
+        )
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=False)
+
+        d = engine.decide_permission(
+            _req(action="exec", path=None, tool="BashTool", command="pytest -q tests/"),
+            Effect.ASK, "requires approval", policy="prompt",
+        )
+
+        assert d.action is Action.PROCEED
+        assert "预先放行" in d.reason
+
+    def test_non_preapproved_still_skipped(self, tmp_path: Path):
+        (tmp_path / ".clawd" / "autonomy").mkdir(parents=True)
+        (tmp_path / ".clawd" / "autonomy" / "allow.json").write_text(
+            '{"commands": ["npm test"]}', encoding="utf-8"
+        )
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=False)
+
+        d = engine.decide_permission(
+            _req(action="exec", path=None, tool="BashTool", command="pip install x"),
+            Effect.ASK, "requires approval", policy="prompt",
+        )
+
+        assert d.action is Action.SKIP
+
+    def test_prefix_must_match_from_start(self, tmp_path: Path):
+        (tmp_path / ".clawd" / "autonomy").mkdir(parents=True)
+        (tmp_path / ".clawd" / "autonomy" / "allow.json").write_text(
+            '{"commands": ["npm test"]}', encoding="utf-8"
+        )
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=False)
+
+        # "echo npm test" 不以 npm 开头 → 不应命中
+        d = engine.decide_permission(
+            _req(action="exec", path=None, tool="BashTool", command="echo npm test"),
+            Effect.ASK, "requires approval", policy="prompt",
+        )
+        assert d.action is Action.SKIP
+
+    def test_missing_allow_file_is_safe(self, tmp_path: Path):
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=False)
+        assert engine.extra_allowed_prefixes() == []
+
+
+class TestStopFile:
+    """挂机中叫停：放一个 STOP 文件即可，下一检查点停下"""
+
+    def test_stop_requested_detected(self, tmp_path: Path):
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=False)
+        assert engine.stop_requested() is False
+
+        (tmp_path / ".clawd" / "autonomy").mkdir(parents=True)
+        (tmp_path / ".clawd" / "autonomy" / "STOP").write_text("stop", encoding="utf-8")
+
+        assert engine.stop_requested() is True
+        stop, why = engine.check_stop(iterations=1)
+        assert stop is True
+        assert "STOP" in why
+        assert "保留当前进度" in why
+
+    def test_cli_stop_and_resume(self, tmp_path: Path):
+        from src.cli.entrypoint import app as cli_app
+
+        stopped = runner.invoke(cli_app, ["autonomy", "stop", "--dir", str(tmp_path)])
+        assert stopped.exit_code == 0
+        assert (tmp_path / ".clawd" / "autonomy" / "STOP").exists()
+
+        resumed = runner.invoke(cli_app, ["autonomy", "resume", "--dir", str(tmp_path)])
+        assert resumed.exit_code == 0
+        assert not (tmp_path / ".clawd" / "autonomy" / "STOP").exists()
+
+
+class TestAutonomyCli:
+    def test_allow_list_revoke_roundtrip(self, tmp_path: Path):
+        from src.cli.entrypoint import app as cli_app
+
+        r1 = runner.invoke(cli_app, ["autonomy", "allow", "npm test", "--dir", str(tmp_path)])
+        assert r1.exit_code == 0
+        assert "已预先放行" in r1.output
+
+        r2 = runner.invoke(cli_app, ["autonomy", "list", "--dir", str(tmp_path)])
+        assert "npm test" in r2.output
+
+        r3 = runner.invoke(cli_app, ["autonomy", "revoke", "npm test", "--dir", str(tmp_path)])
+        assert "已取消" in r3.output
+
+        r4 = runner.invoke(cli_app, ["autonomy", "list", "--dir", str(tmp_path)])
+        assert r4.exit_code == 0
+
+    def test_log_shows_chinese_audit(self, tmp_path: Path):
+        from src.cli.entrypoint import app as cli_app
+
+        engine = AutonomyEngine(AutonomyLevel.UNATTENDED, workdir=tmp_path, audit=True)
+        engine.decide_permission(_req(path="src/a.py"), Effect.ASK)
+
+        result = runner.invoke(cli_app, ["autonomy", "log", "--dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "放行" in result.output
+
+    def test_log_when_empty(self, tmp_path: Path):
+        from src.cli.entrypoint import app as cli_app
+
+        result = runner.invoke(cli_app, ["autonomy", "log", "--dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "暂无审计记录" in result.output

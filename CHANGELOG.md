@@ -7,6 +7,40 @@
 
 ---
 
+## [v0.73.0] (2026-10-29) — 挂机可干预：预授权 / 叫停 / 审计查看
+
+### 解决的问题
+挂机最大的顾虑是"跑偏了没法管"。之前只有"中断进程"一条路，太粗暴。
+现在提供三条轻量通道，全部中文：
+
+| 场景 | 命令 |
+|:---|:---|
+| 挂机**前**授权某命令（否则挂机时会因无人审批被跳过） | `clawd autonomy allow "npm test"` |
+| 取消授权 / 查看清单 | `clawd autonomy revoke "npm test"` / `clawd autonomy list` |
+| 挂机**中**叫停（下一检查点停下并保留进度） | `clawd autonomy stop` |
+| 撤销叫停 | `clawd autonomy resume` |
+| 事后看它做过哪些自主决定 | `clawd autonomy log -n 20` |
+
+实现：`.clawd/autonomy/allow.json`（命令前缀白名单，**每次决策重读**，支持挂机中途追加）
++ `.clawd/autonomy/STOP`（检查点检测）+ `decisions.jsonl`（中文审计）。
+
+### 语义细节
+- 预授权按**前缀从命令开头**匹配：`npm test` 命中 `npm test --watch`，
+  但 `echo npm test` 不命中（防止借 shell 拼接绕过）
+- STOP 一旦存在，`check_stop` 立刻返回停止并保留进度；删掉文件即恢复
+- 预授权优先级高于"策略要求审批但无人可批 → 跳过"
+
+### 验证
+- `tests/agent/test_autonomy.py` **42 passed**（新增 9 个：预授权命中/不命中/前缀边界/
+  缺失文件安全、STOP 检测与 CLI stop/resume、CLI allow/list/revoke 往返、log 中文输出与空态）
+- 全量回归、IMPORT、ruff 硬指标见下
+
+### 顺带修掉一个不稳定测试
+`test_scrape_ssrf.py::test_urllib_redirect_handler_allows_public_target` 依赖真实 DNS
+（`getaddrinfo`），全量跑时偶发失败、单独跑又通过。已改为 monkeypatch 固定解析到公网 IP。
+
+---
+
 ## [v0.72.0] (2026-10-29) — 挂机细化：半挂机按策略分级 + 成本护栏真正生效
 
 ### 修复（两个"看起来有其实没有"）

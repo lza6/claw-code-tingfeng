@@ -693,6 +693,135 @@ def session_resume(
     raise typer.Exit(code=0)
 
 
+# ---------------------------------------------------------------------------
+# 挂机控制命令组（挂机前授权、挂机中叫停、事后看审计）
+# ---------------------------------------------------------------------------
+autonomy_app = typer.Typer(help="挂机控制：预授权命令 / 叫停 / 查看审计（.clawd/autonomy/）")
+
+
+def _autonomy_dir(workdir: Path | None) -> Path:
+    return (workdir or Path.cwd()).resolve() / ".clawd" / "autonomy"
+
+
+@autonomy_app.command("allow")
+def autonomy_allow(
+    command: str = typer.Argument(..., help='要预先放行的命令（如 "npm test" 或 "pytest"）'),
+    workdir: Path | None = typer.Option(None, "--dir", help="项目根（默认当前目录）"),
+):
+    """挂机前预先放行某个命令前缀（挂机期间就不会因无人审批而跳过它）"""
+    import json
+
+    d = _autonomy_dir(workdir)
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / "allow.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    commands = data.get("commands") if isinstance(data, dict) else None
+    if not isinstance(commands, list):
+        commands = []
+    if command not in commands:
+        commands.append(command)
+    path.write_text(json.dumps({"commands": commands}, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+    console.print(f"[green]已预先放行:[/green] {command}（共 {len(commands)} 条）")
+
+
+@autonomy_app.command("revoke")
+def autonomy_revoke(
+    command: str = typer.Argument(..., help="要取消放行的命令"),
+    workdir: Path | None = typer.Option(None, "--dir"),
+):
+    """取消某条预先放行"""
+    import json
+
+    path = _autonomy_dir(workdir) / "allow.json"
+    if not path.is_file():
+        console.print("[yellow]没有预先放行记录[/yellow]")
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    commands = [c for c in (data.get("commands") or []) if c != command]
+    path.write_text(json.dumps({"commands": commands}, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+    console.print(f"[green]已取消:[/green] {command}（剩 {len(commands)} 条）")
+
+
+@autonomy_app.command("list")
+def autonomy_list(
+    workdir: Path | None = typer.Option(None, "--dir"),
+):
+    """查看当前预先放行的命令"""
+    import json
+
+    path = _autonomy_dir(workdir) / "allow.json"
+    if not path.is_file():
+        console.print("[yellow]暂无预先放行[/yellow]")
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        console.print("[red]allow.json 损坏[/red]")
+        raise typer.Exit(code=1)
+    for cmd in data.get("commands") or []:
+        console.print(f"- {cmd}")
+
+
+@autonomy_app.command("stop")
+def autonomy_stop(
+    workdir: Path | None = typer.Option(None, "--dir"),
+):
+    """请求挂机在下一次检查点停止（写 STOP 文件）"""
+    d = _autonomy_dir(workdir)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "STOP").write_text("stop", encoding="utf-8")
+    console.print("[yellow]已请求停止：挂机将在下一次检查点停下（保留进度）[/yellow]")
+
+
+@autonomy_app.command("resume")
+def autonomy_resume(
+    workdir: Path | None = typer.Option(None, "--dir"),
+):
+    """撤销停止请求"""
+    stop_file = _autonomy_dir(workdir) / "STOP"
+    if stop_file.exists():
+        stop_file.unlink()
+        console.print("[green]已撤销停止请求[/green]")
+    else:
+        console.print("[dim]当前没有停止请求[/dim]")
+
+
+@autonomy_app.command("log")
+def autonomy_log(
+    tail: int = typer.Option(10, "--tail", "-n", help="显示最近多少条"),
+    workdir: Path | None = typer.Option(None, "--dir"),
+):
+    """查看挂机的自主决策审计（每条都带中文理由）"""
+    import json
+
+    path = _autonomy_dir(workdir) / "decisions.jsonl"
+    if not path.is_file():
+        console.print("[yellow]暂无审计记录[/yellow]")
+        return
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    for raw in lines[-tail:]:
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        console.print(
+            f"[dim]{entry.get('时间', '')}[/dim] "
+            f"[bold]{entry.get('决策', '')}[/bold] "
+            f"{entry.get('工具', '')} {entry.get('目标', '') or entry.get('命令', '')} "
+            f"—— {entry.get('理由', '')}"
+        )
+
+
+app.add_typer(autonomy_app, name="autonomy")
+
 app.add_typer(session_app, name="session")
 
 # 注册模块化命令

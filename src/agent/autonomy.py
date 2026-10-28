@@ -147,7 +147,13 @@ class AutonomyEngine:
         self.budget = budget or AutonomyBudget()
         self.stats = AutonomyStats()
         self.audit = audit
-        self.audit_path = self.workdir / ".clawd" / "autonomy" / "decisions.jsonl"
+        self.dir = self.workdir / ".clawd" / "autonomy"
+        self.audit_path = self.dir / "decisions.jsonl"
+        #: 用户预先放行的命令前缀文件（挂机前用 `clawd autonomy allow` 添加）
+        self.allow_path = self.dir / "allow.json"
+        #: 用户放置 `STOP` 文件即可让挂机在下一次检查点停下
+        self.stop_path = self.dir / "STOP"
+        self._extra_allow: list[list[str]] | None = None
 
     # ---------- 决策 ----------
     def decide_permission(
@@ -216,6 +222,12 @@ class AutonomyEngine:
             self._record(req, decision)
             return decision
 
+        # 用户挂机前显式授权的命令前缀 → 等同于策略允许
+        if req.action == "exec" and self._user_preapproved(getattr(req, "command", "")):
+            return self._auto_proceed(
+                req, f"挂机模式：命令命中你预先放行的清单（{req.command}），自决放行"
+            )
+
         if req.action == "exec" and policy == "allow":
             # 策略明确允许的命令（如 ls / git status）：挂机时放行，否则挂机会寸步难行
             return self._auto_proceed(
@@ -255,6 +267,39 @@ class AutonomyEngine:
             return policy != "allow"
         return False
 
+    # ---------- 用户预先放行（挂机前授权，避免挂在半路） ----------
+    def extra_allowed_prefixes(self) -> list[list[str]]:
+        """读取用户预先放行的命令前缀（每次重新读，支持挂机中途追加）"""
+        import json as _json
+
+        try:
+            raw = _json.loads(self.allow_path.read_text(encoding="utf-8"))
+        except (OSError, _json.JSONDecodeError):
+            return []
+        items = raw.get("commands") if isinstance(raw, dict) else raw
+        if not isinstance(items, list):
+            return []
+        out: list[list[str]] = []
+        for item in items:
+            if isinstance(item, str) and item.strip():
+                out.append(item.strip().split())
+            elif isinstance(item, list) and item:
+                out.append([str(x) for x in item])
+        return out
+
+    def _user_preapproved(self, command: str | None) -> bool:
+        if not command:
+            return False
+        argv = command.strip().split()
+        for prefix in self.extra_allowed_prefixes():
+            if len(argv) >= len(prefix) and argv[:len(prefix)] == prefix:
+                return True
+        return False
+
+    def stop_requested(self) -> bool:
+        """用户是否请求停止（放置 .clawd/autonomy/STOP 文件）"""
+        return self.stop_path.exists()
+
     # ---------- 停止条件 ----------
     def check_stop(
         self,
@@ -267,6 +312,10 @@ class AutonomyEngine:
         """是否该停下（返回：是否停止 + 中文理由）"""
         b = self.budget
 
+        if self.stop_requested():
+            return True, (
+                "检测到 .clawd/autonomy/STOP 文件：你要求停止，已按停并保留当前进度"
+            )
         if self.stats.consecutive_skips >= b.max_skips:
             return True, (
                 f"连续跳过 {self.stats.consecutive_skips} 次（超过上限 {b.max_skips}）："
