@@ -7,6 +7,49 @@
 
 ---
 
+## [v0.64.0] (2026-10-28) — 多引擎整合 + MCP 领域工具反向供给
+
+### 事实纠正（先纠正前提，再谈方案）
+"把 Codex / Grok / OpenCode / OpenClaw / Hermes / Pi 六个项目合并成一个"在技术上不成立：
+Rust/Go/TS 三套运行时、协议互不兼容。实测分类：
+- **引擎**：Codex（Rust，0.165.0 ✅）、OpenCode（Go，1.19.5 ✅）、OpenClaw（TS，Node 版本不兼容本机 ⚠️）
+- **非引擎**：Grok = 模型代理（属 provider 层）；Pi = 插件/上下文原语包（属能力层）
+- **无源码**：Hermes（参考库空目录）
+
+### 新增：三层整合
+1. **引擎层统一驱动**（`src/backends/base.py` + `registry.py`）
+   - `CliBackend`：子进程管理 + JSONL 归一化 + 硬超时 + **进程树强杀**
+   - `EngineProbe`：真实探活（ready / incompatible / not_installed / error），**不假装支持**
+   - 新增引擎只需一份 `CliEngineProfile`，不复制驱动逻辑
+   - `clawd engines [--json] [--run "..."]`：多引擎总览 + 用首个可用引擎执行
+2. **模型层**：Grok 等模型代理不进引擎表，只作 provider
+3. **领域层（关键）**：`src/mcp/domain_server.py` 把我们的能力暴露成标准 MCP server
+   - `clawd_read_file` / `clawd_grep` / `clawd_project_map` / `clawd_tool_list`
+   - Codex 侧注入：`CodexBackend(mcp_servers={"clawd": {...}})`
+
+### 实测中修掉的 4 个真 bug（只有真实往返才暴露）
+1. **MCP stdio 必须显式 UTF-8**：中文被 GBK 写出 → 客户端 UTF-8 解码失败 → 读任务死掉 → 全部请求超时
+2. **`for line in stdin` 预读缓冲**导致交互协议死锁 → 改 `readline()`
+3. **通知（无 id）不得回响应**，否则客户端视为协议违规
+4. **JSON error 事件必须计入 errors**，否则引擎失败被当成"无输出成功"（静默失败）
+
+### 验证（真实执行）
+- `pytest tests/backends tests/mcp` → **93 passed**（含真实 MCP 客户端子进程往返）
+- `clawd engines` 实测：codex `ready` / opencode `ready` / openclaw `incompatible`
+- **Codex 确实发现并调用了我们的 MCP 工具**：
+  `mcp_tool_call {"server":"clawd","tool":"clawd_grep","arguments":{"pattern":"clawd-domain"}}`
+- OpenCode 经统一适配层：协议跑通（返回 sessionID + JSON 事件），凭据未配置时 **ok=False 且错误可见**
+
+### 未闭环（如实披露）
+1. **Codex 内完整多轮 MCP 工具循环**受网关限制：`previous_response_id ... only supported on
+   Responses WebSocket v2` —— 需支持 Responses 续传的端点（网关能力问题，非适配层）
+2. **OpenClaw 本机跑不了**：Node 25.8.1 不在其支持区间（换 Node 会影响 Electron 构建，未擅自切换）
+3. **OpenCode 凭据未配置**：需 `opencode auth` 登录后用真实模型复验
+4. **Hermes 无源码**，未集成
+5. **World Model 未暴露为 MCP 工具**（当前只暴露项目图谱/grep/读文件）
+
+---
+
 ## [v0.63.0] (2026-10-28) — 接入 OpenAI Codex 作为外部 agent 内核后端
 
 ### 决策（ADR-0009）

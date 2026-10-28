@@ -152,8 +152,11 @@ class CodexBackend:
     skip_git_check: bool = True
     #: 从哪个环境变量读取 API Key（Codex 自定义 provider 用 env_key 引用）
     api_key_env: str = "OPENAI_API_KEY"
-    #: 兼容端点协议：chat（/chat/completions）或 responses
+    #: 兼容端点协议：responses（Codex 0.165 起 chat 已废弃）
     wire_api: str = "responses"
+    #: 注入给 Codex 的 MCP server（把我们的领域工具交给它调用）
+    #: 形如 {"clawd": {"command": "python", "args": ["-m", "src.mcp.domain_server"]}}
+    mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # ---------- 可用性 ----------
     def available(self) -> bool:
@@ -199,6 +202,12 @@ class CodexBackend:
             ]
         elif self.provider:
             argv += ["-c", f'model_provider="{self.provider}"']
+        for name, spec in self.mcp_servers.items():
+            argv += ["-c", f"mcp_servers.{name}.command={json.dumps(spec['command'])}"]
+            if spec.get("args"):
+                argv += ["-c", f"mcp_servers.{name}.args={json.dumps(spec['args'])}"]
+            if spec.get("env"):
+                argv += ["-c", f"mcp_servers.{name}.env={json.dumps(spec['env'])}"]
         for key, value in self.extra_config.items():
             argv += ["-c", f"{key}={json.dumps(value)}"]
         argv.append(goal)

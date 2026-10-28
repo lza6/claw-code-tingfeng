@@ -537,6 +537,57 @@ def _register_command_modules() -> list[str]:
 _REGISTRATION_FAILURES = _register_command_modules()
 
 
+@app.command(name="engines")
+def engines_cmd(
+    probe: bool = typer.Option(True, "--probe/--no-probe", help="是否真实探活（运行 --version）"),
+    json_out: bool = typer.Option(False, "--json", help="JSON 输出"),
+    run: str | None = typer.Option(None, "--run", help="用第一个可用引擎执行该任务"),
+    timeout: float = typer.Option(900.0, "--timeout", help="--run 时的硬超时（秒）"),
+):
+    """
+    多引擎总览：列出已集成的开源 agent 引擎及其真实可用性
+
+    整合原则：不合并源码（语言/协议都不同），而是统一驱动接口 + 统一探活 +
+    通过 MCP 把我们的领域工具反向供给所有引擎。
+    """
+    from ..backends import registry
+
+    described = registry.describe()
+    if json_out:
+        console.print_json(data=described)
+    else:
+        console.print("[bold]已集成引擎[/bold]")
+        for name, info in described.items():
+            if info["kind"] != "engine":
+                continue
+            status = info["status"]
+            color = "green" if status == "ready" else ("yellow" if status == "incompatible" else "red")
+            ver = info["version"] or "-"
+            console.print(f"  [{color}]{status:<13}[/{color}] {name:<10} {ver}")
+        console.print("")
+        console.print("[bold]非引擎项（不可当引擎驱动）[/bold]")
+        for name, info in described.items():
+            if info["kind"] == "engine":
+                continue
+            console.print(f"  [dim]{name:<10} {info['detail']}[/dim]")
+
+    ready = registry.ready_engines()
+    if not ready:
+        console.print("[yellow]没有可用引擎[/yellow]")
+        raise typer.Exit(code=1)
+
+    if run:
+        engine = ready[0]
+        console.print(f"[dim]使用引擎: {engine}[/dim]")
+        backend = registry.get_backend(engine, workdir=Path.cwd())
+        result = backend.run(run, timeout=timeout)
+        console.print(result.text or "(无输出)")
+        if result.errors:
+            for err in result.errors[:3]:
+                console.print(f"[red]{err}[/red]")
+        raise typer.Exit(code=0 if result.ok else 1)
+
+
 @app.command(name="codex")
 def codex_run(
     goal: str = typer.Argument(..., help="交给 Codex 后端执行的任务"),

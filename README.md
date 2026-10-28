@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.63.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.64.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -51,6 +51,39 @@ DSH 式桌面客户端，**双击即用**：
 | 安全工具 | `SafeCatalogRunner` | YAML 目录 + scope 授权门禁 + 注入拦截（仅限授权测试目标） |
 | 逆向知识库 | `skills/reverse/` | 51 个场景 SKILL.md（固件/Ghidra/IDA/恶意软件/协议/pwn/CTF） |
 | 插件开发 | `.agent/skills/clawd-extension-sop.md` | 四件套 SOP（manifest/DI/接入面/CLI） |
+
+## 🧩 多引擎整合（v0.64.0 新增）
+
+**不合并源码**（Rust/Go/TS 三套运行时合并必崩），而是**统一驱动 + MCP 领域工具反向供给**：
+
+```bash
+clawd engines                 # 多引擎总览（真实探活，不含水分）
+clawd engines --json          # 机器可读
+clawd engines --run "任务"     # 用首个可用引擎执行
+```
+
+| 项 | 真实性质 | 本机实测 |
+|---|---|---|
+| Codex | Agent CLI（Rust 内核，Apache-2.0） | ✅ ready 0.165.0 |
+| OpenCode | Agent CLI（Go） | ✅ ready 1.19.5（凭据需自行登录） |
+| OpenClaw | Agent CLI（TS） | ⚠️ incompatible（Node 版本区间不符） |
+| Grok | **模型代理**，不是引擎 | 归属 provider 层 |
+| Pi | **插件/上下文原语包**，不是引擎 | 归属能力层 |
+| Hermes | 参考库无源码 | 未集成 |
+
+**领域魔改的正解 —— 让我们自己的工具长进别人的内核里**（`src/mcp/domain_server.py`）：
+
+```bash
+# 任何支持 MCP 的引擎都能挂载（Codex 示例已内置于适配层）
+python -m src.mcp.domain_server --root .
+```
+
+暴露工具：`clawd_read_file`（只读+越界防护）、`clawd_grep`（rg 优先）、
+`clawd_project_map`（代码库符号地图）、`clawd_tool_list`（发现我们的领域工具）。
+
+> 实测：Codex 已能发现并调用这些工具
+> （`mcp_tool_call {"server":"clawd","tool":"clawd_grep"}`）；完整多轮循环受网关
+> Responses 续传能力限制，见 `docs/adr/0010-multi-engine-integration.md`。
 
 ## 🔌 外部内核后端：Codex（v0.63.0 新增）
 
