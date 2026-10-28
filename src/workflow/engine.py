@@ -292,6 +292,11 @@ class WorkflowEngine:
         if intent:
             self.intent = intent
 
+        # 维度引导接线：CLI `--dimension/-d` 把维度写入运行期配置，
+        # 此前没有任何消费者（"假开关"）。这里解析维度并把引导词注入 goal，
+        # 使 creative/adversarial/audit 等维度真正作用到后续阶段。
+        goal = self._inject_dimension_guidance(goal)
+
         # 0. 初始化运行环境
         # 汲取 GoalX: 自动生成或恢复 Run ID
         run_id = None
@@ -915,6 +920,32 @@ class WorkflowEngine:
                         pass
 
         return f"{completed}/{len(tasks)} completed, {failed} failed"
+
+    def _inject_dimension_guidance(self, goal: str) -> str:
+        """把 `--dimension/-d` 指定的维度引导词注入 goal。
+
+        维度来源：运行期配置（CLI 通过 set_config("dimensions", ...) 写入）。
+        无维度或解析失败时原样返回 goal（增强项失败不得破坏主流程）。
+        """
+        try:
+            from ..core.config.injector import get_config
+
+            specs = get_config("dimensions", None)
+            if not specs:
+                return goal
+            if isinstance(specs, str):
+                specs = [s.strip() for s in specs.split(",") if s.strip()]
+
+            from .dimensions import get_dimensions_prompt
+
+            guidance = get_dimensions_prompt(list(specs))
+            if not guidance:
+                return goal
+            self.logger.info(f"已激活维度引导: {', '.join(specs)}")
+            return f"{goal}\n\n{guidance}"
+        except Exception as e:  # 降级：维度失效不影响主流程
+            self.logger.warning(f"维度引导注入失败（已降级为无维度）: {e}")
+            return goal
 
     def _sync_state(
         self,
