@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+import time
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -513,11 +514,38 @@ class AgentEngine:
         # 装配扩展工具（幂等，失败降级）
         await self._load_extended_tools()
         result = await self._run_agent_core(goal=goal, is_stream=False, on_step=on_step)
+        self._persist_session(result['session'])
         return result['session']
 
     async def run_stream(self, goal: str, on_chunk: Callable | None = None, on_step: Callable | None = None) -> AgentSession:
         result = await self._run_agent_core(goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step)
+        self._persist_session(result['session'])
         return result['session']
+
+    def _persist_session(self, session: Any) -> None:
+        """把本次运行落盘到 .clawd/sessions/（此前两套会话存储都没人写，CLI 永远是空的）
+
+        失败只告警不阻断：会话留痕是增强项，不能影响主流程返回。
+        """
+        try:
+            from ..core.session_bridge import persist_agent_session
+
+            steps = []
+            for step in getattr(session, 'steps', []) or []:
+                content = getattr(step, 'content', None) or getattr(step, 'result', None)
+                if content:
+                    steps.append({'role': 'assistant', 'content': str(content)[:4000]})
+            stamp = time.strftime('%Y%m%d_%H%M%S')
+            persist_agent_session(
+                session_id=f'sess-{stamp}',
+                goal=str(getattr(session, 'goal', '') or ''),
+                steps=steps,
+                final_result=str(getattr(session, 'final_result', '') or ''),
+                total_tokens=int(getattr(session, 'total_tokens', 0) or 0),
+                directory=self.workdir / '.clawd' / 'sessions',
+            )
+        except Exception as e:  # noqa: BLE001 — 留痕失败不影响主流程
+            self.logger.warning(f'会话落盘失败（不影响本次结果）: {e}')
 
     async def _run_agent_core(self, goal: str, **kwargs) -> dict[str, Any]:
         """统一入口，调用 engine_loop 中的 _run_agent_loop"""

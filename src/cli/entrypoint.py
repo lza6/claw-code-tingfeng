@@ -533,6 +533,102 @@ def _register_command_modules() -> list[str]:
     return failed
 
 
+# ---------------------------------------------------------------------------
+# 会话管理命令组（会话持久化在 src/core/session_store.py，此前 CLI 摸不到）
+# ---------------------------------------------------------------------------
+session_app = typer.Typer(help="会话管理：列出/查看/分叉/改名（持久化在 .clawd/sessions/）")
+
+
+@session_app.command("list")
+def session_list(
+    json_out: bool = typer.Option(False, "--json", help="JSON 输出"),
+    sessions_dir: Path | None = typer.Option(None, "--dir", help="会话目录（默认 .clawd/sessions）"),
+):
+    """列出已保存的会话"""
+    from ..core.session_bridge import list_all
+
+    # 用桥接层：引擎侧与会话侧两套格式都能读（此前只读一套 → 引擎写的会话看不见）
+    rows = [v.to_dict() for v in list_all(sessions_dir)]
+    if json_out:
+        console.print_json(data=rows)
+        return
+    if not rows:
+        console.print("[yellow]暂无已保存会话[/yellow]")
+        return
+    for row in rows:
+        title = row.get("title") or "(无标题)"
+        parent = f" ← {row['parent_session_id']}" if row.get("parent_session_id") else ""
+        console.print(
+            f"[bold]{row['session_id']}[/bold]{parent}  {title}  "
+            f"[dim]{row.get('turn_count', 0)} 轮 · "
+            f"tokens {row.get('input_tokens', 0)}/{row.get('output_tokens', 0)} · "
+            f"${row.get('total_cost', 0.0):.4f}[/dim]"
+        )
+
+
+@session_app.command("show")
+def session_show(
+    session_id: str = typer.Argument(..., help="会话 ID"),
+    sessions_dir: Path | None = typer.Option(None, "--dir"),
+):
+    """查看单个会话详情（含分叉链）"""
+    from ..core.session_bridge import chain, load
+
+    try:
+        sess = load(session_id, sessions_dir)
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[bold red]读取失败:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    payload = sess.to_dict()
+    payload["chain"] = chain(session_id, sessions_dir)
+    payload["roles"] = [
+        {"role": m.get("role"), "chars": len(str(m.get("content") or ""))}
+        for m in sess.messages
+    ]
+    console.print_json(data=payload)
+
+
+@session_app.command("fork")
+def session_fork(
+    parent_id: str = typer.Argument(..., help="父会话 ID"),
+    new_id: str = typer.Argument(..., help="新会话 ID"),
+    title: str = typer.Option("", "--title", help="新会话标题"),
+    sessions_dir: Path | None = typer.Option(None, "--dir"),
+):
+    """从已有会话分叉（保留历史，不改父会话）"""
+    from ..core.session_bridge import fork as fork_session
+
+    try:
+        forked = fork_session(parent_id, new_id, title=title, directory=sessions_dir)
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[bold red]分叉失败:[/bold red] {e}")
+        raise typer.Exit(code=1)
+    console.print(
+        f"[green]已分叉[/green] {parent_id} → [bold]{forked.session_id}[/bold]"
+        f"（继承 {len(forked.messages)} 条消息）"
+    )
+
+
+@session_app.command("title")
+def session_title(
+    session_id: str = typer.Argument(..., help="会话 ID"),
+    title: str = typer.Argument(..., help="新标题"),
+    sessions_dir: Path | None = typer.Option(None, "--dir"),
+):
+    """设置会话标题"""
+    from ..core.session_bridge import set_title as update_session_meta
+
+    try:
+        updated = update_session_meta(session_id, title, sessions_dir)
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[bold red]更新失败:[/bold red] {e}")
+        raise typer.Exit(code=1)
+    console.print(f"[green]标题已更新:[/green] {updated.session_id} → {updated.title}")
+
+
+app.add_typer(session_app, name="session")
+
 # 注册模块化命令
 _REGISTRATION_FAILURES = _register_command_modules()
 

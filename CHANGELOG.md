@@ -7,6 +7,37 @@
 
 ---
 
+## [v0.68.0] (2026-10-29) — 会话真正落盘 + 会话管理 CLI
+
+### 发现并修复的连环缺口（三个叠在一起）
+1. **两套会话存储并存、schema 不兼容**，且都写同一目录 `.clawd/sessions/*.json`：
+   - `src/memory/session_manager.py`（引擎侧：`messages: [{role, content, timestamp}]` + status）
+   - `src/core/session_store.py`（早期：`messages: ["u","a"]` 字符串元组 + tokens/cost）
+   → 只读其中一套的实现看不到另一套写的数据
+2. **两套都没人写盘**：`.clawd/sessions/` 实测为空 —— `clawd session list` 永远是"暂无"
+3. **CLI 完全没有入口**：持久化能力存在但用户摸不到
+
+### 修复与新增
+- `src/core/session_bridge.py`：**按文件内容自动识别格式**的统一桥接层
+  （engine / legacy 双向可读；写盘统一用引擎格式，与 Agent 运行时同源）
+- **引擎运行时落盘**：`AgentEngine.run()/run_stream()` 完成后
+  `_persist_session()` 写入 `.clawd/sessions/sess-<时间戳>.json`
+  （goal / steps / final_result / tokens）；失败只告警不阻断主流程
+- 新增 `clawd session` 命令组：`list [--json]` / `show <id>`（含分叉链）/ `fork <父> <新> [--title]` / `title <id> <标题>`
+
+### 验证
+- `tests/cli/test_session_commands.py` **13 passed**（含 4 个关键回归：
+  引擎落盘后 CLI 能看见、桥接读引擎格式、桥接读旧格式、从旧格式分叉写出新格式且不改父）
+- `tests/core/test_session_fork.py` **11 passed**
+- 真实 CLI 实跑：建会话 → `list` 显示"演示会话 2 轮 · tokens 500/120" → `fork` → `show` 链 `["demo2","demo1"]`
+
+### 边界
+- `clawd chat --resume <id>` 仍未接通：消息持久化现在带 role 了，但 REPL 需要把历史回灌进
+  agent 循环（`_run_agent_core` 目前固定 `messages=[]`），属下一步
+- 旧格式会话只能被"读"和"分叉"，不会被原地改写（避免误伤历史文件）
+
+---
+
 ## [v0.67.0] (2026-10-29) — 命令执行策略 + 会话分叉元数据（ADR-0014）
 
 ### 1. 命令执行策略（来自 Codex `execpolicy`，Rust/Apache-2.0）
