@@ -96,7 +96,10 @@ class HistoryProcessor:
             total -= kept[i].tokens if kept[i] else 0
             kept[i] = None
 
-        # 压缩连续丢弃区段为摘要占位
+        # 压缩连续丢弃区段为**结构化检查点摘要**（借鉴 Codex：
+        # 原先是丢弃后放一句"已省略 N 条"，信息全丢；现在保留目标/决策/文件/工具/错误/待办）
+        from ..agent.compaction import build_checkpoint
+
         result: list[HistoryEntry] = []
         i = 0
         while i < len(kept):
@@ -105,17 +108,19 @@ class HistoryProcessor:
                 i += 1
                 continue
             j = i
-            dropped_tokens = 0
-            dropped_count = 0
+            dropped: list[HistoryEntry] = []
             while j < len(kept) and kept[j] is None:
-                dropped_count += 1
+                dropped.append(self.entries[j])
                 j += 1
+            checkpoint = build_checkpoint(dropped)
             summary = HistoryEntry(
                 role="system",
                 content=(
-                    f"[历史已压缩: 省略 {dropped_count} 条早期记录 "
-                    f"（约 {dropped_tokens} tokens），关键结论见后续 pinned 条目]"
+                    f"[历史检查点: 已压缩 {len(dropped)} 条早期记录"
+                    f"（约 {checkpoint.dropped_tokens} tokens）]\n"
+                    f"{checkpoint.render()}"
                 ),
+                is_pinned=True,  # 摘要本身必须保留，否则下一轮又丢
             )
             result.append(summary)
             i = j

@@ -7,6 +7,53 @@
 
 ---
 
+## [v0.65.0] (2026-10-29) — 定向汲优补缺：LSP / 检查点压缩 / 笔记本（ADR-0012）
+
+三家开源项目的源码级借鉴（直接读代码提取，非转述）：
+
+### 1. LSP 代码智能（来自 OpenCode `internal/lsp/`，Go/MIT）
+- `src/lsp/client.py` + `src/tools_runtime/lsp_tool.py`：`diagnostics` / `definition` / `hover`
+- **对外 1-based、内部 0-based** 行号换算；客户端按 (root, language) 复用，避免每次重启语言服务器
+- 实测修掉 3 个真实坑：
+  1. 必须走**二进制流**（文本流会换行转换+本地编码，导致 Content-Length 与字节数不符）
+  2. `shutil.which` 找不到 venv 里的服务器 → 改查「PATH + 解释器同目录」
+  3. pylsp 缺 `pyflakes`/`jedi` 时会**静默不报诊断**（表现为"LSP 没反应"）
+- 真实 E2E：`undefined_name` 检出（第 5 行）、`definition` 命中 `mod.py`、
+  `hover` 返回 `helper(x: int) -> int`
+
+### 2. 上下文检查点压缩（来自 Codex `core/src/compact.rs`，Rust/Apache-2.0）
+- 原实现是"超预算就丢弃旧条目 + 一句占位"——信息全丢
+- 新增 `src/agent/compaction.py`：四段式 handoff 摘要（进展决策/上下文约束/待办/关键数据）
+  + `SUMMARY_PREFIX` 防重复劳动 + 摘要长度上限
+- **默认不依赖 LLM**（确定性抽取目标/决策/文件/工具/错误/待办），LLM 失败自动降级
+- 接入 `HistoryProcessor`：丢弃区段 → 结构化检查点，且检查点 **pinned**（否则下一轮又被压）
+
+### 3. 笔记本 + 两级删除（来自 Pi `handoff/eligibility.ts` + `notebook/`，TS/MIT）
+- `src/memory/notebook.py` + `src/tools_runtime/notebook_tool.py`
+- 页面（topic→slug，可跨轮次持久）、`active_topic` + **boundary hint**（换主题时提示）
+- **两级式删除**：`prepare_discard`（只算计划+留快照）→ `commit_discard`（压缩成功后才真删）
+  → `abort_discard`，避免压缩失败丢页面
+- 借用 Pi 的**最小压缩阈值**洞见：`MIN_COMPACT_TOKENS=30_000` + `is_compaction_eligible()`
+  （上下文太小时压缩是净损失）；usage 未知时如实说"未知"，不猜
+
+### 落地形态
+三项全部是**内置原生工具**（非 MCP）：`LSPTool`(read) / `WorldModelTool`(read) /
+`ProjectMapTool`(read) / `NotebookTool`(**write，需审批**)，引擎装配时自动就位。
+
+### 验证
+- `tests/tools_runtime/test_lsp_tool.py` **20 passed**（含真实 pylsp E2E + 假服务器分帧单测）
+- `tests/agent/test_compaction.py` **16 passed**
+- `tests/memory/test_notebook.py` **26 passed**（含 Pi 准入阈值与两级删除安全模型）
+- 依赖补充：`python-lsp-server` + `pyflakes` + `jedi`（LSP 真实运行所需）
+
+### 边界
+- LSP 仅覆盖 .py/.go/.ts/.tsx/.js/.jsx/.rs；未装服务器时明确报"未安装"
+- 确定性摘要只保事实骨架，不如 LLM 摘要自然（接 LLM 时才有段落文本）
+- 笔记本 commit 后不可撤销（风险靠两级 + 快照控制，快照仅在内存）
+- 未做 Codex 的远端压缩端点（我们网关不支持 `/responses/compact`）
+
+---
+
 ## [v0.64.1] (2026-10-28) — 领域能力改为"内置优先" + 索引自动预热（ADR-0011）
 
 ### 架构纠正（推翻自己上一版的做法）

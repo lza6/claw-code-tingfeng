@@ -202,10 +202,18 @@ class AgentEngine:
         try:
             from ..brain.warmup import ensure_warm
             from ..tools_runtime.domain_tools import get_domain_tools
+            from ..tools_runtime.lsp_tool import get_lsp_tool
+            from ..tools_runtime.notebook_tool import get_notebook_tool
 
             count_before = len(self.tools)
             for tool in get_domain_tools(self.workdir):
                 self.tools[tool.name] = tool
+            # LSP 代码智能（懒启动：首次调用才拉语言服务器）
+            lsp_tool = get_lsp_tool(self.workdir)
+            self.tools[lsp_tool.name] = lsp_tool
+            # 会话笔记本（长会话持久记忆）
+            notebook_tool = get_notebook_tool(self.workdir)
+            self.tools[notebook_tool.name] = notebook_tool
             self.logger.info(f"领域工具已装配: {len(self.tools) - count_before} 个")
 
             # 后台预热：非阻塞；索引在小仓库上秒级就绪，大仓库期间工具会如实返回 indexing
