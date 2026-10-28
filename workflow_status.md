@@ -1,6 +1,6 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.61.2 死码清理+审查修复完成**（2026-10-28）：红线修复（静默异常 168）+ E2E 5/5 + 收集 0 errors + 计划文档清理完毕；桌面端阶段 1-5 COMPLETE
+> 状态: **v0.61.3 覆盖率 60.33% 达成 + 8 个真实 P1 缺陷修复**（2026-10-28）：收集 4575/0 errors · 执行 4491 passed/0 failed · 静默异常 156 · ruff src 319 · E2E 5/5 · 压测 0 错误率 · 桌面端阶段 1-5 COMPLETE
 
 ## 桌面端进度（DSH 模式 + Electron）
 | 阶段 | 内容 | 状态 |
@@ -29,6 +29,7 @@
 | A8 | 硬指标不回归 | done — ruff All passed；collect 0 errors；IMPORT-FAIL=0 |
 
 ## 验证日志
+- 2026-10-28（v0.61.3）: 覆盖率 54.87%→**60.33%**（+883 用例，5 个并行攻坚代理）；修复 **8 个真实 P1 缺陷**（notification payload 缺 3 字段致 20/38 事件崩、ISO 时间戳、watch set 序列化、pipeline 两个不存在的 ErrorCode、pipeline artifacts 不回写、chat 永退 1、config 单向开关）；全量 4491 passed/0 failed
 - 2026-10-28（v0.61.2）: 死码删除 P1+P2 落地（47 文件/10,685 行零引用孤岛，保守跳过 core.security 等 4 组争议项）；独立审查 1 轮 Required×2+Suggestion×4 全部修复；ralplan skip 语义就地内联恢复（7 锁定测试 + 原实现 5 用例等价性 diff，顺带修原 None.strip 潜在 bug）；快速回归 3692/0；E2E 5/5；可达 455 不变
 - 2026-10-28（v0.61.1 后续收口）: 导入链路修复 3 个真实 bug（celery 相对导入/otel API 路径/celery 信号签名）→ IMPORT 649/649 OK 全绿（此前 642+3fail+7missing）
 - 2026-10-28: venv 补装 pathspec/celery/otel 全家桶（requirements 已声明）；clawdignore 测试失败根因=pathspec 缺失，非代码 bug → 快速回归 3685/0

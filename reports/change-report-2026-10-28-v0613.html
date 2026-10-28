@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>变更报告 — v0.61.3 覆盖率 60% 达成 + 8 个真实缺陷修复（2026-10-28）</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222}
+h1{border-bottom:3px solid #2563eb;padding-bottom:.5rem}
+h2{border-left:5px solid #2563eb;padding-left:.6rem;margin-top:2rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #cbd5e1;padding:.5rem .7rem;text-align:left;vertical-align:top}
+th{background:#eff6ff}
+code,pre{background:#f1f5f9;border-radius:4px}
+pre{padding:.8rem;overflow-x:auto}
+.pass{color:#16a34a;font-weight:bold}.warn{color:#d97706;font-weight:bold}.bad{color:#dc2626;font-weight:bold}
+details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.8rem;margin:.5rem 0}
+</style>
+</head>
+<body>
+<h1>变更报告 — v0.61.3：覆盖率 60% 达成 + 8 个真实缺陷修复</h1>
+<p><b>日期:</b> 2026-10-28 · <b>项目:</b> claw-code-tingfeng · <b>结论:</b> <span class="pass">complete（P0/P1 清零 · 覆盖率目标达成 · E2E 5/5 · 压测 0 错误）</span></p>
+
+<h2>1. 上下文与直觉</h2>
+<p>v0.61.2 发布后剩余的核心欠账是 <b>W5 覆盖率 60%</b>（当时文档写 49.89%，实为 10-23 陈旧数据）。本轮判断：覆盖率不是靠"写更多测试"堆出来的，
+而是<b>先把不可达的 10.6k 行删掉（v0.61.2 已完成）</b>，再对<b>高价值生产模块补真实行为测试</b>。
+结果证明这条路子同时产出了更高价值的东西——<b>测试逼出了 8 个此前无人发现的真实缺陷</b>。</p>
+
+<h2>2. 做了什么</h2>
+<table>
+<tr><th>批次</th><th>内容</th><th>提交</th></tr>
+<tr><td>工程卫生 W7</td><td>ruff（src）433 → 319；仅空白字符 101 + 安全未用导入 11，<b>禁用 --unsafe-fixes 全量</b></td><td><code>ae4e7f0</code></td></tr>
+<tr><td>覆盖率攻坚（5 个并行代理）</td><td>新增 883 用例，覆盖 formatter/config/generator/watch_tool/pipeline/worktree/locks/dashboard/swarm</td><td><code>a1074f8</code> + 本批</td></tr>
+<tr><td>缺陷修复</td><td>8 个真实缺陷（详见 §4）</td><td><code>a1074f8</code> + 本批</td></tr>
+<tr><td>发布</td><td>v0.61.3：CHANGELOG / README / workflow_status / test_ledger / evidence</td><td>本批</td></tr>
+</table>
+
+<h2>3. 覆盖率进展（真实测量）</h2>
+<table>
+<tr><th>时点</th><th>覆盖率</th><th>覆盖行/语句</th><th>说明</th></tr>
+<tr><td>文档旧值（10-23）</td><td>49.89%</td><td>28,175 / 56,469</td><td class="warn">陈旧，删码前</td></tr>
+<tr><td>删码后重测</td><td>54.87%</td><td>29,678 / 54,087</td><td>10.6k 不可达行删除的机械提升</td></tr>
+<tr><td>攻坚 A（notification/config/watch）</td><td>58.47%</td><td>31,635 / 54,101</td><td>+1,957 行</td></tr>
+<tr><td><b>攻坚 B~E 完成</b></td><td class="pass"><b>60.33%</b></td><td><b>32,643 / 54,103</b></td><td class="pass">目标达成（+1,008 行）</td></tr>
+</table>
+
+<h2>4. 修复的 8 个真实缺陷（全部由测试暴露，非测试问题）</h2>
+<table>
+<tr><th>#</th><th>缺陷</th><th>位置</th><th>后果（严重度）</th><th>修复</th></tr>
+<tr><td>1</td><td>Payload 缺 <code>tmux_tail</code>/<code>agent_name</code>/<code>agent_type</code></td><td>notification/types.py</td><td class="bad">20/38 事件类型必然 AttributeError（SESSION_END、全部 TASK_*/AGENT_*/PIPELINE_*/WORKER_*/AUDIT_*/REVIEW_*/BLOCKED）</td><td>补齐可选字段；实测 38/38 可格式化</td></tr>
+<tr><td>2</td><td><code>float(timestamp)</code> 解析 ISO 字符串</td><td>formatter.py:177</td><td class="bad">session-start 通知必定 ValueError 崩溃</td><td><code>_parse_timestamp()</code> 兼容 epoch/ISO</td></tr>
+<tr><td>3</td><td><code>set</code> 直接 <code>json.dumps</code></td><td>watch_tool.py:489</td><td class="bad">带 path 的 get_changes 必抛 TypeError</td><td><code>list(...)</code></td></tr>
+<tr><td>4</td><td>引用不存在的 <code>ErrorCode.INVALID_PARAMETER</code>/<code>TASK_FAILED</code></td><td>pipeline.py:184,390</td><td class="bad">契约承诺的 ClawdError 从未抛出（AttributeError），调用方 <code>except ClawdError</code> 收不到</td><td><code>CONFIG_MISSING</code> / <code>WORKFLOW_EXECUTION_ERROR</code></td></tr>
+<tr><td>5</td><td>run() 不回写 artifacts</td><td>pipeline.py</td><td class="warn">get_artifact() 恒 None、状态文件 artifacts 恒空（与 docstring 不符）</td><td>回写 + 持久化</td></tr>
+<tr><td>6</td><td><code>typer.Exit</code> 被 <code>except Exception</code> 吞掉</td><td>entrypoint.py:chat</td><td class="bad"><b>clawd chat 永远退出码 1</b>（成功路径也报失败，CI/脚本无法判断）</td><td>try 只包 start_repl，<code>except typer.Exit: raise</code></td></tr>
+<tr><td>7</td><td><code>--report</code> 单向布尔</td><td>entrypoint.py:config</td><td class="warn">无法关闭报告（<code>--no-report</code> 报 No such option）</td><td><code>--report/--no-report</code></td></tr>
+<tr><td>8</td><td>except 窄化漏 <code>UnicodeDecodeError</code></td><td>hooks/extensibility/sdk.py</td><td class="warn">hook 状态文件为 GBK 时抛错到调用方</td><td>并入 <code>ValueError</code></td></tr>
+</table>
+
+<h2>5. 工程卫生与踩坑</h2>
+<p>ruff（src 口径）433 → <b>319</b>（-114），只做空白字符与安全未用导入，<b>禁用 <code>--unsafe-fixes</code> 全量</b>。</p>
+<div class="bad"><b>踩坑（已入 memory/decisions.md + ICM）：</b> <code>ruff --fix --unsafe-fixes</code> 会先删 <code># noqa</code> 注释（RUF100），
+随后 F401 把"故意保留的向后兼容 re-export 块"整块删除 —— 实测导致 <code>src/cli/repl.py</code> 尾部导出块消失、
+<code>tests/cli/test_repl_core.py</code> 收集期 <code>ImportError: cannot import name '_print'</code>。已全量回退重做。</div>
+
+<h2>6. 验证证据（全部实跑）</h2>
+<table>
+<tr><th>项</th><th>命令</th><th>结果</th></tr>
+<tr><td class="pass">全量回归</td><td><code>pytest tests/ -m "not slow"</code></td><td><b>4,587 passed / 0 failed</b> / 7 skipped / 12 xfailed（版本测试 2 个因 bump 元数据滞后，重装 editable 后 2 passed）</td></tr>
+<tr><td class="pass">覆盖率</td><td><code>--cov=src</code></td><td><b>60.33%</b>（32,643 / 54,103）</td></tr>
+<tr><td class="pass">收集</td><td><code>pytest --collect-only</code></td><td>4,575 / 0 errors</td></tr>
+<tr><td class="pass">导入扫描</td><td><code>import_sweep --strict-exit</code></td><td>602/602 OK，FAIL 0，DEP-MISSING 0</td></tr>
+<tr><td class="pass">ruff 硬指标</td><td><code>--select F821,F811,E9</code></td><td>All checks passed</td></tr>
+<tr><td class="pass">静默吞异常</td><td><code>check_silent_except --fail-over 172</code></td><td>156（≤172，门禁 exit 0）</td></tr>
+<tr><td class="pass">可达性</td><td><code>reachability --min-reachable 443</code></td><td>455 ≥ 443，exit 0</td></tr>
+<tr><td class="pass">真实 E2E</td><td><code>e2e_smoke.py</code></td><td>5/5 PASS，exit 0</td></tr>
+<tr><td class="pass">环境诊断</td><td><code>python -m src doctor</code></td><td>0 FAIL（版本 0.61.3 三处一致）</td></tr>
+<tr><td class="pass">压测</td><td><code>stress_host.py --n 200 --rounds 5</code></td><td>QPS 1456 / P50 9.0ms / P95 10.1ms / P99 10.5ms / 错误率 0%</td></tr>
+</table>
+
+<h2>7. 风险与回滚</h2>
+<ul>
+<li>缺陷修复均为最小改动（单行～数行级），逐个可独立 <code>git revert</code>；测试用例锁定修复后的契约，回滚会立即红</li>
+<li>覆盖率测试不依赖真实网络/LLM/音频设备；git worktree 测试用 <code>tmp_path</code> 临时仓库，不触碰主仓库</li>
+<li>剩余 319 条 ruff 风格项多为 re-export 兼容块纠缠，需逐文件人工判断，<b>不自动修</b>（已记录）</li>
+</ul>
+
+<h2>8. 底部测验</h2>
+<details open><summary><b>点击展开测验（含答案，自测 5/5 通过）</b></summary>
+<ol>
+<li><b>判断</b>：删除不可达代码会降低覆盖率。<b>答：错</b>——恰好相反。不可达代码全部是未覆盖行，删掉后分母下降，覆盖率从 49.89% 机械升到 54.87%。</li>
+<li><b>选择</b>：<code>clawd chat</code> 成功执行后退出码是多少？A. 0 B. 1 C. 取决于 start_repl。<b>答：修复前恒为 1</b>（<code>raise typer.Exit(0)</code> 被 <code>except Exception</code> 捕获后重抛 Exit(1)）；修复后为 start_repl 的返回值。</li>
+<li><b>简答</b>：为什么 <code>ErrorCode.INVALID_PARAMETER</code> 这类"不存在的枚举"能长期存活？<b>答</b>：该分支从未被执行（pipeline 未配置阶段的错误路径），且 <code>ErrorCode</code> 是 Enum，属性错误发生在<b>运行时</b>而非导入时，静态检查抓不到。覆盖率测试是唯一能暴露它的手段。</li>
+<li><b>判断</b>：<code>ruff --fix --unsafe-fixes</code> 可以安全地全量跑在 src/ 上。<b>答：错</b>——它会删 <code># noqa</code>，进而让 F401 删掉受保护的兼容 re-export 块（本轮实测踩坑并回退）。</li>
+<li><b>简答</b>：如何验证覆盖率数字不是刷出来的？<b>答</b>：①断言必须是输入→输出语义（禁止 <code>is not None</code>）；②用 <code>--cov-report=term-missing</code> 查看具体覆盖行；③本轮的旁证是 8 个真实缺陷被测试逼出——空断言测试不会发现 <code>float(ISO字符串)</code> 或 <code>json.dumps(set)</code> 这类问题。</li>
+</ol>
+</details>
+
+<p style="color:#64748b;margin-top:2rem">生成于 2026-10-28 · 证据: test_ledger.md（v0.61.3 批次）· CHANGELOG v0.61.3 · coverage-fresh.json</p>
+</body>
+</html>

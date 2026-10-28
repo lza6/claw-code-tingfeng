@@ -66,10 +66,12 @@ def chat(
             use_textual_tui=tui,
             project_ctx=project_ctx,
         )
-        raise typer.Exit(code=exit_code)
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[bold red]错误:[/bold red] {e}")
         raise typer.Exit(code=1)
+    raise typer.Exit(code=exit_code)
 
 @app.command(name="run")
 def workflow_run(
@@ -404,7 +406,7 @@ def hud_start(
 def config(
     web: bool = typer.Option(False, "--web", help="启动可视化 Web 配置界面"),
     reset: bool = typer.Option(False, "--reset", help="重置所有配置为默认值"),
-    report: bool = typer.Option(True, "--report", help="显示配置优先级链报告"),
+    report: bool = typer.Option(True, "--report/--no-report", help="显示配置优先级链报告（--no-report 关闭）"),
     generate: bool = typer.Option(False, "--generate", "-g", help="生成Clawd Code扩展配置"),
     generate_path: Path | None = typer.Option(None, "--path", "-p", help="配置输出路径"),
 ):

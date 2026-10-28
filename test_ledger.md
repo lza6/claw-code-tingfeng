@@ -332,3 +332,34 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 | static-mime | src/server/websocket_server.py | tests/server/test_host_entry.py | 静态托管 18 后缀 mime 白名单；白名单外 403；路径穿越 is_relative_to 拒绝 | 2026-10-28 | locked |
 | ralplan-approved-hint | src/workflow/stages/ralplan.py | tests/workflow/test_ralplan_approved_hint.py | .omx/plans/prd-*.md 中 $team/$ralph 命令解析（slug 过滤 spec）；7 用例锁定 | 2026-10-28 | locked |
 | background-tasks | src/background/tasks/*.py | src/background/celery_app.py | 相对导入 `..celery_app`；task_revoked 接收 **kwargs | 2026-10-28 | locked |
+
+## v0.61.3 覆盖率攻坚批次（2026-10-28，全部实跑）
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| 覆盖率（实测） | `pytest tests/ -m "not slow" --cov=src` | **60.33%**（32,643 / 54,103），较 10-23 陈旧值 49.89% 提升 10.44pp |
+| 全量执行 | 同上 | **4491 passed / 7 skipped / 12 xfailed**（收集 4575） |
+| 测试规模增长 | 3692 → 4575 收集（+883 用例，5 个并行攻坚代理） | — |
+| notification/formatter | `--cov=src.notification.formatter` | 14% → **99%** |
+| notification/config | `--cov=src.notification.config` | 17% → **100%** |
+| config/generator | `--cov=src.config.generator` | 15% → **99%** |
+| core/config/generator | `--cov=src.core.config.generator` | 0% → 高覆盖 |
+| tools_runtime/watch_tool | `--cov=src.tools_runtime.watch_tool` | 15% → **99%** |
+| workflow/pipeline | `--cov=src.workflow.pipeline` | 45% → 高覆盖（含状态机/持久化/异常路径） |
+| workflow/worktree_isolation | 新增测试 | 0% → 覆盖 |
+| workflow/team/state/locks | 新增测试 | 0% → 覆盖 |
+| cli/textual_dashboard + dashboard/* | 新增测试 | 0% → 覆盖 |
+| agent/swarm/{engine,auditor} | 新增测试 | 42% / 26% → 显著提升 |
+
+### 本批次修复的真实缺陷（8 个，均有测试锁定）
+
+| # | 缺陷 | 位置 | 后果 | 状态 |
+|:--|:---|:---|:---|:---|
+| 1 | Payload 缺 tmux_tail/agent_name/agent_type | src/notification/types.py | 20/38 事件类型 AttributeError | 已修 + 38/38 实测 |
+| 2 | float(ISO timestamp) | src/notification/formatter.py:177 | session-start 通知必崩 | 已修（_parse_timestamp） |
+| 3 | set 交给 json.dumps | src/tools_runtime/watch_tool.py:489 | get_changes(path=) 必抛 TypeError | 已修（list()） |
+| 4 | 不存在的 ErrorCode.INVALID_PARAMETER / TASK_FAILED | src/workflow/pipeline.py:184,390 | 契约 ClawdError 从未抛出 | 已修（CONFIG_MISSING / WORKFLOW_EXECUTION_ERROR） |
+| 5 | artifacts 不回写状态 | src/workflow/pipeline.py:run() | get_artifact() 恒 None | 已修 |
+| 6 | typer.Exit 被 except Exception 吞 | src/cli/entrypoint.py:chat | **clawd chat 永远退出码 1** | 已修 |
+| 7 | --report 单向布尔 | src/cli/entrypoint.py:config | 无法关闭报告 | 已修（--report/--no-report） |
+| 8 | UnicodeDecodeError 逃逸 | src/hooks/extensibility/sdk.py | hook 状态读 GBK 时抛错 | 已修（ValueError） |

@@ -7,6 +7,34 @@
 
 ---
 
+## [v0.61.3] (2026-10-28) — 覆盖率达成 60% + 8 个真实缺陷修复
+
+### 覆盖率（W5 目标闭环）
+- **49.89%（陈旧）→ 52.72% → 54.87% → 58.47% → 60.33%**（32,643 / 54,103 语句），`fail_under=47` 之外再跨 60% 里程碑
+- 新增 **883 个测试用例**（3,692 → 4,575 收集；执行 4,491 passed / 7 skipped / 12 xfailed）
+- 模块级提升：`notification/formatter` 14%→99%、`notification/config` 17%→100%、`config/generator` 15%→99%、`core/config/generator` 0%→高覆盖、`tools_runtime/watch_tool` 15%→99%、`workflow/pipeline` 45%→高覆盖、`workflow/worktree_isolation` 0%→、`workflow/team/state/locks` 0%→、`cli/textual_dashboard`+`dashboard/thinking`+`dashboard_widgets/telemetry` 0%→、`agent/swarm/{engine,auditor}` 42%/26%→
+
+### 修复（8 个真实缺陷，全部由覆盖率测试暴露，非测试问题）
+1. **`FullNotificationPayload` 缺 `tmux_tail`/`agent_name`/`agent_type`** → formatter 读取时 **20/38 事件类型必然 AttributeError**（SESSION_END、全部 TASK_*/AGENT_*/PIPELINE_*/WORKER_*/AUDIT_*/REVIEW_*/BLOCKED）。修复后实测 38/38 事件全部可格式化
+2. **`format_session_start` 用 `float(timestamp)`**，而 notifier 传 ISO-8601 → `send_session_start_notification()` 必定 ValueError。新增 `_parse_timestamp()` 兼容 epoch 与 ISO
+3. **`WatchTool.get_changes(path=...)` 把 `set` 直接 `json.dumps`** → 带 path 调用必抛 TypeError（空集合亦然）。改 `list(...)`
+4. **`workflow/pipeline.py` 引用不存在的 `ErrorCode.INVALID_PARAMETER`（:184）/`TASK_FAILED`（:390）** → 契约承诺的 ClawdError 从未抛出（实际 AttributeError，调用方 `except ClawdError` 收不到）。改 `CONFIG_MISSING` / `WORKFLOW_EXECUTION_ERROR`
+5. **`pipeline.run()` 不回写 artifacts** → `get_artifact()` 恒 None、状态文件 artifacts 恒空（与 docstring 承诺不符）。回写并持久化
+6. **`clawd chat` 永远退出码 1**：`raise typer.Exit()` 被 `except Exception` 吞掉（`typer.Exit` 是 Exception 子类），成功路径也变成失败。try 只包 `start_repl`，`except typer.Exit: raise` 透传
+7. **`clawd config --report` 单向开关** → 无法关闭报告（`--no-report` 报 No such option）。改 `--report/--no-report`
+8. **`hooks/extensibility/sdk.py` except 窄化遗漏 `UnicodeDecodeError`** → 补入 `ValueError`
+
+### 工程卫生（W7）
+- ruff（src 口径）**433 → 319**（-114）：仅空白字符 101 + 安全未用导入 11，**禁用 `--unsafe-fixes` 全量**
+- 踩坑记录：`ruff --fix --unsafe-fixes` 会删除 `# noqa` 注释，进而让 F401 删掉"故意保留的向后兼容 re-export"块（曾致 `tests/cli/test_repl_core.py` 收集 ImportError，已回退重做）
+- 静默吞异常 **174 → 156**（门禁 ≤172）
+
+### 验证（实跑）
+- 全量快速回归 **4,491 passed / 0 failed**；收集 4,575 / 0 errors；IMPORT 602/602 0 fail/0 missing；ruff 硬指标 All passed；可达 455 ≥ 443
+- 真实 E2E 冒烟 5/5 PASS；doctor 0 FAIL；压测 100 并发 QPS 3839 / P95 14.4ms、300 并发 QPS 1265 / P95 10.8ms，错误率均 0%
+
+---
+
 ## [v0.61.2] (2026-10-28) — 死码清理 + 导入链路修复 + 独立审查修复
 
 ### 修复（3 个真实 bug，IMPORT 642+3fail+7missing → 649/649 全绿）
