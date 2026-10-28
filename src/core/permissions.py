@@ -17,6 +17,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class Effect(str, Enum):
@@ -42,6 +43,7 @@ class PermissionRequest:
     action: str  # read | write | exec
     path: str | None = None
     session_id: str = "default"
+    command: str | None = None  # exec 类：待执行的命令（供命令前缀策略评估）
 
     @property
     def scope_dir(self) -> str:
@@ -138,6 +140,8 @@ class PermissionEngine:
     """
 
     grants: SessionGrants = field(default_factory=SessionGrants)
+    #: 命令前缀策略（exec 类；None 表示不评估）
+    exec_policy: Any = None
     #: 是否禁止写保护路径（测试/特殊场景可关，但默认开）
     enforce_protected: bool = True
     #: YOLO 模式下是否仍守保护路径（默认守：密钥/版本库不该被模型改）
@@ -147,13 +151,30 @@ class PermissionEngine:
         if req.action == "read":
             return Decision(Effect.ALLOW, "只读操作")
 
+        # exec 类：过命令前缀策略（Codex execpolicy 语义，比"写/执行"分类更具体）
+        if req.action == "exec" and self.exec_policy is not None and req.command:
+            evaluation = self.exec_policy.evaluate(req.command)
+            if evaluation.decision.value == "forbidden":
+                return Decision(Effect.DENY, evaluation.reason)
+            if evaluation.decision.value == "prompt":
+                # 策略要求审批：跳过会话授权（命令级 prompt 每次确认更安全）
+                return Decision(Effect.ASK, evaluation.reason)
+            # ALLOW 只表示"策略不禁止"，不越过 ApprovalMode 的询问语义
+            #（否则 AUTO_EDIT/DEFAULT 下 echo 之类就永不再问，与既有契约冲突）
+            exec_allowed_reason = evaluation.reason
+
+        exec_allowed_reason = ""
+
         if self.enforce_protected:
             reason = protected_reason(req.path)
             if reason and (self.protect_even_in_yolo or approval_mode != "yolo"):
                 return Decision(Effect.DENY, reason)
 
         if self.grants.matches(req):
-            return Decision(Effect.ALLOW, "本会话内已授权同类操作")
+            return Decision(
+                Effect.ALLOW,
+                exec_allowed_reason or "本会话内已授权同类操作",
+            )
 
         return Decision(Effect.ASK, "")
 
@@ -166,6 +187,12 @@ class PermissionEngine:
         `exec_policy.rs` 用 `` `cmd` rejected: {justification} ``。
         我们也让模型看到"什么被拒 + 为什么"，它才能换方案而不是重试。
         """
+        # 已经是 Codex 风格文案（命令策略生成的）就直接用，避免 "rejected: ... rejected: ..."
+        already_formatted = reason.startswith("`") and (
+            " rejected:" in reason or " requires approval" in reason
+        )
+        if already_formatted:
+            return reason
         target = f" `{req.path}`" if req.path else ""
         return f"`{req.tool}`{target} rejected: {reason}"
 
@@ -188,6 +215,17 @@ def extract_target_path(tool_args: dict | None) -> str | None:
     cwd = tool_args.get("cwd")
     if isinstance(cwd, str) and cwd.strip():
         return str(Path(cwd.strip()) / "_")
+    return None
+
+
+def extract_command(tool_args: dict | None) -> str | None:
+    """从工具参数里提取待执行命令（BashTool 等用 command / cmd）"""
+    if not tool_args:
+        return None
+    for key in ("command", "cmd", "script", "shell_command"):
+        value = tool_args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
 
 

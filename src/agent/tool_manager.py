@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
 from ..core.approval_mode import ApprovalMode
+from ..core.exec_policy import ExecPolicy
 from ..core.permissions import (
     Effect,
     PermissionEngine,
     PermissionRequest,
     current_session_id,
+    extract_command,
     extract_target_path,
 )
 from ..core.exceptions import ToolApprovalDeniedError
@@ -67,7 +70,11 @@ class ToolManager:
         self.approval_mode = approval_mode if approval_mode is not None else self._load_approval_mode()
         self._confirm_callback = confirm_callback
         # 权限引擎：保护路径 + 会话级授权（见 src/core/permissions.py 的借鉴说明）
-        self.permissions = PermissionEngine()
+        self.permissions = PermissionEngine(
+            exec_policy=ExecPolicy.load(
+                Path.cwd() / ".clawd" / "exec_policy.json"
+            )
+        )
         self._warn_if_approval_unenforceable()
 
     def _warn_if_approval_unenforceable(self) -> None:
@@ -139,6 +146,7 @@ class ToolManager:
             action=kind,
             path=extract_target_path(tool_args),
             session_id=current_session_id(),
+            command=extract_command(tool_args),
         )
         decision = self.permissions.decide(req, approval_mode=mode.value)
 

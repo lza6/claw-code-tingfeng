@@ -7,6 +7,42 @@
 
 ---
 
+## [v0.67.0] (2026-10-29) — 命令执行策略 + 会话分叉元数据（ADR-0014）
+
+### 1. 命令执行策略（来自 Codex `execpolicy`，Rust/Apache-2.0）
+`src/core/exec_policy.py`：命令**前缀匹配** + `Allow/Prompt/Forbidden` + **最长匹配获胜**
++ 三档拒绝文案（与 Codex 逐字对齐）；用户可用 `.clawd/exec_policy.json` 覆盖（同前缀用户优先）
+- 内置直接禁：`rm -rf`、`git push --force`、`git reset --hard`、`git clean -fd`、
+  `terraform destroy`、`dd`、`mkfs`、`shutdown/reboot`
+- 内置需审批：`curl/wget`、`pip install`、`npm publish`、`chmod 777`、`docker rm`、`python -c`
+- 内置放行：`git status/diff/log/show/add/commit`、`ls/cat/grep/rg/pwd/echo`
+- 接入 `PermissionEngine`（exec 类先过策略）
+
+**实测回归修正**：初版让策略 `ALLOW` 直接放行 → `AUTO_EDIT/DEFAULT` 下 `echo` 永不再问，
+破坏既有契约（10 项失败）。正确语义：`ALLOW` 只表示"不禁止"，不越过 `ApprovalMode` 的询问；
+`PROMPT` 则**跳过会话授权**（命令级审批每次问）。
+
+### 2. 会话分叉与元数据（来自 OpenCode `internal/session/session.go`）
+`StoredSession` 新增 `parent_session_id` / `title` / `summary_message_id`；
+新增 `fork_session()`（分叉保留历史、不改父）、`update_session_meta()`、`session_chain()`（带环形保护）。
+向后兼容：老会话文件缺字段按空值读，不崩。
+
+### 3. Pi 的 `quoteShellArgument` —— 已有等价实现，未重复造
+`src/utils/string_utils.py` 已有 `quote_shell_arg` / `quote_powershell_arg`。
+
+### 验证
+- `tests/core/test_exec_policy.py` **32 passed**（YOLO 也挡 `rm -rf` 与强推；PLAN 连 `ls` 也拒）
+- `tests/core/test_session_fork.py` **11 passed**
+- `tests/agent/` **645 passed**（既有审批契约无回归）
+- IMPORT 621/621；ruff 硬指标 All passed
+
+### 边界
+- 策略只做前缀匹配，**不解析 shell 语法**（`bash -c "rm -rf /"` 这类包装未识别）
+- 未实现 Codex 的 Starlark 策略格式，改用 JSON
+- 会话分叉是浅复制历史，未做消息级 parent 链
+
+---
+
 ## [v0.66.0] (2026-10-29) — 权限决策引擎：会话授权 / 拒绝理由回灌 / 写入边界（ADR-0013）
 
 延续源码级借鉴，补齐审批链路的三个真实缺口（此前只有粗粒度 `ApprovalMode`）：
