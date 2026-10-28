@@ -184,10 +184,18 @@ async def _run_agent_loop(
         # 挂机护栏：预算/失败/空转达上限就停，返回阶段性结论（而不是无限跑）
         if config.autonomy is not None:
             try:
+                # 成本从估算器取（AgentSession 没有 total_cost 字段，
+                # 之前 getattr 恒为 0 → 成本护栏实际从未生效，实测发现）
+                _cost = 0.0
+                try:
+                    if config.enable_cost_tracking and config._cost_estimator:
+                        _cost = float(config._cost_estimator.get_total_cost() or 0.0)
+                except Exception:  # noqa: BLE001 — 成本读取失败不影响护栏其它项
+                    _cost = 0.0
                 stop, why = config.autonomy.check_stop(
                     iterations=iteration,
                     consecutive_failures=_audit_retry_count,
-                    cost_usd=float(getattr(config.session, 'total_cost', 0.0) or 0.0),
+                    cost_usd=_cost,
                 )
             except Exception as e:  # noqa: BLE001 — 护栏自身异常不能阻断任务
                 warn(f'挂机护栏检查异常（忽略本次检查）: {e}')

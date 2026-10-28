@@ -184,8 +184,11 @@ class AutonomyEngine:
             return AutonomyDecision(Action.ASK, "需要你确认", needs_human=True)
 
         if self.level is AutonomyLevel.SEMI:
-            # 半挂机：只有高风险（受保护路径 / 禁命令）才出声，其余自决放行
-            if self._is_high_risk(req):
+            # 半挂机：只有真正高风险才出声，其余自决放行
+            # 高风险定义：受保护路径 / 禁命令 / **策略要求审批的命令**（policy=prompt）
+            # 注意：策略明确允许的命令（policy=allow，如 git status）在半挂机时自决放行，
+            # 否则半挂机退化成"每条命令都问"，失去意义
+            if self._is_high_risk(req, policy=policy):
                 self.stats.note(Action.ASK)
                 return AutonomyDecision(
                     Action.ASK, f"高风险操作（{protected_reason(req.path) or '危险命令'}），需你确认",
@@ -242,10 +245,15 @@ class AutonomyEngine:
     def _exec_is_forbidden(reason: str) -> bool:
         return "rejected:" in (reason or "")
 
-    def _is_high_risk(self, req: PermissionRequest) -> bool:
-        return bool(protected_reason(req.path)) or self._exec_is_forbidden(
-            getattr(req, "command", "") or ""
-        )
+    def _is_high_risk(self, req: PermissionRequest, *, policy: str = "") -> bool:
+        if protected_reason(req.path):
+            return True
+        if self._exec_is_forbidden(getattr(req, "command", "") or ""):
+            return True
+        if req.action == "exec":
+            # 策略要求审批（或未命中任何规则）→ 高风险；策略明确允许 → 不算
+            return policy != "allow"
+        return False
 
     # ---------- 停止条件 ----------
     def check_stop(

@@ -331,3 +331,28 @@ class TestAllowedCommandHint:
         engine.system_prompt = "BASE-PROMPT"
 
         assert engine._system_prompt_with_autonomy_hint() == "BASE-PROMPT"
+
+
+class TestSemiRefinedByPolicy:
+    """半挂机按命令策略细分：安全命令自决，需审批/未知命令才问"""
+
+    def test_allowlisted_command_proceeds_in_semi(self, tmp_path: Path):
+        engine = AutonomyEngine(AutonomyLevel.SEMI, workdir=tmp_path, audit=False)
+        d = engine.decide_permission(
+            _req(action="exec", path=None, tool="BashTool", command="git status"),
+            Effect.ASK, "策略允许", policy="allow",
+        )
+        assert d.action is Action.PROCEED
+
+    def test_policy_prompt_asks_in_semi(self, tmp_path: Path):
+        engine = AutonomyEngine(AutonomyLevel.SEMI, workdir=tmp_path, audit=False)
+        d = engine.decide_permission(
+            _req(action="exec", path=None, tool="BashTool", command="pip install x"),
+            Effect.ASK, "requires approval", policy="prompt",
+        )
+        assert d.action is Action.ASK
+        assert d.needs_human is True
+
+    def test_normal_write_proceeds_in_semi(self, tmp_path: Path):
+        engine = AutonomyEngine(AutonomyLevel.SEMI, workdir=tmp_path, audit=False)
+        assert engine.decide_permission(_req(path="src/a.py"), Effect.ASK).action is Action.PROCEED
