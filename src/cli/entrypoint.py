@@ -646,14 +646,26 @@ def session_resume(
         console.print(f"[bold red]读取失败:[/bold red] {e}")
         raise typer.Exit(code=1)
 
-    if not view.messages:
+    prior = view.messages
+    if not prior:
         console.print("[yellow]该会话没有历史消息，将按新任务执行[/yellow]")
     else:
-        console.print(f"[dim]已载入 {len(view.messages)} 条历史消息（{view.title or '无标题'}）[/dim]")
+        # 长历史先压成检查点（Pi 准入阈值 + Codex 检查点语义），避免续跑直接爆上下文
+        from ..agent.compaction import prepare_resume_messages
+
+        prior, checkpoint = prepare_resume_messages(list(prior))
+        if checkpoint is not None:
+            console.print(
+                f"[yellow]历史较长（{checkpoint.dropped_entries} 条），已压缩为检查点摘要[/yellow]"
+            )
+        else:
+            console.print(
+                f"[dim]已载入 {len(prior)} 条历史消息（{view.title or '无标题'}）[/dim]"
+            )
 
     engine = AgentEngine(workdir=Path.cwd(), max_iterations=max_iterations)
     try:
-        session = asyncio.run(engine.run(goal, prior_messages=view.messages or None))
+        session = asyncio.run(engine.run(goal, prior_messages=prior or None))
     except Exception as e:  # noqa: BLE001 — CLI 层要把错误讲清楚
         console.print(f"[bold red]执行失败:[/bold red] {type(e).__name__}: {e}")
         raise typer.Exit(code=1)

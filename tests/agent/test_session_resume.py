@@ -121,3 +121,65 @@ class TestResumeCli:
         ])
         assert result.exit_code == 1
         assert "读取失败" in result.output
+
+
+class TestResumeCompaction:
+    """长历史续跑必须先压缩（ADR-0012 的检查点 + Pi 的准入阈值）"""
+
+    def test_short_history_untouched(self):
+        from src.agent.compaction import prepare_resume_messages
+
+        msgs = [{"role": "user", "content": "短消息"}]
+        out, checkpoint = prepare_resume_messages(msgs)
+
+        assert out == msgs
+        assert checkpoint is None
+
+    def test_long_history_compacted_to_checkpoint(self):
+        from src.agent.compaction import MIN_COMPACT_TOKENS, prepare_resume_messages
+
+        long_text = "x" * (MIN_COMPACT_TOKENS * 4)
+        msgs = [
+            {"role": "user", "content": "请实现 src/api/user.py 的登录，目标支持 JWT" + long_text},
+            {"role": "assistant", "content": "下一步：补测试"},
+        ]
+
+        out, checkpoint = prepare_resume_messages(msgs)
+
+        assert checkpoint is not None
+        assert len(out) == 1 and out[0]["role"] == "system"
+        assert "检查点摘要" in out[0]["content"]
+        assert "src/api/user.py" in out[0]["content"]  # 关键事实被保住
+
+    def test_cli_resume_compacts_long_session(self, tmp_path: Path, monkeypatch):
+        from src.agent.compaction import MIN_COMPACT_TOKENS
+        from src.core.session_bridge import persist_agent_session
+
+        huge = "y" * (MIN_COMPACT_TOKENS * 4)
+        persist_agent_session(
+            "s-long", "长会话", [{"role": "assistant", "content": "历史内容" + huge}],
+            directory=tmp_path,
+        )
+        captured = {}
+
+        class _FakeSession:
+            final_result = "ok"
+
+        class _FakeEngine:
+            def __init__(self, **kwargs):
+                pass
+
+            async def run(self, goal, prior_messages=None):
+                captured["prior"] = prior_messages
+                return _FakeSession()
+
+        monkeypatch.setattr("src.agent.engine.AgentEngine", _FakeEngine)
+
+        result = runner.invoke(app, [
+            "session", "resume", "s-long", "继续", "--dir", str(tmp_path),
+        ])
+
+        assert result.exit_code == 0, result.output
+        assert "已压缩为检查点摘要" in result.output
+        assert len(captured["prior"]) == 1  # 只剩一条 system 摘要
+        assert captured["prior"][0]["role"] == "system"

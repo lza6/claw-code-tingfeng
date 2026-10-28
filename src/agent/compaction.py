@@ -255,3 +255,28 @@ def build_checkpoint(
         used_llm=used_llm,
         facts=facts,
     )
+
+
+def prepare_resume_messages(
+    messages: list[Any],
+    summarizer: Summarizer | None = None,
+    *,
+    min_tokens: int = MIN_COMPACT_TOKENS,
+) -> tuple[list[Any], Checkpoint | None]:
+    """续跑前处理历史：超过阈值就压成检查点，否则原样返回
+
+    解决的问题（ADR-0012 里标注的未串接点）：`session resume` 会把整段历史塞进上下文，
+    长会话直接爆上下文。这里复用 Pi 的准入阈值 + Codex 的检查点语义：
+
+    Returns:
+        (处理后的消息列表, 检查点或 None)
+        - 未超阈值：原消息原样返回，检查点为 None
+        - 超阈值：返回单条 system 消息（检查点摘要），并把检查点带回供调用方展示
+    """
+    total = sum(_default_tokens(str(_classify(m)[1])) for m in messages or [])
+    if not is_compaction_eligible(tokens=total, min_tokens=min_tokens):
+        return list(messages or []), None
+
+    checkpoint = build_checkpoint(messages, summarizer=summarizer)
+    compacted = [{"role": "system", "content": checkpoint.render()}]
+    return compacted, checkpoint

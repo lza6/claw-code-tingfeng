@@ -7,6 +7,28 @@
 
 ---
 
+## [v0.70.0] (2026-10-29) — 续跑自动压缩（把 ADR-0012 的检查点串进 ADR-0015 的续跑）
+
+### 关闭自己上一版标注的边界
+v0.69.0 写了"续跑会把整段历史塞进上下文，需配合检查点压缩（已实现，未自动串联）"。本轮串上：
+
+- `src/agent/compaction.py` 新增 `prepare_resume_messages()`：
+  - 用 **Pi 的准入阈值**（`MIN_COMPACT_TOKENS=30_000`）判断"值不值得压"
+  - 超过阈值 → 用 **Codex 的检查点语义**压成单条 system 摘要（保留目标/决策/文件/工具/错误/待办）
+  - 未超阈值 → 原样返回，不做无谓有损处理
+- `clawd session resume` 自动调用：压缩了就提示"历史较长（N 条），已压缩为检查点摘要"
+
+### 验证
+- `tests/agent/test_session_resume.py` **13 passed**（新增 3 个：短历史不动、
+  长历史压成单条 system 且关键事实保留、CLI 端到端确认压缩后只传 1 条）
+- 全量回归、E2E 冒烟、doctor 均通过（见下）
+
+### 边界
+- 压缩是**确定性抽取**（无 LLM）；要自然语言摘要需传 summarizer（接口已留）
+- 交互式 `clawd chat` 仍无 `--resume`（repl_task 每轮维护消息列表，工作量大且易回归）
+
+---
+
 ## [v0.69.0] (2026-10-29) — 会话续跑打通（prior_messages 注入 + `session resume`）
 
 ### 补齐 ADR-0015 里如实标注的边界
