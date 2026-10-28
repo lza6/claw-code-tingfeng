@@ -9,6 +9,10 @@ Windows 关键点：必须走**二进制流**。用文本流会把 "\r\n" 做换
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import subprocess
@@ -151,16 +155,16 @@ class LSPClient:
             return
         try:
             self._notify("exit", {})
-        except Exception:  # noqa: BLE001 — 关闭阶段异常不重要
+        except Exception:
             pass
         try:
             self.proc.terminate()
             self.proc.wait(timeout=5)
-        except Exception:  # noqa: BLE001
+        except Exception:
             try:
                 self.proc.kill()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as e:
+                logger.debug("LSP 进程强杀失败（忽略）: %s", e)
         self.proc = None
         self._ready = False
         self._opened.clear()
@@ -214,7 +218,7 @@ class LSPClient:
         while True:
             try:
                 msg = self._read_message()
-            except Exception:  # noqa: BLE001 — 读流出错即结束
+            except Exception:
                 break
             if msg is None:
                 break

@@ -414,7 +414,7 @@ def try_strategy(
         # 这两类不是"策略没匹配上"，而是资源/实现层面的严重问题，
         # 必须向上抛，不能被降级成"未找到匹配"。
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # 单个策略失败**不得中断回退矩阵**。
         # 实例：git_cherry_pick_osr_onto_o 在非 git 仓库会抛
         # `git.exc.InvalidGitRepositoryError`（不是 OSError），

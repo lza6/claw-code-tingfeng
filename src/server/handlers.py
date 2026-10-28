@@ -596,7 +596,7 @@ class MessageRouter:
             from .. import __version__
 
             version = __version__
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
         def _flag(name: str, default: str) -> bool:
@@ -610,7 +610,7 @@ class MessageRouter:
             provider = injector.get_runtime_override('llm_provider', None)
             model = injector.get_runtime_override('llm_model', None)
             base_url = injector.get_runtime_override('llm_base_url', None)
-        except Exception:  # noqa: BLE001 — 注入器不可用时回落 settings
+        except Exception:
             provider = model = base_url = None
 
         def _pick(override, attr):
@@ -704,7 +704,7 @@ class MessageRouter:
                             'base_url': 'llm_base_url',
                         }[key]
                         set_config(cfg_key, text)
-                    except Exception as exc:  # noqa: BLE001 — 记录但不阻断落盘
+                    except Exception as exc:
                         self.logger.warning(f'写入运行期配置失败 {key}: {exc}')
 
             settings_file = Path.cwd() / '.clawd' / 'ui_settings.json'
@@ -719,7 +719,7 @@ class MessageRouter:
             settings_file.write_text(
                 json.dumps(existing, ensure_ascii=False, indent=2), encoding='utf-8'
             )
-        except Exception as exc:  # noqa: BLE001 — 落盘失败要让调用方知道，不能假成功
+        except Exception as exc:
             return build_error(
                 message.get('id'),
                 'E_SETTINGS_WRITE_FAILED',

@@ -50,7 +50,7 @@ def _find_linenums_in_output(text: str, fnames: list[str]) -> list[int]:
 
     # 尝试使用 grep_ast.TreeContext 进行更精确的解析
     try:
-        from grep_ast import TreeContext  # noqa: F401
+        from grep_ast import TreeContext
         filenames_linenums = find_filenames_and_linenums(text, fnames)
         if filenames_linenums:
             # 返回第一个文件的行号（转为 0-indexed）

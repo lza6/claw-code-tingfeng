@@ -13,6 +13,10 @@
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 import threading
 import time
@@ -54,8 +58,8 @@ def _count_sources(root: Path, limit: int) -> int:
                 n += 1
                 if n > limit:
                     return n
-    except OSError:
-        pass
+    except OSError as e:
+        logger.debug("统计源文件数时出错（忽略）: %s", e)
     return n
 
 
@@ -80,7 +84,7 @@ def _index(st: _WarmState) -> None:
             st.model = model
             st.state = "ready"
             st.finished_at = time.time()
-    except Exception as e:  # noqa: BLE001 — 预热失败只降级，不影响主流程
+    except Exception as e:
         with st.lock:
             st.state = "failed"
             st.error = f"{type(e).__name__}: {e}"

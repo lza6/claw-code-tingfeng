@@ -10,6 +10,10 @@
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import threading
 
@@ -46,7 +50,7 @@ def shutdown_clients() -> None:
         for client in _CLIENTS.values():
             try:
                 client.stop()
-            except Exception:  # noqa: BLE001 — 退出阶段忽略
+            except Exception:
                 pass
         _CLIENTS.clear()
 
@@ -175,7 +179,7 @@ class LSPTool(BaseTool):
                     start = rng.get("start") or {}
                     try:
                         path = Path(uri.replace("file:///", "").replace("%20", " ")).as_posix()
-                    except Exception:  # noqa: BLE001 — uri 解析失败就原样给 uri
+                    except Exception:
                         path = uri
                     items.append({"uri": uri, "path": path,
                                   "line": int(start.get("line", 0)) + 1,

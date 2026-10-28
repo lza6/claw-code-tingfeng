@@ -131,7 +131,7 @@ class WorldModelTool(BaseTool):
                 return self._not_ready("索引仍在后台预热，稍后重试或用 clawd_project_map 轻量替代")
             try:
                 payload = {**model.stats(), "warmup": status}
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 return ToolResult(success=False, output="", error=f"读取统计失败: {e}", exit_code=1)
             return ToolResult(success=True, output=json.dumps(payload, ensure_ascii=False, indent=2))
 
@@ -149,7 +149,7 @@ class WorldModelTool(BaseTool):
                 return self._not_ready("索引仍在后台预热，稍后重试")
             try:
                 ctx = model.get_context_for_file(str(target))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 return ToolResult(success=False, output="", error=f"查询失败: {e}", exit_code=1)
             return ToolResult(success=True, output=json.dumps(ctx, ensure_ascii=False, default=str, indent=2))
 
@@ -163,7 +163,7 @@ class WorldModelTool(BaseTool):
                 return self._not_ready("索引仍在后台预热，稍后重试")
             try:
                 files = model.predict_relevant_files(current, depth=depth)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 return ToolResult(success=False, output="", error=f"预测失败: {e}", exit_code=1)
             return ToolResult(
                 success=True,
@@ -240,7 +240,7 @@ class ProjectMapTool(BaseTool):
 
             with RepoMap(root_dir=self.workdir) as mapper:
                 text = mapper.get_repo_map(chat_files=[], other_files=files) or ""
-        except Exception as e:  # noqa: BLE001 — 图谱失败降级为文件清单，不静默
+        except Exception as e:
             listing = "\n".join(str(Path(f).relative_to(self.workdir)) for f in files[:max_files])
             return ToolResult(
                 success=True,

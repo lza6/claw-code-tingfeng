@@ -61,7 +61,7 @@ def build_system_prompt(
                         params = " 参数: " + "; ".join(parts)
                     else:
                         params = " 参数: " + "; ".join(f"{k}: {v}" for k, v in raw.items())
-        except Exception:  # noqa: BLE001 — schema 提取失败不阻断 prompt 构建
+        except Exception:
             params = ""
         desc_lines.append(f'- {name}: {tool.description}{params}')
     tool_descriptions = '\n'.join(desc_lines)

@@ -222,7 +222,7 @@ class DomainServer:
                 return _text_content("(项目图谱为空)")
             lines = str(text).splitlines()[: max_files * 20]
             return _text_content("\n".join(lines))
-        except Exception as e:  # noqa: BLE001 — 图谱失败降级为文件清单
+        except Exception as e:
             files = sorted(
                 str(p.relative_to(self.root))
                 for p in self.root.rglob("*.py")
@@ -249,7 +249,7 @@ class DomainServer:
             module = "src.tools_runtime." + ".".join(rel.parts)
             try:
                 mod = importlib.import_module(module)
-            except Exception:  # noqa: BLE001 — 单个模块导入失败不影响清单
+            except Exception:
                 continue
             for name, obj in inspect.getmembers(mod, inspect.isclass):
                 if issubclass(obj, BaseTool) and obj is not BaseTool and obj.__module__ == module:
@@ -312,7 +312,7 @@ class DomainServer:
         try:
             model = self._world_model()
             ctx = model.get_context_for_file(str(target))
-        except Exception as e:  # noqa: BLE001 — 世界模型失败要显式报错，不假装有结果
+        except Exception as e:
             return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
         return _text_content(json.dumps(ctx, ensure_ascii=False, default=str, indent=2))
 
@@ -324,7 +324,7 @@ class DomainServer:
         try:
             model = self._world_model()
             files = model.predict_relevant_files(current, depth=depth)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
         return _text_content(json.dumps({"current_file": current, "depth": depth,
                                          "predicted": files}, ensure_ascii=False, indent=2))
@@ -338,7 +338,7 @@ class DomainServer:
                 {**stats, "indexed": bool(getattr(model, "_is_initialized", False))},
                 ensure_ascii=False, default=str, indent=2,
             ))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return _error_content(f"世界模型不可用: {type(e).__name__}: {e}")
 
     # ---------- JSON-RPC 分发 ----------
@@ -375,7 +375,7 @@ class DomainServer:
                 return _error(req_id, -32602, "arguments 必须是对象")
             try:
                 return _result(req_id, spec["handler"](args))
-            except Exception as e:  # noqa: BLE001 — 工具异常转为 MCP isError 内容
+            except Exception as e:
                 return _result(req_id, _error_content(f"{type(e).__name__}: {e}"))
 
         return _error(req_id, -32601, f"不支持的方法: {method}")
@@ -415,7 +415,7 @@ class DomainServer:
                 continue
             try:
                 response = self.handle(request)
-            except Exception as exc:  # noqa: BLE001 — 单请求异常不应打死整个服务
+            except Exception as exc:
                 response = _error(request.get("id"), -32603, f"{type(exc).__name__}: {exc}")
             if response is not None:
                 stdout.write(json.dumps(response, ensure_ascii=False) + chr(10))

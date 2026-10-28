@@ -160,7 +160,7 @@ class ClawdWebSocketServer:
             from .. import __version__
 
             info["version"] = __version__
-        except Exception:  # noqa: BLE001 — 版本读不到不影响其他信息
+        except Exception:
             pass
 
         try:
@@ -168,7 +168,7 @@ class ClawdWebSocketServer:
             info["model"] = getattr(self._settings, "llm_model", None)
             info["base_url"] = getattr(self._settings, "llm_base_url", None)
             info["api_key_set"] = bool(getattr(self._settings, "llm_api_key", None))
-        except Exception:  # noqa: BLE001
+        except Exception:
             info["provider"] = None
             info["model"] = None
             info["api_key_set"] = False
@@ -232,7 +232,7 @@ class ClawdWebSocketServer:
                             ) if flag
                         ] or ["插件"],
                     })
-                except Exception as exc:  # noqa: BLE001 — 单个 manifest 坏了不影响其他插件
+                except Exception as exc:
                     plugins.append({
                         "name": plugin_dir.name,
                         "version": "?",
@@ -241,7 +241,7 @@ class ClawdWebSocketServer:
                         "source": str(plugin_dir),
                         "capabilities": ["插件"],
                     })
-        except Exception as exc:  # noqa: BLE001 — 插件子系统不可用不影响内置列表
+        except Exception as exc:
             self.logger.debug(f"插件发现失败: {exc}")
 
         # 2. 内置能力包（逆向工具/安全目录/MCP 桥接 — 让市场不为空）
@@ -256,7 +256,7 @@ class ClawdWebSocketServer:
                 "status": "builtin",
                 "capabilities": ["逆向", "静态分析", "CLI 包装"],
             })
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         plugins.append({
             "name": "安全工具目录",
@@ -342,7 +342,7 @@ class ClawdWebSocketServer:
                 # websockets 16 的 Request 无 method 属性；进入此回调的
                 # 非 upgrade 请求按 GET 处理（loopback-only 服务，可接受）
                 return self._handle_static_http(path)
-            except Exception as exc:  # noqa: BLE001 — 静态托管异常不应炸掉服务进程
+            except Exception as exc:
                 import traceback
 
                 self.logger.error(f"静态托管处理失败: {path} — {type(exc).__name__}: {exc}")

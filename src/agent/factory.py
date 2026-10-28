@@ -53,7 +53,7 @@ def _create_rag_index(workdir: Path | None) -> object | None:
                 count += 1
         debug(f'RAG 索引已挂载: {root} ({count} 个 Python 文件)')
         return index
-    except Exception as e:  # noqa: BLE001 - 索引是可选增强，失败不应阻塞 Agent
+    except Exception as e:
         debug(f'RAG 索引初始化失败，降级为无 RAG: {e}')
         return None
 

@@ -9,6 +9,10 @@
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import shutil
 import subprocess
@@ -327,9 +331,9 @@ class CliBackend:
                     capture_output=True, timeout=20, check=False,
                 )
                 return
-            except (OSError, subprocess.SubprocessError):
-                pass
+            except (OSError, subprocess.SubprocessError) as e:
+                logger.debug("taskkill 失败，回退到 kill: %s", e)
         try:
             proc.kill()
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug("进程强杀失败（忽略）: %s", e)

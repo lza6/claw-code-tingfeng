@@ -59,9 +59,9 @@ def start_repl(
 
 
 # ─── 向后兼容导出 (测试文件和其他模块依赖这些) ───────────────────────
-from . import command_registry  # noqa: E402, F401, I001
+from . import command_registry  # noqa: F401 — 向后兼容导出，勿删
 
-from .repl_commands import (  # noqa: E402, F401
+from .repl_commands import (  # noqa: F401 — 向后兼容导出，勿删
     _print,
     _handle_help,
     _handle_version,

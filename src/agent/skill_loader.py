@@ -39,7 +39,7 @@ def _parse_frontmatter(text: str) -> dict:
 
         data = yaml.safe_load(text[3:end])
         return data if isinstance(data, dict) else {}
-    except Exception:  # noqa: BLE001 - frontmatter 损坏不应让启动失败
+    except Exception:
         return {}
 
 

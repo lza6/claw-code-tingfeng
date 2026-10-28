@@ -44,7 +44,7 @@ class OmniGlowApp(App):
     # 状态
     app_state: reactive[str] = reactive("idle")
 
-    BINDINGS = [  # noqa: RUF012
+    BINDINGS = [
         ("ctrl+b", "break_execution", "中断"),
         ("q", "quit", "退出"),
     ]

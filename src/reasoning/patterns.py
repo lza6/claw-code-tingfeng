@@ -143,7 +143,7 @@ class BaseReasoningPattern(ABC):
             return "[已达工具调用上限]"
         try:
             return self.tool_executor(tool_name, args)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return f"[工具异常] {e}"
 
     @abstractmethod
@@ -318,7 +318,7 @@ class PlanExecuteLoop(BaseReasoningPattern):
                         + "\n\n综合所有发现给出最终结论（纯文本）",
                     )
                     result.answer = final
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     result.answer = findings[-1]
                 result.confidence = 0.8
                 return result
@@ -417,7 +417,7 @@ class LATSPattern(BaseReasoningPattern):
                 f"任务: {task}\n全部证据:\n" + "\n".join(evidence_pool)
                 + "\n\n综合全部证据给出最终结论（纯文本）",
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             result.answer = f"综合失败: {e}；已有证据:\n" + "\n".join(evidence_pool[:5])
         return result
 

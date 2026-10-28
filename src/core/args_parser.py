@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 # 尝试导入可选依赖
 try:
-    import configargparse as _configargparse  # noqa: F401
+    import configargparse as _configargparse
     CONFIGARGPARSE_AVAILABLE = True
 except ImportError:
     CONFIGARGPARSE_AVAILABLE = False

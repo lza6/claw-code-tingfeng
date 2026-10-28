@@ -152,13 +152,13 @@ class MCPClient:
         if self._session:
             try:
                 await self._session.__aexit__(None, None, None)
-            except Exception as e:  # noqa: BLE001 — 关闭时尽最大努力
+            except Exception as e:
                 logger.warning(f"关闭 session 异常: {e}")
             self._session = None
         if self._stdio_cm:
             try:
                 await self._stdio_cm.__aexit__(None, None, None)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"关闭 stdio 传输异常: {e}")
             self._stdio_cm = None
         self._connected = False
@@ -263,7 +263,7 @@ class MCPHttpClient(MCPClient):
         # 通知 initialized（某些 server 要求）
         try:
             await self._http.post("", json={"jsonrpc": "2.0", "method": "notifications/initialized"})
-        except Exception as e:  # noqa: BLE001 — 通知失败不阻断
+        except Exception as e:
             logger.debug(f"initialized 通知异常: {e}")
         server_info = init.get("serverInfo", {})
         logger.info(
@@ -393,7 +393,7 @@ class MCPServerManager:
             if client.is_connected:
                 try:
                     await client.disconnect()
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(f"断开 {name} 异常: {e}")
 
     async def discover_tools(self, server: str) -> list[MCPToolInfo]:
@@ -406,7 +406,7 @@ class MCPServerManager:
         for name in self._clients:
             try:
                 all_tools.extend(await self.discover_tools(name))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"发现 {name} 工具失败（跳过）: {e}")
         return all_tools
 

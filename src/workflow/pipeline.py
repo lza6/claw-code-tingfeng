@@ -501,7 +501,7 @@ def create_ralplan_stage() -> PipelineStage:
 
                 engine = RalplanEngine(workdir=Path(ctx.cwd), max_rounds=1)
                 plan = await engine.run(ctx.task)
-            except Exception as exc:  # noqa: BLE001 - 阶段失败必须变成 FAILED
+            except Exception as exc:
                 self._logger.error("RALPLAN 阶段失败: %s: %s", type(exc).__name__, exc)
                 return StageResult(
                     status=StageStatus.FAILED,
@@ -579,7 +579,7 @@ def create_team_exec_stage(
                     intent=self.agent_type,
                 )
                 result = await engine.run(ctx.task)
-            except Exception as exc:  # noqa: BLE001 - 阶段失败必须变成 FAILED
+            except Exception as exc:
                 self._logger.error("team-exec 阶段失败: %s: %s", type(exc).__name__, exc)
                 return StageResult(
                     status=StageStatus.FAILED,
@@ -737,7 +737,7 @@ def create_precontext_intake_stage() -> PipelineStage:
                     "Context intake: %d files / %d lines", len(py_files), total_lines
                 )
                 return StageResult(status=StageStatus.SUCCESS, artifacts=artifacts)
-            except Exception as e:  # noqa: BLE001 - 不阻止 pipeline，但不得报成功
+            except Exception as e:
                 # Intake 失败不应阻止 pipeline，但**不能报 SUCCESS**：
                 # 用 SKIPPED 表示"本阶段没做成事但允许继续"。
                 self._logger.warning(f"Intake failed: {e}")

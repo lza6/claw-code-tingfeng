@@ -177,7 +177,7 @@ class WorkflowEngine:
             self._resolved_dimensions = resolved
             lines = [f"- **{d.name}**: {d.guidance}" for d in resolved]
             return "## 维度引导（本次运行请遵循）\n" + "\n".join(lines)
-        except Exception as e:  # noqa: BLE001 - 维度解析失败不应阻断工作流
+        except Exception as e:
             self.logger.warning(f"维度解析失败，本次运行不启用维度引导: {e}")
             return ""
 

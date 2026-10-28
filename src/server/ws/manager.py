@@ -51,7 +51,7 @@ class WSManager:
         # 其余事件类型统一按 step 推送（工具调用/LLM 轮次等）
         try:
             other = {t for t in EventType if t not in watch and t.name.startswith('AGENT')}
-        except Exception:  # noqa: BLE001 — EventType 结构变化时兜底
+        except Exception:
             other = set()
 
         def _make_handler(ev_type: EventType):
@@ -75,7 +75,7 @@ class WSManager:
         for ev_type in (watch | other):
             try:
                 event_bus.subscribe(ev_type, _make_handler(ev_type))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.debug(f"事件订阅失败 {ev_type}: {e}")
 
     @property

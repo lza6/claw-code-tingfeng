@@ -181,7 +181,7 @@ class CodeGraph:
                     node = future.result()
                     if node:
                         self._add_node_to_index(node)
-                except Exception as e:  # noqa: BLE001 — 单文件失败不中断整批
+                except Exception as e:
                     logger.error(f"解析文件失败: {e}")
 
         in_main_thread = threading.current_thread() is threading.main_thread()
@@ -191,14 +191,14 @@ class CodeGraph:
                 with ProcessPoolExecutor(max_workers=workers) as executor:
                     _collect([executor.submit(_parse_file_task, self.root, f) for f in changed_files])
                 return
-            except Exception as e:  # noqa: BLE001 — 进程池不可用（spawn/frozen/沙箱）→ 降级
+            except Exception as e:
                 logger.warning(f"进程池解析不可用，降级为线程池: {type(e).__name__}: {e}")
 
         try:
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 _collect([executor.submit(_parse_file_task, self.root, f) for f in changed_files])
             return
-        except Exception as e:  # noqa: BLE001 — 线程池也失败 → 串行
+        except Exception as e:
             logger.warning(f"线程池解析失败，降级为串行: {type(e).__name__}: {e}")
 
         for f in changed_files:
@@ -206,7 +206,7 @@ class CodeGraph:
                 node = _parse_file_task(self.root, f)
                 if node:
                     self._add_node_to_index(node)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error(f"解析文件失败: {e}")
 
     def _add_node_to_index(self, node: CodeNode):

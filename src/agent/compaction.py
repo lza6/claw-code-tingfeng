@@ -234,7 +234,7 @@ def build_checkpoint(
         try:
             summary = summarizer(COMPACTION_PROMPT, list(entries))
             used_llm = bool(summary and summary.strip())
-        except Exception:  # noqa: BLE001 — 摘要失败必须降级，不能丢上下文
+        except Exception:
             used_llm = False
             summary = ""
         if not used_llm:

@@ -247,7 +247,7 @@ class AgentEngine:
 
             # 后台预热：非阻塞；索引在小仓库上秒级就绪，大仓库期间工具会如实返回 indexing
             ensure_warm(self.workdir)
-        except Exception as e:  # noqa: BLE001 — 领域工具失败不阻断主引擎
+        except Exception as e:
             self.logger.warning(f"领域工具装配失败（降级运行）: {e}")
 
         # 1. 逆向原生工具（纯本地，无外部依赖）
@@ -260,7 +260,7 @@ class AgentEngine:
             self.logger.info(
                 f"逆向工具已装配: {len(self.tools) - count_before} 个"
             )
-        except Exception as e:  # noqa: BLE001 — 扩展工具失败不阻断主引擎
+        except Exception as e:
             self.logger.warning(f"逆向工具装配失败（降级运行）: {e}")
 
         # 2. 外部 MCP server 桥接（配置驱动，未配置则跳过）
@@ -295,7 +295,7 @@ class AgentEngine:
                     self.tools[t.name] = t
                 bridged_total += len(tools)
             self.logger.info(f"MCP 桥接工具已装配: {bridged_total} 个")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.logger.warning(f"MCP 桥接装配失败（降级运行）: {e}")
 
     def _init_config_systems(self) -> None:
@@ -308,7 +308,7 @@ class AgentEngine:
         try:
             from ..utils.provider_manager import provider_manager
             provider_manager.initialize(workdir=self.workdir)
-        except Exception as e:  # noqa: BLE001 - 配置系统不可用时可降级
+        except Exception as e:
             self.logger.warning(
                 "provider_manager 初始化失败，将使用默认 provider 配置: %s: %s",
                 type(e).__name__, e,
@@ -316,7 +316,7 @@ class AgentEngine:
         try:
             from ..utils.features import features
             features.initialize(workdir=self.workdir)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.logger.warning(
                 "features 初始化失败，将使用默认特性开关: %s: %s",
                 type(e).__name__, e,
@@ -404,7 +404,7 @@ class AgentEngine:
             from .autonomy import AutonomyEngine, level_from_env
 
             autonomy_engine = AutonomyEngine(level_from_env(), workdir=self.workdir)
-        except Exception as e:  # noqa: BLE001 — 自决引擎失败不影响主流程，但必须留痕
+        except Exception as e:
             self.logger.warning(f'挂机自决引擎初始化失败（回退为有人盯模式）: {e}')
             autonomy_engine = None
         self.autonomy = autonomy_engine
@@ -586,7 +586,7 @@ class AgentEngine:
             return base
         try:
             hint = autonomy.allowed_command_hint()
-        except Exception:  # noqa: BLE001 — 提示注入失败不影响主流程
+        except Exception:
             return base
         return f'{base}{hint}' if hint else base
 
@@ -612,7 +612,7 @@ class AgentEngine:
                 total_tokens=int(getattr(session, 'total_tokens', 0) or 0),
                 directory=self.workdir / '.clawd' / 'sessions',
             )
-        except Exception as e:  # noqa: BLE001 — 留痕失败不影响主流程
+        except Exception as e:
             self.logger.warning(f'会话落盘失败（不影响本次结果）: {e}')
 
     async def _run_agent_core(self, goal: str, **kwargs) -> dict[str, Any]:

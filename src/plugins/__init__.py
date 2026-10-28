@@ -79,7 +79,7 @@ def load_manifest_from_dir(plugin_dir: Path) -> PluginManifest:
         raise PluginError(f"插件目录缺少 pyproject.toml: {plugin_dir}")
     try:
         data = tomllib.loads(pp.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001 — TOML 解析错误转结构化错误
+    except Exception as e:
         raise PluginError(f"pyproject.toml 解析失败 {pp}: {e}") from e
     return PluginManifest.from_pyproject(data, source=str(pp))
 
@@ -165,7 +165,7 @@ class PluginManager:
         for fn in reversed(self._shutdown_hooks):
             try:
                 fn()
-            except Exception as e:  # noqa: BLE001 — 钩子失败不阻断其他插件
+            except Exception as e:
                 logger.warning(f"插件 shutdown 钩子失败: {e}")
         self._shutdown_hooks.clear()
         self._loaded.clear()
@@ -192,14 +192,14 @@ class PluginManager:
         for plugin_dir in self.discover():
             try:
                 manifest = load_manifest_from_dir(plugin_dir)
-            except Exception as e:  # noqa: BLE001 — manifest 都读不出，用目录名报错
+            except Exception as e:
                 logger.warning(f"插件 manifest 失败 {plugin_dir.name}: {e}")
                 results[plugin_dir.name] = f"error:{e}"
                 continue
             try:
                 self._load_one(plugin_dir, manifest)
                 results[manifest.name] = "loaded"
-            except Exception as e:  # noqa: BLE001 — 单插件失败降级
+            except Exception as e:
                 logger.warning(f"插件加载失败 {plugin_dir.name}: {e}")
                 results[manifest.name] = f"error:{e}"
         return results
@@ -240,7 +240,7 @@ class PluginManager:
                 raise PluginError(f"入口函数不可调用: {manifest.entry}")
         except PluginError:
             raise
-        except Exception as e:  # noqa: BLE001 — 导入失败转结构化错误
+        except Exception as e:
             sys.modules.pop(unique_name, None)
             raise PluginError(f"插件模块加载失败 {module_name}: {e}") from e
 

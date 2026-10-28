@@ -369,7 +369,7 @@ class AutonomyEngine:
             allowed = [
                 " ".join(r.prefix) for r in ExecPolicy().rules if r.decision is _D.ALLOW
             ]
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
         if not allowed:
             return ""

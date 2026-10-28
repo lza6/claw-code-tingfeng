@@ -67,7 +67,7 @@ def _setup_braintrust(api_key: str) -> bool:
     不再伪装成"已初始化"。
     """
     try:
-        import braintrust  # noqa: F401
+        import braintrust
     except ImportError:
         logger.warning("braintrust not installed, skipping Braintrust setup")
         return False

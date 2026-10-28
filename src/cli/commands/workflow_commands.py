@@ -124,7 +124,7 @@ def ralph_run(
                     console.print((result.final_result or "")[:2000])
                     return True
                 console.print("[yellow]本轮未完成，继续下一轮[/yellow]")
-            except Exception as e:  # noqa: BLE001 - 单轮失败不应终止整个循环
+            except Exception as e:
                 console.print(f"[red]✗ 迭代失败: {e}[/red]")
                 ledger.entries.append({
                     "iteration": current_iter,

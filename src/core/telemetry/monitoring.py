@@ -54,7 +54,7 @@ class MetricsCollector:
     def _init_prometheus(self):
         """初始化 Prometheus"""
         try:
-            from prometheus_client import Counter  # noqa: F401
+            from prometheus_client import Counter
             self._prom = True
             logger.info("Prometheus 指标已启用")
         except ImportError:

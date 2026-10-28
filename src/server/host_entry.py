@@ -69,7 +69,7 @@ async def run_host(
         if not llm_config.api_key:
             llm_config = None
             logger.warning("LLM API key 未配置，引擎将以无 LLM 模式运行")
-    except Exception as e:  # noqa: BLE001 — 配置失败不阻断 Host 启动
+    except Exception as e:
         logger.warning(f"LLM 配置加载失败: {e}")
 
     # 令牌：AGENT_SERVER_TOKEN 环境变量优先，否则随机生成（写入端口文件供壳读取）

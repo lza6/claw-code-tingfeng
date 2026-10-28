@@ -69,7 +69,7 @@ def cmd_reason(argv: list[str] | None = None) -> int:
 
     try:
         llm = build_llm_adapter()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[错误] LLM 适配失败: {e}")
         return 1
 

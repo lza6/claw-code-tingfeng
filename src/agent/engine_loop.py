@@ -190,14 +190,14 @@ async def _run_agent_loop(
                 try:
                     if config.enable_cost_tracking and config._cost_estimator:
                         _cost = float(config._cost_estimator.get_total_cost() or 0.0)
-                except Exception:  # noqa: BLE001 — 成本读取失败不影响护栏其它项
+                except Exception:
                     _cost = 0.0
                 stop, why = config.autonomy.check_stop(
                     iterations=iteration,
                     consecutive_failures=_audit_retry_count,
                     cost_usd=_cost,
                 )
-            except Exception as e:  # noqa: BLE001 — 护栏自身异常不能阻断任务
+            except Exception as e:
                 warn(f'挂机护栏检查异常（忽略本次检查）: {e}')
                 stop, why = False, ''
             if stop:

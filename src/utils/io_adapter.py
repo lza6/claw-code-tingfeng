@@ -142,7 +142,7 @@ def sanitize_json_str(s: str) -> str:
 def prompt_toolkit_available() -> bool:
     """Check if prompt_toolkit is available."""
     try:
-        import prompt_toolkit  # noqa: F401
+        import prompt_toolkit
         return True
     except ImportError:
         return False

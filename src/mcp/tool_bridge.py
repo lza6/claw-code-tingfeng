@@ -71,7 +71,7 @@ class MCPExternalTool(BaseTool):
                 error=str(e),
                 duration_ms=(time.time() - start) * 1000,
             )
-        except Exception as e:  # noqa: BLE001 — 统一转为工具错误
+        except Exception as e:
             return ToolResult(
                 tool_name=self.name,
                 status=ToolCallStatus.ERROR,
@@ -93,7 +93,7 @@ async def bridge_server_tools(
     bridged: list[MCPExternalTool] = []
     try:
         tools = await manager.discover_tools(server)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning(f"桥接 {server} 失败（跳过）: {e}")
         return bridged
     for info in tools:

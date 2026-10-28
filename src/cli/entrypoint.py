@@ -521,7 +521,7 @@ def _register_command_modules() -> list[str]:
 
     try:
         groups = _load_command_modules()
-    except Exception as exc:  # noqa: BLE001 - 降级要宽，但必须可见
+    except Exception as exc:
         logger.warning(
             "命令组模块导入失败，相关命令在本进程中不可用: %s: %s",
             type(exc).__name__,
@@ -538,7 +538,7 @@ def _register_command_modules() -> list[str]:
             register = getattr(mod, func_name)
             register(app)
             _REGISTERED_GROUPS.add(group_name)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             failed.append(group_name)
             # ImportError 之外也一并接住：`field` 未定义这类 NameError
             # 同样会让整组命令消失，只接 ImportError 会漏掉一半情况。
@@ -685,7 +685,7 @@ def session_resume(
     engine = AgentEngine(workdir=Path.cwd(), max_iterations=max_iterations)
     try:
         session = asyncio.run(engine.run(goal, prior_messages=prior or None))
-    except Exception as e:  # noqa: BLE001 — CLI 层要把错误讲清楚
+    except Exception as e:
         console.print(f"[bold red]执行失败:[/bold red] {type(e).__name__}: {e}")
         raise typer.Exit(code=1)
 

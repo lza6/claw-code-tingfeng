@@ -260,7 +260,7 @@ def _register_shutdown_hooks() -> None:
         from .agent import tool_executor as exec_mod
 
         exec_mod.shutdown_executor()
-    except Exception as e:  # noqa: BLE001 - atexit 阶段不允许再抛
+    except Exception as e:
         try:
             from .utils import debug
 

@@ -85,7 +85,7 @@ class LockStore:
                 existing = LockInfo.from_dict(data)
                 if not existing.is_expired() and existing.owner != owner:
                     return None  # 锁被占用
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 # 锁文件损坏时**不能**静默当成"无锁"直接覆盖 ——
                 # 那会让两个 owner 同时认为自己持锁（正是锁要防的事）。
                 # 做法：告警 + 把损坏文件隔离为 .corrupt-<ts>，再重建。
@@ -123,7 +123,7 @@ class LockStore:
                 return False
             path.unlink()
             return True
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("释放锁失败 %s: %s", lock_id, exc)
             return False
 

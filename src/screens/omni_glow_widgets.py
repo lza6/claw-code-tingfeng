@@ -52,7 +52,7 @@ from .omni_glow_tree import ThinkingTree
 
 # 版本信息
 __version__ = "5.0"
-__all__ = [  # noqa: RUF022
+__all__ = [
     # 主题颜色
     "_get_theme_colors",
     "COLOR_ALERT",
