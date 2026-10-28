@@ -7,6 +7,37 @@
 
 ---
 
+## [v0.62.0] (2026-10-28) — Agent 评测 harness（W8 缺口闭环）+ 假开关接线
+
+### 新增：`src/eval/` 评测 harness
+- **`clawd eval <dataset> [--baseline B] [--save] [--live] [--tolerance T]`**
+- **replay 模式（默认，零成本）**：使用数据集里录制的输出做确定性断言，可直接进 CI 做 agent 行为回归
+- **live 模式双闸**：`--live` + `CLAWD_EVAL_ALLOW_PAID=1` 缺一即拒绝（exit 2），守住付费 API 红线
+- 五类确定性断言：`equals` / `contains` / `not_contains` / `regex` / `tool_sequence`（工具调用序列）
+- 基线比对：`pass_rate` 下降（可配 `--tolerance`）或"用例由通过转失败"→ exit 1；
+  新增用例不计为回归
+- 数据集校验前置：空 expect / 未知断言类型 / 类型不符 / JSON 损坏 → 显式报错（不静默跳过）
+- 单用例执行异常记为失败用例，不中断整轮
+- 示例数据集 `src/eval/datasets/smoke.json`（3 用例，含"禁止假成功"用例）
+
+### 修复：`--dimension/-d` 假开关接线
+- CLI 帮助承诺 `creative/adversarial/audit` 维度引导，但 `src/workflow/dimensions.py`
+  的 `resolve_dimensions`/`get_dimensions_prompt` **从未被调用**（谎称功能存在）
+- `WorkflowEngine._inject_dimension_guidance()` 在 `run()` 入口读取运行期配置并注入引导词；
+  无维度/未知维度/解析异常均降级为原样返回，不破坏主流程
+
+### 文档
+- 决策记录：55 个不可达模块由"待拍板"收敛为**明确保留 + 接线条件**（`计划书/死代码判定-2026-10-28.md §九`）
+- ruff 自动化边界与两条红线（unsafe-fixes 删 noqa / I001 引入循环导入）写入 `.agent/memory/decisions.md`
+- 挂机扫描 backlog 轮次 2（4 条新实践，DIRECT 证据）
+
+### 验证（实跑）
+- `tests/eval` **33 passed**；`clawd eval src/eval/datasets/smoke.json` → `3/3 passed (100.0%)` exit 0
+- 全量回归 **4594 passed / 0 failed**；覆盖率 **60.33%**；IMPORT 602/602；ruff 硬指标 All passed
+- E2E 5/5；doctor 0 FAIL
+
+---
+
 ## [v0.61.3] (2026-10-28) — 覆盖率达成 60% + 8 个真实缺陷修复
 
 ### 覆盖率（W5 目标闭环）

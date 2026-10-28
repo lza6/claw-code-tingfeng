@@ -537,6 +537,74 @@ def _register_command_modules() -> list[str]:
 _REGISTRATION_FAILURES = _register_command_modules()
 
 
+@app.command(name="eval")
+def eval_dataset(
+    dataset: Path = typer.Argument(..., help="评测数据集 JSON 路径"),
+    baseline: Path | None = typer.Option(
+        None, "--baseline", "-b", help="基线 JSON 路径（比对回归）"
+    ),
+    save: bool = typer.Option(False, "--save", help="把本轮结果写为基线"),
+    live: bool = typer.Option(
+        False, "--live", help="真实调用 agent（需 CLAWD_EVAL_ALLOW_PAID=1，会产生费用）"
+    ),
+    tolerance: float = typer.Option(0.0, "--tolerance", help="pass_rate 允许的下降幅度"),
+):
+    """
+    运行 agent 评测数据集（默认 replay 模式，零成本、确定性）
+
+    默认使用数据集里录制的输出做确定性断言（exact/contains/regex/tool_sequence），
+    适合放进 CI 做 agent 行为回归。真实调用需显式 --live + 环境变量双闸。
+    """
+    from ..eval import (
+        compare_with_baseline,
+        load_baseline,
+        load_dataset,
+        run_dataset,
+        save_baseline,
+    )
+    from ..eval.runner import EvalConfigError
+
+    try:
+        cases = load_dataset(dataset)
+    except EvalConfigError as e:
+        console.print(f"[bold red]数据集非法:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    try:
+        report = run_dataset(
+            cases, live=live, dataset_name=str(dataset)
+        )
+    except EvalConfigError as e:
+        console.print(f"[bold red]无法执行:[/bold red] {e}")
+        raise typer.Exit(code=2)
+
+    console.print(f"[bold]{report.summary_line()}[/bold]")
+    for outcome in report.failures:
+        console.print(f"  [red]FAIL[/red] {outcome.case_id}: {outcome.detail}")
+
+    exit_code = 0
+    if baseline is not None:
+        problems = compare_with_baseline(
+            report, load_baseline(baseline), tolerance=tolerance
+        )
+        if problems:
+            console.print("[bold red]基线回归:[/bold red]")
+            for problem in problems:
+                console.print(f"  - {problem}")
+            exit_code = 1
+        else:
+            console.print("[green]基线比对通过（无回归）[/green]")
+
+    if save:
+        target = baseline or Path(".clawd/eval_baseline.json")
+        written = save_baseline(report, target)
+        console.print(f"[green]基线已写入:[/green] {written}")
+
+    if report.failed:
+        exit_code = exit_code or 1
+    raise typer.Exit(code=exit_code)
+
+
 def main():
     import atexit
     atexit.register(_register_shutdown_hooks)

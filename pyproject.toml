@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.61.3"
+version = "0.62.0"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -106,6 +106,9 @@ clawd = "src.cli.entrypoint:main"
 
 [tool.setuptools.packages.find]
 include = ["src*"]
+
+[tool.setuptools.package-data]
+"src.eval" = ["datasets/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "."]

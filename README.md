@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.61.3 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.62.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -35,6 +35,35 @@ DSH 式桌面客户端，**双击即用**：
 | 安全工具 | `SafeCatalogRunner` | YAML 目录 + scope 授权门禁 + 注入拦截（仅限授权测试目标） |
 | 逆向知识库 | `skills/reverse/` | 51 个场景 SKILL.md（固件/Ghidra/IDA/恶意软件/协议/pwn/CTF） |
 | 插件开发 | `.agent/skills/clawd-extension-sop.md` | 四件套 SOP（manifest/DI/接入面/CLI） |
+
+## 🧪 Agent 评测与回归（v0.62.0 新增）
+
+默认 **replay 模式**（零成本、确定性）：用数据集里录制的输出做断言，可直接放进 CI 做 agent 行为回归。
+
+```bash
+# 跑示例数据集（3 用例，四类断言）
+python -m src eval src/eval/datasets/smoke.json
+
+# 与基线比对（pass_rate 下降或用例由通过转失败 → exit 1）
+python -m src eval my_dataset.json --baseline .clawd/eval_baseline.json
+
+# 把当前结果存为新基线
+python -m src eval my_dataset.json --save --baseline .clawd/eval_baseline.json
+```
+
+断言类型：`equals` / `contains` / `not_contains` / `regex` / `tool_sequence`（工具调用序列完全一致）。
+
+数据集格式：
+```json
+{"version": 1, "cases": [
+  {"id": "c1", "input": "读取 config.yaml 并改 timeout",
+   "expect": {"tool_sequence": ["read_file", "edit_file"], "contains": ["timeout"]},
+   "recorded": {"output": "已改为 30", "tools": ["read_file", "edit_file"]}}
+]}
+```
+
+> **付费红线**：真实调用需 `--live` + 环境变量 `CLAWD_EVAL_ALLOW_PAID=1` 双闸，否则直接拒绝（exit 2）。
+> 默认路径不发起任何 LLM 调用。
 
 ---
 

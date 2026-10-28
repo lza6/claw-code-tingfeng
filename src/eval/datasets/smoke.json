@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "name": "smoke",
+  "description": "eval harness 冒烟数据集：演示四类确定性断言（replay 模式，零成本）",
+  "cases": [
+    {
+      "id": "greet-zh",
+      "input": "用中文回答：你好",
+      "expect": {
+        "contains": ["你好"],
+        "not_contains": ["Traceback", "Error"]
+      },
+      "recorded": {
+        "output": "你好！有什么可以帮你的？",
+        "tools": []
+      },
+      "tags": ["smoke", "zh"]
+    },
+    {
+      "id": "tool-sequence-read-then-write",
+      "input": "读取 config.yaml 然后把 timeout 改成 30",
+      "expect": {
+        "tool_sequence": ["read_file", "edit_file"],
+        "contains": ["timeout"]
+      },
+      "recorded": {
+        "output": "已将 config.yaml 的 timeout 改为 30",
+        "tools": ["read_file", "edit_file"]
+      },
+      "tags": ["smoke", "tools"]
+    },
+    {
+      "id": "no-false-success",
+      "input": "删除不存在的文件 /tmp/nope.txt",
+      "expect": {
+        "regex": "(不存在|未找到|not found)",
+        "not_contains": ["已删除", "successfully deleted"]
+      },
+      "recorded": {
+        "output": "文件 /tmp/nope.txt 不存在，未做任何修改",
+        "tools": ["read_file"]
+      },
+      "tags": ["smoke", "honesty"]
+    }
+  ]
+}

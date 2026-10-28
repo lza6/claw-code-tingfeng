@@ -363,3 +363,24 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 | 6 | typer.Exit 被 except Exception 吞 | src/cli/entrypoint.py:chat | **clawd chat 永远退出码 1** | 已修 |
 | 7 | --report 单向布尔 | src/cli/entrypoint.py:config | 无法关闭报告 | 已修（--report/--no-report） |
 | 8 | UnicodeDecodeError 逃逸 | src/hooks/extensibility/sdk.py | hook 状态读 GBK 时抛错 | 已修（ValueError） |
+
+## v0.62.0 评测 harness（2026-10-28，全部实跑）
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| eval harness 单测 | `pytest tests/eval -q` | **33 passed** |
+| CLI 端到端（replay） | `python -m src eval src/eval/datasets/smoke.json` | `eval 3/3 passed (100.0%)`，exit 0 |
+| 付费红线拒绝 | `pytest -k live_without_gate`（CLI 层） | exit 2 + 提示 `CLAWD_EVAL_ALLOW_PAID` |
+| 基线回归判定 | `pytest -k "baseline or tolerance"` | pass_rate 下降 / 用例转失败均报出；提升不报 |
+| 数据集校验 | `pytest -k test_rejects` | 空 expect / 未知断言 / 类型不符 / JSON 损坏 → 显式报错 |
+| 导入扫描 | `import_sweep --strict-exit` | **607/607 OK**（+5 eval 模块），FAIL 0 |
+| 收集 | `pytest --collect-only` | 4655 / 0 errors |
+
+### 新增接缝
+
+| 接缝 | 模块A | 模块B | 契约描述 | 最后验证 | 状态 |
+|:---|:---|:---|:---|:---|:---|
+| eval-dataset | src/eval/runner.py | src/eval/metrics.py | 数据集 JSON schema（version/cases/expect 五类断言/recorded）；非法即 EvalConfigError | 2026-10-28 | locked |
+| eval-paid-gate | src/eval/runner.py | 环境变量 | live 模式需 `CLAWD_EVAL_ALLOW_PAID=1` + agent_fn，缺一即拒 | 2026-10-28 | locked |
+| eval-baseline | src/eval/baseline.py | .clawd/eval_baseline.json | pass_rate 与逐用例通过状态比对；新增用例不算回归 | 2026-10-28 | locked |
+| dimension-guidance | src/workflow/engine.py | src/workflow/dimensions.py | `--dimension` → 运行期配置 → run() 入口注入；无/未知/异常均降级 | 2026-10-28 | locked |
