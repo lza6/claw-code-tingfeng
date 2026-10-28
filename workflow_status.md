@@ -29,11 +29,11 @@
 | A8 | 硬指标不回归 | done — ruff All passed；collect 0 errors；IMPORT-FAIL=0 |
 
 ## 验证日志
-- 2026-10-28（v0.61.1 收口）: 静默吞异常修复 src/hooks/extensibility/sdk.py 6 处裸 except（窄化+stderr 日志）→ 174→168，门禁 exit 0
-- 2026-10-28: py -3.10 补装 mcp → 收集 3702/0 errors；venv 补装 redis（requirements.txt 已声明）→ 5 个 redis 测试环境失败消除
-- 2026-10-28: E2E 冒烟 5/5 PASS exit 0（上轮 2/5 的模型配置问题已闭环）
-- 2026-10-28: ruff 硬指标 All passed；IMPORT 0/0；可达 455≥443；版本三处一致 v0.61.1
-- 2026-10-28: 删除 2 份已归档计划文档（用户确认"审查后删除"；删前 diff 与归档副本逐字节一致）
+- 2026-10-28（v0.61.1 后续收口）: 导入链路修复 3 个真实 bug（celery 相对导入/otel API 路径/celery 信号签名）→ IMPORT 649/649 OK 全绿（此前 642+3fail+7missing）
+- 2026-10-28: venv 补装 pathspec/celery/otel 全家桶（requirements 已声明）；clawdignore 测试失败根因=pathspec 缺失，非代码 bug → 快速回归 3685/0
+- 2026-10-28: NR-3 修复（mime 白名单 18 后缀+白名单外 403）+5 测试；NR-1 确认 v0.61.0 已修（历史 0 污染）；doctor 0 FAIL
+- 2026-10-28: 压测（本地 WS Host，scripts/stress_host.py）：100 并发×10 轮 QPS 3839 P95 14.4ms 错误率 0%；300 并发×5 轮 QPS 1265 P95 10.8ms 错误率 0%，均 PASS
+- 2026-10-28: E2E 冒烟 5/5 PASS exit 0；死码判定报告产出（127→66 删/6 留/55 拍板）
 - 2026-10-27: 新增测试 156 passed（mcp/reasoning/security/reverse_tools/engine装配/reason CLI/契约39）
 - 2026-10-27: reason CLI 实跑 E2E：reflexion --json / reflexion 人读 / plan-execute 三种调用 exit 0
 - 2026-10-27: 主控实跑复核修复 P1 bug：conclusion 参数误传非 debate 模式导致 TypeError（测试未覆盖 CLI 分发层）

@@ -13,12 +13,24 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
-from ..artifacts import (
-    read_approved_execution_launch_hint,
-)
 from ..pipeline_stage import PipelineStage, StageContext, StageResult
+
+logger = logging.getLogger(__name__)
+
+
+def _read_approved_execution_launch_hint(cwd: Path, mode: str = "team"):
+    """从 .clawd/ 目录读取已批准的执行启动提示（artifacts 模块删除后的本地回退实现）。"""
+    hint_path = Path(cwd) / ".clawd" / ("approved_launch_hint.team.txt" if mode == "team" else "approved_launch_hint.txt")
+    try:
+        if hint_path.exists():
+            return SimpleNamespace(source_path=str(hint_path), command=hint_path.read_text(encoding="utf-8").strip(), test_spec_paths=[])
+    except OSError:
+        pass
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +73,7 @@ class RalplanStage(PipelineStage):
     def can_skip(self, ctx: StageContext) -> bool:
         """检查是否可以跳过 RALPLAN 阶段（如果已有已批准的计划）"""
         # 从 artifacts 检查是否已有已批准的计划
-        existing_hint = read_approved_execution_launch_hint(ctx.cwd, mode="team")
+        existing_hint = _read_approved_execution_launch_hint(ctx.cwd, mode="team")
         return existing_hint is not None
 
     async def run(self, ctx: StageContext) -> StageResult:
@@ -72,7 +84,7 @@ class RalplanStage(PipelineStage):
         cwd = self._config.cwd
 
         # 步骤 0: 检查是否已有已批准的计划 (从 artifacts 读取)
-        existing_hint = read_approved_execution_launch_hint(cwd, mode="team")
+        existing_hint = _read_approved_execution_launch_hint(cwd, mode="team")
         if existing_hint:
             logger.info(f"[Ralplan] Found existing approved plan: {existing_hint.source_path}")
             return StageResult.completed(

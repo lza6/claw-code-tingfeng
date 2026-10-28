@@ -1,0 +1,69 @@
+{
+  "task_id": "T-090-closure-v2",
+  "status": "passed",
+  "timestamp": "2026-10-28T16:00:00",
+  "commands_executed": [
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 100 --rounds 10",
+      "exit_code": 0,
+      "raw_output_tail": "并发客户端: 100 | 成功: 100 | 失败: 0 | 请求: 1000 | 耗时: 0.26s | QPS: 3839 | P50: 10.0ms P95: 14.4ms P99: 14.7ms | 错误率: 0.0% | STRESS: PASS"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 300 --rounds 5",
+      "exit_code": 0,
+      "raw_output_tail": "并发客户端: 300 | 成功: 300 | 失败: 0 | 请求: 1500 | 耗时: 1.19s | QPS: 1265 | P50: 9.5ms P95: 10.8ms P99: 11.9ms | 错误率: 0.0% | STRESS: PASS"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/e2e_smoke.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 5 项通过 5，失败 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ -q -m \"not slow\"",
+      "exit_code": 0,
+      "raw_output_tail": "3685 passed, 7 skipped, 9 deselected, 2 xfailed, 1 warning in 236.18s"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/import_sweep.py --strict-exit",
+      "exit_code": 0,
+      "raw_output_tail": "IMPORT-OK: 649 | IMPORT-FAIL: 0 | DEP-MISSING: 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m src doctor",
+      "exit_code": 0,
+      "raw_output_tail": "框架一致性 PASS 版本一致性: 0.61.1；能力状态全 PASS（0 FAIL）"
+    },
+    {
+      "cmd": "cmd //c .\\start.bat",
+      "exit_code": 0,
+      "raw_output_tail": "Clawd Code v0.61.1 / openai step-5-preview / REPL 进入退出正常 / Done"
+    }
+  ],
+  "files_changed": [
+    "src/background/tasks/llm_tasks.py",
+    "src/background/tasks/workflow_tasks.py",
+    "src/core/tracing/otel.py",
+    "src/server/websocket_server.py",
+    "tests/server/test_host_entry.py",
+    "requirements.txt",
+    "pyproject.toml",
+    "README.md",
+    "计划书/死代码判定-2026-10-28.md"
+  ],
+  "tests": [
+    {"name": "stress_host 100c", "type": "smoke", "status": "passed", "evidence": "QPS 3839 P95 14.4ms err 0%"},
+    {"name": "stress_host 300c", "type": "smoke", "status": "passed", "evidence": "QPS 1265 P95 10.8ms err 0%"},
+    {"name": "e2e_smoke", "type": "e2e", "status": "passed", "evidence": "5/5"},
+    {"name": "pytest not slow", "type": "integration", "status": "passed", "evidence": "3685/0"},
+    {"name": "server tests", "type": "unit", "status": "passed", "evidence": "38 passed"}
+  ],
+  "coverage_summary": {"lines": 49.89, "branches": null, "functions": null, "statements": null},
+  "seams_touched": ["background.tasks", "server.static"],
+  "mock_scenarios_covered": [],
+  "browser_validation": {"performed": false, "paths": [], "screenshots": []},
+  "limitations": [
+    "压测仅覆盖 WS Host ping/auth 链路，未压 LLM 代理链路（避免真实付费调用）",
+    "覆盖率数字沿用 2026-10-23 全量 cov 产物，本轮未重跑全量 --cov",
+    "start.bat 交互式 REPL 输入路径由自动化冒烟替代（echo 管道）"
+  ]
+}
