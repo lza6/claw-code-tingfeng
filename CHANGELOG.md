@@ -7,6 +7,40 @@
 
 ---
 
+## [v0.85.0] (2026-10-30) — 修「重启后数据丢」+ provider 改 JSON + 工具调用折叠 + 上下文面板
+
+**1. 修致命问题：重启/升级后 provider、用量、会话全丢**
+根因：桌面端把 Host 的 cwd 设成**安装目录**，于是 `.clawd/` 落在 `resources/host` 里，
+升级/重装覆盖安装目录 → 数据一起没了。
+- 新增 `src/core/data_dir.py`：数据目录解析 `CLAWD_DATA_DIR`（桌面端 = `userData/data`）→ 否则 `<workdir>/.clawd`；
+  `local_db`（用量 SQLite）、`session_bridge`（会话）、附件上传、引擎落盘**全部改用它**；
+- Electron 启动 Host 时传 `--data-dir <userData>/data` 并设同名环境变量；
+  **旧数据自动迁移一次**（把安装目录里的 `.clawd` 拷到 userData，已有文件不覆盖，只迁移一次）。
+
+**2. provider 配置改 JSON（你明确要求的）**
+`<数据目录>/providers.json`：可读、可手改、升级不丢；写入用临时文件 + `os.replace` 原子替换。
+老版本存在 SQLite 里的 provider **自动迁移**到 JSON（一次性）。
+用量仍留 SQLite（高频、持续增长、要 GROUP BY）——这一点我保留了技术判断，理由写在模块 docstring 里。
+
+**3. 工具调用折叠成一组（参考你给的那几张图）**
+对话区不再一条条平铺工具行，而是折叠成一个组：
+`🔧 命令 2 · 读取 1 · 执行中… ⌄` —— 点开逐条显示（✓/✗ + 工具名 + 参数，点某条看完整输出）。
+LLM 轮次/token 之类的噪音事件只进「轨迹」页，不再污染对话区。
+
+**4. 上下文用量面板（参考 orca 的"上下文 872.8k/1M"）**
+输入框左侧新增 ◎ 按钮：显示 `已用 / 窗口（百分比）` + 进度条 + 分项（消息历史、技能清单、剩余空间），
+数据来自新端点 `/api/context`（窗口大小可用 `CLAWD_CONTEXT_WINDOW` 覆盖，默认 200k）。
+
+**5. 其它**
+`clawd serve --data-dir`；`/api/info` 显示数据目录与 providers.json 位置（设置页能看到"配置到底存哪"）。
+
+**验证（实跑）**
+- 新增 `tests/core/test_data_dir_and_providers_json.py`（13 条，含**跨进程重启后仍能读到配置**）
+- 控制台 E2E 扩到 **21 项**：工具默认折叠成一组（`命令 2 · 读取 1`、展开后 3 条）、上下文面板（`12.9k / 200.0k 6%`）全 PASS
+- `tests/core+server+cli` 1459 passed；ruff F821/F811/E9 全过
+
+---
+
 ## [v0.84.0] (2026-10-30) — P3 三项收口 + 风险表四条落地（全部机器可验）+ 死码 31 个/4.5k 行
 
 **1. P3-2 死代码收敛：141 → 110 个不可达模块（29,933 → 25,441 行）**

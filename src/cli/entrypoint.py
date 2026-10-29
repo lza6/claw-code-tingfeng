@@ -456,6 +456,9 @@ def serve(
     port: int | None = typer.Option(None, "--port", help="WS 端口（默认走配置）"),
     workdir: str | None = typer.Option(None, "--workdir", help="工作目录"),
     env_file: str | None = typer.Option(None, "--env-file", help="额外加载的 .env（桌面壳传入）"),
+    data_dir: str | None = typer.Option(
+        None, "--data-dir", help="运行期数据目录（provider/用量/会话）；桌面端传 userData/data，升级不丢"
+    ),
 ):
     """
     启动本地 Host 服务 — 桌面端(Electron)/Web 端连接的权威运行时
@@ -471,6 +474,8 @@ def serve(
         argv += ["--workdir", workdir]
     if env_file:
         argv += ["--env-file", env_file]
+    if data_dir:
+        argv += ["--data-dir", data_dir]
     code = cmd_serve(argv)
     if code != 0:
         raise typer.Exit(code)

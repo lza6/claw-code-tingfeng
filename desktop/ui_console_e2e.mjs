@@ -193,6 +193,43 @@ if (pasted.chips >= 1) {
   check('消息里没有把 base64 直接铺到对话区', after.base64Leak === false);
 }
 
+// ---------- 2.8 工具调用折叠组 ----------
+const fold = await page.evaluate(async () => {
+  window.__clawdAddTool('BashTool', '{"command":"pytest -q"}', true);
+  window.__clawdAddTool('FileReadTool', '{"file_path":"app.js"}', true);
+  window.__clawdAddTool('BashTool', '{"command":"false"}', false, 'Error: exit 1');
+  await new Promise((r) => setTimeout(r, 200));
+  const group = document.querySelector('.tool-group');
+  const collapsed = group ? !group.classList.contains('open') : false;
+  const summary = (document.querySelector('.tg-summary')?.textContent || '').trim();
+  const items = document.querySelectorAll('.tg-item').length;
+  if (group) group.querySelector('.tg-head').click();
+  await new Promise((r) => setTimeout(r, 200));
+  return {
+    groups: document.querySelectorAll('.tool-group').length,
+    collapsedByDefault: collapsed,
+    summary,
+    items,
+    openAfterClick: !!document.querySelector('.tool-group.open'),
+  };
+});
+check('工具调用默认折叠成一组', fold.groups === 1 && fold.collapsedByDefault === true, JSON.stringify(fold));
+check('折叠标题带分类计数', fold.summary.includes('命令') && fold.summary.includes('读取'), fold.summary);
+check('展开后逐条可见', fold.items === 3 && fold.openAfterClick === true, JSON.stringify(fold));
+await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '26-tool-fold.png') });
+
+// ---------- 2.9 上下文用量面板 ----------
+await page.click('#btnContext');
+await page.waitForTimeout(1000);
+const ctx = await page.evaluate(() => ({
+  open: document.querySelector('#ctxOverlay').classList.contains('show'),
+  total: (document.querySelector('#ctxTotal')?.textContent || '').trim(),
+  items: document.querySelectorAll('#ctxItems .ctx-item').length,
+}));
+check('上下文面板可用', ctx.open && ctx.items >= 2, JSON.stringify(ctx));
+await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '28-context-panel.png') });
+await page.evaluate(() => document.querySelector('#ctxClose')?.click());
+
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
 await page.waitForTimeout(1200);

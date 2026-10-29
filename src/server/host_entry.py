@@ -113,7 +113,13 @@ def cmd_serve(argv: list[str] | None = None) -> int:
     parser.add_argument("--workdir", type=str, default=None)
     parser.add_argument("--env-file", type=str, default=None,
                         help="额外加载的 .env（桌面端壳传入 userData 下的 .env）")
+    parser.add_argument("--data-dir", type=str, default=None,
+                        help="运行期数据目录（provider/用量/会话）；桌面端传 userData/data，升级不丢")
     args = parser.parse_args(argv)
+    if args.data_dir:
+        import os as _os
+
+        _os.environ["CLAWD_DATA_DIR"] = str(Path(args.data_dir).expanduser())
     try:
         return asyncio.run(
             run_host(

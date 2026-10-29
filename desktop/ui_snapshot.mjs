@@ -45,6 +45,34 @@ await page.waitForTimeout(1500);
 await shot('23-usage.png');
 await page.click('#usageClose');
 
+// 工具调用折叠组：发一个会触发工具的消息
+await page.fill('#input', '读取 desktop/web/app.js 的前 3 行并总结它们做什么。');
+await page.click('#send');
+const dl = Date.now() + 150000;
+let done = false;
+while (Date.now() < dl) {
+  await page.waitForTimeout(1500);
+  if (!(await page.$eval('#send', (b) => b.disabled))) { done = true; break; }
+}
+await page.waitForTimeout(800);
+const fold = await page.evaluate(() => ({
+  groups: document.querySelectorAll('.tool-group').length,
+  open: document.querySelectorAll('.tool-group.open').length,
+  summary: (document.querySelector('.tg-summary')?.textContent || '').trim(),
+  items: document.querySelectorAll('.tg-item').length,
+}));
+console.log('[fold]', JSON.stringify(fold));
+await shot('26-tool-fold-collapsed.png');
+await page.evaluate(() => { const head = document.querySelector('.tool-group .tg-head'); if (head) head.click(); });
+await page.waitForTimeout(400);
+await shot('27-tool-fold-expanded.png');
+
+// 上下文用量面板
+await page.click('#btnContext');
+await page.waitForTimeout(1200);
+await shot('28-context-panel.png');
+await page.click('#ctxClose');
+
 // 设置面板
 await page.click('#btnSettings');
 await page.waitForTimeout(1200);

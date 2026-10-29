@@ -56,6 +56,7 @@
 
   // —— 消息渲染 ——
   function addUser(text) {
+    closeToolGroup();
     const d = document.createElement('div');
     d.className = 'msg-user';
     d.textContent = text;
@@ -280,6 +281,7 @@
   }
 
   function addAssistant(text, opts) {
+    closeToolGroup();
     const wrap = document.createElement('div');
     wrap.className = 'msg-assistant';
     if (text.length > DEGRADE_THRESHOLD) wrap.classList.add('degraded');
@@ -366,26 +368,116 @@
     scrollEnd();
   }
 
-  function addToolRow(label, detail) {
-    callCount++; updateStats();
-    // 对话区：折叠单行
+  // —— 工具调用：折叠成一组（参考 orca 的 "运行 36 命令 和 编辑 5 文件 ⌄"） ——
+  const TOOL_KIND_LABEL = {
+    bash: '命令', file_read: '读取', file_write: '编辑', grep: '搜索',
+    glob: '查找', lsp: '代码智能', world: '世界模型', other: '工具',
+  };
+
+  function toolKind(name) {
+    const n = String(name || '').toLowerCase();
+    if (n.includes('bash') || n.includes('shell') || n.includes('command')) return 'bash';
+    if (n.includes('edit') || n.includes('write') || n.includes('patch')) return 'file_write';
+    if (n.includes('read')) return 'file_read';
+    if (n.includes('grep') || n.includes('search')) return 'grep';
+    if (n.includes('glob') || n.includes('list') || n.includes('find')) return 'glob';
+    if (n.includes('lsp')) return 'lsp';
+    if (n.includes('world') || n.includes('map')) return 'world';
+    return 'other';
+  }
+
+  let toolGroup = null; // {el, listEl, summaryEl, counts, running}
+
+  function closeToolGroup() { toolGroup = null; }
+
+  function ensureToolGroup() {
+    if (toolGroup) return toolGroup;
+    const el = document.createElement('div');
+    el.className = 'tool-group';
+
+    const head = document.createElement('button');
+    head.className = 'tg-head';
+    const chev = document.createElement('span');
+    chev.className = 'tg-chev';
+    chev.textContent = '⌄';
+    const summary = document.createElement('span');
+    summary.className = 'tg-summary';
+    summary.textContent = '工具调用';
+    head.appendChild(chev);
+    head.appendChild(summary);
+
+    const list = document.createElement('div');
+    list.className = 'tg-list';
+
+    head.onclick = () => {
+      el.classList.toggle('open');
+      chev.textContent = el.classList.contains('open') ? '⌃' : '⌄';
+    };
+
+    el.appendChild(head);
+    el.appendChild(list);
+    $chat.appendChild(el);
+    toolGroup = { el, listEl: list, summaryEl: summary, counts: {}, running: 0 };
+    return toolGroup;
+  }
+
+  function describeGroup(group) {
+    const parts = [];
+    for (const [kind, n] of Object.entries(group.counts)) {
+      if (!n) continue;
+      parts.push(`${TOOL_KIND_LABEL[kind] || kind} ${n}`);
+    }
+    const tail = group.running > 0 ? ' · 执行中…' : '';
+    return parts.length ? `${parts.join(' · ')}${tail}` : `工具调用${tail}`;
+  }
+
+  function addToolEvent(name, argsText, ok, detail) {
+    callCount += 1; updateStats();
+    const group = ensureToolGroup();
+    const kind = toolKind(name);
+    group.counts[kind] = (group.counts[kind] || 0) + 1;
+    group.summaryEl.textContent = describeGroup(group);
+
     const row = document.createElement('div');
-    row.className = 'tool-row' + (detail && detail.length > DEGRADE_THRESHOLD ? ' degraded' : '');
-    const ico = document.createElement('span'); ico.className = 't-ico'; ico.textContent = '⚙';
-    const lab = document.createElement('span'); lab.className = 't-label'; lab.textContent = label;
-    const det = document.createElement('div'); det.className = 't-detail'; det.textContent = detail || '(无输出)';
-    row.appendChild(ico); row.appendChild(lab); row.appendChild(det);
-    row.onclick = () => row.classList.toggle('open');
-    $chat.appendChild(row);
-    // 轨迹区：完整记录
+    row.className = 'tg-item' + (ok === false ? ' failed' : '');
+    const icon = document.createElement('span');
+    icon.className = 'tg-item-ico';
+    icon.textContent = ok === false ? '✗' : '▸';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tg-item-name';
+    nameEl.textContent = name || 'tool';
+    const argEl = document.createElement('span');
+    argEl.className = 'tg-item-arg';
+    argEl.textContent = String(argsText || '').slice(0, 120);
+    row.appendChild(icon); row.appendChild(nameEl); row.appendChild(argEl);
+    if (detail) {
+      const det = document.createElement('div');
+      det.className = 'tg-item-detail';
+      det.textContent = String(detail).slice(0, 2000);
+      row.appendChild(det);
+      row.onclick = (ev) => { ev.stopPropagation(); row.classList.toggle('show-detail'); };
+    }
+    group.listEl.appendChild(row);
+    scrollEnd();
+
+    // 轨迹区保留完整时间线
     const tr = document.createElement('div');
     tr.className = 'tool-row open';
-    tr.innerHTML = '<span class="t-label"></span>';
-    tr.querySelector('.t-label').textContent = label;
-    const td = document.createElement('div'); td.className = 't-detail'; td.textContent = detail || '';
-    tr.appendChild(td);
+    const lab = document.createElement('span'); lab.className = 't-label';
+    lab.textContent = `${ok === false ? '✗' : '✓'} ${name} ${String(argsText || '').slice(0, 100)}`;
+    const det = document.createElement('div'); det.className = 't-detail';
+    det.textContent = detail || '(无输出)';
+    tr.appendChild(lab); tr.appendChild(det);
     $trace.appendChild(tr);
-    scrollEnd();
+  }
+
+  // E2E 钩子：把工具分组暴露出来，便于用真实浏览器断言折叠行为（不改变运行逻辑）
+  window.__clawdAddTool = (name, args, ok, detail) => addToolEvent(name, args, ok, detail);
+
+  // 兼容旧调用（其它地方还在用 addToolRow）
+  function addToolRow(label, detail) {
+    const name = String(label || '').replace(/^[^A-Za-z\u4e00-\u9fa5]+/, '').split(/[ :（(]/)[0] || 'tool';
+    addToolEvent(name, '', null, detail);
   }
 
   // 仅当用户「本来就在底部附近」时才自动跟随；否则保持用户位置（消息一多也能往上翻）
@@ -513,13 +605,25 @@
       if (raw === 'AGENT_STREAM_STARTED') { beginStream(); return; }
       if (raw === 'AGENT_STREAM_DELTA') { appendStream(d.text || ''); return; }
       if (raw === 'AGENT_STREAM_COMPLETED') { finalizeStream(); return; }
+      if (raw === 'AGENT_TOOL_EXEC_STARTED') {
+        const group = ensureToolGroup();
+        group.running += 1;
+        group.summaryEl.textContent = describeGroup(group);
+        addToolEvent(d.tool_name || '?', JSON.stringify(d.tool_args || {}), null, '');
+        const g2 = ensureToolGroup();
+        g2.running = Math.max(0, g2.running - 1);
+        g2.summaryEl.textContent = describeGroup(g2);
+        return;
+      }
+      if (raw === 'AGENT_TOOL_EXEC_COMPLETED') {
+        const argsText = JSON.stringify(d.tool_args || {});
+        addToolEvent(d.tool_name || '?', argsText, d.success !== false, d.success === false ? '(失败)' : '');
+        return;
+      }
+
       const [ico, fixedLabel] = LABELS[raw] || ['·', raw];
       let label;
-      if (raw === 'AGENT_TOOL_EXEC_STARTED') {
-        label = `工具调用: ${d.tool_name || '?'} ${JSON.stringify(d.tool_args || {}).slice(0, 80)}`;
-      } else if (raw === 'AGENT_TOOL_EXEC_COMPLETED') {
-        label = `工具完成: ${d.tool_name || '?'} ${d.success === false ? '(失败)' : ''}`;
-      } else if (raw === 'AGENT_LLM_CALL_STARTED') {
+      if (raw === 'AGENT_LLM_CALL_STARTED') {
         label = `LLM 第 ${d.iteration || '?'} 轮`;
       } else if (raw === 'AGENT_LLM_CALL_COMPLETED') {
         label = `LLM 第 ${d.iteration || '?'} 轮完成 (${d.usage?.total_tokens || 0} tok)`;
@@ -533,10 +637,61 @@
         label = fixedLabel || JSON.stringify(d).slice(0, 120);
       }
       const detail = JSON.stringify(d, null, 2);
-      addToolRow(`${ico} ${label}`, detail);
+      const tr = document.createElement('div');
+      tr.className = 'tool-row open';
+      const lab = document.createElement('span');
+      lab.className = 't-label';
+      lab.textContent = `${ico} ${label}`;
+      const det = document.createElement('div');
+      det.className = 't-detail';
+      det.textContent = detail;
+      tr.appendChild(lab); tr.appendChild(det);
+      $trace.appendChild(tr);
       return;
     }
     addToolRow(msg.type || '?', JSON.stringify(msg, null, 2).slice(0, 4000));
+  }
+
+  // —— 上下文用量面板 ——
+  function fmtTok(n) {
+    const v = Number(n || 0);
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'k';
+    return String(Math.round(v));
+  }
+
+  async function openContext() {
+    $('ctxOverlay').classList.add('show');
+    const totalEl = $('ctxTotal');
+    const itemsEl = $('ctxItems');
+    totalEl.textContent = '加载中…';
+    itemsEl.innerHTML = '';
+    try {
+      const data = await fetchJsonRetry('/api/context', 2);
+      totalEl.textContent = fmtTok(data.used) + ' / ' + fmtTok(data.context_window)
+        + '（' + (Number(data.used_percent || 0) * 100).toFixed(0) + '%）';
+      $('ctxBarFill').style.width = Math.min(100, Number(data.used_percent || 0) * 100) + '%';
+      for (const item of (data.items || [])) {
+        const row = document.createElement('div');
+        row.className = 'ctx-item';
+        const label = document.createElement('span');
+        label.className = 'ck-label';
+        label.textContent = item.label;
+        const val = document.createElement('span');
+        val.className = 'ck-val';
+        val.textContent = fmtTok(item.tokens) + ' · ' + (Number(item.percent || 0) * 100).toFixed(1) + '%';
+        row.appendChild(label); row.appendChild(val);
+        itemsEl.appendChild(row);
+        if (item.note) {
+          const note = document.createElement('div');
+          note.className = 'ck-note';
+          note.textContent = item.note;
+          itemsEl.appendChild(note);
+        }
+      }
+    } catch (e) {
+      totalEl.textContent = '上下文统计不可用: ' + e.message;
+    }
   }
 
   // —— 图片附件（粘贴 / 拖拽）：交给 Host 落盘，模型能读到路径；不支持视觉就如实说看不到 ——
@@ -1171,6 +1326,12 @@
   if (usageRefresh) usageRefresh.onclick = loadUsage;
   const usageOverlay = $('usageOverlay');
   if (usageOverlay) usageOverlay.addEventListener('click', (e) => { if (e.target === usageOverlay) closeUsage(); });
+  const ctxBtn = $('btnContext');
+  if (ctxBtn) ctxBtn.onclick = openContext;
+  const ctxClose = $('ctxClose');
+  if (ctxClose) ctxClose.onclick = () => $('ctxOverlay').classList.remove('show');
+  const ctxOverlay = $('ctxOverlay');
+  if (ctxOverlay) ctxOverlay.addEventListener('click', (e) => { if (e.target === ctxOverlay) ctxOverlay.classList.remove('show'); });
   const provSave = $('provSave');
   if (provSave) provSave.onclick = saveProviderFromForm;
   const provReset = $('provReset');

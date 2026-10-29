@@ -137,6 +137,34 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .prov-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .prov-form .full{grid-column:1/-1}
 
+/* 上下文用量 */
+.ctx-btn{width:28px;height:26px;border-radius:50%;border:1px solid var(--border-l2);background:var(--bg-layer-3);color:var(--label-secondary);font-size:13px;display:flex;align-items:center;justify-content:center}
+.ctx-btn:hover{border-color:var(--brand);color:var(--label-primary)}
+.ctx-bar{height:8px;border-radius:6px;background:var(--bg-layer-3);overflow:hidden;margin:6px 0 12px}
+.ctx-bar-fill{height:100%;width:0;background:var(--brand);transition:width .2s}
+.ctx-items{display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--label-secondary)}
+.ctx-item{display:flex;align-items:baseline;gap:8px}
+.ctx-item .ck-label{flex:1;color:var(--label-primary)}
+.ctx-item .ck-val{color:var(--label-tertiary);font-variant-numeric:tabular-nums}
+.ctx-item .ck-note{width:100%;font-size:11px;color:var(--label-tertiary);padding-left:2px}
+
+/* ===== 工具调用折叠组（参考 orca：运行 N 命令 · 编辑 M 文件 ⌄） ===== */
+.tool-group{margin:6px 0 10px;border:1px solid var(--border-l1);border-radius:var(--radius-c);background:var(--bg-layer-1);overflow:hidden;max-width:100%}
+.tg-head{display:flex;align-items:center;gap:8px;width:100%;padding:7px 12px;font-size:12px;color:var(--label-secondary);text-align:left}
+.tg-head:hover{background:var(--hover);color:var(--label-primary)}
+.tg-chev{width:12px;color:var(--label-tertiary)}
+.tg-summary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tg-list{display:none;border-top:1px solid var(--border-l1);padding:4px 0}
+.tool-group.open .tg-list{display:block}
+.tg-item{display:grid;grid-template-columns:16px 130px 1fr;gap:8px;align-items:baseline;padding:3px 12px;font-size:12px;color:var(--label-tertiary);cursor:default}
+.tg-item:hover{background:var(--hover)}
+.tg-item-ico{color:var(--ok)}
+.tg-item.failed .tg-item-ico{color:var(--error)}
+.tg-item-name{color:var(--label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tg-item-arg{font-family:Consolas,"Cascadia Mono",monospace;font-size:11.5px;color:var(--label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tg-item-detail{display:none;grid-column:1/-1;margin:4px 0 6px;padding:8px 10px;background:var(--bg-layer-2);border-radius:var(--radius-s);font-family:Consolas,monospace;font-size:11.5px;color:var(--label-secondary);white-space:pre-wrap;max-height:220px;overflow:auto}
+.tg-item.show-detail .tg-item-detail{display:block}
+
 /* ===== 轻量会话栏（替代厚重顶栏，orca 式） ===== */
 .sessionbar{display:flex;align-items:center;gap:10px;padding:10px 24px 6px;flex-shrink:0;font-size:13px}
 .sb-title{color:var(--label-primary);font-weight:600;max-width:46vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -281,6 +309,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
         <div class="attach-bar" id="attachBar"></div>
         <textarea id="input" rows="1" placeholder="给智能体发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
         <div class="composer-row">
+          <button class="ctx-btn" id="btnContext" title="上下文用量">◎</button>
           <select class="persona-select" id="persona" title="角色（系统提示词模板）">
             <option value="">默认角色</option>
           </select>
@@ -310,6 +339,23 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
       <input class="market-search" id="marketSearch" placeholder="搜索插件…">
     </div>
     <div class="market-body"><div class="market-grid" id="marketGrid"></div></div>
+  </div>
+</div>
+
+<!-- 上下文用量弹窗 -->
+<div class="overlay" id="ctxOverlay">
+  <div class="market-panel" style="max-width:420px;height:auto">
+    <div class="market-head" style="display:flex;align-items:flex-start">
+      <div style="flex:1">
+        <h1 style="font-size:15px">上下文</h1>
+        <p id="ctxTotal" style="font-size:12px">—</p>
+      </div>
+      <button class="market-close" id="ctxClose">✕</button>
+    </div>
+    <div style="padding:6px 22px 18px">
+      <div class="ctx-bar"><div class="ctx-bar-fill" id="ctxBarFill"></div></div>
+      <div id="ctxItems" class="ctx-items"></div>
+    </div>
   </div>
 </div>
 

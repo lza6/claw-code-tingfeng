@@ -14,7 +14,9 @@ from src.core import providers_store, usage_store
 
 
 @pytest.fixture
-def wd(tmp_path: Path) -> Path:
+def wd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """数据目录随 CLAWD_DATA_DIR 走（provider JSON / SQLite 都在这里），测试要隔离到 tmp"""
+    monkeypatch.setenv("CLAWD_DATA_DIR", str(tmp_path / ".clawd"))
     return tmp_path
 
 

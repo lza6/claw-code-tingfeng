@@ -111,6 +111,7 @@ class TestEnginePersistenceBridge:
 
         # 安全默认是"测试环境不落盘"（审计 P1-3），此处显式开启以验证落盘链路
         monkeypatch.setenv("CLAWD_FORCE_SESSION_PERSIST", "1")
+        monkeypatch.setenv("CLAWD_DATA_DIR", str(tmp_path / ".clawd"))
         engine = AgentEngine(workdir=tmp_path)
 
         class _FakeSession:

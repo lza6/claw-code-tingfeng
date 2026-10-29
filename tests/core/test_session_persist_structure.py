@@ -62,6 +62,8 @@ class TestEnginePersistWiring:
         from src.agent.engine import AgentEngine
 
         monkeypatch.setenv("CLAWD_FORCE_SESSION_PERSIST", "1")
+        # 数据目录随 CLAWD_DATA_DIR 走（v0.85.0 起与程序目录分离），测试要隔离到 tmp
+        monkeypatch.setenv("CLAWD_DATA_DIR", str(tmp_path / ".clawd"))
         eng = AgentEngine(workdir=tmp_path)
 
         class _Estimator:

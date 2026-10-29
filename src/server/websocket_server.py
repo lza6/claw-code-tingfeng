@@ -168,6 +168,15 @@ class ClawdWebSocketServer:
             info["model"] = getattr(self._settings, "llm_model", None)
             info["base_url"] = getattr(self._settings, "llm_base_url", None)
             info["api_key_set"] = bool(getattr(self._settings, "llm_api_key", None))
+            try:
+                from ..core.data_dir import describe as _describe_data_dir
+
+                info["data_dir"] = _describe_data_dir()["data_dir"]
+                from ..core import providers_store as _ps
+
+                info["providers_file"] = _ps.store_path()
+            except Exception:  # noqa: BLE001
+                pass
             # 多 provider：让设置页能显示"当前真正生效的那套"
             try:
                 from ..core import providers_store
@@ -420,6 +429,54 @@ class ClawdWebSocketServer:
                 payload = usage_store.summary(range_key, Path.cwd())
                 # 一次请求把"汇总 + 最近日志"都给前端（面板打开即渲染，不用二次往返）
                 payload['recent'] = usage_store.recent(50, Path.cwd())
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
+        # API 端点：上下文用量（"这一轮上下文都被谁占了"）
+        if path == '/api/context':
+            import os as _os
+
+            try:
+                from ..core import usage_store
+                from ..agent.skill_loader import discover_skills
+
+                window = int(_os.environ.get('CLAWD_CONTEXT_WINDOW', '200000'))
+                recent = usage_store.recent(1, Path.cwd())
+                used_prompt = int((recent[0].get('prompt_tokens') or 0)) if recent else 0
+
+                skills = discover_skills(Path.cwd())
+                skills_chars = sum(len(s.name) + len(s.description) for s in skills)
+                # 中文约 1.6 字/token、英文约 4 字符/token，这里取 3 作折中估算
+                skills_tokens = max(1, skills_chars // 3)
+
+                items = [
+                    {'label': '消息历史', 'tokens': used_prompt, 'note': '上一轮实际 prompt token'},
+                    {'label': '技能清单', 'tokens': skills_tokens, 'note': f'{len(skills)} 个技能的 name+description'},
+                ]
+                used = sum(i['tokens'] for i in items)
+                free = max(0, window - used)
+                for item in items:
+                    item['percent'] = round(item['tokens'] / window, 4) if window else 0
+                payload = {
+                    'context_window': window,
+                    'used': used,
+                    'free': free,
+                    'used_percent': round(used / window, 4) if window else 0,
+                    'items': items + [{'label': '剩余空间', 'tokens': free,
+                                       'percent': round(free / window, 4) if window else 0,
+                                       'note': '可继续对话的余量'}],
+                }
                 body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
                 status = 200
             except Exception as exc:  # noqa: BLE001

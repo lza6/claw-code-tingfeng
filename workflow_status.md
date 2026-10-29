@@ -293,3 +293,18 @@
 - [x] R3 两套账本：`src/workflow/run_ledger.py` + `clawd ledger`（ADR 0020），真实仓库抓到 1 条存量不一致。
 - [x] R4 文档漂移门禁改用 hard_metrics 单一阈值。
 - 验证：`verify_audit_p1.py` 28/28；tests/workflow+cli+core 1868 passed；brain+rag 1074 passed；ruff 全过。
+
+## 2026-10-30 v0.85.0 —— 修「重启后数据丢」+ provider JSON + 工具折叠 + 上下文面板
+
+- [x] 数据目录与程序目录分离：`src/core/data_dir.py`（`CLAWD_DATA_DIR` 优先），
+      `local_db`/`session_bridge`/附件上传/引擎落盘全部改走它；Electron 传 `--data-dir <userData>/data`
+      并设同名环境变量；**旧安装目录里的 .clawd 自动迁移一次**（不覆盖已有文件）。
+- [x] provider 配置改 JSON（`<数据目录>/providers.json`，原子写；老 SQLite 自动迁移）；
+      用量仍 SQLite（高频+聚合查询，理由写在模块 docstring）。
+- [x] 工具调用折叠成一组：`命令 2 · 读取 1 · 执行中… ⌄`，展开逐条 ✓/✗ + 参数；
+      LLM/token 噪音事件只进「轨迹」。E2E 断言：默认折叠、分类计数、展开 3 条。
+- [x] 上下文用量面板（◎）：`已用/窗口(%)` + 进度条 + 分项（消息历史/技能清单/剩余空间），
+      新端点 `/api/context`（`CLAWD_CONTEXT_WINDOW` 可覆盖，默认 200k）。
+- [x] 安装 E2E 新增 STEP2e：重启应用后 `/api/providers` 仍有配置（直接验证用户头号投诉）。
+- 测试：`tests/core/test_data_dir_and_providers_json.py` 13 条（含跨进程重启读取）；
+      core+server+cli 1459 passed；console E2E 21 项全绿；ruff 全过。

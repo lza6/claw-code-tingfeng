@@ -41,6 +41,17 @@ if TYPE_CHECKING:
     from ..tools_runtime.base import BaseTool
     from .engine_session_data import AgentSession
 
+def _session_dir() -> Path:
+    """会话落盘目录（跟随数据目录；桌面端在 userData 下，升级不丢）"""
+    try:
+        from ..core.data_dir import data_path
+
+        return data_path('sessions', create_dir=True)
+    except Exception:  # noqa: BLE001
+        return Path.cwd() / '.clawd' / 'sessions'
+
+
+
 def _normalize_prior_messages(raw: Any) -> list[Any] | None:
     """把 {role, content} 字典或已是 LLMMessage 的列表统一成 LLMMessage 列表
 
@@ -787,7 +798,7 @@ class AgentEngine:
                 persona=str(getattr(self, 'persona_name', '') or ''),
                 model=model,
                 provider=provider,
-                directory=self.workdir / '.clawd' / 'sessions',
+                directory=_session_dir(),
             )
 
             # 用量记账（CLI 与桌面端共用这条路径）：用户面板里的成本/请求数/缓存命中率就靠它

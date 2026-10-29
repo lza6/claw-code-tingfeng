@@ -1,4 +1,4 @@
-"""本地 SQLite 存储（单一 db 文件，放在 <workdir>/.clawd/clawd.db）
+"""本地 SQLite 存储（单一 db 文件，放在数据目录 `CLAWD_DATA_DIR` 或 `<workdir>/.clawd`）
 
 为什么用 SQLite 而不是 JSON 文件：
 - **用量/请求日志会持续增长**（每跑一轮就一行），JSON 全量读写会越来越慢，
@@ -26,9 +26,10 @@ DB_FILENAME = "clawd.db"
 
 
 def db_path(workdir: Path | str | None = None) -> Path:
-    base = Path(workdir) if workdir else Path.cwd()
-    directory = base / ".clawd"
-    directory.mkdir(parents=True, exist_ok=True)
+    # 数据目录与程序目录分离：桌面端由 CLAWD_DATA_DIR 指到 userData（见 core/data_dir.py）
+    from .data_dir import data_dir
+
+    directory = data_dir(workdir, create=True)
     return directory / DB_FILENAME
 
 

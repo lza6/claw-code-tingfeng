@@ -113,6 +113,22 @@ document.getElementById('btnSkip').onclick = function(){
   });
 }
 
+
+/** 把旧版本写在安装目录里的 .clawd 数据搬到 userData（只搬一次，不覆盖已有文件） */
+function migrateLegacyData(targetDir) {
+  const legacy = path.join(HOST_DIR, '.clawd');
+  if (!fs.existsSync(legacy)) return;
+  const marker = path.join(targetDir, '.migrated-from-legacy');
+  if (fs.existsSync(marker)) return;
+  try {
+    fs.cpSync(legacy, targetDir, { recursive: true, force: false, errorOnExist: false });
+    fs.writeFileSync(marker, new Date().toISOString(), 'utf-8');
+    slog('[clawd-shell] 已把旧安装目录里的 .clawd 数据迁移到 userData');
+  } catch (err) {
+    slog(`[clawd-shell] 旧数据迁移失败（可忽略）: ${err && err.message}`);
+  }
+}
+
 function startHost() {
   const py = findPython();
   const args = ['-m', 'src', 'serve'];
@@ -126,11 +142,23 @@ function startHost() {
     } catch (_) {}
     if (fs.existsSync(userEnv)) args.push('--env-file', userEnv);
   }
+  // 数据目录必须与安装目录分离：否则升级/重装覆盖 resources/host，
+  // 用户的 provider 配置 / 用量 / 会话会一起被清掉（真实事故）。
+  const dataDir = path.join(app.getPath('userData'), 'data');
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    migrateLegacyData(dataDir);
+  } catch (err) {
+    slog(`[clawd-shell] 准备数据目录失败: ${err && err.message}`);
+  }
+  args.push('--data-dir', dataDir);
+
   slog(`[clawd-shell] 启动 Host: ${py} ${args.join(' ')}`);
   hostProc = spawn(py, args, {
     cwd: HOST_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    env: { ...process.env, CLAWD_DATA_DIR: dataDir },
   });
   hostProc.stdout.on('data', (d) => slog(`[host] ${d}`.trimEnd()));
   hostProc.stderr.on('data', (d) => slog(`[host!] ${d}`.trimEnd()));

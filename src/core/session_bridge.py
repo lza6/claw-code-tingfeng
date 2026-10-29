@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DIR = Path(".clawd") / "sessions"
+DEFAULT_DIR = Path(".clawd") / "sessions"  # 兼容旧调用；实际以 _default_dir() 为准
 
 
 @dataclass
@@ -62,8 +62,18 @@ class SessionView:
         }
 
 
+def _default_dir() -> Path:
+    """默认会话目录：跟随数据目录（桌面端在 userData 下，升级不丢）"""
+    try:
+        from .data_dir import data_path
+
+        return data_path("sessions", create_dir=True)
+    except Exception:  # noqa: BLE001 — 极端情况下退回旧行为
+        return DEFAULT_DIR
+
+
 def _dir(directory: Path | str | None) -> Path:
-    return Path(directory) if directory is not None else DEFAULT_DIR
+    return Path(directory) if directory is not None else _default_dir()
 
 
 def _detect_and_parse(path: Path) -> SessionView | None:

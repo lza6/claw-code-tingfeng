@@ -333,7 +333,9 @@ class MessageRouter:
             import base64
             import hashlib
 
-            upload_dir = self._workdir() / '.clawd' / 'uploads'
+            from ..core.data_dir import data_path
+
+            upload_dir = data_path('uploads', create_dir=True)
             try:
                 upload_dir.mkdir(parents=True, exist_ok=True)
             except OSError as exc:
