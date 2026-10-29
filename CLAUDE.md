@@ -17,7 +17,7 @@
 > ```bash
 > venv/Scripts/python.exe scripts/e2e_smoke.py                  # 真实端点 E2E，退出码 0 才算通过
 > py -3.10 -m pytest tests/contracts/ -q                         # 公共 API 契约
-> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 3261 / 4.6s）
+> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 5007 / 5.1s）
 > venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
 > py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
 > venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降
@@ -34,8 +34,12 @@
 > `py -3.10` = 测试与 lint 工具齐全；`py`（默认 3.14）缺 `loguru`，**不要用**。
 >
 > **本项目的硬指标**（v0.57.0 起作为基线，现已全部接入 CI）：
-> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0` · `IMPORT-EXIT = 0` · 生产可达 ≥ 443 · 静默吞异常 ≤ 172。
+> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0` · `IMPORT-EXIT = 0` · 生产可达 ≥ 443 · 静默吞异常 ≤ **162** · 覆盖率 ≥ **60%**。
 > 任何一项回升都视为回归，先修再谈其他。
+>
+> **门禁 2026-10-29 已收紧**（原 172 / 47，远低于实际 → 掉 15 个点仍能全绿，尺子失效）：
+> 静默吞异常 172→**162**、覆盖率 `fail_under` 47→**60**。单一来源分别在
+> `scripts/hard_metrics.py` 与 `pyproject.toml`，改一处必须同步另一处（有测试守着）。
 
 ## Project Overview
 
@@ -93,7 +97,7 @@ Clawd Code is a comprehensive AI-powered coding agent framework written in Pytho
 
 - **Language:** Python 3.10+
 - **Package Manager:** pip / pyproject.toml
-- **Testing:** pytest（2026-10-23 实测：**3261 收集用例 / 0 errors / 4.6s**；全量 **3254 passed / 0 failed / 640s**；覆盖率 **47.44%**，`fail_under = 47` 已生效 —— 见 `pyproject.toml` 的 `[tool.coverage.report]`）
+- **Testing:** pytest（**2026-10-29 实测：5,007 收集用例 / 0 errors / 5.1s**；`not slow` 全量 **4,979 passed / 0 failed**（8~14 分钟，波动较大）；覆盖率 **62.39%**，`fail_under = 60` 已生效 —— 见 `pyproject.toml` 的 `[tool.coverage.report]`）
   > 注：覆盖率数字请以 `pytest --cov=src` 的实际输出为准。历史上此处长期
   > 虚报为 "1414 用例 / ~50%"、后来又写成 "2857 用例 / 19.5%"，
   > 与实测相差 2 倍以上。指标不要写死在文档里。

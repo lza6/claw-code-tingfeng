@@ -65,13 +65,31 @@ class NativeBackend:
         except Exception as e:  # noqa: BLE001
             raise BackendUnavailable(f"原生引擎不可用: {e}") from e
 
+    @staticmethod
+    def _run_coro(coro: Any) -> Any:
+        """在同步上下文里跑协程；**若已有事件循环则改用线程**跑
+
+        陷阱（本项目 skill 记录）：同步函数里 `asyncio.run(...)` 在已有事件循环中会
+        抛 `RuntimeError: asyncio.run() cannot be called from a running event loop`。
+        collaborate 目前从 CLI（同步）调用，但库调用方可能在 async 上下文里用它。
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)  # 无运行中的 loop，正常路径
+
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+
     def run(self, goal: str, timeout: float = 900.0) -> BackendResult:
         if not goal or not goal.strip():
             raise BackendUnavailable("goal 不能为空")
         engine = self._get_engine()
         started = time.perf_counter()
         try:
-            session = asyncio.run(engine.run(goal))
+            session = self._run_coro(engine.run(goal))
         except Exception as e:  # noqa: BLE001 — 统一转成 BackendResult 的错误
             return BackendResult(
                 engine="native", text="", errors=[f"{type(e).__name__}: {e}"],
