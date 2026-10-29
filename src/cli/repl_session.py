@@ -15,6 +15,7 @@ from ..utils.colors import (
     bold_green,
     dim,
     green,
+    status_warn,
 )
 from .banner import render_banner
 from .command_registry import command_registry
