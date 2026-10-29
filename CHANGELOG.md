@@ -7,6 +7,43 @@
 
 ---
 
+## [v0.80.0] (2026-10-30) — 去掉原生菜单栏 + 状态/记忆/追踪/团队内建为原生工具 + 修 Windows 编码系统性 bug
+
+**1. 去掉 Electron 原生菜单栏（File / Edit / View / Window / Help）**
+截图里那排 2003 年风格的菜单直接从 `Menu.setApplicationMenu(null)` 干掉（聊天式应用不需要它）。
+必要的快捷键在窗口内用 `before-input-event` 本地补齐：Ctrl+R/F5 刷新、Ctrl+Shift+I/F12 开发者工具、
+Ctrl+Q/W 关闭、Ctrl+=/-/0 缩放 —— **不注册系统全局热键**，不干扰其它软件。
+验证方式：启动 unpacked 版后用 `CopyFromScreen` 截真实窗口图（见 workflow_status v0.80.0 段）。
+
+**2. 状态 / 记忆 / 追踪 / 团队：从"MCP 专属"变成"原生内置"**
+之前这四项能力只有 `src/core/mcp/*_server.py` 的 MCP 形态可用，agent 想用得先起 MCP 进程。
+新增 `src/tools_runtime/builtin_capability_tools.py`：
+- `MemoryTool`（search/create/observe/stats）、`StateTool`（surface/session 读写 + list_sessions）、
+  `TraceTool`（recent/get/summarize/export）、`TeamTool`（create_task/list_tasks/assign/send/mailbox/workers）
+- **实现同源**：直接调 `core/mcp` 的 Server 类（同进程、零端口、零 token 握手），
+  所以内置工具与 MCP 工具共用一份存储逻辑，不会漂移；
+- `get_domain_tools()` 现在装配 6 个工具（世界模型 + 项目图谱 + 这 4 个），引擎启动即可用。
+
+> 结论：MCP 只留给**外部引擎跨进程**用（Codex/OpenCode 跑在别的进程），
+> 自家 agent 一律走原生工具 —— 这正是 ADR 0011「内置优先」的落地，也是这次你问的"能不能直接内置"的答案。
+
+**3. 修一个只在 Windows 上炸的系统性编码 bug**
+`core/mcp` 与 `mcp` 两个目录里共 **38 处** `Path.write_text()/read_text()` 没写 `encoding`，
+Windows 默认走 GBK：写中文进去、再按 UTF-8 读就 `UnicodeDecodeError`。
+实测触发：`MemoryServer.create_entity(name="登录模块")` 后 `search("登录")` 直接崩；
+`TeamServer` 写中文任务后 mailbox 打不开。已全部补 `encoding="utf-8"`（写 18 处 + 读 20 处）。
+
+**4. 审计 P1 台账可复验**
+新增 `scripts/verify_audit_p1.py`：把 P1-1 ~ P1-16 逐条变成机器可跑的断言（查代码 + 查测试 + 查数据集），
+当前 **16/16 PASS**，任何一条回退都会退出非 0，适合挂 CI。
+
+**验证（实跑）**
+- `tests/tools_runtime` **299 passed / 4 skipped**；新增 `tests/tools_runtime/test_builtin_capability_tools.py`（16 条）
+- `scripts/verify_audit_p1.py` → 16/16 PASS
+- 安装包实装 E2E（见下一条 commit 的截图与报告）：窗口无菜单栏、UI 流式/角色库/无顶栏全通
+
+---
+
 ## [v0.79.0] (2026-10-30) — 真流式回复 + 角色库 + 极简对话界面（对标 orca 的做法）
 
 你反馈的两件事都在这一版：**"发消息后只刷工具调用、没有正常回复"** 与 **"顶栏老旧、不能选角色"**。

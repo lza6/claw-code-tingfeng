@@ -146,13 +146,13 @@ class TraceServer:
             "events": span.events,
         }
         path = self.trace_dir / "spans" / f"{span.span_id}.json"
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def get_trace(self, trace_id: str) -> list[dict]:
         """获取追踪的所有跨度"""
         spans = []
         for p in (self.trace_dir / "spans").glob("*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             if data.get("trace_id") == trace_id:
                 spans.append(data)
         return sorted(spans, key=lambda s: s["start_time"])
@@ -163,7 +163,7 @@ class TraceServer:
         trace_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         traces = []
         for p in trace_files[:limit]:
-            traces.append(json.loads(p.read_text()))
+            traces.append(json.loads(p.read_text(encoding="utf-8")))
         return traces
 
     def export_trace(self, trace_id: str, format: str = "json") -> str:

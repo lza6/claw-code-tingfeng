@@ -156,7 +156,7 @@ class StateServer:
             return None
 
         try:
-            data = json.loads(state_path.read_text())
+            data = json.loads(state_path.read_text(encoding="utf-8"))
             return ModeState.from_dict(data)
         except (json.JSONDecodeError, KeyError):
             return None
@@ -193,7 +193,7 @@ class StateServer:
         # 原子写入
         tmp_path = state_path.with_suffix(f".tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}")
         try:
-            tmp_path.write_text(json.dumps(state.to_dict(), indent=2, ensure_ascii=False))
+            tmp_path.write_text(json.dumps(state.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
             tmp_path.replace(state_path)
         except Exception:
             if tmp_path.exists():

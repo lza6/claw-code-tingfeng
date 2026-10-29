@@ -206,11 +206,17 @@ class TestProjectMapTool:
 
 
 class TestGetDomainTools:
-    def test_returns_both_tools_bound_to_workdir(self, repo: Path):
+    def test_returns_domain_and_capability_tools_bound_to_workdir(self, repo: Path):
+        """领域工具 + 内置能力工具（状态/记忆/追踪/团队）都要装配进引擎
+
+        v0.80.0 起把这四个能力做成原生工具 —— 它们的实现与 core/mcp 的 Server 类同源，
+        只是不再绕 MCP 进程（同进程直连）。
+        """
         tools = get_domain_tools(repo)
 
         names = {t.name for t in tools}
-        assert names == {"WorldModelTool", "ProjectMapTool"}
+        assert {"WorldModelTool", "ProjectMapTool"} <= names
+        assert {"MemoryTool", "StateTool", "TraceTool", "TeamTool"} <= names
         for tool in tools:
             assert tool.workdir == repo.resolve()
 

@@ -210,3 +210,17 @@
 - [x] 模型写半截工具标记（多 `>`、漏 `</tool>`）→ 工具不执行且原文被当答案 → 加括号配平宽松解析 + 7 条测试。
 - 实测（安装版）：顶栏 0 个、角色下拉 7 项、流式采样 0→15→23→143→213、结束无残留 streaming 气泡，
   截图 `desktop/screenshots/08-stream-persona.png`；卸载后注册表残留 0。
+
+## 2026-10-30 v0.80.0 —— 去原生菜单栏 + 能力工具内建 + Windows 编码系统性修复
+
+- [x] Electron 原生菜单栏（File/Edit/View/Window/Help）移除：`Menu.setApplicationMenu(null)`；
+      快捷键用 `before-input-event` 本地补齐（Ctrl+R/F5、Ctrl+Shift+I/F12、Ctrl+Q/W、Ctrl+=/-/0），不占系统全局热键。
+- [x] 状态/记忆/追踪/团队内建为原生工具：`src/tools_runtime/builtin_capability_tools.py`
+      （MemoryTool/StateTool/TraceTool/TeamTool，`action` 子命令），实现直接复用 `core/mcp` 的 Server 类，
+      与 MCP 同源、同进程、零端口；`get_domain_tools()` 由 2 个变成 6 个工具。
+- [x] 修 Windows 编码系统性 bug：`core/mcp` + `mcp` 共 38 处 `write_text/read_text` 未指定 encoding
+      → 写中文用 GBK、按 UTF-8 读直接 UnicodeDecodeError（实测 MemoryServer.search 与 TeamServer 崩）。
+      写侧 18 处 + 读侧 20 处全部补 `encoding="utf-8"`。
+- [x] 新增 `scripts/verify_audit_p1.py`：P1-1~P1-16 逐条断言，当前 **16/16 PASS**（可挂 CI）。
+- 测试：`tests/tools_runtime` 299 passed / 4 skipped（含新增 16 条能力工具测试）；
+  `tests/tools_runtime+tests/server+tests/mcp` 434 passed；ruff F821/F811/E9 全过。

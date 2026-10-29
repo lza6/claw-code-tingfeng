@@ -81,13 +81,13 @@ class TeamServer:
                 "workers": [],
                 "created_at": datetime.now().isoformat(),
             }
-            self.state_path.write_text(json.dumps(state, indent=2))
+            self.state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
     def _read_state(self) -> dict:
-        return json.loads(self.state_path.read_text())
+        return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def _write_state(self, state: dict) -> None:
-        self.state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+        self.state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # ==================== 任务板 ====================
 
@@ -103,7 +103,7 @@ class TeamServer:
             **{k: v for k, v in kwargs.items() if k in Task.__dataclass_fields__},
         )
         path = self.team_dir / "tasks" / f"{task_id}.json"
-        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info(f"Created task: {task_id}")
         return task_id
 
@@ -111,7 +111,7 @@ class TeamServer:
         """获取任务"""
         path = self.team_dir / "tasks" / f"{task_id}.json"
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             return Task(**data)
         return None
 
@@ -124,14 +124,14 @@ class TeamServer:
             if hasattr(task, k):
                 setattr(task, k, v)
         path = self.team_dir / "tasks" / f"{task_id}.json"
-        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False), encoding="utf-8")
         return task
 
     def list_tasks(self, status: str | None = None) -> list[Task]:
         """列出任务"""
         tasks = []
         for p in (self.team_dir / "tasks").glob("*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             if status is None or data.get("status") == status:
                 tasks.append(Task(**data))
         return tasks
@@ -145,7 +145,7 @@ class TeamServer:
         task.status = "in_progress"
         task.started_at = datetime.now().isoformat()
         path = self.team_dir / "tasks" / f"{task_id}.json"
-        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(asdict(task), indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info(f"Task {task_id} assigned to {assignee}")
         return True
 
@@ -174,7 +174,7 @@ class TeamServer:
         mailbox_dir = self.team_dir / "mailboxes" / to_agent
         mailbox_dir.mkdir(parents=True, exist_ok=True)
         path = mailbox_dir / f"{msg_id}.json"
-        path.write_text(json.dumps(asdict(msg), indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(asdict(msg), indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info(f"Message sent: {from_agent} -> {to_agent}: {subject}")
         return msg_id
 
@@ -186,7 +186,7 @@ class TeamServer:
 
         messages = []
         for p in mailbox_dir.glob("*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             if unread_only and data.get("read"):
                 continue
             messages.append(MailboxMessage(**data))
@@ -196,9 +196,9 @@ class TeamServer:
         """标记消息已读"""
         path = self.team_dir / "mailboxes" / agent_name / f"{msg_id}.json"
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             data["read"] = True
-            path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             return True
         return False
 
@@ -233,7 +233,7 @@ class TeamServer:
             "last_heartbeat": datetime.now().isoformat(),
         }
         path = self.team_dir / "workers" / f"{worker_id}.json"
-        path.write_text(json.dumps(worker, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(worker, indent=2, ensure_ascii=False), encoding="utf-8")
 
         # 更新团队状态
         state = self._read_state()
@@ -247,9 +247,9 @@ class TeamServer:
         """Worker 心跳"""
         path = self.team_dir / "workers" / f"{worker_id}.json"
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             data["last_heartbeat"] = datetime.now().isoformat()
-            path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             return True
         return False
 
@@ -257,16 +257,16 @@ class TeamServer:
         """列出所有 Workers"""
         workers = []
         for p in (self.team_dir / "workers").glob("*.json"):
-            workers.append(json.loads(p.read_text()))
+            workers.append(json.loads(p.read_text(encoding="utf-8")))
         return workers
 
     def unregister_worker(self, worker_id: str) -> bool:
         """注销 Worker"""
         path = self.team_dir / "workers" / f"{worker_id}.json"
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             data["status"] = "stopped"
-            path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             return True
         return False
 

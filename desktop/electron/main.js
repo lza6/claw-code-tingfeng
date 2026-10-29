@@ -210,6 +210,21 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // 去掉原生菜单后，把真正会被用到的快捷键在窗口内补齐（不注册系统全局热键）
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const ctrl = input.control || input.meta;
+    const key = (input.key || '').toLowerCase();
+    if (ctrl && key === 'r') { event.preventDefault(); mainWindow.webContents.reload(); return; }
+    if (key === 'f5') { event.preventDefault(); mainWindow.webContents.reload(); return; }
+    if (ctrl && input.shift && key === 'i') { event.preventDefault(); mainWindow.webContents.toggleDevTools(); return; }
+    if (key === 'f12') { event.preventDefault(); mainWindow.webContents.toggleDevTools(); return; }
+    if (ctrl && (key === 'q' || key === 'w')) { event.preventDefault(); mainWindow.close(); return; }
+    if (ctrl && (key === '=' || key === '+')) { event.preventDefault(); mainWindow.webContents.setZoomLevel(mainWindow.webContents.getZoomLevel() + 0.5); return; }
+    if (ctrl && key === '-') { event.preventDefault(); mainWindow.webContents.setZoomLevel(mainWindow.webContents.getZoomLevel() - 0.5); return; }
+    if (ctrl && key === '0') { event.preventDefault(); mainWindow.webContents.setZoomLevel(0); return; }
+  });
+
   mainWindow.loadURL(`${HOST_URL_BASE}:${readPortFile()?.port ?? ''}`);
 
   // E2E 探针（仅测试时启用）：验证 preload 桥/版本栏/设置/市场/检查更新是否真的通
@@ -466,6 +481,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showMainWindow);
 
   app.whenReady().then(async () => {
+    // 去掉 Electron 默认的原生菜单栏（File/Edit/View/Window/Help）——
+    // 这是个聊天式应用，顶部那排 2003 年风格的菜单既不现代也没人用（用户明确反馈）。
+    // 必要的快捷键在 createWindow() 里用 before-input-event 本地补齐（不占系统全局热键）。
+    Menu.setApplicationMenu(null);
+
     registerIpcHandlers();
     // 打包版首次启动：LLM 配置引导（写 userData/.env 后 Host 才带 LLM）
     if (!IS_DEV && !fs.existsSync(path.join(app.getPath('userData'), '.env'))) {

@@ -39,13 +39,13 @@ class StateServer:
         """获取会话状态"""
         path = self.state_dir / "sessions" / f"{session_id}.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
         return None
 
     def set_session_state(self, session_id: str, state: dict) -> None:
         """设置会话状态"""
         path = self.state_dir / "sessions" / f"{session_id}.json"
-        path.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def list_sessions(self) -> list[str]:
         """列出所有会话"""
@@ -56,25 +56,25 @@ class StateServer:
         """获取 Surface 数据"""
         path = self.state_dir / "surfaces" / f"{name}.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
         return None
 
     def set_surface(self, name: str, data: dict) -> None:
         """设置 Surface 数据"""
         path = self.state_dir / "surfaces" / f"{name}.json"
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def get_task_state(self, task_id: str) -> dict | None:
         """获取任务状态"""
         path = self.state_dir / "tasks" / f"{task_id}.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
         return None
 
     def set_task_state(self, task_id: str, data: dict) -> None:
         """设置任务状态"""
         path = self.state_dir / "tasks" / f"{task_id}.json"
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def log_event(self, event_type: str, data: dict) -> None:
         """记录事件"""

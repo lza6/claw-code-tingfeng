@@ -188,7 +188,7 @@ class TraceServer:
                 }
                 for session_id, session in self._sessions.items()
             }
-            Path(path).write_text(json.dumps(data, indent=2))
+            Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
             logger.info(f"[Trace] Saved to {path}")
             return True
         except Exception as e:

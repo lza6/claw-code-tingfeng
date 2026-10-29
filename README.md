@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.79.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.80.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -119,8 +119,11 @@ clawd engines --run "任务"     # 用首个可用引擎执行
 
 | 调用方 | 路径 | 说明 |
 |---|---|---|
-| 我们自己的 agent | **原生工具**（`WorldModelTool` / `ProjectMapTool`） | 零进程、零序列化、共享进程内缓存；索引后台自动预热 |
-| 外部引擎（Codex/OpenCode…） | **MCP**（`src/mcp/domain_server.py`） | 跨进程只能走协议 |
+| 我们自己的 agent | **原生工具**（`WorldModelTool` / `ProjectMapTool` / `MemoryTool` / `StateTool` / `TraceTool` / `TeamTool`） | 零进程、零序列化、共享进程内缓存；能力工具与 `core/mcp` 的 Server 类**同源实现** |
+| 外部引擎（Codex/OpenCode…） | **MCP**（`src/mcp/domain_server.py`、`src/core/mcp/*_server.py`） | 跨进程只能走协议 |
+
+> v0.80.0 起，**状态/记忆/追踪/团队**也内建成原生工具（`action` 子命令），
+> 不再需要为自家 agent 起 MCP 进程；MCP 只留给外部引擎跨进程使用。
 
 > 世界模型索引在引擎启动时**自动后台预热**（非阻塞，实测启动开销 0.00s）。
 > 大仓库（源文件 >300）默认跳过全量索引并如实告知原因，用 `CLAWD_WM_FORCE=1` /

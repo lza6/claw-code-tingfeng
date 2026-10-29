@@ -87,7 +87,7 @@ class MemoryServer:
     def create_entity(self, entity: MemoryEntity) -> str:
         """创建实体"""
         path = self.memory_dir / "entities" / f"{entity.id}.json"
-        path.write_text(json.dumps(entity.__dict__, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(entity.__dict__, indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info(f"Created entity: {entity.id}")
         return entity.id
 
@@ -95,7 +95,7 @@ class MemoryServer:
         """获取实体"""
         path = self.memory_dir / "entities" / f"{entity_id}.json"
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             return MemoryEntity(**data)
         return None
 
@@ -109,14 +109,14 @@ class MemoryServer:
                 setattr(entity, k, v)
         entity.updated_at = datetime.now().isoformat()
         path = self.memory_dir / "entities" / f"{entity_id}.json"
-        path.write_text(json.dumps(entity.__dict__, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(entity.__dict__, indent=2, ensure_ascii=False), encoding="utf-8")
         return entity
 
     def list_entities(self, entity_type: str | None = None) -> list[MemoryEntity]:
         """列出实体"""
         entities = []
         for p in (self.memory_dir / "entities").glob("*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             if entity_type is None or data.get("type") == entity_type:
                 entities.append(MemoryEntity(**data))
         return entities
@@ -156,7 +156,7 @@ class MemoryServer:
             created_at=datetime.now().isoformat(),
         )
         path = self.memory_dir / "observations" / f"{obs_id}.json"
-        path.write_text(json.dumps(obs.__dict__, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(obs.__dict__, indent=2, ensure_ascii=False), encoding="utf-8")
 
         logger.info(f"Added observation {obs_id} to entity {entity_id}")
         return obs_id
@@ -165,7 +165,7 @@ class MemoryServer:
         """获取实体的所有观察"""
         observations = []
         for p in (self.memory_dir / "observations").glob(f"{entity_id}_*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             observations.append(MemoryObservation(**data))
         return observations
 
@@ -195,17 +195,17 @@ class MemoryServer:
             / "relations"
             / f"{from_id}_{relation_type}_{to_id}.json"
         )
-        path.write_text(json.dumps(rel, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(rel, indent=2, ensure_ascii=False), encoding="utf-8")
         return True
 
     def get_related_entities(self, entity_id: str) -> list[tuple[str, str]]:
         """获取关联实体"""
         relations = []
         for p in (self.memory_dir / "relations").glob(f"*_{entity_id}_*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             relations.append((data["to_id"], data["relation_type"]))
         for p in (self.memory_dir / "relations").glob(f"{entity_id}_*_*.json"):
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
             relations.append((data["from_id"], data["relation_type"]))
         return relations
 

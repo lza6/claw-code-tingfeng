@@ -134,7 +134,7 @@ class MemoryServer:
                     for k, v in self._index.entries.items()
                 }
             }
-            Path(save_path).write_text(json.dumps(data, indent=2))
+            Path(save_path).write_text(json.dumps(data, indent=2), encoding="utf-8")
             logger.info(f"[Memory] Saved to {save_path}")
             return True
         except Exception as e:
@@ -144,7 +144,7 @@ class MemoryServer:
     def load_from_file(self, path: str) -> bool:
         """从文件加载"""
         try:
-            data = json.loads(Path(path).read_text())
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
             entries = {}
 
             for k, v in data.get("entries", {}).items():

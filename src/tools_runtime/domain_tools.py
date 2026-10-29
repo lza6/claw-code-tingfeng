@@ -256,6 +256,13 @@ class ProjectMapTool(BaseTool):
 
 
 def get_domain_tools(workdir: Path | str | None = None) -> list[BaseTool]:
-    """返回领域原生工具实例（供引擎装配）"""
+    """返回领域原生工具实例（供引擎装配）
+
+    除了世界模型/项目图谱，还装配"状态 / 记忆 / 追踪 / 团队"四个能力工具 ——
+    它们直接调 `src/core/mcp/*_server.py` 的 Server 类（同进程），
+    **不需要** 起 MCP 进程；MCP 只留给外部引擎跨进程用（见模块 docstring）。
+    """
     wd = Path(workdir or Path.cwd()).resolve()
-    return [WorldModelTool(wd), ProjectMapTool(wd)]
+    from .builtin_capability_tools import get_builtin_capability_tools
+
+    return [WorldModelTool(wd), ProjectMapTool(wd), *get_builtin_capability_tools(wd)]
