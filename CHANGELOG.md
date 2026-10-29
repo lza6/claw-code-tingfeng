@@ -7,6 +7,83 @@
 
 ---
 
+## [v0.76.7] (2026-10-29) — 真实端点跑通后，修 3 个只有真跑才暴露的缺陷
+
+本轮第一次把"真实 LLM 端点"跑到底（此前一直因付费红线跳过），结果**立刻抓到 3 个
+单测完全覆盖不到的缺陷**——它们都在"用户真的用一次"的路径上。
+
+**真实 E2E（`scripts/e2e_smoke.py`）**
+`0. 读取 .env 配置` / `1. 应用模块可导入` / `2. 项目 LLM 栈真实对话`（PONG）/
+`3. 工具调用 function calling`（get_weather Berlin）/ `4. 推理内容解析`（391 + reasoning）
+→ **5/5 PASS，退出码 0**。
+
+**修复 1：工具失败原因没进会话步骤，收尾消息只剩一句空话**
+真实复现：PRE_TOOL_USE hook 拒绝 `BashTool` 后，模型反复重试 3 次，最终答案只有
+「达到最大迭代次数，任务可能未完成。」—— 用户根本看不到"被策略拒绝"这个真原因。
+原因：`AgentStep(result=_res_obj.output)` 在失败时 output 是空串，error 被丢掉。
+已改为失败时把 `error` 写进 step.result，并让收尾消息带上
+`最后一次失败: <工具> -> <原因>`（实测输出已带上完整拒绝理由）。
+
+**修复 2：拒绝后没告诉模型"别重试"，白烧迭代**
+拒绝结果只写了"被拒绝"，模型就用相同参数再试。现在显式追加
+「该工具已被策略拒绝，不要用相同参数重试；请换方案或直接说明被拒绝的原因」。
+
+**修复 3：会话落盘压平结构 + 用量全丢，`clawd explain` 只能显示"未知/0/0"**
+真实会话文件里：工具步骤被写成 `role=assistant` 的文本、`model`/`provider` 为空、
+`output_tokens=0`、`total_cost=0`。于是 `clawd explain` 显示
+`模型: 未知 · 输出 0 tokens · $0.0000 · 工具调用: 没有记录`。
+现在：execute 步骤以 `role=tool` + `name` + `ok` 结构化落盘；`model`/`provider` 取引擎配置；
+输入/输出 token 与费用取 `CostEstimator.get_summary()`（估算器异常时降级为 session 总量，不阻断落盘）。
+实测同一句话的 explain 输出变成：
+`openai/step-5-preview · 输入 16323 / 输出 262 tokens · $0.0171 · 工具调用 1 次（成功 1 / 失败 0）: FileReadTool`。
+
+**验证（实跑）**
+- `scripts/e2e_smoke.py` → 5/5 PASS，exit 0
+- 真实引擎跑 3 次（读文件 / 被 hook 拒绝 / 落盘后 explain），全部符合预期：
+  - PRE/POST hook 在真实 `FileReadTool` 调用上各触发 1 次
+  - 拒绝 BashTool 后 `hello-from-shell` **未出现**（真的没执行）
+  - `clawd explain` 能列出工具、成败、模型、token、费用
+- 新增 7 个测试：`tests/core/test_session_persist_structure.py`（落盘结构 + 用量来源 + 估算器失败降级）
+  与 `tests/agent/test_engine_hooks_wiring.py` 增补 3 条（失败原因入步骤 / 别再重试提示）
+
+**修复 4：评审裁决解析太窄，真实模型的中文/别名裁决被判 UNKNOWN**
+真实跑 `clawd review`（4 角色并行、真实端点）时发现：`style-reviewer` 写的是中文结论，
+被解析成 `UNKNOWN` → 整体 `INCOMPLETE`。现在接受
+`VERDICT/结论/判定` + `APPROVE/PASS/OK/LGTM/通过/无问题/无需修改/NEEDS_FIX/REJECT/需要修复/有问题`；
+**没写裁决行时按它自己报的分级兜底**（有 CRITICAL/HIGH/MEDIUM → NEEDS_FIX；只报 LOW 或啥都没报 → UNKNOWN），
+依然不猜"通过"。修后同一文件同一角色：`APPROVE`。
+
+**真实并行评审实测**（`clawd review /tmp/review_target/demo.py`，真实端点）
+4 个角色并行，命中真实缺陷：`CRITICAL: SQL 注入（字符串拼接构造 SQL）`、
+`HIGH: 数据库连接未关闭`；聚合裁决 `NEEDS_FIX`；`performance-reviewer` 120s 超时被如实标为
+`FAILED/超时`（没有伪装成通过）。说明"并行调度 + 确定性裁决 + 不伪造通过"三件事在真实模型下成立。
+
+**修复 5：桌面打包不含 `prompts/`，打包态 `clawd review` 直接 ModuleNotFoundError**
+用打包好的 host 运行时实测：`python/python.exe -m src --version` 正常（v0.76.6），
+但 `from src.agent.review_team import available_review_roles` 报
+`ModuleNotFoundError: No module named 'prompts'` —— `scripts/prepare_host_bundle.py`
+只拷了 `src/`。已补拷 `prompts/`（并在脚本里显式告警"缺 prompts 则 review 不可用"），
+顺带给清理步骤加了 `rmtree_with_retry`：Windows 上杀软/索引器会短暂占用
+site-packages 文件（WinError 32），不重试整条打包链直接失败（本轮实测踩到两次）。
+
+**修复 6：`clawd_code.egg-info` 残留导致版本一致性假失败**
+`pip wheel .` 在仓库根留下 `clawd_code.egg-info/PKG-INFO`（版本 0.76.6），而 cwd 在 sys.path 上，
+`importlib.metadata.version("clawd-code")` 会优先命中它 → 明明装的是 0.76.7 却报 0.76.6。
+已清理该制品（`.gitignore` 本就忽略 `*.egg-info/`），并在 known-issues 记录这个坑。
+
+**桌面端 0.76.7（含 prompts 修复）实测证据**
+- `desktop/dist/latest.yml` → `version: 0.76.7`，产物 `Clawd Desktop Setup 0.76.7.exe`(160.3M) /
+  `ClawdDesktop-Portable-0.76.7.exe`(160.0M)；旧 0.76.6 产物已删
+- 打包内 `resources/host/pyproject.toml` → `version = "0.76.7"`；`resources/host/prompts/agents/` **33 个 .md**
+- 用**打包自带的 python** 实跑：`python/python.exe -m src --version` → `Clawd Code v0.76.7`；
+  `available_review_roles()` → **9 个角色**（修复前是 `ModuleNotFoundError: prompts`）
+- 仍未签名（无证书，`signing is skipped`）
+
+**说明**：本轮确实发起了真实 LLM 调用（e2e 冒烟 5 步 + 引擎验证 3 次 run + 评审 2 次共 5 次调用）。
+按你"不必担心预算"的授权执行，次数与开销在此列明。
+
+---
+
 ## [v0.76.6] (2026-10-29) — P1-14 收口（真并行评审）+ 讲人话入口 + 桌面端 0.76.5 重建
 
 v0.76.5 把"假成功"清完之后，本轮补的是**功能面缺口**，同样每条都有实跑证据。

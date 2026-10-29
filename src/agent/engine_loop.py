@@ -555,8 +555,14 @@ async def _run_agent_loop(
                         )
                     else:
                         config.messages.append(LLMMessage(role='user', content=result_content))
+                    # 失败时 result 必须带上错误原因：否则 session.steps 里只有空字符串，
+                    # 收尾消息 / clawd explain / HUD 都只能看到"失败了但不为什么"（真实 E2E 发现）
+                    _step_result = (
+                        _res_obj.output if _res_obj.success
+                        else (_res_obj.error or _res_obj.output or '工具执行失败（无错误信息）')
+                    )
                     step = AgentStep(step_type='execute', action=f'{tool_name}({tool_args})',
-                                     result=_res_obj.output, success=_res_obj.success)
+                                     result=_step_result, success=_res_obj.success)
                     config.session.steps.append(step)
                     if config.on_step:
                         config.on_step(step, config.session)
@@ -657,7 +663,12 @@ async def _run_agent_loop(
     if not config.session.is_complete:
         warn(f'{mode_tag} 达到最大迭代次数')
         config.session.is_complete = True
-        config.session.final_result = '达到最大迭代次数，任务可能未完成。'
+        # 只说"达到最大迭代次数"等于把失败原因藏起来 —— 用户看日志才知道是工具被拒/超时。
+        # 把最后一次失败步骤的原因带出来，避免"跑完了但不知道为什么没成"。
+        hint = _last_failure_hint(config.session)
+        config.session.final_result = '达到最大迭代次数，任务可能未完成。' + (
+            f'\n最后一次失败: {hint}' if hint else ''
+        )
 
     # Token/cost update
     cost_summary = None
@@ -824,3 +835,15 @@ def _extract_code_changes(messages: list[LLMMessage]) -> dict[str, str]:
 
 
 __all__ = ['_run_agent_loop']
+
+
+def _last_failure_hint(session: Any) -> str:
+    """取最后一次失败步骤的原因（用于收尾消息，不让用户对着"任务可能未完成"猜）"""
+    for step in reversed(getattr(session, 'steps', []) or []):
+        if getattr(step, 'success', True):
+            continue
+        text = str(getattr(step, 'result', '') or '').strip()
+        if text:
+            action = str(getattr(step, 'action', '') or '').strip()
+            return (f'{action} -> {text}' if action else text)[:300]
+    return ''

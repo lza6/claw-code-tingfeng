@@ -187,3 +187,46 @@ class _FakeSession:
 
 async def _async_none(*args, **kwargs):
     return None
+
+
+class TestFailureHintSurfaced:
+    """收尾消息不能只说"达到最大迭代次数"——要把最后一次失败原因带出来
+
+    真实 E2E 发现的：PRE_TOOL_USE 拒绝 BashTool 后模型反复重试，最终只输出
+    "达到最大迭代次数，任务可能未完成。"，用户看不到"被拒"这个真实原因。
+    """
+
+    def test_helper_returns_last_failure_result(self):
+        from src.agent.engine_loop import _last_failure_hint
+        from src.agent.engine_session_data import AgentStep
+
+        class _Session:
+            steps = [
+                AgentStep("execute", "a", "ok", True),
+                AgentStep("execute", "b", "Hook 拒绝执行 BashTool: 禁止 shell", False),
+            ]
+
+        assert "Hook 拒绝执行 BashTool" in _last_failure_hint(_Session())
+
+    def test_helper_returns_empty_when_all_success(self):
+        from src.agent.engine_loop import _last_failure_hint
+        from src.agent.engine_session_data import AgentStep
+
+        class _Session:
+            steps = [AgentStep("execute", "a", "ok", True)]
+
+        assert _last_failure_hint(_Session()) == ""
+
+    def test_deny_result_tells_model_not_to_retry(self, engine: AgentEngine):
+        import asyncio as _asyncio
+
+        async def fake_execute(tool_name, tool_args):
+            raise AssertionError("被拒绝的工具不应被执行")
+
+        engine.tool_manager.execute_tool = fake_execute  # type: ignore[method-assign]
+        _register(
+            HookPoint.PRE_TOOL_USE,
+            lambda ctx: HookExecutionResult(result=HookResult.DENY, message="验证用拒绝"),
+        )
+        result = _asyncio.run(engine._execute_tool_with_hooks("BashTool", {"command": "echo hi"}))
+        assert "不要用相同参数重试" in result.error

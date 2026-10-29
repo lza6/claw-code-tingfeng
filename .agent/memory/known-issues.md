@@ -86,3 +86,18 @@
 4. **`clawd explain` 的工具成败是启发式**：只扫描输出前 400 字符的失败标志；误判方向选"宁可放过"，
    所以 `ok` 只用于展示，不能作为对外"通过"承诺。
 5. **`scripts/e2e_smoke.py` 本轮未跑**：真实 LLM 端点属付费红线（预算默认 0），需单独批准。
+
+## 2026-10-29 v0.76.7 真实端点验证后的结论
+
+1. **真实 E2E 已跑通**：`scripts/e2e_smoke.py` 5/5 PASS（真实端点，exit 0）。此前"未跑"的记录作废。
+2. **单测覆盖不到的三类缺陷已修**：工具失败原因未入步骤 / 拒绝后不告知别重试 /
+   会话落盘压平结构且丢掉 model·provider·output_tokens·cost。详见 CHANGELOG v0.76.7。
+3. **仍需注意**：`clawd explain` 的 `ok` 现在优先取落盘记录里的显式 `ok` 字段；
+   只有 legacy/无记录时才退回启发式（扫输出前 400 字符的失败标志）。
+4. **仍未做**：桌面安装包的实际安装（会改系统，需用户确认）；代码签名（无证书）。
+
+5. **`*.egg-info` 会遮蔽 editable 安装的版本**：在仓库根跑过 `pip wheel .` 后，
+   `importlib.metadata.version("clawd-code")` 会优先命中 `clawd_code.egg-info/PKG-INFO`，
+   于是版本一致性测试报"dist-info 落后"。处理：`rm -rf clawd_code.egg-info` 后重跑。
+6. **Windows 上删 `desktop/host` 会被占用**：`shutil.rmtree` 可能连续锁在不同
+   site-packages 文件上（WinError 32）；`prepare_host_bundle.py` 已内置 6 次重试。

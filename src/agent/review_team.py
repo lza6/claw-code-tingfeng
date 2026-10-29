@@ -35,7 +35,14 @@ DEFAULT_ROLES: tuple[str, ...] = (
 
 SEVERITIES: tuple[str, ...] = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 _SEVERITY_RE = re.compile(r"\b(" + "|".join(SEVERITIES) + r")\b")
-_VERDICT_RE = re.compile(r"VERDICT\s*[:：]\s*\**\s*(APPROVE|NEEDS_?FIX)", re.IGNORECASE)
+_VERDICT_RE = re.compile(
+    r"(?:VERDICT|结论|判定)\s*[:：]\s*\**\s*"
+    r"(APPROVE|NEEDS[ _]?FIX|PASS|OK|LGTM|REJECT|通过|无问题|无需修改|需要修复|需修复|有问题)",
+    re.IGNORECASE,
+)
+#: 裁决词归一（真实模型会英文/中文/口语混写；只认一种写法会把"通过"误判成 UNKNOWN）
+_APPROVE_WORDS = ("approve", "pass", "ok", "lgtm", "通过", "无问题", "无需修改")
+_NEEDS_FIX_WORDS = ("needsfix", "reject", "需要修复", "需修复", "有问题")
 
 #: 单个角色看到的代码上限（字符）——评审要的是证据，不是把整个仓库塞进 prompt
 MAX_PAYLOAD_CHARS = 24_000
@@ -151,13 +158,6 @@ def parse_role_output(role: str, text: str, duration_s: float = 0.0) -> RoleRevi
     body = text or ""
     review = RoleReview(role=role, raw=body, duration_s=duration_s)
 
-    verdict_match = _VERDICT_RE.search(body)
-    if verdict_match:
-        token = verdict_match.group(1).upper().replace("_", "").replace(" ", "")
-        review.verdict = VERDICT_NEEDS_FIX if token in ("NEEDSFIX", "NEEDS FIX") else VERDICT_APPROVE
-    else:
-        review.verdict = "UNKNOWN"
-
     for name in _SEVERITY_RE.findall(body.upper()):
         review.severities[name] = review.severities.get(name, 0) + 1
 
@@ -165,6 +165,24 @@ def parse_role_output(role: str, text: str, duration_s: float = 0.0) -> RoleRevi
         head = line.lstrip("-* \t")
         if head.upper().startswith(SEVERITIES):
             review.findings.append(line.strip())
+
+    verdict_match = _VERDICT_RE.search(body)
+    if verdict_match:
+        raw = verdict_match.group(1).lower().strip()
+        compact = raw.replace("_", "").replace(" ", "")
+        approve = {w.replace(" ", "") for w in _APPROVE_WORDS}
+        needs_fix = {w.replace(" ", "") for w in _NEEDS_FIX_WORDS}
+        if compact in approve:
+            review.verdict = VERDICT_APPROVE
+        elif compact in needs_fix:
+            review.verdict = VERDICT_NEEDS_FIX
+        else:
+            review.verdict = "UNKNOWN"
+    else:
+        # 没写裁决行时**不猜"通过"**：按它自己报的分级兜底
+        # （有 CRITICAL/HIGH/MEDIUM → NEEDS_FIX；只报 LOW 或啥都没报 → UNKNOWN）
+        blocking = {k for k, v in review.severities.items() if v} & {"CRITICAL", "HIGH", "MEDIUM"}
+        review.verdict = VERDICT_NEEDS_FIX if blocking else "UNKNOWN"
 
     return review
 

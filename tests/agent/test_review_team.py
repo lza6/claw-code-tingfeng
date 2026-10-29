@@ -226,3 +226,24 @@ class TestSecretGuard:
                                      ("server.pem", "credentials.json", "id_rsa", "ok.py")])
         assert used == [str(tmp_path / "ok.py")]
         assert "secret" not in payload
+
+
+class TestVerdictAliases:
+    """真实模型会用中英混写裁决（实测 style-reviewer 曾因此被判 UNKNOWN）"""
+
+    def test_chinese_verdict_accepted(self):
+        assert parse_role_output("r", "结论: 通过").verdict == VERDICT_APPROVE
+        assert parse_role_output("r", "判定：有问题").verdict == VERDICT_NEEDS_FIX
+        assert parse_role_output("r", "VERDICT：需要修复").verdict == VERDICT_NEEDS_FIX
+
+    def test_english_aliases_accepted(self):
+        assert parse_role_output("r", "VERDICT: PASS").verdict == VERDICT_APPROVE
+        assert parse_role_output("r", "VERDICT: OK").verdict == VERDICT_APPROVE
+        assert parse_role_output("r", "VERDICT: REJECT").verdict == VERDICT_NEEDS_FIX
+
+    def test_missing_verdict_falls_back_to_severities(self):
+        """没写裁决行时按它自己的分级兜底（绝不猜"通过"）"""
+        assert parse_role_output("r", "HIGH: x").verdict == VERDICT_NEEDS_FIX
+        assert parse_role_output("r", "MEDIUM: y").verdict == VERDICT_NEEDS_FIX
+        assert parse_role_output("r", "LOW: 行有点长").verdict == "UNKNOWN"
+        assert parse_role_output("r", "看起来还行").verdict == "UNKNOWN"

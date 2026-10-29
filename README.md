@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.76.6 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.76.7 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -392,7 +392,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 |:---|:---|:---|
 | 测试用例 | **本轮按目录回归全绿**：agent+cli+eval+mcp+backends **1403 passed / 0 failed**（931s）；backends+core+mcp+eval+cli 1500 passed（上一轮） | `py -3.10 -m pytest tests/ -q` |
 | 快速层（不含 slow） | 本轮分目录跑：backends+core+mcp+eval+cli **1500 passed / 78s**、agent+workflow **1208 passed / 554s** | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5166 / 0 errors**（2026-10-29 v0.76.6 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 用例收集 | **5187 / 0 errors**（2026-10-29 v0.76.7 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q`（历史值，本轮含在全量内） |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |

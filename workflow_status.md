@@ -128,3 +128,35 @@
 - 代码签名证书（P2-4，外部条件）
 - `src/hooks/` 若采用需按本项目重写契约（ADR 0019）
 - `scripts/e2e_smoke.py` 未跑（真实 LLM 付费红线）
+
+## 2026-10-29 v0.76.7 —— 真实端点跑通，修 3 个只有真跑才暴露的缺陷
+
+**真实 E2E**
+- [x] `scripts/e2e_smoke.py` → **5/5 PASS，exit 0**（真实端点：PONG / get_weather tool_calls / 391+reasoning）
+- [x] 真实 `clawd review`（4 角色并行）→ 命中真实 SQL 注入 CRITICAL + 连接泄漏 HIGH；聚合 NEEDS_FIX；
+      `performance-reviewer` 120s 超时被标 FAILED（不伪装通过）
+- [x] 真实引擎 run ×3：读文件 / 被 hook 拒绝 / 落盘后 explain
+
+**修复（单选测覆盖不到）**
+1. [x] 工具失败原因没入 `session.steps` → 收尾消息只有"达到最大迭代次数"。现：失败时 step.result 存 error，
+      收尾消息带 `最后一次失败: <工具> -> <原因>`（实测已带完整拒绝理由）。
+2. [x] 拒绝后没告诉模型别重试 → 原地重试烧迭代。现：结果里显式写"不要用相同参数重试"。
+3. [x] 会话落盘压平工具步骤 + 丢 model/provider/output_tokens/cost → `clawd explain` 只能显示"未知/0/0/没有记录"。
+      现：`role=tool` + name + ok 结构化落盘；用量取 `CostEstimator.get_summary()`（异常降级不阻断）。
+      实测 explain 输出：`openai/step-5-preview · 输入 16323 / 输出 262 · $0.0171 · 工具调用 1 次（成功 1）`。
+4. [x] 评审裁决解析太窄（中文/别名被判 UNKNOWN）→ 扩别名 + 按分级兜底，仍不猜"通过"。
+
+**测试**
+- 新增 `tests/core/test_session_persist_structure.py`（7 条）+ `test_engine_hooks_wiring.py` 增补 3 条
+  + `test_review_team.py` 增补 3 条（裁决别名）
+
+**v0.76.7 追加（打包链路真实发现）**
+- [x] 桌面 bundle 缺 `prompts/` → 打包态 `clawd review` 报 `ModuleNotFoundError: prompts`。
+      `prepare_host_bundle.py` 已拷 `prompts/`，并加 `rmtree_with_retry`（Windows WinError 32）。
+- [x] `clawd_code.egg-info` 残留遮蔽 editable 版本（0.76.6 vs 0.76.7）→ 清理并记入 known-issues。
+- [x] 桌面 0.76.7 重建并**用打包自带 python 实跑验证**：`-m src --version` = v0.76.7、
+      `available_review_roles()` = 9 个角色、`prompts/agents` 33 个 md。
+- [x] 新增 `tests/core/test_packaging_contract.py`（6 条）钉住"prompts 必须随发行物出去"。
+- 回归：`pytest tests/agent tests/core tests/cli -q -m "not slow"` → **2117 passed**（2 条 version 失败
+  由 egg-info 残留导致，清理后转绿）；`tests/eval tests/mcp tests/backends tests/contracts` → **219 passed**。
+- 门禁：F821/F811/E9 全过 · 静默吞异常 162 · 可达 482 · 收集 **5187 / 0 errors**

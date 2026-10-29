@@ -81,6 +81,8 @@ clawd chat                                          # 进入交互式 REPL（可
 这一步是 Clawd Code 与"黑盒 agent"的主要区别，全部是本地文件 / 命令，不需要额外服务：
 
 ```powershell
+clawd explain                           # 用中文讲清最近一轮：模型/用量/工具调用成败/失败片段
+clawd explain <session_id> --json        # 同上，机器可读
 clawd session list                      # 会话清单（.clawd/sessions/）
 clawd session show <session_id>         # 某个会话的步骤与结果
 clawd hud                               # 状态面板：模型/迭代/token/成本
@@ -88,6 +90,8 @@ clawd review --json                     # 多角色并行评审未提交改动�
 clawd eval src\eval\datasets\smoke.json # 行为回归（replay，零成本）
 ```
 
+- **会话内容**：`.clawd/sessions/*.json` 里工具调用是**结构化记录**（`role=tool` + 名称 + 成败），
+  不是压平的文本 —— 所以 `clawd explain` 能列出"调了哪个工具、成没成功"
 - **日志**：`.clawd/logs/*.jsonl`（结构化事件，可直接 `Select-String` / `grep`）
 - **评审裁决**：`clawd review` 输出 `VERDICT: APPROVE | NEEDS_FIX`，
   任一角色失败会显示 `INCOMPLETE` —— **不会**把"没评审"算成"没问题"

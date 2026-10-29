@@ -119,10 +119,32 @@ def robocopy(src: Path, dst: Path, exclude_dirs: list[str] | None = None) -> int
     return r.returncode
 
 
+def rmtree_with_retry(path: Path, attempts: int = 6, delay: float = 3.0) -> None:
+    """删除目录（Windows 上会被杀软/索引器短暂占用 → WinError 32）
+
+    实测：直接 `shutil.rmtree` 每次锁在**不同**的 site-packages 文件上，
+    重试即可通过；不重试则整个打包流程直接失败（2026-10-29 真实踩到）。
+    """
+    import time
+
+    last: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as e:  # WinError 32：文件被占用
+            last = e
+            print(f"  文件被占用，{delay:.0f}s 后重试删除（{attempt}/{attempts}）")
+            time.sleep(delay)
+    raise SystemExit(f"清理旧 bundle 失败（{attempts} 次重试仍被占用）: {last}")
+
+
 def main() -> int:
     if OUT.exists():
         print(f"清理旧 bundle: {OUT}")
-        shutil.rmtree(OUT)
+        rmtree_with_retry(OUT)
 
     sys_base = Path(sys.base_prefix)
     py_out = OUT / "python"
@@ -151,8 +173,14 @@ def main() -> int:
         elif src.is_file():
             (sp_out / name).write_bytes(src.read_bytes())
 
-    print("[3/4] 项目源码 + Web UI")
+    print("[3/4] 项目源码 + prompts + Web UI")
     robocopy(ROOT / "src", OUT / "src", exclude_dirs=["__pycache__"])
+    # prompts/ 必须一起打：`clawd review` 的角色模板来自 prompts/agents/*.md。
+    # 实测：只带 src 时打包态执行 `clawd review` 报 ModuleNotFoundError: prompts（2026-10-29 真实发现）
+    if (ROOT / "prompts").is_dir():
+        robocopy(ROOT / "prompts", OUT / "prompts", exclude_dirs=["__pycache__"])
+    else:
+        print("  !! 警告：prompts/ 不存在，clawd review 在打包态将不可用")
     # Web UI（Host 同端口托管；壳 loadURL 指向 Host）
     web_out = OUT / "desktop" / "web"
     web_out.mkdir(parents=True, exist_ok=True)

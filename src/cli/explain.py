@@ -162,13 +162,15 @@ def _extract_tool_calls(messages: list[dict[str, Any]]) -> list[ToolCall]:
         if role == "tool":
             key = str(message.get("tool_call_id") or "")
             content = _text(message.get("content"), 600)
+            explicit_ok = message.get("ok")
             target = pending.get(key)
+            ok = bool(explicit_ok) if isinstance(explicit_ok, bool) else _result_ok(content)
             if target is not None:
                 target.result = content
-                target.ok = _result_ok(content)
+                target.ok = ok
             else:
                 name = str(message.get("name") or "tool").strip() or "tool"
-                calls.append(ToolCall(name=name, result=content, ok=_result_ok(content)))
+                calls.append(ToolCall(name=name, result=content, ok=ok))
     return calls
 
 

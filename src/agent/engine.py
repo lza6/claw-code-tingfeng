@@ -649,7 +649,14 @@ class AgentEngine:
         if denied:
             message = str(getattr(pre, "message", "") or "被 hook 拒绝")
             self.logger.warning(f"PRE_TOOL_USE 拒绝执行 {tool_name}: {message}")
-            return ToolResult(success=False, output="", error=f"Hook 拒绝执行 {tool_name}: {message}")
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Hook 拒绝执行 {tool_name}: {message}"
+                    "（该工具已被策略拒绝，不要用相同参数重试；请换方案或直接说明被拒绝的原因）"
+                ),
+            )
 
         try:
             result = await self.tool_manager.execute_tool(tool_name, tool_args)
@@ -714,15 +721,51 @@ class AgentEngine:
             steps = []
             for step in getattr(session, 'steps', []) or []:
                 content = getattr(step, 'content', None) or getattr(step, 'result', None)
-                if content:
+                if not content:
+                    continue
+                step_type = str(getattr(step, 'step_type', '') or '')
+                if step_type == 'execute':
+                    # 工具步骤保留结构：action 形如 `FileReadTool({'file_path': ...})`
+                    action = str(getattr(step, 'action', '') or '')
+                    tool_name = action.split('(', 1)[0].strip() or 'tool'
+                    steps.append({
+                        'role': 'tool',
+                        'name': tool_name,
+                        'content': str(content)[:4000],
+                        'ok': bool(getattr(step, 'success', False)),
+                    })
+                else:
                     steps.append({'role': 'assistant', 'content': str(content)[:4000]})
+
+            llm_config = getattr(self, '_llm_config', None)
+            model = str(getattr(llm_config, 'model', '') or '')
+            provider = getattr(llm_config, 'provider', '')
+            provider = str(getattr(provider, 'value', provider) or '')
+
+            # 用量优先取成本估算器（它同时有输入/输出/费用）；没有就退回 session 的总量
+            estimator = getattr(self, '_cost_estimator', None)
+            usage: dict[str, Any] = {}
+            if estimator is not None and hasattr(estimator, 'get_summary'):
+                try:
+                    usage = estimator.get_summary() or {}
+                except Exception as e:  # noqa: BLE001 — 估算失败不能挡住落盘
+                    self.logger.debug(f'成本摘要不可用: {e}')
+            input_tokens = int(usage.get('total_input_tokens')
+                               or getattr(session, 'total_tokens', 0) or 0)
+            output_tokens = int(usage.get('total_output_tokens') or 0)
+            total_cost = float(usage.get('total_cost') or 0.0)
+
             stamp = time.strftime('%Y%m%d_%H%M%S')
             persist_agent_session(
                 session_id=f'sess-{stamp}',
                 goal=str(getattr(session, 'goal', '') or ''),
                 steps=steps,
                 final_result=str(getattr(session, 'final_result', '') or ''),
-                total_tokens=int(getattr(session, 'total_tokens', 0) or 0),
+                total_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_cost=total_cost,
+                model=model,
+                provider=provider,
                 directory=self.workdir / '.clawd' / 'sessions',
             )
         except Exception as e:

@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 
@@ -237,16 +236,29 @@ def persist_agent_session(
     total_tokens: int = 0,
     model: str = "",
     provider: str = "",
+    output_tokens: int = 0,
+    total_cost: float = 0.0,
     directory: Path | str | None = None,
 ) -> SessionView:
-    """把一次 Agent 运行写入会话存储（供 `clawd session list` 看到真实数据）"""
+    """把一次 Agent 运行写入会话存储（供 `clawd session list` 看到真实数据）
+
+    `steps` 里的**工具步骤必须保留结构**（`role="tool"` + `name` + `ok`）：
+    此前一律压平成 assistant 文本，导致 `clawd explain` 只能看到"读到了文件内容"，
+    却看不出"调用了哪个工具、成没成功"（真实运行发现）。
+    """
     messages: list[dict[str, Any]] = [{"role": "user", "content": goal, "timestamp": time.time()}]
     for step in steps or []:
         role = str(step.get("role") or "assistant")
         content = str(step.get("content") or "")
         if not content:
             continue
-        messages.append({"role": role, "content": content, "timestamp": time.time()})
+        message: dict[str, Any] = {"role": role, "content": content, "timestamp": time.time()}
+        name = step.get("name")
+        if name:
+            message["name"] = str(name)
+        if "ok" in step:
+            message["ok"] = bool(step["ok"])
+        messages.append(message)
     if final_result:
         messages.append({"role": "assistant", "content": final_result, "timestamp": time.time()})
 
@@ -258,6 +270,8 @@ def persist_agent_session(
         created_at=time.time(),
         updated_at=time.time(),
         input_tokens=total_tokens,
+        output_tokens=output_tokens,
+        total_cost=float(total_cost),
         turn_count=max(1, sum(1 for m in messages if m.get("role") == "user")),
         model=model,
         provider=provider,
