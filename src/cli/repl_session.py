@@ -126,6 +126,15 @@ class ReplSession:
             enable_tee_mode=self.enable_tee_mode,
             enable_token_tracking=self.enable_token_tracking,
         )
+        # 角色（personas/*.md）：只影响系统提示词，不改工具与权限
+        role_name = getattr(self, "role", "") or ""
+        if role_name:
+            try:
+                from ..agent.personas import load_persona
+
+                self.engine.apply_persona(load_persona(role_name, self.workdir))
+            except KeyError as e:
+                self._safe_print(f"  {status_warn(str(e))}")
         # 自动挂载 MemoryGuard
         try:
             from ..core.memory_guard import MemoryGuard

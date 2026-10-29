@@ -50,6 +50,7 @@ def chat(
     resume: str | None = typer.Option(
         None, "--resume", "-r", help="续聊某个已保存会话 ID（历史作为上下文，多轮累积）"
     ),
+    role: str = typer.Option("", "--role", help="角色（personas/*.md 的名字），用 `clawd role list` 查看"),
 ):
     """
     启动交互式 AI 编程对话 (类似 Claude Code)
@@ -81,6 +82,7 @@ def chat(
             use_textual_tui=tui,
             project_ctx=project_ctx,
             resume_session_id=resume,
+            role=role,
         )
     except typer.Exit:
         raise
@@ -209,6 +211,62 @@ def server(
         asyncio.run(_serve())
     except KeyboardInterrupt:
         console.print("\n[dim]服务端已停止[/dim]")
+
+
+role_app = typer.Typer(help="角色库：选择内置角色（系统提示词模板），不用自己写提示词")
+app.add_typer(role_app, name="role")
+
+
+@role_app.command("list")
+def role_list(
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
+):
+    """列出可用角色（来自 <项目>/personas、当前目录/personas、~/.clawd/personas）"""
+    import json as _json
+
+    from rich.table import Table
+
+    from ..agent.personas import search_dirs, personas_report
+
+    items = personas_report()
+    if as_json:
+        typer.echo(_json.dumps(items, ensure_ascii=False))
+        raise typer.Exit(code=0)
+    if not items:
+        console.print("[yellow]没有找到任何角色[/yellow]")
+        console.print("  查找路径: " + ", ".join(str(d) for d in search_dirs()))
+        raise typer.Exit(code=1)
+
+    table = Table(title="可用角色", show_lines=False)
+    table.add_column("名字", style="cyan", no_wrap=True)
+    table.add_column("标题")
+    table.add_column("分类", style="dim")
+    table.add_column("说明", style="dim")
+    for item in items:
+        table.add_row(item["name"], item["title"], item["category"], item["description"][:48])
+    console.print(table)
+    console.print("[dim]用法：clawd chat --role <名字>；桌面端在输入框左侧切换角色[/dim]")
+    raise typer.Exit(code=0)
+
+
+@role_app.command("show")
+def role_show(name: str = typer.Argument(..., help="角色名（见 clawd role list）")):
+    """打印某个角色的完整系统提示词（可审计，不藏东西）"""
+    from ..agent.personas import build_system_prefix, load_persona
+
+    try:
+        persona = load_persona(name)
+    except KeyError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(code=1)
+    console.print(f"[bold]{persona.title}[/bold] [dim]({persona.name} · {persona.category})[/dim]")
+    if persona.description:
+        console.print(f"[dim]{persona.description}[/dim]")
+    if persona.source:
+        console.print(f"[dim]来源: {persona.source}[/dim]")
+    console.print("")
+    console.print(build_system_prefix(persona))
+    raise typer.Exit(code=0)
 
 
 @app.command(name="onboard")

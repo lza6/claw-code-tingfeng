@@ -31,6 +31,7 @@ def start_repl(
     use_textual_tui: bool = False,
     project_ctx: Any = None,
     resume_session_id: str | None = None,
+    role: str = "",
 ) -> int:
     """启动交互式 REPL
 
@@ -52,11 +53,11 @@ def start_repl(
             max_iterations=max_iterations,
         )
 
-    session = ReplSession(
-        workdir=workdir,
+    session = ReplSession(workdir=workdir,
         max_iterations=max_iterations,
         project_ctx=project_ctx,
         resume_session_id=resume_session_id,
+        role=role,
     )
     return session.run()
 

@@ -101,3 +101,13 @@
    于是版本一致性测试报"dist-info 落后"。处理：`rm -rf clawd_code.egg-info` 后重跑。
 6. **Windows 上删 `desktop/host` 会被占用**：`shutil.rmtree` 可能连续锁在不同
    site-packages 文件上（WinError 32）；`prepare_host_bundle.py` 已内置 6 次重试。
+
+## 2026-10-30 桌面实装 E2E 后的已知事实
+
+1. **桌面安装 E2E 已真实跑过一次**（v0.76.7 安装包）：装→用→关→卸→清理全通；
+   安装目录 `%LOCALAPPDATA%\Programs\Clawd Desktop`，卸载注册表残留 0。
+2. **`GET /health` 需 token**：不带 `?token=` 返回 403。这是鉴权行为，别误判成"服务挂了"。
+3. **自签名只验证了管线**：`Get-AuthenticodeSignature` 为 `UnknownError`（不在信任链），
+   SmartScreen 仍会警告；要彻底解决必须 CA 证书（P2-4）。
+4. **UI 事件里的 `success` 只认 ToolResult**：`EventPublisher` 用 `hasattr(result,'success')`，
+   任何被包一层的元组都会被判 False（已在 v0.76.8 修复调用点并加测试）。

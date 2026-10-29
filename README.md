@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.76.7 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.79.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -79,6 +79,22 @@ clawd codex --with-clawd-tools --bypass-approvals   "用 clawd MCP 的 clawd_gre
 clawd chat --resume <会话ID>     # 载入历史续聊；REPL 多轮已自动累积上下文
 clawd session resume <会话ID> "<本次目标>"   # 非交互续跑
 ```
+
+**看懂它做了什么 / 让它被别人审**（v0.76.6–v0.76.8 新增）：
+```bash
+clawd explain                    # 中文解释最近一轮：模型/用量/工具调用成败/失败片段（零 LLM 调用）
+clawd explain <会话ID> --json     # 机器可读
+clawd review src/app.py          # 4 个评审角色**并行**（code/security/performance/style）
+clawd review --json              # 给 CI；裁决 VERDICT: APPROVE|NEEDS_FIX，任一角色失败=INCOMPLETE
+clawd onboard                    # 上手体检：检测密钥 + 推荐模型 + 下一步
+clawd role list                  # 角色库（系统提示词模板，不用自己写提示词）
+clawd role show reviewer         # 打印某角色的完整系统提示词（可审计）
+clawd chat --role concise        # 用指定角色开聊；桌面端在输入框左侧下拉切换
+```
+
+> `clawd review` 的裁决是确定性解析出来的（不是让模型自己说"通过"），
+> 角色模板来自 `prompts/agents/*.md`（已随 wheel 与桌面安装包一起发布）；
+> `.env` / `*.pem` / `id_rsa` 等密钥类文件**不会**发给模型。
 
 ## 🧩 多引擎整合（v0.64.0 新增）
 
@@ -392,7 +408,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 |:---|:---|:---|
 | 测试用例 | **本轮按目录回归全绿**：agent+cli+eval+mcp+backends **1403 passed / 0 failed**（931s）；backends+core+mcp+eval+cli 1500 passed（上一轮） | `py -3.10 -m pytest tests/ -q` |
 | 快速层（不含 slow） | 本轮分目录跑：backends+core+mcp+eval+cli **1500 passed / 78s**、agent+workflow **1208 passed / 554s** | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5187 / 0 errors**（2026-10-29 v0.76.7 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 用例收集 | **5190 / 0 errors**（2026-10-30 v0.76.8 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q`（历史值，本轮含在全量内） |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |

@@ -132,7 +132,66 @@ def parse_tool_calls(content: str) -> list[tuple[str, dict[str, Any]]]:
         except json.JSONDecodeError as e:
             warn(f'JSON 解析失败: {e}')
 
+    if not tool_calls:
+        tool_calls = parse_tool_calls_lenient(content)
+
     return tool_calls
+
+
+def _balanced_json_at(text: str, start: int) -> str | None:
+    """从 text[start] 开始取一个括号配平的 JSON 对象（忽略字符串内的括号）
+
+    真实踩坑：模型有时写出 `<tool>{"name": ...}}>`（多一个 `>`、漏掉 `</tool>`），
+    严格正则 `<tool>\{.*?\}</tool>` 直接匹配不到 → 工具不执行、原始标记被当答案返回。
+    """
+    if start >= len(text) or text[start] != '{':
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == chr(92):  # 反斜杠：处理转义
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:idx + 1]
+    return None
+
+
+def parse_tool_calls_lenient(content: str) -> list[tuple[str, dict[str, Any]]]:
+    """宽松解析：容忍 `<tool>{json}>`、漏 `</tool>`、`functions` 前缀等常见漂移"""
+    calls: list[tuple[str, dict[str, Any]]] = []
+    for match in re.finditer(r'<tool>', content or ''):
+        idx = match.end()
+        while idx < len(content) and content[idx].isspace():
+            idx += 1
+        blob = _balanced_json_at(content, idx)
+        if not blob:
+            continue
+        try:
+            data = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        name = data.get('name') or data.get('tool') or data.get('tool_name') or ''
+        args = data.get('args') or data.get('arguments') or data.get('input') or {}
+        if isinstance(name, str) and name.strip():
+            calls.append((name.strip(), args if isinstance(args, dict) else {}))
+            warn(f'工具调用格式不规范（缺少 </tool> 或多出符号），已宽松解析: {name.strip()}')
+    return calls
 
 
 async def execute_tool(

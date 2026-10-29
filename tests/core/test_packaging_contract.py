@@ -59,3 +59,17 @@ class TestDesktopBundlePackaging:
         text = HOST_SCRIPT.read_text(encoding="utf-8")
         assert "rmtree_with_retry" in text
         assert "PermissionError" in text
+
+
+class TestPersonasPackaging:
+    """角色库也要随发行物出去：桌面端选择器读 personas/ 目录"""
+
+    def test_host_bundle_copies_personas(self):
+        text = HOST_SCRIPT.read_text(encoding="utf-8")
+        assert 'robocopy(ROOT / "personas"' in text
+        assert 'OUT / "personas"' in text
+
+    def test_repo_personas_dir_exists(self):
+        personas_dir = REPO / "personas"
+        assert personas_dir.is_dir()
+        assert len(list(personas_dir.glob("*.md"))) >= 4

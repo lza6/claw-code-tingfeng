@@ -211,3 +211,43 @@ async def test_deep_rag_patch_trigger():
     last_msg = config.messages[-1]
     assert "found info" in last_msg.content
     assert "补充参考资料" in last_msg.content
+
+
+class TestStreamingThinkingTuples:
+    """真实 provider 会 yield ("thinking", text) 元组
+
+    真实踩坑：`full_content += chunk` 遇到元组直接 TypeError
+    （"can only concatenate str (not tuple) to str"），而这条路径只在真流式下走到，
+    所以"流式回复"一直没真正跑通过。
+    """
+
+    @pytest.mark.asyncio
+    async def test_thinking_tuple_does_not_break_stream(self):
+        from src.agent.engine_loop import AgentLoopConfig, _run_agent_loop
+        from src.llm.config import LLMResponse
+
+        class _ThinkProvider:
+            async def chat_stream(self, messages, **kwargs):
+                yield ("thinking", "先想一下…")
+                yield "答案"
+                yield "是 42"
+
+            async def chat(self, messages, **kwargs):  # 非流式兜底
+                return LLMResponse(content="答案", model="mock", usage={})
+
+        chunks: list[str] = []
+        config = AgentLoopConfig(
+            goal="算数",
+            llm_provider=_ThinkProvider(),
+            messages=[],
+            max_iterations=1,
+            system_prompt="sys",
+            tools={},
+            is_stream=True,
+            on_chunk=chunks.append,
+        )
+        result = await _run_agent_loop(config=config)
+
+        assert result["session"].final_result is not None
+        assert "".join(chunks) == "答案是 42", f"可见文本不对: {chunks}"
+        assert all("先想一下" not in c for c in chunks), "推理内容不该进用户可见正文"

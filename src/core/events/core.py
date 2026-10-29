@@ -43,6 +43,8 @@ class EventType(Enum):
     AGENT_TOKEN_USAGE = 'agent.token_usage'
     AGENT_COST_UPDATE = 'agent.cost_update'
     AGENT_STREAM_STARTED = 'agent.stream_started'
+    #: 流式增量文本（真流式的关键：没有它，客户端只能等最后一整段）
+    AGENT_STREAM_DELTA = 'agent.stream_delta'
     AGENT_STREAM_COMPLETED = 'agent.stream_completed'
     AGENT_SHUTDOWN_REQUESTED = 'agent.shutdown_requested'
     AGENT_SHUTDOWN_COMPLETED = 'agent.shutdown_completed'

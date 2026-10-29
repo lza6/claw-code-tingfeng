@@ -599,6 +599,22 @@ class AgentEngine:
         self._execute_hook_point("session_end", {"goal": goal, "ok": True, "stream": True})
         return result['session']
 
+    def apply_persona(self, persona: Any) -> None:
+        """装载角色（系统提示词模板）
+
+        `persona` 是 `src.agent.personas.Persona`（或任意带 system/title 的对象）；
+        传 None 表示清空。角色只影响系统提示词，不改工具集与权限边界。
+        """
+        if persona is None:
+            self.persona_prompt = ""
+            self.persona_name = ""
+            return
+        from .personas import build_system_prefix
+
+        self.persona_prompt = build_system_prefix(persona)
+        self.persona_name = getattr(persona, "name", "")
+        self.logger.info(f"已装载角色: {self.persona_name or '?'}")
+
     # ---------- Hook 接线（hook_registry 此前在引擎里零调用点）----------
     def _execute_hook_point(self, point_name: str, data: dict[str, Any]):
         """执行一个 Hook 点
@@ -687,6 +703,10 @@ class AgentEngine:
         这些在挂机时会被保守跳过，白烧迭代且任务完不成。
         """
         base = self.system_prompt or ''
+        persona = getattr(self, 'persona_prompt', '')
+        if persona:
+            # 角色（personas/*.md）放最前面：它是"怎么说话/怎么做事"的总体设定
+            base = (persona.strip() + chr(10) + chr(10) + '---' + chr(10) + chr(10) + base).strip()
         autonomy = getattr(self, 'autonomy', None)
         if autonomy is None:
             return base
@@ -764,6 +784,7 @@ class AgentEngine:
                 total_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_cost=total_cost,
+                persona=str(getattr(self, 'persona_name', '') or ''),
                 model=model,
                 provider=provider,
                 directory=self.workdir / '.clawd' / 'sessions',

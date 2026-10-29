@@ -100,6 +100,24 @@ clawd eval src\eval\datasets\smoke.json # 行为回归（replay，零成本）
 
 ---
 
+## 4.5 角色库（不用自己写提示词）
+
+```powershell
+clawd role list                 # 看有哪些角色（内置 6 个：严谨工程师/极简输出/教学讲解/严格审查者/中文写作/排障专家）
+clawd role show reviewer        # 打印该角色的完整系统提示词 —— 不藏东西
+clawd chat --role concise       # 用"极简输出"开聊
+```
+
+角色就是一个 markdown 文件：`personas/<name>.md`，frontmatter 放 `name/title/description/category`，
+**正文就是系统提示词**。搜索顺序：`<项目>/personas` → `<当前目录>/personas` → `~/.clawd/personas`，
+同名时后面的覆盖前面的（团队统一底库 + 个人覆盖）。桌面端在输入框左侧下拉切换，会话里会记录用了哪个角色。
+
+> 想加自己的角色：把 `personas/我的角色.md` 放进去，`clawd role list` 立刻能看到。
+> 内置库只放工程/写作类角色；越狱/绕过安全审查类提示词不在内置范围。
+
+**关于"流式回复"**：桌面端与 Host 走的是真流式（`agent.stream_delta` 事件），
+助手说的话边生成边显示；工具调用只是正文下面的折叠单行，不抢注意力。
+
 ## 5. 权限与挂机（要不要让它自己跑）
 
 ```powershell

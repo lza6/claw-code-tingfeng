@@ -181,6 +181,11 @@ def main() -> int:
         robocopy(ROOT / "prompts", OUT / "prompts", exclude_dirs=["__pycache__"])
     else:
         print("  !! 警告：prompts/ 不存在，clawd review 在打包态将不可用")
+    # personas/ 同理：桌面端的角色选择器读的就是这个目录（装出来没有 = 角色库是空的）
+    if (ROOT / "personas").is_dir():
+        robocopy(ROOT / "personas", OUT / "personas", exclude_dirs=["__pycache__"])
+    else:
+        print("  !! 警告：personas/ 不存在，桌面端角色库在打包态将为空")
     # Web UI（Host 同端口托管；壳 loadURL 指向 Host）
     web_out = OUT / "desktop" / "web"
     web_out.mkdir(parents=True, exist_ok=True)

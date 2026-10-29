@@ -24,7 +24,7 @@ log(`连接已安装版 Host: port=${info.port}`);
   log(`连接状态: ${conn}`);
 
   // 真实对话（带 LLM）
-  fs.writeFileSync(path.join(process.env.LOCALAPPDATA, 'Programs', 'clawd desktop', 'resources', 'host', 'final_probe.txt'), 'INSTALLED_APP_E2E_9527', 'utf-8');
+  fs.writeFileSync(path.join(process.env.LOCALAPPDATA, 'Programs', 'clawd desktop', 'resources', 'host', 'final_probe.txt'), 'ZQ7A9527', 'utf-8');
   await page.fill('#input', '请用 FileReadTool 读取文件 final_probe.txt，只回复文件中的完整字符串。');
   await page.click('#send');
 
@@ -40,7 +40,8 @@ log(`连接已安装版 Host: port=${info.port}`);
     if (finalText && !disabled) break;
   }
   log(`最终回复: ${finalText.slice(0, 150)}`);
-  const pass = finalText.includes('INSTALLED_APP_E2E_9527');
+  log('期望令牌: ZQ7A9527（写在 final_probe.txt 里）');
+  const pass = finalText.includes('ZQ7A9527');
   log(pass ? 'PASS ✔ 安装版真实对话+工具调用全链路' : 'FAIL');
 
   await page.screenshot({ path: path.join(OUT_DIR, '07-installed-final.png') });

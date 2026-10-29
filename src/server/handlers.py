@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -147,6 +148,7 @@ class MessageRouter:
         handlers: dict[str, callable] = {  # type: ignore[type-arg]
             'auth': self._handle_auth,
             'run': self._handle_run,
+            'personas': self._handle_personas,
             'status': self._handle_status,
             'file_read': self._handle_file_read,
             'file_write': self._handle_file_write,
@@ -265,6 +267,16 @@ class MessageRouter:
 
         engine = engine_factory.create(llm_config=llm_config_from_msg)
 
+        # 角色（personas/*.md）：用户不用自己写提示词，选一个即可
+        persona_name = str(message.get('persona') or '').strip()
+        if persona_name:
+            from ..agent.personas import load_persona
+
+            try:
+                engine.apply_persona(load_persona(persona_name))
+            except KeyError as exc:
+                return build_error(message.get('id'), 'E_PERSONA_UNKNOWN', str(exc))
+
         self.event_bus.publish(Event(
             type=EventType.AGENT_TASK_STARTED,
             data={
@@ -290,15 +302,51 @@ class MessageRouter:
         try:
             start_time = time.time()
             if stream:
-                chunks: list[str] = []
+                # 真流式：把增量文本发给客户端。
+                # 之前这里只把 chunk 收进本地 list 就扔了 —— 客户端全程只看到工具事件，
+                # 模型说的话要等整段结束才出现（"只汇报工具调用、没有正常回复"的根因）。
+                self.event_bus.publish(Event(
+                    type=EventType.AGENT_STREAM_STARTED,
+                    data={'goal': goal},
+                    source='websocket_server',
+                ))
+                buf: list[str] = []
+                state = {'chars': 0, 'last': time.monotonic()}
+
+                def _flush() -> None:
+                    if not buf:
+                        return
+                    text = ''.join(buf)
+                    buf.clear()
+                    state['last'] = time.monotonic()
+                    self.event_bus.publish(Event(
+                        type=EventType.AGENT_STREAM_DELTA,
+                        data={'text': text, 'chars': state['chars']},
+                        source='websocket_server',
+                    ))
 
                 def _on_chunk(text: str) -> None:
-                    chunks.append(text)
+                    if not text:
+                        return
+                    buf.append(text)
+                    state['chars'] += len(text)
+                    # 合并发送：≥40 字符或距上次 ≥120ms，避免 token 级事件打爆 WS
+                    if len(''.join(buf)) >= 12 or (time.monotonic() - state['last']) >= 0.06:
+                        _flush()
 
                 session = await engine.run_stream(
                     goal=goal,
                     on_chunk=_on_chunk,
                 )
+                _flush()
+                # 事件总线 → WS 的投递是排队进行的：让出一次循环，
+                # 保证增量文本先于最终 response 到达客户端（否则前端会看到"先出完整答案、后补流式"）
+                await asyncio.sleep(0.08)
+                self.event_bus.publish(Event(
+                    type=EventType.AGENT_STREAM_COMPLETED,
+                    data={'chars': state['chars']},
+                    source='websocket_server',
+                ))
             else:
                 session = await engine.run(goal=goal)
 
@@ -349,6 +397,22 @@ class MessageRouter:
                 'E_RUN_FAILED',
                 f'任务执行失败: {exc}',
             )
+
+    async def _handle_personas(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,  # dispatch 统一传三参
+    ) -> dict[str, Any]:
+        """列出可用角色（personas/*.md）—— 前端角色选择器用"""
+        from ..agent.personas import personas_report
+
+        try:
+            items = personas_report()
+        except Exception as exc:  # noqa: BLE001 — 角色库坏了不能拖垮会话
+            self.logger.warning(f'读取角色库失败: {exc}')
+            return build_error(message.get('id'), 'E_PERSONAS_FAILED', f'读取角色库失败: {exc}')
+        return build_response(message.get('id'), {'personas': items, 'count': len(items)})
 
     async def _handle_status(
         self,

@@ -7,6 +7,127 @@
 
 ---
 
+## [v0.79.0] (2026-10-30) — 真流式回复 + 角色库 + 极简对话界面（对标 orca 的做法）
+
+你反馈的两件事都在这一版：**"发消息后只刷工具调用、没有正常回复"** 与 **"顶栏老旧、不能选角色"**。
+
+**1. 真流式回复（修的是真 bug，不是观感）**
+- 根因：WS 的 `_handle_run` 在 stream 分支把 chunk 收进一个**本地 list 就扔掉了**，
+  客户端全程只能收到工具事件；模型说的话要等整段跑完才出现 → 观感就是"只在汇报工具调用"。
+- 现在：新增事件 `agent.stream_delta`，`_on_chunk` 边收边发（≥40 字符或 ≥120ms 合并一次，
+  避免 token 级事件打爆 WS），`stream_started` / `stream_completed` 成对包住。
+- 前端：助手气泡先出现、逐字填充（带光标），结束时用最终文本收尾并挂"复制"。
+
+**2. 角色库（personas）——你不用再自己写提示词**
+- `personas/<name>.md`：frontmatter 放 `name/title/description/category`，**正文就是系统提示词**。
+- 三级搜索：`<项目>/personas` → `<当前目录>/personas` → `~/.clawd/personas`，同名后者覆盖前者。
+- 内置 6 个：严谨工程师 / 极简输出 / 教学讲解 / 严格审查者 / 中文写作 / 排障专家。
+- CLI：`clawd role list`、`clawd role show <name>`（**把完整系统提示词打印出来**，可审计）、
+  `clawd chat --role <name>`。
+- 桌面端：输入框左侧下拉切换角色，`run` 消息带 `persona`，Host 侧 `engine.apply_persona()` 注入系统提示词；
+  会话落盘记录用了哪个角色（`metadata.persona`）。
+- 说明：内置库只放工程/写作类角色。**越狱/绕过安全审查类的提示词内容我不内置**；
+  机制是通用的，你自己的 `personas/*.md` 会按同样规则被加载（有测试守着内置库不含这类内容）。
+
+**3. 对话界面重做（学 orca 的"transcript 优先"，只学思路）**
+参考 `D:\参考项目\orca`（Electron+React 的 agentic IDE）的做法后改的：
+- **去掉顶栏**：原来那条"标题 + 标准模式 + 对话/轨迹 tab"的一整行没了，
+  换成一行轻量会话栏（标题 + 轨迹开关 + 连接状态），正文占满高度。
+- **正文是主体、工具是脚注**：工具调用仍是 `▸ 工具名 预览` 的折叠单行，但降级为次级信息（80% 透明度），
+  不再和助手回复抢注意力；点开才看完整参数/输出。
+- **输入框常驻底部**，角色选择器与模型标记放在同一行（对应 orca 的 SessionOptionPickers 思路）。
+
+7. **助手正文里的 ``` 代码块被原样显示**（截图里 nginx 配置就是一坨围栏符号）。
+   加了最小 Markdown 渲染：``` 围栏 → `<pre class="code-block">`、`行内代码` → 代码 chip、
+   `**粗体**` → strong，换行保留。**全部用 textContent 拼 DOM，不走 innerHTML**
+   （模型输出不可信，避免把内容当 HTML 执行）。实测：1 个代码块 + 3 个行内 chip，正文里不再出现 ```。
+
+**验证**
+- 新增 `tests/agent/test_personas.py`（12 条：覆盖优先级、非法名、空正文、超长截断、内置库不含违规内容）
+- 新增 `tests/server/test_streaming_and_persona.py`（7 条：增量事件、合并发送、非流式不发增量、
+  persona 注入、未知角色报错、角色清单）
+- 新增 `desktop/ui_stream_persona_e2e.mjs`：真实浏览器验证"流式文本确实在增长"+"角色下拉可用"+"顶栏已移除"
+- 新增 `scripts/e2e_host_stream.py`：绕过 Electron 直接打 WS —— 实测
+  `personas=6` + `delta #1 +5字 / #2 +30字 / #3 +41字` + `status=completed 文本 86 字`
+
+**安装 E2E 又抓到 2 个真 bug（都在打包态才暴露）**
+1. **流式一开就崩**：真实 provider（openai 兼容 + 推理模型）`chat_stream` 会 yield
+   `("thinking", text)` 元组，而 `full_content += chunk` 直接 `TypeError:
+   can only concatenate str (not "tuple") to str` —— 这条路径只在真流式下走到，所以"流式"从未真正跑通。
+   现在 `thinking` 单独累积（不进用户可见正文），正文只拼字符串，并加测试钉住。
+2. **角色下拉永远是空的**：`dispatch` 统一用 `handler(ws, message, engine_factory)` 三参调用，
+   而新写的 `_handle_personas(self, ws, message)` 少一个参数 → TypeError 被吞成 `E_INTERNAL_ERROR`。
+   已补参数，并加了"**必须走 dispatch**"的测试（直接调 handler 的测试发现不了这个）。
+3. 打包链版本错配：先打 bundle 再升版本会让安装包内 host 停在旧版本号。流程固定为
+   「先升版本 → prepare_host_bundle → electron-builder」，安装 E2E 会核对
+   `resources/host/pyproject.toml` 与主程序版本一致。
+4. **乱序导致"永远在输出中"的幽灵气泡**：实测 WS 上 `response(completed)` 会先于最后一条
+   `stream_delta` 到达（事件总线投递是排队的）。前端原来在 response 时就 endStream，
+   随后迟到的 delta 又新建一个气泡 —— 界面上一直挂着"正在输出"。
+   修法：response 只记 `pendingFinal`，收尾交给 `AGENT_STREAM_COMPLETED`（1.2s 兜底），
+   收尾后 3s 内的迟到 delta 直接丢弃。
+5. 顺带把合并阈值从 40 字/120ms 降到 12 字/60ms，并在 flush 后 `await asyncio.sleep(0.08)`
+   让事件先于 response 落地 —— 实测改造后 4 条 delta 全部先到，最后才来 response。
+
+6. **模型把工具调用写成"半截标记"，工具没执行、原始标记还被当答案**
+   实装 E2E 里模型输出 ` <tool>{"name": "FileReadTool", "args": {...}}}>`（多一个 `>`、漏 `</tool>`），
+   严格正则 `<tool>\{.*?\}</tool>` 匹配不到 → 工具不执行，界面把 `<tool>…` 原文当最终回答。
+   现在加括号配平扫描 + 宽松兜底（容忍多符号、漏闭合、`arguments` 别名），命中时打 warning；
+   括号在字符串内也不会误判。新增 7 条测试覆盖这些变体。
+
+
+
+
+---
+
+## [v0.76.8] (2026-10-30) — 桌面端实装 E2E 跑通：修「工具成功却显示失败」，签名链路已验证
+
+本轮按你拍板做了两件事：**完整跑一次 NSIS 实装（跑完自己清理）**、**自签名验证签名链路**。
+安装 E2E 立刻抓到一个只在真实桌面上才看得见的缺陷。
+
+**1. 桌面端完整实装 E2E（装 → 用 → 卸 → 清理）**
+- `Clawd Desktop Setup 0.76.7.exe /S` 静默安装 → exit 0，装到 `%LOCALAPPDATA%\Programs\Clawd Desktop`
+- 安装态核对：主程序 `FileVersion=0.76.7`、内嵌 `resources/host/pyproject.toml` = 0.76.7、
+  `resources/host/prompts/agents` **33 个 .md**
+- 启动 → Host 起来（`.clawd_host_port` port=8765/token 32 位）→ `GET /` **200**；
+  Playwright 连**已安装版 Host** 完成真实对话 + 工具调用：回 `INSTALLED_APP_E2E_9527`，
+  `PASS ✔ 安装版真实对话+工具调用全链路`，截图 `desktop/screenshots/07-installed-final.png`
+- 关进程（0 残留）→ 静默卸载 exit 0 → 清 AppData/快捷方式/注册表（卸载注册表残留 **0**）
+- **`GET /health` 返回 403**（需要 token）——这是鉴权行为，不是故障；已记入文档
+
+**2. 修复：工具明明成功，界面却显示「(失败)」**
+截图里 `FileReadTool` 那行写着「工具完成: FileReadTool (失败)」，但会话落盘 `ok: true`、
+模型也正确用到了文件内容 —— 界面在说假话。
+根因：`engine_loop` 里 `result` 可能是被包一层的 `(name, args, ToolResult)`，
+而 `publish_tool_completed(tool_name, tool_args, result)` 直接把元组发出去；
+`EventPublisher` 用 `hasattr(result, 'success')` 判断 → 元组没有该属性 → 一律上报 `False`。
+修法：先解包成 `ToolResult` 再发事件。验证：同一探针再跑，界面事件变为
+`"success": true`（GlobTool + FileReadTool 两条都对），不再出现「(失败)」。
+
+**3. 自签名签名链路（按你选择"先做自签名验证流程"）**
+- `New-SelfSignedCertificate` → 导出 pfx 到 `%TEMP%`（口令进程内生成，不打印、不进仓库）
+- `CSC_LINK` + `electron-builder` 实际签了 5 个产物：`Clawd Desktop.exe`、`elevate.exe`、
+  卸载器、Setup、Portable —— 构建日志从 `signing is skipped` 变为 `signing ... certificateFile=...`
+- `Get-AuthenticodeSignature` → `Status=UnknownError, Signer=CN=Clawd Code Dev (self-signed)`：
+  **签名确实存在，但自签名不在信任链里**，SmartScreen 仍会警告。
+  也就是说：签名管线通了，**信任问题依然要靠 CA 证书解决**（P2-4 未闭环）
+- 跑完已清理：临时证书与私钥从证书存储删除、`%TEMP%\clawd-signing` 删除
+
+**4. 0.76.8 安装包重跑实装 E2E（确认修复随产物出去）**
+装 `Clawd Desktop Setup 0.76.8.exe` → 主程序/内嵌 host 均 0.76.8、prompts 33 个、
+`GET /` 200、Playwright 连已装 Host 真实对话 PASS、卸载 exit 0、注册表残留 0、AppData/快捷方式已清。
+截图 `desktop/screenshots/07-installed-final.png` 里 `FileReadTool` 那行已变成
+**「✓ 工具完成: FileReadTool」**（不再有「(失败)」），左下角版本 `v0.76.8`。
+本次发布产物**未签名**（`Status=NotSigned`）——自签名只用于验证管线，验证完已把证书与私钥删除。
+
+**验证（实跑）**
+- 安装 E2E ×2：0.76.7（带自签名）与 0.76.8（发布态）各一次，全部装→用→卸→清理跑通
+- 新增 `tests/agent/test_tool_event_payload.py`（3 条）：成功工具必须上报 `success=True`、
+  失败工具 `success=False`，并钉住"元组形态必然被误判"这个根因
+- 门禁与回归见 `workflow_status.md` 的 v0.76.8 段
+
+---
+
 ## [v0.76.7] (2026-10-29) — 真实端点跑通后，修 3 个只有真跑才暴露的缺陷
 
 本轮第一次把"真实 LLM 端点"跑到底（此前一直因付费红线跳过），结果**立刻抓到 3 个

@@ -238,7 +238,18 @@ async def _run_agent_loop(
                 _llm_start = time.monotonic()
 
                 if config.is_stream and hasattr(config.llm_provider, 'chat_stream'):
+                    thinking_text = ''
                     async for chunk in config.llm_provider.chat_stream(messages=config.messages):
+                        # 真实 provider（openai 兼容 + 推理模型）会 yield ("thinking", text) 元组：
+                        # 直接 `full_content += chunk` 会 TypeError（"can only concatenate str"），
+                        # 而这条路径只在真流式下走到 —— 所以之前"流式"从未真正跑通过。
+                        if isinstance(chunk, tuple):
+                            kind = str(chunk[0]).lower() if chunk else ''
+                            text = str(chunk[1]) if len(chunk) > 1 else ''
+                            if kind == 'thinking':
+                                thinking_text += text  # 推理内容单独累积，不混进正文
+                                continue
+                            chunk = text
                         full_content += chunk
                         if config.on_chunk:
                             config.on_chunk(chunk)
@@ -503,13 +514,15 @@ async def _run_agent_loop(
                             raise e
 
                 for result_idx, (tool_name, tool_args, result) in enumerate(results):
+                    # result 可能是 ToolResult，也可能是被包了一层的 (name, args, ToolResult)。
+                    # 必须先解包再发事件：否则 `hasattr(result, 'success')` 为 False，
+                    # UI 上就会把**成功**的工具显示成「(失败)」（安装版真实 E2E 抓到）。
+                    _res_obj = result[2] if isinstance(result, tuple) else result
                     if config.publish_tool_completed:
-                        config.publish_tool_completed(tool_name, tool_args, result)
+                        config.publish_tool_completed(tool_name, tool_args, _res_obj)
 
                     # --- WorldModel 预取 (v0.65) ---
                     # 当工具成功读取或编辑文件时，触发 topologically 相关文件的预取
-                    # result 可能是一个 ToolResult 对象或一个元组 (name, args, result)
-                    _res_obj = result[2] if isinstance(result, tuple) else result
                     if getattr(_res_obj, 'success', False) and config.world_model:
                         file_path = tool_args.get('file_path')
                         if file_path:

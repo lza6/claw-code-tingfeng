@@ -78,6 +78,27 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .msg-actions button{font-size:11px;color:var(--label-tertiary);padding:2px 6px;border-radius:var(--radius-s)}
 .msg-actions button:hover{background:var(--hover);color:var(--label-primary)}
 
+/* ===== 轻量会话栏（替代厚重顶栏，orca 式） ===== */
+.sessionbar{display:flex;align-items:center;gap:10px;padding:10px 24px 6px;flex-shrink:0;font-size:13px}
+.sb-title{color:var(--label-primary);font-weight:600;max-width:46vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.sb-btn{font-size:12px;color:var(--label-tertiary);padding:3px 8px;border-radius:var(--radius-s)}
+.sb-btn:hover{background:var(--hover);color:var(--label-primary)}
+.sb-btn.active{color:var(--label-primary);background:var(--hover)}
+
+/* ===== 流式回复光标 ===== */
+.msg-assistant.streaming .caret{display:inline-block;width:7px;height:14px;margin-left:2px;background:var(--brand);vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+.msg-assistant .body{white-space:pre-wrap;word-break:break-word}
+/* 工具行：正文之下的次级信息，弱化显示 */
+.tool-row{opacity:.82}
+.tool-row:hover{opacity:1}
+
+/* 代码块 / 行内代码（助手正文渲染） */
+.msg-assistant .body .para{white-space:pre-wrap;word-break:break-word}
+.msg-assistant .code-block{margin:8px 0;padding:10px 12px;border-radius:var(--radius-m);background:var(--bg-layer-2);border:1px solid var(--border-l1);overflow-x:auto}
+.msg-assistant .code-block code{font-family:Consolas,"Cascadia Mono",monospace;font-size:12.5px;line-height:1.55;color:#cfd6e4;white-space:pre}
+.msg-assistant .inline-code{font-family:Consolas,"Cascadia Mono",monospace;font-size:12.5px;background:var(--bg-layer-2);border:1px solid var(--border-l1);border-radius:4px;padding:0 4px}
 /* ===== 输入区 ===== */
 .composer-wrap{padding:12px 20px 8px;flex-shrink:0}
 .composer{border-radius:16px;background:var(--bg-layer-2);border:1px solid var(--border-l1);padding:12px 14px;transition:border-color .15s}
@@ -85,6 +106,8 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .composer textarea{width:100%;background:none;border:none;outline:none;resize:none;font-size:13px;color:var(--label-primary);min-height:20px;max-height:160px}
 .composer-row{display:flex;align-items:center;gap:8px;margin-top:10px}
 .perm{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--label-secondary)}
+.persona-select{max-width:180px;height:26px;border-radius:var(--radius-s);border:1px solid var(--border-l2);background:var(--bg-layer-3);color:var(--label-secondary);font-size:12px;padding:0 6px;outline:none;cursor:pointer}
+.persona-select:hover{border-color:#4a4a4a;color:var(--label-primary)}
 .model-tag{margin-left:auto;font-size:12px;color:var(--label-tertiary)}
 .send-btn{width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
 .send-btn:disabled{opacity:.4;cursor:not-allowed}
@@ -167,14 +190,12 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 
   <!-- 主区 -->
   <main class="main">
-    <div class="topbar">
-      <span class="title" id="sessionTitle">新会话</span>
-      <span class="mode-tag">⚡ 标准模式</span>
-      <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
-    </div>
-    <div class="tabs">
-      <button class="tab active" data-tab="chat">对话</button>
-      <button class="tab" data-tab="trace">轨迹</button>
+    <div class="sessionbar">
+      <span class="sb-title" id="sessionTitle">新会话</span>
+      <div class="sb-right">
+        <button class="sb-btn" id="btnTrace" title="查看原始事件轨迹">轨迹</button>
+        <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
+      </div>
     </div>
     <div class="view"><div id="chat"></div><div id="trace" style="display:none;padding:20px 28px"></div></div>
     <div class="banner" id="banner"></div>
@@ -182,6 +203,9 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
       <div class="composer">
         <textarea id="input" rows="1" placeholder="给智能体发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
         <div class="composer-row">
+          <select class="persona-select" id="persona" title="角色（系统提示词模板）">
+            <option value="">默认角色</option>
+          </select>
           <span class="perm">🛡 Full access</span>
           <span class="model-tag" id="modelTag">clawd · 本地 Host</span>
           <button class="send-btn" id="send">↑</button>

@@ -17,6 +17,9 @@
   let reconnectDelay = 1000;
   let everConnected = false;
   let turnCount = 0;
+  let streamEl = null;        // 当前正在流式输出的助手气泡
+  let pendingFinal = null;    // 已收到 response 的最终文本，等 STREAM_COMPLETED 收尾
+  let finalizedAt = 0;        // 上次收尾时间（用于丢弃迟到 delta）
   let callCount = 0;
   const pending = Object.create(null);
   let reqSeq = 0;
@@ -58,27 +61,141 @@
     scrollEnd();
   }
 
-  function addAssistant(text) {
+  // —— 最小 Markdown 渲染（安全：全部用 textContent 拼节点） ——
+  // 支持：``` 围栏代码块、`行内代码`、**粗体**、换行保留。其余按纯文本。
+  function renderRich(container, text) {
+    container.textContent = '';
+    const src = String(text || '');
+    const lines = src.split('\n');
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const fence = line.match(/^\s*```(\w*)\s*$/);
+      if (fence) {
+        const lang = fence[1] || '';
+        const buf = [];
+        i += 1;
+        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { buf.push(lines[i]); i += 1; }
+        i += 1; // 跳过结束围栏
+        const pre = document.createElement('pre');
+        pre.className = 'code-block';
+        const code = document.createElement('code');
+        if (lang) code.dataset.lang = lang;
+        code.textContent = buf.join('\n');
+        pre.appendChild(code);
+        container.appendChild(pre);
+        continue;
+      }
+      const para = document.createElement('div');
+      para.className = 'para';
+      appendInline(para, line);
+      container.appendChild(para);
+      i += 1;
+    }
+  }
+
+  // 行内：`code` 与 **bold**
+  function appendInline(parent, line) {
+    const re = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    let last = 0;
+    let m;
+    while ((m = re.exec(line)) !== null) {
+      if (m.index > last) parent.appendChild(document.createTextNode(line.slice(last, m.index)));
+      const token = m[0];
+      if (token.startsWith('`')) {
+        const code = document.createElement('code');
+        code.className = 'inline-code';
+        code.textContent = token.slice(1, -1);
+        parent.appendChild(code);
+      } else {
+        const strong = document.createElement('strong');
+        strong.textContent = token.slice(2, -2);
+        parent.appendChild(strong);
+      }
+      last = m.index + token.length;
+    }
+    if (last < line.length) parent.appendChild(document.createTextNode(line.slice(last)));
+  }
+
+  function addAssistant(text, opts) {
     const wrap = document.createElement('div');
     wrap.className = 'msg-assistant';
     if (text.length > DEGRADE_THRESHOLD) wrap.classList.add('degraded');
     const who = document.createElement('div');
     who.className = 'who';
-    who.textContent = 'Clawd';
+    who.textContent = (opts && opts.who) || 'Clawd';
     const body = document.createElement('div');
-    body.textContent = text;
+    body.className = 'body';
+    renderRich(body, text);
     const actions = document.createElement('div');
     actions.className = 'msg-actions';
     const copy = document.createElement('button');
     copy.textContent = '复制';
     copy.onclick = () => navigator.clipboard.writeText(text);
     actions.appendChild(copy);
-    wrap.appendChild(who); wrap.appendChild(body); wrap.appendChild(actions);
+    wrap.appendChild(who); wrap.appendChild(body);
+    if (!(opts && opts.streaming)) wrap.appendChild(actions);
     $chat.appendChild(wrap);
     scrollEnd();
+    return wrap;
+  }
+
+  // —— 流式：开始 / 追加 / 收尾（orca 式：正文边到边显示） ——
+  function beginStream() {
+    if (streamEl) return streamEl;
+    streamEl = addAssistant('', { streaming: true });
+    streamEl.classList.add('streaming');
+    const caret = document.createElement('span');
+    caret.className = 'caret';
+    streamEl.querySelector('.body').appendChild(caret);
+    return streamEl;
+  }
+  function appendStream(text) {
+    if (!text) return;
+    if (!streamEl && (Date.now() - finalizedAt) < 3000) return; // 迟到的增量：丢弃
+    const el = beginStream();
+    const body = el.querySelector('.body');
+    const caret = body.querySelector('.caret');
+    if (caret) caret.remove();
+    body.appendChild(document.createTextNode(text));
+    const c2 = document.createElement('span');
+    c2.className = 'caret';
+    body.appendChild(c2);
+    scrollEnd();
+  }
+  function endStream(finalText) {
+    if (!streamEl) return false;
+    const body = streamEl.querySelector('.body');
+    const caret = body.querySelector('.caret');
+    if (caret) caret.remove();
+    if (typeof finalText === 'string' && finalText.trim()) renderRich(body, finalText);
+    streamEl.classList.remove('streaming');
+    const text = body.textContent || '';
+    if (text.length > DEGRADE_THRESHOLD) streamEl.classList.add('degraded');
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const copy = document.createElement('button');
+    copy.textContent = '复制';
+    copy.onclick = () => navigator.clipboard.writeText(text);
+    actions.appendChild(copy);
+    streamEl.appendChild(actions);
+    streamEl = null;
+    finalizedAt = Date.now();
+    scrollEnd();
+    return true;
+  }
+
+  // 收尾当前流式气泡（若没有则不做事），优先用 response 给的最终文本
+  function finalizeStream() {
+    if (!streamEl) return false;
+    const text = pendingFinal;
+    pendingFinal = null;
+    return endStream(text || '');
   }
 
   function addError(text) {
+    pendingFinal = null;
+    endStream('');
     const d = document.createElement('div');
     d.className = 'msg-err';
     d.textContent = '⚠ ' + text;
@@ -164,16 +281,25 @@
         if (ok) {
           authenticated = true; reconnectDelay = 1000; everConnected = true;
           hideBanner(); setConn(true, '已连接 · 就绪');
+          loadPersonas();
         } else {
           setConn(false, '认证失败');
           showBanner('认证失败：token 无效。请通过 Host 入口访问。');
         }
         return;
       }
+      // personas 响应: {id, type:'response', data:{personas:[...]}}
+      const d0 = msg.data || msg.result || {};
+      if (d0 && Array.isArray(d0.personas)) { applyPersonas(d0.personas); return; }
       // run 响应: {id, type:'response', data:{status, result, steps, elapsed_seconds}}
       const d = msg.data || msg.result || {};
       if (typeof d === 'object' && d.status === 'completed') {
-        addAssistant(d.result || '(无输出)');
+        if (streamEl) {
+          pendingFinal = d.result || '';
+          setTimeout(() => { if (streamEl) finalizeStream(); }, 1200);
+        } else {
+          addAssistant(d.result || '(无输出)');
+        }
         const st = $('stTurns');
         st.textContent = `${turnCount} 轮`;
         if (d.elapsed_seconds) $('stCalls').textContent = `工具 ${callCount} 次 · ${d.elapsed_seconds}s · ${d.steps} 步`;
@@ -198,6 +324,9 @@
         AGENT_TOOL_EXEC_COMPLETED: ['✓', null],
         AGENT_TOKEN_USAGE: ['$', 'Token 统计'],
       };
+      if (raw === 'AGENT_STREAM_STARTED') { beginStream(); return; }
+      if (raw === 'AGENT_STREAM_DELTA') { appendStream(d.text || ''); return; }
+      if (raw === 'AGENT_STREAM_COMPLETED') { finalizeStream(); return; }
       const [ico, fixedLabel] = LABELS[raw] || ['·', raw];
       let label;
       if (raw === 'AGENT_TOOL_EXEC_STARTED') {
@@ -224,6 +353,29 @@
     addToolRow(msg.type || '?', JSON.stringify(msg, null, 2).slice(0, 4000));
   }
 
+  // —— 角色库（personas/*.md）：连上 Host 后拉一次，填进输入框左侧下拉 ——
+  const personasPending = {};
+  function loadPersonas() {
+    if (!ws || ws.readyState !== 1) return;
+    const id = 'personas-' + Date.now();
+    personasPending[id] = true;
+    ws.send(JSON.stringify({ type: 'personas', id }));
+  }
+  function applyPersonas(items) {
+    const sel = $('persona');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">默认角色</option>';
+    for (const p of items || []) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.title ? `${p.title}` : p.name;
+      opt.title = (p.description || '') + '（' + p.name + '）';
+      sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+  }
+
   // —— 发送 ——
   function send() {
     const text = $input.value.trim();
@@ -233,7 +385,8 @@
     }
     addUser(text);
     turnCount++; updateStats();
-    ws.send(JSON.stringify({ type: 'run', goal: text, id: 'run-' + Date.now() }));
+    const persona = ($('persona') && $('persona').value) || '';
+    ws.send(JSON.stringify({ type: 'run', goal: text, stream: true, persona, id: 'run-' + Date.now() }));
     $input.value = '';
     $send.disabled = true;
     hideBanner();
@@ -255,16 +408,14 @@
     hideBanner();
   };
 
-  // —— tab 切换 ——
-  document.querySelectorAll('.tab').forEach((t) => {
-    t.onclick = () => {
-      document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
-      t.classList.add('active');
-      const isChat = t.dataset.tab === 'chat';
-      $chat.style.display = isChat ? '' : 'none';
-      $trace.style.display = isChat ? 'none' : '';
-    };
-  });
+  // —— 轨迹开关（会话栏上的轻量按钮，不再用一整行 tab）——
+  let showingTrace = false;
+  $('btnTrace').onclick = () => {
+    showingTrace = !showingTrace;
+    $('btnTrace').classList.toggle('active', showingTrace);
+    $chat.style.display = showingTrace ? 'none' : '';
+    $trace.style.display = showingTrace ? '' : 'none';
+  };
 
   // —— 插件市场 ——
   let pluginsCache = [];

@@ -160,3 +160,53 @@
 - 回归：`pytest tests/agent tests/core tests/cli -q -m "not slow"` → **2117 passed**（2 条 version 失败
   由 egg-info 残留导致，清理后转绿）；`tests/eval tests/mcp tests/backends tests/contracts` → **219 passed**。
 - 门禁：F821/F811/E9 全过 · 静默吞异常 162 · 可达 482 · 收集 **5187 / 0 errors**
+
+## 2026-10-30 v0.76.8 —— 桌面实装 E2E + 自签名链路 + 修「成功却显示失败」
+
+**按用户拍板执行的两件事**
+- [x] 完整 NSIS 实装（装→用→关→卸→清理）：install exit 0，装到 `%LOCALAPPDATA%\Programs\Clawd Desktop`；
+      主程序 FileVersion=0.76.7、内嵌 host=0.76.7、prompts 33 个 md；`GET /` 200；
+      Playwright 连已装 Host 完成真实对话+工具调用 PASS；卸载 exit 0，注册表残留 0，AppData/快捷方式已清。
+- [x] 自签名签名链路：5 个产物实际签名（含 Setup/Portable），`Get-AuthenticodeSignature`
+      → `Status=UnknownError` + `Signer=CN=Clawd Code Dev (self-signed)`；跑完删证书与私钥。
+
+**实装 E2E 抓到的缺陷（已修）**
+- [x] 工具成功却显示「(失败)」：`publish_tool_completed` 收到的是被包一层的元组，
+      `hasattr(result,'success')` 为 False → 一律上报 False。改为先解包成 ToolResult 再发事件。
+      验证：unpacked 版同一探针复跑，事件变 `"success": true`（GlobTool + FileReadTool 两条）。
+- [x] 新增 `tests/agent/test_tool_event_payload.py`（3 条）钉住该语义与根因。
+
+**已知（不粉饰）**
+- `GET /health` 需 token，未带 token 返回 403（鉴权行为，非故障）
+- 自签名只证明"管线可用"，SmartScreen 信任仍需 CA 证书（P2-4 未闭环）
+
+## 2026-10-30 v0.79.0 —— 真流式回复 + 角色库 + 极简对话界面
+
+**修的真 bug**
+- [x] WS `_handle_run` 的 stream 分支把 chunk 收进本地 list 就扔 → 客户端只看到工具事件、
+      模型说的话要等整段结束才出现（用户反馈"只汇报工具调用、没有正常回复"的根因）。
+      现：`agent.stream_delta` 事件 + 合并发送（≥40 字符或 ≥120ms）+ started/completed 成对。
+
+**新能力**
+- [x] 角色库 `personas/*.md`（正文=系统提示词），三级搜索（repo → 当前目录 → ~/.clawd），同名后者覆盖。
+      内置 6 个工程/写作角色；`clawd role list|show`；`clawd chat --role`；桌面端下拉切换；
+      Host `run` 消息带 `persona` → `engine.apply_persona()`；会话落盘记录 `metadata.persona`。
+- [x] 桌面 UI 去顶栏（改轻量会话栏 + 轨迹开关），工具行降级为次级信息，输入框常驻底部含角色选择器。
+
+**未内置（明确边界）**
+- 不内置越狱/绕过安全审查类提示词；机制通用，用户自建 `personas/*.md` 会按同规则加载（有测试守内置库不含此类内容）。
+
+**测试**
+- 新增 `tests/agent/test_personas.py`（12）、`tests/server/test_streaming_and_persona.py`（7）、
+  `desktop/ui_stream_persona_e2e.mjs`（真浏览器：流式增长 + 角色下拉 + 无顶栏）
+
+**v0.79.0 安装 E2E 追加（真机跑出来的 3 个 bug）**
+- [x] 流式一开就崩：provider `chat_stream` 会 yield `("thinking", text)` 元组，
+      `full_content += chunk` 直接 TypeError → 拆开处理（thinking 不进可见正文）。
+- [x] 角色下拉永远空：`dispatch` 三参调用，`_handle_personas` 少一个参数被吞成 E_INTERNAL_ERROR → 补齐 +
+      加"必须走 dispatch"的测试。
+- [x] 乱序幽灵气泡：response 先于最后一条 delta 到达 → response 只记 pendingFinal，
+      收尾交给 STREAM_COMPLETED（1.2s 兜底），迟到 delta 丢弃。
+- [x] 模型写半截工具标记（多 `>`、漏 `</tool>`）→ 工具不执行且原文被当答案 → 加括号配平宽松解析 + 7 条测试。
+- 实测（安装版）：顶栏 0 个、角色下拉 7 项、流式采样 0→15→23→143→213、结束无残留 streaming 气泡，
+  截图 `desktop/screenshots/08-stream-persona.png`；卸载后注册表残留 0。
