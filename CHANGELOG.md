@@ -7,6 +7,53 @@
 
 ---
 
+## [v0.84.0] (2026-10-30) — P3 三项收口 + 风险表四条落地（全部机器可验）+ 死码 31 个/4.5k 行
+
+**1. P3-2 死代码收敛：141 → 110 个不可达模块（29,933 → 25,441 行）**
+删掉 31 个文件、约 4,500 行**真正没人用**的模块（每个都先核过零引用）：
+`src/background/`（celery 脚手架 4 个）、`src/core/journal/`、`src/core/secrets/`、
+`src/core/auth/` + `src/core/auth_module/`（与 `src/server/auth.py` 重复的旧认证）、
+`src/core/middleware.py`、`src/core/health_check.py`、`src/cli/surface_viewer.py`、
+`src/utils/version_check.py`、`src/agent/history_compressor.py`、`src/agent/task_analyzer.py`、
+`src/agent/swarm/{team_types,synthesized_agent}.py`、`src/workflow/{integration_engine,integration_wrapper}.py`、
+`src/workflow/pipeline_stages/`、`src/tools_runtime/code_simplifier.py`。
+**可达数 494 → 495（没降）**，IMPORT-FAIL 0，收集 0 errors —— 证明删的都是死码。
+顺带把静默吞异常从 162 收紧到 **159**（删码顺带少 3 个），门禁同步（`hard_metrics` 单一真相源）。
+
+**2. P3-1 `src/core/` 边界治理（ADR 0021）**
+新增 `scripts/core_surface.py`：核心层**禁止 import** `cli/tools_runtime/agent/server/workflow`；
+实测抓到 6 处存量越界（`args_parser`、`config/generator`、`patch/atomic_patcher`×2、`persistence/run_state`、`security/allowlist`），
+全部登记进 `scripts/core_surface_allow.json` 并写明迁移方向 —— **只阻断新增**，存量逐步清零；
+同时报公开面（`__all__` 89 个符号）与规模（153 文件 / 34,112 行，阈值 200/40,000 告警）。
+
+**3. P3-3 "讲人话"入口补齐**
+`clawd explain`（单轮）已在；本轮补 `clawd explain --cross -n 10`：跨会话归因
+（成功率 / 成本 / tokens / 最常见失败 / 失败最多的工具），全部确定性统计，不调 LLM。
+
+**4. 风险表第 1 条：假成功专项扫描**
+新增 `scripts/scan_fake_success.py`：AST 扫描"打日志/TODO 后直接 return True"的函数，
+并排除能力谓词（`available/supports_*/can_*/is_*/has_*/validate`）。当前 **0 命中**，已接入总闸门。
+
+**5. 风险表第 2 条：生成配置"可启动性"自检**
+新增 `scripts/check_mcp_startup.py`：对 `DEFAULT_MCP_SERVERS` 逐个**真实 spawn**（用当前解释器），
+发 `initialize`/`tools/list`，10s 内必须拿到 `serverInfo` 且工具非空 —— 实测 4/4 PASS。
+
+**6. 风险表第 3 条：两套账本收敛（ADR 0020）**
+新增 `src/workflow/run_ledger.py`：`mode_state`（状态真相）与 `ralph_ledger`（进度真相）**语义分家、入口归一**；
+读只走 `RunLedger.snapshot()`（含一致性诊断：只写一半 / 孤儿进度 / 时间漂移），写只走 `record_stage()`（一次写两处）。
+新增 `clawd ledger [--json]`，不一致时退出 1。**在真实仓库里立刻抓到一条存量不一致**
+（有 autopilot 模式状态但没有 ralph 进度）。
+
+**7. 风险表第 4 条：文档数字漂移门禁扩到单一口径**
+`check_doc_drift.py` 不再手写阈值，改为 import `hard_metrics.MAX_SILENT_EXCEPT`（单一真相源）。
+
+**验证（实跑）**
+`scripts/verify_audit_p1.py` 扩到 **P1×16 + P2×6 + P3×3 + 风险×3 = 28 条 → 28/28 PASS**（失败即非 0，可挂 CI）。
+`tests/workflow+cli+core` 1868 passed；`tests/brain+rag` 1074 passed；ruff F821/F811/E9 全过；
+可达 495、静默 159、收集 5280 / 0 errors。
+
+---
+
 ## [v0.83.0] (2026-10-30) — UI 走查迭代（自己截图逐项修）+ 图片可粘贴上传 + 续聊历史 + CLI Markdown + 签名脚本
 
 按你"自己截图验证、迭代优化"的要求，我用真实浏览器/真实窗口截了 6 张图逐项挑毛病并修掉：

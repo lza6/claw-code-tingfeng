@@ -274,4 +274,41 @@ def explain_session(
     return explanation
 
 
-__all__ = ["Explanation", "ToolCall", "explain_session"]
+def explain_recent(limit: int = 10, directory: Path | str | None = None) -> dict:
+    """跨会话归因：最近 N 轮的成功率、常见失败原因、成本
+
+    为什么需要：单轮 explain 只讲"这一次"，用户接着会问"最近总出什么毛病"。
+    这里只做**确定性统计**（不调 LLM）：失败原因按文本归类计数、成本求和、工具失败最多的文件。
+    """
+    views = session_bridge.list_all(directory)[: max(1, int(limit))]
+    total = len(views)
+    completed = sum(1 for v in views if (v.status or "").lower() in ("completed", "complete", "done"))
+    cost = sum(float(v.total_cost or 0.0) for v in views)
+    tokens = sum(int(v.input_tokens or 0) + int(v.output_tokens or 0) for v in views)
+
+    failure_reasons: dict[str, int] = {}
+    tool_failures: dict[str, int] = {}
+    for view in views:
+        explanation = explain_session(view.session_id, directory)
+        for item in explanation.failures:
+            key = str(item)[:80]
+            failure_reasons[key] = failure_reasons.get(key, 0) + 1
+        for call in explanation.tool_calls:
+            if call.ok is False:
+                tool_failures[call.name] = tool_failures.get(call.name, 0) + 1
+
+    def _top(counter: dict[str, int], n: int = 5) -> list[dict[str, Any]]:
+        return [{"key": k, "count": v} for k, v in sorted(counter.items(), key=lambda kv: -kv[1])[:n]]
+
+    return {
+        "sessions": total,
+        "completed": completed,
+        "success_rate": round(completed / total, 3) if total else 0.0,
+        "cost": round(cost, 6),
+        "tokens": tokens,
+        "top_failures": _top(failure_reasons),
+        "top_failed_tools": _top(tool_failures),
+    }
+
+
+__all__ = ["Explanation", "ToolCall", "explain_recent", "explain_session"]

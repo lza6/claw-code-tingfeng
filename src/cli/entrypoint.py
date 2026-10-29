@@ -343,6 +343,39 @@ def usage_cmd(
     raise typer.Exit(code=0)
 
 
+@app.command(name="ledger")
+def ledger_cmd(
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
+):
+    """
+    运行账本快照（合并 mode_state 与 ralph_ledger，并做一致性诊断）
+
+    两本账职责分开：mode_state 记"当前处于哪个模式/阶段"，ralph_ledger 记"一步步做了什么"。
+    这个命令是**唯一读取入口**，会指出两本账是否对得上（只写一半 / 孤儿进度 / 时间漂移）。
+    """
+    import json as _json
+
+    from ..workflow.run_ledger import ledger_snapshot
+
+    snap = ledger_snapshot()
+    if as_json:
+        typer.echo(_json.dumps(snap.to_dict(), ensure_ascii=False, default=str))
+        raise typer.Exit(code=0 if snap.consistent else 1)
+
+    console.print(f"[bold]{snap.summary_line()}[/bold]")
+    for mode in snap.modes:
+        console.print(f"  · {mode.mode}: {mode.phase or '(无阶段)'}  — {mode.task[:60]}")
+    if snap.progress:
+        console.print(f"  最近进度（共 {len(snap.progress)} 条）:")
+        for entry in snap.progress[-5:]:
+            console.print(f"    - {entry.get('recorded_at', '')} {entry.get('text', '')[:100]}")
+    if snap.issues:
+        console.print("[bold red]账本不一致:[/bold red]")
+        for issue in snap.issues:
+            console.print(f"  - {issue}")
+    raise typer.Exit(code=0 if snap.consistent else 1)
+
+
 @app.command(name="onboard")
 def onboard(
     as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于脚本/CI 使用）"),
@@ -1253,6 +1286,8 @@ def codex_run(
 def explain(
     session_id: str = typer.Argument(None, help="会话 ID（缺省=最近一次会话）"),
     as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于脚本核对）"),
+    cross: bool = typer.Option(False, "--cross", help="跨会话归因：最近 N 轮的成功率/常见失败/成本"),
+    limit: int = typer.Option(10, "--limit", "-n", help="--cross 时统计最近多少轮"),
 ):
     """
     用中文讲清上一轮它到底做了什么（零成本：不调用 LLM）
@@ -1262,7 +1297,29 @@ def explain(
     """
     import json as _json
 
-    from .explain import explain_session
+    from .explain import explain_recent, explain_session
+
+    if cross:
+        summary = explain_recent(limit, None)
+        if as_json:
+            typer.echo(_json.dumps(summary, ensure_ascii=False, default=str))
+            raise typer.Exit(code=0)
+        console.print(
+            f"[bold]最近 {summary['sessions']} 轮[/bold] 完成 {summary['completed']}"
+            f" · 成功率 {summary['success_rate'] * 100:.0f}%"
+            f" · 成本 ${summary['cost']:.4f} · tokens {summary['tokens']}"
+        )
+        if summary["top_failures"]:
+            console.print("[bold red]最常见失败:[/bold red]")
+            for item in summary["top_failures"]:
+                console.print(f"  - {item['count']}× {item['key']}")
+        if summary["top_failed_tools"]:
+            console.print("[bold yellow]失败最多的工具:[/bold yellow]")
+            for item in summary["top_failed_tools"]:
+                console.print(f"  - {item['key']}: {item['count']} 次")
+        if not summary["top_failures"] and not summary["top_failed_tools"]:
+            console.print("[green]没有记录到失败[/green]")
+        raise typer.Exit(code=0)
 
     try:
         explanation = explain_session(session_id)

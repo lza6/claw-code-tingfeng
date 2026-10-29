@@ -279,3 +279,17 @@
 - 修法：新增 `src/core/source_scan.py`（排除 site-packages/node_modules/venv/dist/.git/.clawd…），
   `world_model` 与 `CodeGraph` 兜底扫描都改用它；超 `CLAWD_WM_MAX_FILES`（默认 5000）→ 跳过索引并如实告知。
 - 实测：同一目录 11606 → **635**；`/api/usage` 响应 **83ms**；tests/brain+rag+core **1074 passed**。
+
+## 2026-10-30 v0.84.0 —— P3 三项 + 风险表四条（28/28 机器可验）
+
+- [x] P3-2 死码收敛：删 31 文件 / ~4.5k 行（background、core/journal、core/secrets、core/auth(+auth_module)、
+      middleware、health_check、surface_viewer、version_check、history_compressor、task_analyzer、
+      swarm/team_types、synthesized_agent、workflow/integration_*、pipeline_stages、code_simplifier）；
+      不可达 141→110（29,933→25,441 行），可达 494→495（没降），IMPORT-FAIL 0；静默吞异常 162→159（门禁同步收紧）。
+- [x] P3-1 core 边界：`scripts/core_surface.py` 禁止 core→上层 import；6 处存量登记 allow.json + 迁移方向；公开面 89 符号；153 文件/34,112 行。
+- [x] P3-3 讲人话入口：`clawd explain --cross`（跨会话：成功率/成本/tokens/常见失败/失败最多工具）。
+- [x] R1 假成功扫描：`scripts/scan_fake_success.py`（AST，排除能力谓词）→ 0 命中。
+- [x] R2 MCP 可启动性：`scripts/check_mcp_startup.py` 真 spawn 4 台 → 4/4 PASS。
+- [x] R3 两套账本：`src/workflow/run_ledger.py` + `clawd ledger`（ADR 0020），真实仓库抓到 1 条存量不一致。
+- [x] R4 文档漂移门禁改用 hard_metrics 单一阈值。
+- 验证：`verify_audit_p1.py` 28/28；tests/workflow+cli+core 1868 passed；brain+rag 1074 passed；ruff 全过。

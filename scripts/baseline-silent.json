@@ -1,5 +1,5 @@
 {
-  "total": 162,
+  "total": 159,
   "note": "静默吞异常趋势基线：只允许下降，不允许上升（policy.md §1）",
   "generated_at": "2026-10-29T09:32:45",
   "by_file": {

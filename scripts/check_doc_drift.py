@@ -40,7 +40,10 @@ def actual_collect() -> int | None:
 
 
 def actual_silent() -> int | None:
-    proc = _run([PY, "scripts/check_silent_except.py", "--fail-over", "162"])
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from hard_metrics import MAX_SILENT_EXCEPT  # 单一真相源
+
+    proc = _run([PY, "scripts/check_silent_except.py", "--fail-over", str(MAX_SILENT_EXCEPT)])
     m = re.search(r"：\s*(\d+)|:\s*(\d+)\s*$", (proc.stdout or "").strip().splitlines()[0] if proc.stdout else "")
     if m:
         return int(m.group(1) or m.group(2))

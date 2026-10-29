@@ -24,7 +24,16 @@
 > venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 162  # 静默吞异常只降不升
 > ```
 >
-> **日常快检**（约 4 分钟，不含 slow 层约 410s）：
+> **审计台账 + 风险门禁（一轮全跑，约 3 分钟）**：
+> ```bash
+> venv/Scripts/python.exe scripts/verify_audit_p1.py        # P1×16 + P2×6 + P3×3 + 风险×3 = 28 条，全绿才算数
+> venv/Scripts/python.exe scripts/scan_fake_success.py      # 「打日志/TODO 后 return True」专项，期望 0 命中
+> venv/Scripts/python.exe scripts/check_mcp_startup.py      # 生成配置里每个 MCP server 真 spawn + 握手
+> venv/Scripts/python.exe scripts/core_surface.py           # core 不得 import 上层；存量在 core_surface_allow.json
+> venv/Scripts/python.exe scripts/check_doc_drift.py        # README 数字必须与现跑一致
+> ```
+>
+> 日常快检（约 4 分钟，不含 slow 层约 410s）：
 > `py -3.10 -m pytest tests/ -q -m "not slow"` · 全量 `py -3.10 -m pytest tests/ -q`（约 13 分钟）
 > **取一次全部指标**：`py -3.10 scripts/baseline.py --out .clawd/baseline.json`
 > （17 项指标一条命令出数；文档里的数字以它为准，不要手抄）

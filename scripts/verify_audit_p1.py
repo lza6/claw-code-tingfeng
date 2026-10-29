@@ -193,9 +193,81 @@ check("P2-6 上手教程", has_steps and "skills-distribution" in gs,
       "docs/getting-started.md 是『安装→配置→第一个任务→看懂发生了什么』教程，技能分发已拆到 skills-distribution.md")
 
 
+# ==========================================================================
+# P3 / 风险表（P3-1 ~ P3-3、R1 ~ R3）
+# ==========================================================================
+
+def _run_script(rel: str, extra: list[str] | None = None, timeout: int = 900):
+    import os
+    import subprocess
+
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    return subprocess.run(
+        [sys.executable, str(ROOT / rel), *(extra or [])],
+        cwd=str(ROOT), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=timeout, env=env,
+    )
+
+
+# P3-1 src/core 边界治理（新增越界即失败；存量已登记）
+try:
+    proc = _run_script("scripts/core_surface.py")
+    check("P3-1 core 边界", proc.returncode == 0, (proc.stdout or "").strip().splitlines()[-2] if proc.stdout else "")
+except Exception as e:  # noqa: BLE001
+    check("P3-1 core 边界", False, f"检查失败: {e}")
+
+# P3-2 不可达模块收敛（不超过基线 110 个 / 25441 行）
+try:
+    proc = _run_script("scripts/reachability.py", ["--min-reachable", "443"])
+    text = proc.stdout or ""
+    import re as _re
+
+    m = _re.search(r"生产不加载[^:：]*[:：]\s*(\d+)", text)
+    unreachable = int(m.group(1)) if m else -1
+    check("P3-2 不可达收敛", proc.returncode == 0 and 0 <= unreachable <= 110,
+          f"不可达模块={unreachable}（基线 ≤110；本轮删除 31 个死模块后 141→110）")
+except Exception as e:  # noqa: BLE001
+    check("P3-2 不可达收敛", False, f"检查失败: {e}")
+
+# P3-3 CLI 的"讲人话"入口（explain / --cross / ledger）
+try:
+    entry = (ROOT / "src/cli/entrypoint.py").read_text(encoding="utf-8")
+    ok = '@app.command(name="explain")' in entry and "--cross" in entry and '@app.command(name="ledger")' in entry
+    check("P3-3 explain/ledger 入口", ok,
+          "clawd explain（单轮讲人话）、explain --cross（跨会话归因）、ledger（账本诊断）均存在")
+except Exception as e:  # noqa: BLE001
+    check("P3-3 explain/ledger 入口", False, f"检查失败: {e}")
+
+# R1 假成功专项扫描（打日志/TODO 后 return True）
+try:
+    proc = _run_script("scripts/scan_fake_success.py")
+    check("R1 假成功扫描", proc.returncode == 0,
+          (proc.stdout or "").strip().splitlines()[1] if proc.stdout else "")
+except Exception as e:  # noqa: BLE001
+    check("R1 假成功扫描", False, f"检查失败: {e}")
+
+# R2 生成配置的可启动性（真实 spawn + 握手）
+try:
+    proc = _run_script("scripts/check_mcp_startup.py", timeout=600)
+    check("R2 MCP 可启动性", proc.returncode == 0,
+          (proc.stdout or "").strip().splitlines()[-2] if proc.stdout else "")
+except Exception as e:  # noqa: BLE001
+    check("R2 MCP 可启动性", False, f"检查失败: {e}")
+
+# R3 两套账本单一入口
+try:
+    from src.workflow.run_ledger import RunLedger  # noqa: E402
+
+    ok = hasattr(RunLedger, "snapshot") and hasattr(RunLedger, "record_stage")
+    check("R3 账本单一入口", ok, "RunLedger.snapshot() 读、record_stage() 写；clawd ledger 出诊断")
+except Exception as e:  # noqa: BLE001
+    check("R3 账本单一入口", False, f"检查失败: {e}")
+
+
 # ---------- 输出 ----------
 print("=" * 78)
-print("审计台账复验（P1-1 ~ P1-16、P2-1 ~ P2-6）")
+print("审计台账复验（P1×16、P2×6、P3×3、风险×3）")
 print("=" * 78)
 failed = 0
 for tag, ok, evidence in results:
