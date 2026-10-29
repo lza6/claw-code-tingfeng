@@ -1179,8 +1179,10 @@ def main():
                             f"[yellow]提示：检测到 {cfg_path.name} 但未自动加载（安全默认）。"
                             f"确认可信后设置 CLAWD_ENABLE_HOOKS_CONFIG=1。[/yellow]"
                         )
-                except (OSError, ValueError):
-                    pass
+                except (OSError, ValueError) as _e:
+                    # 拿不到节流标记时忽略（提示本身是可选增强），但要留痕
+                    import logging as _logging
+                    _logging.getLogger(__name__).debug("hooks 提示节流失败: %s", _e)
     except Exception as e:
         import warnings
         warnings.warn(f"Hooks config load failed: {e}")
