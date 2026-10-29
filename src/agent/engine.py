@@ -603,7 +603,21 @@ class AgentEngine:
         """把本次运行落盘到 .clawd/sessions/（此前两套会话存储都没人写，CLI 永远是空的）
 
         失败只告警不阻断：会话留痕是增强项，不能影响主流程返回。
+
+        **测试环境不落盘**：pytest 运行时引擎会被大量实例化，此前把
+        `<MagicMock name='mock.goal'>` 之类脏数据写进了真实 `.clawd/sessions/`
+        （实测 37 个会话里 17 个是 MagicMock），`clawd session list` 直接展示脏数据
+        （2026-10-29 审计 P1-3）。可用 CLAWD_DISABLE_SESSION_PERSIST=1 显式关闭。
         """
+        import os as _os
+
+        # 显式开关优先级最高：测试要验证落盘链路时设 CLAWD_FORCE_SESSION_PERSIST=1
+        if _os.environ.get("CLAWD_FORCE_SESSION_PERSIST", "").lower() in ("1", "true", "yes"):
+            pass  # 强制落盘
+        elif _os.environ.get("PYTEST_CURRENT_TEST") or _os.environ.get(
+            "CLAWD_DISABLE_SESSION_PERSIST", ""
+        ).lower() in ("1", "true", "yes"):
+            return
         try:
             from ..core.session_bridge import persist_agent_session
 

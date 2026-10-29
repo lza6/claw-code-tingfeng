@@ -1151,8 +1151,36 @@ def main():
 
     # 自动加载 Hooks 配置
     try:
-        from ..core.hooks_config import load_hooks_config
-        load_hooks_config(Path.cwd() / "hooks" / "config.toml")
+        # 安全（审计 P1-4）：**默认不自动加载项目目录里的 hooks/config.toml**。
+        # 该文件可随仓库分发，自动加载等于"克隆一个仓库就跑它的命令"。
+        # 需要时显式开启：CLAWD_ENABLE_HOOKS_CONFIG=1
+        import os as _os
+
+        cfg_path = Path.cwd() / "hooks" / "config.toml"
+        if cfg_path.is_file():
+            if _os.environ.get("CLAWD_ENABLE_HOOKS_CONFIG", "").lower() in ("1", "true", "yes"):
+                from ..core.hooks_config import load_hooks_config
+                load_hooks_config(cfg_path)
+            else:
+                # 提示一次即可（24h 节流）：否则每条命令都刷一行，变成新噪音
+                try:
+                    import time as _time
+
+                    marker = Path(".clawd") / "hooks_config_warned"
+                    _now = _time.time()
+                    _warn = True
+                    if marker.is_file():
+                        _last = float(marker.read_text(encoding="utf-8").strip() or "0")
+                        _warn = (_now - _last) > 86400
+                    if _warn:
+                        marker.parent.mkdir(parents=True, exist_ok=True)
+                        marker.write_text(str(_now), encoding="utf-8")
+                        console.print(
+                            f"[yellow]提示：检测到 {cfg_path.name} 但未自动加载（安全默认）。"
+                            f"确认可信后设置 CLAWD_ENABLE_HOOKS_CONFIG=1。[/yellow]"
+                        )
+                except (OSError, ValueError):
+                    pass
     except Exception as e:
         import warnings
         warnings.warn(f"Hooks config load failed: {e}")

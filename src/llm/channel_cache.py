@@ -64,7 +64,8 @@ class ChannelCache:
             self._cache_dir.mkdir(parents=True, exist_ok=True)
             self._load_from_disk()
 
-        logger.info(f"渠道缓存已初始化 (TTL={default_ttl}s, 磁盘={enable_disk})")
+        # 降级为 debug：每条 CLI 命令都会初始化一次，info 级属噪音（审计 P2-1）
+        logger.trace(f"渠道缓存已初始化 (TTL={default_ttl}s, 磁盘={enable_disk})")
 
     def get(self, key: str) -> Any | None:
         """

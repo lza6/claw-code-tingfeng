@@ -7,6 +7,38 @@
 
 ---
 
+## [v0.76.0] (2026-10-29) — 执行项目自身审计（v4 指南）P1 全清零 + 门禁收紧
+
+按 `计划书/下一步改进指南.md`（v4，另一会话产出的实测审计）的 P1 清单逐条修复：
+
+### P1 全清零（6 条）
+| ID | 问题 | 修复 |
+|---|---|---|
+| P1-1 | Hook 注册表 1:1 字典 + 静默覆盖 → 配置里第二个 hook 永远不生效，日志却报 "Loaded N hooks" | `_REGISTRY` 改 **1:N**；`register_hook(replace=)` 显式替换、同名替换同项；`execute_hook` 依次执行全部规格、DENY 短路；新增 `get_hook_point_specs` / `get_registered_hook_lists`，旧 API 返回最后一项保持兼容 |
+| P1-2 | `HookPoint` 值是 `auto()` 生成的 `'1'..'48'`，日志不可读、按名配置永不匹配 | `_generate_next_value_` 返回小写枚举名；实测 `HookPoint.SESSION_START == "session_start"` |
+| P1-3 | 测试把 `<MagicMock name='mock.goal'>` 写进真实 `.clawd/sessions/`（37 个会话 17 个脏） | `_persist_session` 在 `PYTEST_CURRENT_TEST` 下不落盘（另支持 `CLAWD_DISABLE_SESSION_PERSIST=1`）；清理 17 个脏会话，实测跑测试前后 20→20 |
+| P1-4 | hooks 配置以 `shell=True` 执行 + 启动自动加载 CWD 配置（克隆仓库即执行=活的 RCE 面） | 去掉 `shell=True`（改 `shlex.split` 直 exec，需 shell 须显式 `CLAWD_HOOKS_ALLOW_SHELL=1`）；启动**默认不加载** hooks 配置，需 `CLAWD_ENABLE_HOOKS_CONFIG=1` |
+| P1-5 | 覆盖率门禁 `fail_under=47` 远低于实际 62.39% → 掉 15 点仍全绿（尺子失效） | **47 → 60** |
+| P1-6 | 静默异常门禁 172 比实际 162 松 10 处 | **172 → 162**（`hard_metrics` + `baseline-silent.json` + CLAUDE.md 同步） |
+
+### P2 修复（4 条）
+- **P2-1 CLI 噪音 5~8 行 → 1 行**：渠道缓存初始化 `info→trace`；定价过期提示 24h 节流（`CLAWD_PRICING_WARN=always/never`）；hooks 未加载提示 24h 节流
+- **P2-7** `celery[redis]` / `redis` 补进 `pyproject.dependencies`（`src/background/*` 硬 import，干净环境不再缺包）
+- **P2-8** 删除 3 个只剩 `__pycache__` 的幽灵包目录（`src/autoresearch`/`src/openclaw`/`src/templates`）
+- **P2-6（部分）** 新增 `[lsp]` extra 并同步 requirements.txt；**lock 文件未引入**（需决策工具）
+
+### 验证
+- `tests/core/test_hook_registry_multi.py` **12 passed**（含"两个 hook 都真的执行"、"DENY 短路"、"旧 API 兼容"）
+- `tests/cli/test_entrypoint_commands.py` **48 passed**（含新增"安全默认不自动加载 hooks"回归）
+- 全量回归、IMPORT、ruff 硬指标见下
+
+### 未修（如实披露）
+- P2-3/4/5/9 桌面端打包版本/签名/publish 域名/playwright 归类 —— 需重打包 + 代码签名证书（外部条件）
+- P2-2 定价数据仍过期 171 天（需联网核对官方价，不伪造）
+- P2-10 全量测试耗时波动（8~14 分钟），根因待专项分析
+
+---
+
 ## [v0.75.0] (2026-10-29) — 多引擎协同 + 两处误判更正 + REPL 多轮记忆
 
 ### 一、两处"未闭环"其实是**我测错了**（更正）

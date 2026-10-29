@@ -21,7 +21,7 @@
 > venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
 > py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
 > venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降
-> venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 172  # 静默吞异常只降不升
+> venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 162  # 静默吞异常只降不升
 > ```
 >
 > **日常快检**（约 4 分钟，不含 slow 层约 410s）：

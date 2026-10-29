@@ -6,8 +6,8 @@
 
 | 位置 | 值 |
 |:---|:---|
-| `.github/workflows/ci.yml` | `--min-reachable 443` / `--fail-over 172` |
-| `scripts/baseline.py` | `MIN_REACHABLE=443` / `MAX_SILENT_EXCEPT=172` |
+| `.github/workflows/ci.yml` | `--min-reachable 443` / `--fail-over 162` |
+| `scripts/baseline.py` | `MIN_REACHABLE=443` / `MAX_SILENT_EXCEPT=162` |
 | `scripts/check_silent_except.py` | `BASELINE = 172` |
 | `.agent/memory/verified-scope.md` | 文档里写 `--min-reachable 442`（旧值） |
 
@@ -24,8 +24,8 @@ from __future__ import annotations
 MIN_REACHABLE = 443
 
 # 静默吞异常上限（AST 口径：except 体只含 pass / ...），只允许下降
-MAX_SILENT_EXCEPT = 172
+MAX_SILENT_EXCEPT = 162
 
 # 覆盖率下限（百分比），必须与 pyproject.toml 的 [tool.coverage.report] fail_under 相等
 # （tests/scripts/test_baseline_gate.py::test_thresholds_are_single_source_of_truth 会检查）
-MIN_COVERAGE_PERCENT = 47
+MIN_COVERAGE_PERCENT = 60

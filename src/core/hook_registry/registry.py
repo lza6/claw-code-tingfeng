@@ -40,7 +40,9 @@ logger = get_logger(__name__)
 # 内部注册表（参考 Onyx _REGISTRY）
 # ---------------------------------------------------------------------------
 
-_REGISTRY: dict[HookPoint, HookPointSpec] = {}
+#: 一个 Hook 点可以挂**多个**规格（此前是 1:1 字典 + 静默覆盖，
+#: 配置里第二个 hook 永远不生效，日志却报 "Loaded N hooks"——2026-10-29 审计 P1-1）
+_REGISTRY: dict[HookPoint, list[HookPointSpec]] = {}
 
 # 回调列表（Hook 变更通知）
 _change_callbacks: list[Callable[[HookPoint, HookPointSpec], None]] = []
@@ -50,20 +52,28 @@ _change_callbacks: list[Callable[[HookPoint, HookPointSpec], None]] = []
 # 核心 API
 # ---------------------------------------------------------------------------
 
-def register_hook(hook_point: HookPoint, spec: HookPointSpec) -> None:
-    """注册 Hook 点规格
+def register_hook(hook_point: HookPoint, spec: HookPointSpec, *, replace: bool = False) -> None:
+    """注册 Hook 规格（同一 Hook 点支持多个）
 
     Args:
         hook_point: Hook 执行点
         spec: Hook 规格实例
+        replace: True 时用该规格**替换**该点已有的全部规格；
+                 False（默认）追加。同名规格会替换旧的同名项（便于热重载）。
 
-    Raises:
-        ValueError: 如果 Hook 点已被注册
+    行为说明（与旧版差异）：旧实现是 1:1 字典，重复注册只打一条 warning 就覆盖，
+    导致配置里除最后一个之外的 hook 全部失效（审计 P1-1）。现在改为追加。
     """
-    if hook_point in _REGISTRY:
-        logger.warning(f"Overwriting existing hook for {hook_point}")
+    specs = _REGISTRY.setdefault(hook_point, [])
+    if replace:
+        specs.clear()
+    else:
+        name = getattr(spec, "name", None)
+        if name:
+            specs[:] = [existing for existing in specs
+                        if getattr(existing, "name", None) != name]
 
-    _REGISTRY[hook_point] = spec
+    specs.append(spec)
 
     # 通知回调
     for callback in _change_callbacks:
@@ -103,10 +113,17 @@ def get_hook_point_spec(hook_point: HookPoint) -> HookPointSpec | None:
     Raises:
         ValueError: 如果 Hook 点未注册（严格模式）
     """
-    try:
-        return _REGISTRY[hook_point]
-    except KeyError:
+    specs = _REGISTRY.get(hook_point)
+    if not specs:
         return None
+    # 返回**最后注册**的规格：与旧版 1:1 语义一致（旧版也是最后一个胜出），
+    # 保证既有单 hook 调用方行为不变。要拿全部请用 get_hook_point_specs()。
+    return specs[-1]
+
+
+def get_hook_point_specs(hook_point: HookPoint) -> list[HookPointSpec]:
+    """获取某个 Hook 点上的**全部**规格（按注册顺序）"""
+    return list(_REGISTRY.get(hook_point, []))
 
 
 def execute_hook(hook_point: HookPoint, context: HookContext) -> HookExecutionResult:
@@ -119,28 +136,46 @@ def execute_hook(hook_point: HookPoint, context: HookContext) -> HookExecutionRe
     Returns:
         Hook 执行结果。如果 Hook 未注册，返回 CONTINUE。
     """
-    spec = get_hook_point_spec(hook_point)
-    if spec is None:
+    specs = get_hook_point_specs(hook_point)
+    if not specs:
         # Hook 未注册，不阻断流程
         return HookExecutionResult(
             result=HookResult.CONTINUE,
             message=f"No hook registered for {hook_point}",
         )
 
-    try:
-        # 验证输入
-        if not spec.validate(context):
-            return HookExecutionResult(
-                result=HookResult.WARN,
-                message=f"Invalid input for hook {hook_point}",
-            )
+    # 依次执行该点上的**所有**规格；DENY 立即短路（与 execute_all_hooks 语义一致）
+    final = HookExecutionResult(
+        result=HookResult.CONTINUE,
+        message=f"No hook registered for {hook_point}",
+    )
+    messages: list[str] = []
+    severity = {HookResult.CONTINUE: 0, HookResult.WARN: 1, HookResult.DENY: 2}
+    for spec in specs:
+        try:
+            if not spec.validate(context):
+                result = HookExecutionResult(
+                    result=HookResult.WARN,
+                    message=f"Invalid input for hook {hook_point}",
+                )
+            else:
+                result = spec.execute(context)
+        except Exception as error:  # noqa: BLE001 — 单个 hook 出错不阻断主流程
+            result = spec.on_error(error, context)
 
-        # 执行 Hook
-        return spec.execute(context)
+        messages.append(str(getattr(result, "message", "") or ""))
+        if severity.get(result.result, 0) >= severity.get(final.result, 0):
+            final = result
+        if result.result == HookResult.DENY:
+            break
 
-    except Exception as error:
-        # 错误处理（不阻断主流程）
-        return spec.on_error(error, context)
+    if len(specs) > 1 and messages:
+        final = HookExecutionResult(
+            result=final.result,
+            message=(str(getattr(final, "message", "") or "") + " | 全部: "
+                     + " ; ".join(m for m in messages if m))[:1000],
+        )
+    return final
 
 
 def execute_all_hooks(
@@ -169,13 +204,21 @@ def execute_all_hooks(
 
 
 def get_all_specs() -> list[HookPointSpec]:
-    """获取所有已注册的 Hook 规格"""
-    return list(_REGISTRY.values())
+    """获取所有已注册的 Hook 规格（1:N 展开）"""
+    out: list[HookPointSpec] = []
+    for specs in _REGISTRY.values():
+        out.extend(specs)
+    return out
 
 
 def get_registered_hooks() -> dict[HookPoint, HookPointSpec]:
-    """获取所有已注册的 Hook（副本）"""
-    return _REGISTRY.copy()
+    """获取所有已注册的 Hook（每点取最后注册的一个，兼容旧调用方）"""
+    return {hp: specs[-1] for hp, specs in _REGISTRY.items() if specs}
+
+
+def get_registered_hook_lists() -> dict[HookPoint, list[HookPointSpec]]:
+    """获取所有已注册的 Hook（每点**全部**规格的副本）"""
+    return {hp: list(specs) for hp, specs in _REGISTRY.items()}
 
 
 # ---------------------------------------------------------------------------

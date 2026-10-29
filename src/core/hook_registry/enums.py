@@ -23,7 +23,15 @@ class HookPoint(str, Enum):
 
     参考 Onyx HookPoint 和 oh-my-codex HookEventName 设计。
     已扩展至 20+ 事件类型。
+
+    **值必须是可读名**（如 `post_tool_use`），不能是 auto() 产生的 `'10'`：
+    `str, Enum` + `auto()` 在 Python 3.10 会退化成数字字符串，导致
+    日志不可读、按名字配置永远匹配不上、JSON 序列化看不懂（2026-10-29 审计 P1-2）。
     """
+
+    def _generate_next_value_(name, start, count, last_values):  # noqa: N805
+        """让 auto() 生成小写枚举名而不是数字"""
+        return name.lower()
     # ========== Session 生命周期 (对标 OMX) ==========
     SESSION_START = auto()
     SESSION_END = auto()

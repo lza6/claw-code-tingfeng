@@ -106,9 +106,11 @@ class TestSessionTitle:
 class TestEnginePersistenceBridge:
     """核心缺口回归：两套会话存储并存且 schema 不同，CLI 必须都读得到"""
 
-    def test_engine_persist_makes_session_visible_to_cli(self, tmp_path: Path):
+    def test_engine_persist_makes_session_visible_to_cli(self, tmp_path: Path, monkeypatch):
         from src.agent.engine import AgentEngine
 
+        # 安全默认是"测试环境不落盘"（审计 P1-3），此处显式开启以验证落盘链路
+        monkeypatch.setenv("CLAWD_FORCE_SESSION_PERSIST", "1")
         engine = AgentEngine(workdir=tmp_path)
 
         class _FakeSession:

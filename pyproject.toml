@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.75.0"
+version = "0.76.0"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -58,9 +58,20 @@ dependencies = [
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0; python_version < '3.11'",
     "toml>=0.10.2",  # config/generator.py 与 hooks_config.py 在所有版本都 import
+    # 以下两个被 src/background/* 硬 import（celery_app.py / tasks/*.py）。
+    # 此前只在 requirements.txt 声明，`pip install -e .` 装出的环境导入必失败
+    # （2026-10-29 审计 P2-7 实测：reachability 不可达只是掩盖了它）。
+    "celery[redis]>=5.3.0",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
+# LSP 代码智能（clawd 的 LSPTool 需要本机有语言服务器；不装则工具如实报"未安装"）
+lsp = [
+    "python-lsp-server>=1.10",
+    "pyflakes>=3.0",
+    "jedi>=0.19",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
@@ -149,7 +160,7 @@ omit = ["tests/*", "*/__pycache__/*"]
 #   - CI 不再传 --cov-fail-under（避免两处阈值打架）；
 #   - 相对"此前真正生效的 45"是**提高**，不是降低标准；
 #   - 目标仍是 60（见 计划书/下一步改进指南.md W5），分批提阈值：47 → 50 → 55 → 60。
-fail_under = 47
+fail_under = 60
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

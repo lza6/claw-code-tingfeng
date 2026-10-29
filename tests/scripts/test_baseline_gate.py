@@ -42,7 +42,8 @@ def _healthy() -> dict:
             "dep_missing": 7,
         },
         "reachability": {"status": "ok", "prod_reachable": 443},
-        "coverage": {"status": "ok", "percent_covered": 47.44},
+        # 用常量推导，避免门禁上调后"健康基线"被误判（本次 47→60 就踩到）
+        "coverage": {"status": "ok", "percent_covered": baseline_mod.MIN_COVERAGE_PERCENT + 5},
     }
 
 

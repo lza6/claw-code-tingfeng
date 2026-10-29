@@ -750,6 +750,12 @@ class TestConfigCommand:
 
 class TestMain:
     def test_main_registers_hooks_and_invokes_app(self, monkeypatch):
+        """显式开启（CLAWD_ENABLE_HOOKS_CONFIG=1）时才会加载项目 hooks 配置
+
+        安全默认：不自动加载 CWD 的 hooks/config.toml（审计 P1-4：该文件可随仓库分发，
+        自动加载等于"克隆仓库就跑它的命令"）。
+        """
+        monkeypatch.setenv("CLAWD_ENABLE_HOOKS_CONFIG", "1")
         events: list[str] = []
 
         monkeypatch.setattr(
@@ -780,7 +786,38 @@ class TestMain:
         assert any(e.startswith("hooks:") for e in events)
         assert "dispatcher" in events
 
+    def test_main_does_not_autoload_hooks_by_default(self, monkeypatch):
+        """安全默认回归：未开启时不得加载（否则克隆即执行）"""
+        monkeypatch.delenv("CLAWD_ENABLE_HOOKS_CONFIG", raising=False)
+        loaded: list[str] = []
+        monkeypatch.setattr(entrypoint, "_register_shutdown_hooks", lambda: None)
+        monkeypatch.setattr(
+            "src.core.hooks_config.load_hooks_config",
+            lambda path: loaded.append(str(path)),
+        )
+
+        class _NoopDispatcher:
+            @staticmethod
+            def get():
+                return _NoopDispatcher()
+
+            async def start(self):
+                return None
+
+        monkeypatch.setattr(
+            "src.core.notifications.dispatcher.NotificationDispatcher", _NoopDispatcher
+        )
+        monkeypatch.setattr(entrypoint, "app", lambda: None)
+        import warnings as _w
+
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            entrypoint.main()
+
+        assert loaded == [], f"默认不应加载 hooks 配置，实际加载了: {loaded}"
+
     def test_main_survives_hooks_and_dispatcher_failures(self, monkeypatch):
+        monkeypatch.setenv("CLAWD_ENABLE_HOOKS_CONFIG", "1")
         events: list[str] = []
 
         monkeypatch.setattr(entrypoint, "_register_shutdown_hooks", lambda: None)
