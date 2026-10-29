@@ -34,6 +34,7 @@ class _FakeEngine:
         self._chunks = chunks
         self.persona = None
         self.streamed = False
+        self.llm_provider = None  # handlers 会判断它是否为空来决定是否手动建 provider
 
     def apply_persona(self, persona: Any) -> None:
         self.persona = persona
@@ -195,3 +196,32 @@ class TestDispatchArity:
         assert resp.get("type") == "response", f"分发失败: {resp}"
         names = {p["name"] for p in (resp.get("data") or {}).get("personas", [])}
         assert "reviewer" in names
+
+
+class TestDefaultProviderApplied:
+    """WS run 未显式传 llm_config 时，必须用设置里选的默认 provider"""
+
+    def test_run_uses_active_provider(self, bus, tmp_path, monkeypatch):
+        from src.core import providers_store
+
+        monkeypatch.chdir(tmp_path)
+        providers_store.save_provider(
+            {"id": "p1", "name": "P1", "kind": "deepseek", "model": "deepseek-chat", "key": "sk-test-123456"},
+            tmp_path,
+        )
+
+        captured = {}
+
+        class _Factory:
+            def create(self, llm_config=None):
+                captured["cfg"] = llm_config
+                return _FakeEngine(["ok"])
+
+        event_bus, _ = bus
+        router = MessageRouter(auth_manager=AuthManager(token="t"), event_bus=event_bus)
+        asyncio.run(router._handle_run(_FakeWS(), {"id": "r9", "type": "run", "goal": "hi"}, engine_factory=_Factory()))
+
+        cfg = captured.get("cfg")
+        assert cfg is not None, "没把默认 provider 的配置传给引擎"
+        assert cfg.model == "deepseek-chat"
+        assert cfg.api_key == "sk-test-123456"

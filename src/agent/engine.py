@@ -789,6 +789,26 @@ class AgentEngine:
                 provider=provider,
                 directory=self.workdir / '.clawd' / 'sessions',
             )
+
+            # 用量记账（CLI 与桌面端共用这条路径）：用户面板里的成本/请求数/缓存命中率就靠它
+            try:
+                from ..core import usage_store
+
+                usage_store.record(
+                    provider=provider,
+                    model=model,
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens,
+                    cache_read_tokens=int(usage.get('total_cache_read_tokens') or 0),
+                    cost=total_cost,
+                    steps=len(getattr(session, 'steps', []) or []),
+                    status='completed' if getattr(session, 'is_complete', True) else 'incomplete',
+                    session_id=f'sess-{stamp}',
+                    goal_chars=len(str(getattr(session, 'goal', '') or '')),
+                    workdir=self.workdir,
+                )
+            except Exception as e:  # noqa: BLE001 — 记账失败不影响主流程
+                self.logger.debug(f'用量记账跳过: {e}')
         except Exception as e:
             self.logger.warning(f'会话落盘失败（不影响本次结果）: {e}')
 

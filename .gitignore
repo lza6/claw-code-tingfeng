@@ -115,3 +115,12 @@ hermes-agent-tmp/
 
 # electron-updater 开发态生成（含 CLAWD_UPDATE_URL 派生内容）
 desktop/dev-app-update.yml
+
+# --- 根目录卫生（v0.81.0）---
+x/
+test-run/
+hermes-agent-tmp/
+latest/
+logs/
+.coverage-*
+*.egg-info/

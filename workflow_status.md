@@ -224,3 +224,22 @@
 - [x] 新增 `scripts/verify_audit_p1.py`：P1-1~P1-16 逐条断言，当前 **16/16 PASS**（可挂 CI）。
 - 测试：`tests/tools_runtime` 299 passed / 4 skipped（含新增 16 条能力工具测试）；
   `tests/tools_runtime+tests/server+tests/mcp` 434 passed；ruff F821/F811/E9 全过。
+
+## 2026-10-30 v0.81.0 —— 滚动/Markdown+图片/用量页/多 provider/根目录卫生
+
+- [x] 滚动：`.main{min-height:0}` + `.frame{overflow:hidden}`；自动滚动改"粘底"，上翻出现「↓ 回到最新」。
+- [x] Markdown：标题/列表/引用/表格/链接/图片/代码块（语言+复制）/行内代码/粗体斜体；全 textContent 拼 DOM。
+- [x] 图片：`/api/file?path=`（仅图片 + 工作目录内；实测 traversal 与非图片 403）。
+- [x] 用量：SQLite `.clawd/clawd.db` 的 usage 表，引擎每轮记一行；侧栏「用量统计」= 4 KPI + 按小时柱状图 + 请求日志。
+- [x] 多 provider：providers 表 + 设置页增删改/设默认/掩码显示；env 名优先、编辑留空不清 key。
+- [x] 根目录卫生：oneoff 脚本归 scripts/oneoff/（带 README）、日志归 logs/、对标报告归 docs/reports/、.gitignore 补条目；D-27 记录。
+- [x] 实装 E2E 抓到的两个问题：第三种工具调用写法（XML 风格）解析不到 → 宽松解析 + 工具名别名；
+      流式 E2E 判据改为统计 delta 事件数（DOM 采样会被"末尾吐字"骗过）。
+- 测试：`tests/core/test_local_storage.py` 14 条；core+server+cli 1432 passed；tools_runtime 299 passed；
+  `desktop/ui_console_e2e.mjs` 12 项断言；`verify_audit_p1.py` 16/16 PASS。
+- [x] 实装 E2E 抖动修复：Host 刚跑完一轮时同一端口 HTTP 可能短暂不可用 → 用量/provider 拉取加**短重试**（3 次退避），
+      否则面板会"莫名空白"（这是用户能看到的真问题，不是测试噪声）。
+
+- [x] 多 provider **真正生效**：`_handle_run` 未传 llm_config 时用默认 provider 构造 LLMConfig（含密钥）；
+      没密钥则告警并回退全局。`/api/info` 暴露 active_provider；用量页支持 当天/7天/30天 切换。
+      测试：`tests/core/test_local_storage.py` +4、`tests/server/test_streaming_and_persona.py` +1。

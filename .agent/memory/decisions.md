@@ -148,3 +148,11 @@ B904/RUF012/E741（本版 ruff 无 autofix，需逐点人工判断）。
   正好对上：消息流是主角，工具是脚注，chrome 只留一行。
 - 代价：需要处理事件乱序（response 可能先于最后一条 delta 到），前端要 pendingFinal + 兜底收尾。
 - 重新考虑：若要支持"边流式边可打断"，需要增量消息 id + 服务端可取消（当前 run 不可中途 cancel）。
+
+## D-27 根目录卫生：一次性脚本一律进 `scripts/oneoff/`
+- 决策：`analyze_*.py` / `inject_errors.py` / `cleanup.bat` / `FINAL_FIX_SUMMARY.txt` / `todos.txt`
+  等一次性产物统一挪到 `scripts/oneoff/`（附 README 说明性质与来历），日志挪进 `logs/`，
+  历史对标报告进 `docs/reports/`；`.gitignore` 补 `x/`、`test-run/`、`hermes-agent-tmp/`、`latest/`、`logs/`。
+- 理由：用户明确反馈"仓库根目录越来越臃肿、分不清入口和产物"。根目录只应留**入口与文档**。
+- 代价：`计划书/下一步改进指南.md` 与归档文档里对这些脚本的旧路径引用会失效（属历史表述，未改）。
+- 重新考虑：若某脚本被重新启用，应从 oneoff 提出、进 `scripts/` 并补测试。

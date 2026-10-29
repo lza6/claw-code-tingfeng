@@ -149,6 +149,12 @@ class MessageRouter:
             'auth': self._handle_auth,
             'run': self._handle_run,
             'personas': self._handle_personas,
+            'providers_list': self._handle_providers_list,
+            'providers_save': self._handle_providers_save,
+            'providers_delete': self._handle_providers_delete,
+            'providers_set_default': self._handle_providers_set_default,
+            'usage_summary': self._handle_usage_summary,
+            'usage_recent': self._handle_usage_recent,
             'status': self._handle_status,
             'file_read': self._handle_file_read,
             'file_write': self._handle_file_write,
@@ -263,7 +269,26 @@ class MessageRouter:
 
         stream = message.get('stream', False)
         llm_config_from_msg: LLMConfig | None = message.get('llm_config')  # type: ignore[assignment]
-        message.get('max_iterations')
+
+        # 没显式传 config 时，用用户在设置里选的"默认 provider"——否则多 provider 只是好看的表格
+        if llm_config_from_msg is None:
+            from ..core import providers_store
+
+            try:
+                active = providers_store.active_provider(self._workdir())
+                if active and active.get('has_key'):
+                    llm_config_from_msg = providers_store.build_llm_config(
+                        active['id'], self._workdir()
+                    )
+                    self.logger.info(
+                        f"使用默认 provider: {active['id']} / {active['model'] or '(默认模型)'}"
+                    )
+                elif active:
+                    self.logger.warning(
+                        f"默认 provider {active['id']} 没有可用密钥，回退全局配置"
+                    )
+            except Exception as exc:  # noqa: BLE001 — provider 配置有问题不能挡住对话
+                self.logger.warning(f"默认 provider 不可用，回退全局配置: {exc}")
 
         engine = engine_factory.create(llm_config=llm_config_from_msg)
 
@@ -413,6 +438,118 @@ class MessageRouter:
             self.logger.warning(f'读取角色库失败: {exc}')
             return build_error(message.get('id'), 'E_PERSONAS_FAILED', f'读取角色库失败: {exc}')
         return build_response(message.get('id'), {'personas': items, 'count': len(items)})
+
+    # ------------------------------------------------------------------
+    # 多 provider 配置（本地 SQLite；密钥只返回掩码）
+    # ------------------------------------------------------------------
+
+    def _workdir(self) -> Path:
+        """当前工作目录（provider/用量都存 <workdir>/.clawd/clawd.db）"""
+        return Path.cwd()
+
+    async def _handle_providers_list(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import providers_store
+
+        try:
+            items = providers_store.list_providers(self._workdir())
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(f'读取 provider 列表失败: {exc}')
+            return build_error(message.get('id'), 'E_PROVIDERS_FAILED', f'读取 provider 失败: {exc}')
+        active = next((i for i in items if i['is_default']), None)
+        return build_response(
+            message.get('id'),
+            {'providers': items, 'count': len(items), 'active': active, 'kinds': list(providers_store.KINDS)},
+        )
+
+    async def _handle_providers_save(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import providers_store
+
+        payload = message.get('provider') or {}
+        if not isinstance(payload, dict):
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', 'provider 必须是对象')
+        try:
+            saved = providers_store.save_provider(payload, self._workdir())
+        except ValueError as exc:
+            return build_error(message.get('id'), 'E_PROVIDER_INVALID', str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(f'保存 provider 失败: {exc}')
+            return build_error(message.get('id'), 'E_PROVIDERS_FAILED', f'保存 provider 失败: {exc}')
+        return build_response(message.get('id'), {'provider': saved})
+
+    async def _handle_providers_delete(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import providers_store
+
+        provider_id = str(message.get('id_value') or message.get('provider_id') or '').strip()
+        if not provider_id:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 provider_id')
+        ok = providers_store.delete_provider(provider_id, self._workdir())
+        return build_response(message.get('id'), {'deleted': ok, 'provider_id': provider_id})
+
+    async def _handle_providers_set_default(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import providers_store
+
+        provider_id = str(message.get('id_value') or message.get('provider_id') or '').strip()
+        if not provider_id:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 provider_id')
+        ok = providers_store.set_default(provider_id, self._workdir())
+        if not ok:
+            return build_error(message.get('id'), 'E_PROVIDER_NOT_FOUND', f'provider 不存在: {provider_id}')
+        return build_response(message.get('id'), {'default': provider_id})
+
+    # ------------------------------------------------------------------
+    # 用量统计
+    # ------------------------------------------------------------------
+
+    async def _handle_usage_summary(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import usage_store
+
+        range_key = str(message.get('range') or 'today')
+        try:
+            data = usage_store.summary(range_key, self._workdir())
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(f'读取用量汇总失败: {exc}')
+            return build_error(message.get('id'), 'E_USAGE_FAILED', f'读取用量失败: {exc}')
+        return build_response(message.get('id'), data)
+
+    async def _handle_usage_recent(
+        self,
+        ws: ServerProtocol,
+        message: dict[str, Any],
+        engine_factory: EngineFactoryProtocol | None = None,
+    ) -> dict[str, Any]:
+        from ..core import usage_store
+
+        try:
+            rows = usage_store.recent(int(message.get('limit') or 50), self._workdir())
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(f'读取请求日志失败: {exc}')
+            return build_error(message.get('id'), 'E_USAGE_FAILED', f'读取日志失败: {exc}')
+        return build_response(message.get('id'), {'rows': rows, 'count': len(rows)})
 
     async def _handle_status(
         self,

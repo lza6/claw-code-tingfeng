@@ -78,6 +78,65 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .msg-actions button{font-size:11px;color:var(--label-tertiary);padding:2px 6px;border-radius:var(--radius-s)}
 .msg-actions button:hover{background:var(--hover);color:var(--label-primary)}
 
+/* ===== 滚动修复（关键：flex 子项必须 min-height:0 才能真正滚动） ===== */
+.frame{overflow:hidden}
+.main{min-height:0}
+.view{overflow-y:auto;overscroll-behavior:contain;scroll-behavior:smooth}
+#chat{min-height:0}
+.jump-bottom{position:absolute;right:26px;bottom:96px;width:34px;height:34px;border-radius:50%;background:var(--bg-layer-3);border:1px solid var(--border-l2);color:var(--label-primary);display:none;align-items:center;justify-content:center;box-shadow:0 6px 18px rgb(0 0 0/.45);z-index:20}
+.jump-bottom.show{display:flex}
+.main{position:relative}
+
+/* ===== Markdown 渲染 ===== */
+.msg-assistant .body{white-space:normal}
+.msg-assistant .body .para{white-space:pre-wrap;word-break:break-word}
+.msg-assistant .body h1,.msg-assistant .body h2,.msg-assistant .body h3{margin:14px 0 6px;line-height:1.35;font-weight:600}
+.msg-assistant .body h1{font-size:18px}.msg-assistant .body h2{font-size:16px}.msg-assistant .body h3{font-size:14px}
+.msg-assistant .body ul,.msg-assistant .body ol{margin:6px 0 6px 20px}
+.msg-assistant .body li{margin:2px 0;white-space:pre-wrap}
+.msg-assistant .body blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--brand);background:var(--bg-layer-2);color:var(--label-secondary);border-radius:0 var(--radius-s) var(--radius-s) 0}
+.msg-assistant .body hr{border:none;border-top:1px solid var(--border-l1);margin:12px 0}
+.msg-assistant .body a{color:#7aa2ff;text-decoration:none}
+.msg-assistant .body a:hover{text-decoration:underline}
+.msg-assistant .body table{border-collapse:collapse;margin:8px 0;font-size:12.5px;display:block;overflow-x:auto;max-width:100%}
+.msg-assistant .body th,.msg-assistant .body td{border:1px solid var(--border-l2);padding:6px 10px;text-align:left;vertical-align:top}
+.msg-assistant .body th{background:var(--bg-layer-2);font-weight:600}
+.msg-assistant .body img{max-width:100%;max-height:420px;border-radius:var(--radius-m);border:1px solid var(--border-l1);margin:8px 0;display:block}
+.msg-assistant .body .code-wrap{margin:8px 0;border:1px solid var(--border-l1);border-radius:var(--radius-m);overflow:hidden;background:var(--bg-layer-2)}
+.msg-assistant .body .code-head{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-layer-3);font-size:11px;color:var(--label-tertiary);border-bottom:1px solid var(--border-l1)}
+.msg-assistant .body .code-head .lang{text-transform:lowercase}
+.msg-assistant .body .code-head .copy{margin-left:auto;font-size:11px;color:var(--label-secondary);padding:1px 6px;border-radius:4px}
+.msg-assistant .body .code-head .copy:hover{background:var(--hover);color:var(--label-primary)}
+.msg-assistant .body .code-block{margin:0;padding:10px 12px;background:transparent;border:none;overflow-x:auto}
+
+/* ===== 用量页 ===== */
+.usage-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:4px 24px 10px}
+.kpi{padding:14px 16px;border-radius:var(--radius-c);background:var(--bg-layer-3);border:1px solid var(--border-l2)}
+.kpi .k-label{font-size:12px;color:var(--label-tertiary)}
+.kpi .k-value{font-size:22px;font-weight:600;margin-top:4px}
+.kpi .k-sub{font-size:11px;color:var(--label-tertiary);margin-top:2px}
+.chart-wrap{padding:4px 24px 14px}
+.chart{width:100%;height:180px;background:var(--bg-layer-3);border:1px solid var(--border-l2);border-radius:var(--radius-c)}
+.usage-table-wrap{padding:0 24px 20px;overflow:auto;max-height:44vh}
+.utable{width:100%;border-collapse:collapse;font-size:12.5px}
+.utable th{position:sticky;top:0;background:var(--bg-layer-2);text-align:left;font-weight:600;color:var(--label-secondary);padding:8px 10px;border-bottom:1px solid var(--border-l2)}
+.utable td{padding:7px 10px;border-bottom:1px solid var(--border-l1);color:var(--label-primary);white-space:nowrap}
+.utable tr:hover td{background:var(--hover)}
+.utable .num{text-align:right;font-variant-numeric:tabular-nums}
+.usage-empty{padding:26px 24px;color:var(--label-tertiary);font-size:13px}
+
+/* ===== 设置里的多 provider ===== */
+.prov-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.prov-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-m);border:1px solid var(--border-l2);background:var(--bg-layer-3)}
+.prov-item.active{border-color:var(--brand)}
+.prov-item .p-name{font-size:13px;font-weight:600}
+.prov-item .p-sub{font-size:11px;color:var(--label-tertiary)}
+.prov-item .p-actions{margin-left:auto;display:flex;gap:6px}
+.prov-item button{font-size:11px;color:var(--label-secondary);padding:3px 8px;border-radius:var(--radius-s);border:1px solid var(--border-l2)}
+.prov-item button:hover{background:var(--hover);color:var(--label-primary)}
+.prov-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.prov-form .full{grid-column:1/-1}
+
 /* ===== 轻量会话栏（替代厚重顶栏，orca 式） ===== */
 .sessionbar{display:flex;align-items:center;gap:10px;padding:10px 24px 6px;flex-shrink:0;font-size:13px}
 .sb-title{color:var(--label-primary);font-weight:600;max-width:46vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -179,6 +238,7 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
     <div class="session-list" id="sessionList"></div>
     <div class="sidebar-footer">
       <button class="side-entry" id="btnMarket"><span class="ico">◉</span> 插件市场</button>
+      <button class="side-entry" id="btnUsage"><span class="ico">📊</span> 用量统计</button>
       <button class="side-entry" id="btnSettings"><span class="ico">⚙</span> 设置</button>
       <div class="ver-row">
         <span id="verLine">v—</span>
@@ -197,7 +257,8 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
         <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
       </div>
     </div>
-    <div class="view"><div id="chat"></div><div id="trace" style="display:none;padding:20px 28px"></div></div>
+    <div class="view" id="view"><div id="chat"></div><div id="trace" style="display:none;padding:20px 28px"></div></div>
+    <button class="jump-bottom" id="jumpBottom" title="回到最新">↓</button>
     <div class="banner" id="banner"></div>
     <div class="composer-wrap">
       <div class="composer">
@@ -235,6 +296,39 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
   </div>
 </div>
 
+<!-- 用量统计弹窗 -->
+<div class="overlay" id="usageOverlay">
+  <div class="market-panel" style="max-width:980px;height:min(760px,92vh)">
+    <div class="market-head" style="display:flex;align-items:flex-start">
+      <div style="flex:1">
+        <h1>用量统计</h1>
+        <p>本机记录（SQLite：<code>.clawd/clawd.db</code>）—— 成本 / 请求数 / token / 缓存命中率</p>
+      </div>
+      <button class="sbtn" id="usageRefresh" style="margin-left:auto">刷新</button>
+      <button class="market-close" id="usageClose">✕</button>
+    </div>
+    <div class="viewbar" id="usageRangeBar" style="padding:2px 24px 6px">
+      <button class="vb active" data-range="today">当天</button>
+      <button class="vb" data-range="week">近 7 天</button>
+      <button class="vb" data-range="month">近 30 天</button>
+      <span style="margin-left:auto;font-size:11px;color:var(--label-tertiary)" id="usageActiveProvider"></span>
+    </div>
+    <div class="usage-kpis" id="usageKpis"></div>
+    <div class="chart-wrap"><svg class="chart" id="usageChart" viewBox="0 0 800 180" preserveAspectRatio="none"></svg></div>
+    <div class="usage-table-wrap">
+      <table class="utable">
+        <thead><tr>
+          <th>时间</th><th>Provider</th><th>模型</th>
+          <th class="num">成本</th><th class="num">新增输入</th><th class="num">输出</th>
+          <th class="num">缓存读</th><th class="num">步数</th><th>状态</th>
+        </tr></thead>
+        <tbody id="usageRows"></tbody>
+      </table>
+      <div class="usage-empty" id="usageEmpty" style="display:none">还没有用量记录 —— 跑一次任务就会出现在这里。</div>
+    </div>
+  </div>
+</div>
+
 <!-- 设置弹窗 -->
 <div class="overlay" id="settingsOverlay">
   <div class="market-panel" style="max-width:640px">
@@ -251,8 +345,32 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
       <div class="srow"><label>工作目录</label><span id="setWorkdir">—</span></div>
       <div class="srow"><label>API Key</label><span id="setApiKey">—</span></div>
 
+      <div class="srow" style="border-bottom:none;padding-top:14px"><label>API 提供商</label><span style="color:var(--label-tertiary);font-size:12px">可配置多套，随时切换（存在本地 SQLite）</span></div>
+      <div class="prov-list" id="provList"></div>
+      <div class="prov-form">
+        <input id="provId" placeholder="标识（英文，如 deepseek-main）">
+        <input id="provName" placeholder="显示名（如 DeepSeek 官方）">
+        <select id="provKind">
+          <option value="openai">openai 兼容</option>
+          <option value="anthropic">anthropic</option>
+          <option value="deepseek">deepseek</option>
+          <option value="google">google</option>
+          <option value="groq">groq</option>
+          <option value="openrouter">openrouter</option>
+          <option value="custom">custom</option>
+        </select>
+        <input id="provModel" placeholder="模型（如 deepseek-chat）">
+        <input id="provBaseUrl" class="full" placeholder="Base URL（如 https://api.deepseek.com/v1）">
+        <input id="provKeyEnv" placeholder="密钥的环境变量名（推荐，如 DEEPSEEK_API_KEY）">
+        <input id="provKey" type="password" placeholder="或直接填密钥（仅本机保存，界面只显示掩码）">
+      </div>
+      <div class="sactions">
+        <button class="sbtn primary" id="provSave">保存提供商</button>
+        <button class="sbtn" id="provReset">清空表单</button>
+      </div>
+
       <div class="sfield">
-        <label for="setProvider">Provider</label>
+        <label for="setProvider">当前生效 Provider（只读）</label>
         <input id="setProvider" placeholder="openai / anthropic / openrouter …">
       </div>
       <div class="sfield">

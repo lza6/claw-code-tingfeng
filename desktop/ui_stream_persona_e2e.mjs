@@ -67,9 +67,12 @@ while (Date.now() < deadline) {
   if (!snap.busy) { finished = true; break; }
 }
 const growth = samples.filter((n, i) => n > 0 && (i === 0 || n > samples[i - 1]));
+const deltaCount = await page.evaluate(() => window.__streamDeltas || 0);
 log(`流式采样: ${JSON.stringify(samples.slice(0, 20))}…${samples.length > 20 ? ` (共 ${samples.length} 次)` : ''}`);
 if (!finished) fail('150s 内未完成');
-if (growth.length < 2) fail(`没有观察到流式增长（growth=${growth.length}），可能还是一次性返回`);
+// 真流式的判据：前端确实收到多条 stream_delta（DOM 采样会被"模型末尾才吐字"骗过）
+if (deltaCount < 2) fail(`增量事件太少（deltaCount=${deltaCount}），不是真流式`);
+log(`流式增量事件数=${deltaCount}（DOM 增长采样=${growth.length}）`);
 
 const finalSnap = await page.evaluate(() => {
   const all = document.querySelectorAll('.msg-assistant');

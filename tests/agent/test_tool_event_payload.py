@@ -133,3 +133,42 @@ class TestLenientToolCallParsing:
     def test_braces_inside_strings_do_not_break_balance(self):
         calls = self._parse('<tool>{"name": "BashTool", "args": {"command": "echo {x}"}}')
         assert calls == [("BashTool", {"command": "echo {x}"})]
+
+
+class TestXmlStyleToolCalls:
+    """预览版模型会在同一任务里换着花样写工具调用（实测三种）
+
+    第三种：`<tool_call><file_read>{"file_path": "x"}</file_read></tool_call>` ——
+    只认 `<tool>{json}</tool>` 的解析器会漏掉，工具不执行、原文还被当答案。
+    同时模型会把工具名写成 `file_read` / `shell` 这类别名，需要映射到真实类名。
+    """
+
+    def _parse(self, text: str):
+        from src.agent.tool_executor import parse_tool_calls
+
+        return parse_tool_calls(text)
+
+    def test_xml_style_tag_parsed_with_alias(self):
+        text = '<tool_call><file_read>{"file_path": "final_probe.txt"}</file_read></tool_call>'
+        assert self._parse(text) == [("FileReadTool", {"file_path": "final_probe.txt"})]
+
+    def test_alias_in_json_name_field(self):
+        text = '<tool>{"name": "file_read", "args": {"file_path": "a.txt"}}>'
+        assert self._parse(text) == [("FileReadTool", {"file_path": "a.txt"})]
+
+    def test_shell_alias_maps_to_bash_tool(self):
+        text = '<tool_call><shell>{"command": "echo hi"}</shell></tool_call>'
+        assert self._parse(text) == [("BashTool", {"command": "echo hi"})]
+
+    def test_unknown_tag_becomes_camelcase_tool(self):
+        from src.agent.tool_executor import resolve_tool_alias
+
+        assert resolve_tool_alias("web_search") == "Web_searchTool"
+        assert resolve_tool_alias("GrepTool") == "GrepTool"
+
+    def test_wrapper_tags_are_not_treated_as_tools(self):
+        """`tool_call` / `function_call` 这类包装标签不能被当成工具名"""
+        calls = self._parse('<tool_call>{"name": "FileReadTool", "args": {}}</tool_call>')
+        names = [name for name, _ in calls]
+        assert "tool_call" not in names
+        assert "Tool_callTool" not in names

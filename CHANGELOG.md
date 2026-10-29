@@ -7,6 +7,65 @@
 
 ---
 
+## [v0.81.0] (2026-10-30) — 滚动修复 + 完整 Markdown/图片 + 用量统计页 + 多 provider + 根目录卫生
+
+**1. 修「消息一多就滚不动」**
+根因是 flex 布局链上缺 `min-height:0`（`.main`），高度被内容顶开、`.view` 的 `overflow-y:auto` 失效。
+已补 `.main{min-height:0}` + `.frame{overflow:hidden}`；同时把自动滚动改成**粘底**逻辑：
+只有你本来就在底部附近才跟随，往上翻时不再被强行拉回，并出现「↓ 回到最新」按钮。
+
+**2. Markdown / 图片真正渲染（之前只有最小版）**
+新渲染器支持：标题、无序/有序列表、引用、分隔线、**表格**、链接、**图片**、
+围栏代码块（带语言标签 + 复制按钮）、行内代码、粗体/斜体。
+图片两种来源：`http(s)://` 直连；工作区内相对路径走新端点 `/api/file?path=…`
+（**只放行图片后缀 + 路径必须在工作目录内**，实测 `../etc/passwd` 与 `src/agent/engine.py` 均 403）。
+全部用 `textContent`/`createElement` 拼 DOM，**不走 innerHTML**。
+
+**3. 用量统计页（对齐你截图里那种面板）**
+- 新增本地 SQLite：`<工作区>/.clawd/clawd.db`（表 `usage`），**引擎每跑完一轮就记一行**：
+  provider / model / 新增输入 token / 输出 token / 缓存读 token / 成本 / 步数 / 状态 / 时间。
+- 侧栏新增「用量统计」：4 个 KPI（总成本 / 请求数 / 真实消耗 tokens / **缓存命中率**）+ 按小时柱状图 + 请求日志表。
+- HTTP 端点 `/api/usage`（汇总 + 最近 50 条），WS 也有 `usage_summary` / `usage_recent`。
+- 缓存命中率口径：`缓存读 / (缓存读 + 新增输入)`，与截图里的面板一致。
+
+**4. 多 API 提供商（设置页闭环）**
+- 同一份 SQLite 里存 `providers` 表：id / 名称 / 类型 / base_url / 模型 / `key_env` / `key_inline` / 是否默认。
+- 设置页可**新增、编辑、删除、设为默认**；首次保存自动成为默认；删掉默认项会自动把最近的一条顶上。
+- **密钥两种放法**：环境变量名（推荐）或明文（仅本机）；对外接口**只返回掩码**（`sk-ab…1234`），
+  实测前端拿不到明文；编辑时不填密钥 = 保留原值（不会误清空）。
+
+**5. 根目录卫生**
+`analyze_*.py` / `inject_errors.py` / `cleanup.bat` / `FINAL_FIX_SUMMARY.txt` / `todos.txt` 等一次性产物
+挪进 `scripts/oneoff/`（附 README 说明来历），散落的 `*.log` 归到 `logs/`，历史对标报告进 `docs/reports/`；
+`.gitignore` 补 `x/`、`test-run/`、`hermes-agent-tmp/`、`latest/`、`logs/`。决策记入 `.agent/memory/decisions.md` D-27。
+
+**6. 装到机器上才暴露的两处问题（本轮实装 E2E 抓的）**
+- **模型又换了一种工具调用写法**：这次是 `<tool_call><file_read>{"file_path": "x"}</file_read></tool_call>`
+  —— 前两种（`<tool>{json}</tool>`、`<tool>{json}>` 多符号）已兼容，这种 XML 风格漏了，导致工具不执行、
+  原文被当答案。现在宽松解析同时支持：`<tool>{json}`、`<tag>{json}</tag>`（排除 tool_call/args 等包装标签），
+  并把模型常写的工具名（`file_read`/`read_file`/`shell`/`grep`/`glob`…）映射到真实类名
+  （`FileReadTool`/`BashTool`/`GrepTool`/`GlobTool`）。
+- **流式 E2E 的判据不稳**：原来用 DOM 采样判断"文本是否在增长"，而预览模型常在末尾一次性吐字，
+  采样会漏 → 误报失败。改为在渲染器里计**收到的 delta 事件数**（`window.__streamDeltas`），
+  ≥2 才算真流式；DOM 只断言最终态。
+
+**7. 让"多 provider"真的生效（否则只是好看的表格）**
+- `_handle_run` 在未显式传 `llm_config` 时，会读取设置里的**默认 provider** 并构造 `LLMConfig`
+  （provider/api_key/base_url/model）交给引擎；没配密钥时明确告警并回退全局配置。
+- `/api/info` 增加 `active_provider` 摘要（不含密钥），设置页与用量页显示"生效: xxx"。
+- 用量页支持**时间范围切换**（当天 / 近 7 天 / 近 30 天），`/api/usage?range=`。
+
+**验证（实跑）**
+- 新增 `desktop/ui_console_e2e.mjs`（真实浏览器 12 项断言）：
+  长历史可滚动 / 上翻出「回到最新」/ 点击回底 / Markdown 标题列表引用 / 表格 / 代码块无 ``` 原文 /
+  行内代码与链接 / **图片经 /api/file 真出图（naturalWidth=1360）** / 用量页 4 KPI + 日志行 / provider 保存 + 仅显示 env 名
+  → **12/12 PASS**
+- 新增 `tests/core/test_local_storage.py`（14 条）：provider CRUD / 默认互斥 / 删默认补位 / 密钥掩码 /
+  env 优先 / 空 key 不清空 / 用量汇总口径 / 日志倒序 / 空库零值 / 记账失败不抛
+- `scripts/verify_audit_p1.py` 仍 16/16 PASS；门禁 F821/F811/E9 全过
+
+---
+
 ## [v0.80.0] (2026-10-30) — 去掉原生菜单栏 + 状态/记忆/追踪/团队内建为原生工具 + 修 Windows 编码系统性 bug
 
 **1. 去掉 Electron 原生菜单栏（File / Edit / View / Window / Help）**

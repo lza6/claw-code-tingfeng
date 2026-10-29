@@ -170,6 +170,48 @@ def _balanced_json_at(text: str, start: int) -> str | None:
     return None
 
 
+#: 模型常见的"工具名写法" → 真实工具类名
+TOOL_NAME_ALIASES = {
+    "file_read": "FileReadTool",
+    "read_file": "FileReadTool",
+    "fileread": "FileReadTool",
+    "file_write": "FileEditTool",
+    "write_file": "FileEditTool",
+    "edit_file": "FileEditTool",
+    "file_edit": "FileEditTool",
+    "shell": "BashTool",
+    "bash": "BashTool",
+    "run_command": "BashTool",
+    "execute_command": "BashTool",
+    "grep": "GrepTool",
+    "search": "GrepTool",
+    "glob": "GlobTool",
+    "find_files": "GlobTool",
+    "list_dir": "GlobTool",
+}
+
+
+def resolve_tool_alias(name: str) -> str:
+    """把模型写的工具名解析成真实类名（大小写/下划线/别名都容忍）"""
+    raw = (name or "").strip()
+    if not raw:
+        return ""
+    if raw in TOOL_NAME_ALIASES:
+        return TOOL_NAME_ALIASES[raw]
+    lowered = raw.lower().replace("-", "_")
+    if lowered in TOOL_NAME_ALIASES:
+        return TOOL_NAME_ALIASES[lowered]
+    # file_read_tool / FileReadTool / fileRead → FileReadTool
+    compact = lowered.replace("_", "")
+    for alias, real in TOOL_NAME_ALIASES.items():
+        if compact == alias.replace("_", ""):
+            return real
+    if not raw.endswith("Tool"):
+        candidate = raw[:1].upper() + raw[1:] + "Tool"
+        return candidate
+    return raw
+
+
 def parse_tool_calls_lenient(content: str) -> list[tuple[str, dict[str, Any]]]:
     """宽松解析：容忍 `<tool>{json}>`、漏 `</tool>`、`functions` 前缀等常见漂移"""
     calls: list[tuple[str, dict[str, Any]]] = []
@@ -189,8 +231,30 @@ def parse_tool_calls_lenient(content: str) -> list[tuple[str, dict[str, Any]]]:
         name = data.get('name') or data.get('tool') or data.get('tool_name') or ''
         args = data.get('args') or data.get('arguments') or data.get('input') or {}
         if isinstance(name, str) and name.strip():
-            calls.append((name.strip(), args if isinstance(args, dict) else {}))
+            calls.append((resolve_tool_alias(name.strip()), args if isinstance(args, dict) else {}))
             warn(f'工具调用格式不规范（缺少 </tool> 或多出符号），已宽松解析: {name.strip()}')
+
+    if calls:
+        return calls
+
+    # XML 风格：<tool_call><file_read>{"file_path": "x"}</file_read></tool_call>
+    # 真实踩坑：预览版模型会在同一任务里换着花样写工具调用，只认 <tool>{json}</tool> 必然漏
+    for match in re.finditer(r"<([A-Za-z_][\w-]*)>\s*(\{)", content or ""):
+        tag = match.group(1)
+        if tag.lower() in ("tool", "tool_call", "function_call", "args", "arg"):
+            continue
+        blob = _balanced_json_at(content, match.start(2))
+        if not blob:
+            continue
+        try:
+            data = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        real = resolve_tool_alias(tag)
+        calls.append((real, data))
+        warn(f'工具调用使用了 XML 风格 <{tag}> 标记，已按别名解析为 {real}')
     return calls
 
 

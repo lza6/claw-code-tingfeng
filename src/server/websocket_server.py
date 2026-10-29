@@ -168,6 +168,13 @@ class ClawdWebSocketServer:
             info["model"] = getattr(self._settings, "llm_model", None)
             info["base_url"] = getattr(self._settings, "llm_base_url", None)
             info["api_key_set"] = bool(getattr(self._settings, "llm_api_key", None))
+            # 多 provider：让设置页能显示"当前真正生效的那套"
+            try:
+                from ..core import providers_store
+
+                info["active_provider"] = providers_store.describe_active(self._workdir())
+            except Exception:  # noqa: BLE001 — provider 库坏了不能影响 /api/info
+                info["active_provider"] = {"configured": False}
         except Exception:
             info["provider"] = None
             info["model"] = None
@@ -336,12 +343,13 @@ class ClawdWebSocketServer:
                 body,
             )
 
-        path = request.path.split('?')[0]
+        raw_path = request.path
+        path = raw_path.split('?')[0]
         if request.headers.get('Upgrade', '').lower() != 'websocket':
             try:
                 # websockets 16 的 Request 无 method 属性；进入此回调的
                 # 非 upgrade 请求按 GET 处理（loopback-only 服务，可接受）
-                return self._handle_static_http(path)
+                return self._handle_static_http(path, raw_path)
             except Exception as exc:
                 import traceback
 
@@ -359,7 +367,7 @@ class ClawdWebSocketServer:
                 )
         return None  # WS 握手走默认流程
 
-    def _handle_static_http(self, path: str):
+    def _handle_static_http(self, path: str, raw_path: str = ""):
         """静态 HTTP 处理主体（返回 websockets Response）"""
         from pathlib import Path as _Path
 
@@ -376,6 +384,95 @@ class ClawdWebSocketServer:
                     ('Cache-Control', 'no-cache'),
                     ('Connection', 'close')]),
                 body,
+            )
+
+        # API 端点：多 provider 列表（密钥只给掩码）
+        if path == '/api/providers':
+            from ..core import providers_store
+
+            try:
+                items = providers_store.list_providers(Path.cwd())
+                payload = {'providers': items, 'count': len(items), 'kinds': list(providers_store.KINDS)}
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
+        # API 端点：用量统计（KPI + 按小时 + 按模型）
+        if path == '/api/usage':
+            from ..core import usage_store
+
+            try:
+                from urllib.parse import parse_qs
+
+                source = raw_path or path
+                q = parse_qs(source.split('?', 1)[1] if '?' in source else '')
+                range_key = (q.get('range') or ['today'])[0] or 'today'
+                payload = usage_store.summary(range_key, Path.cwd())
+                # 一次请求把"汇总 + 最近日志"都给前端（面板打开即渲染，不用二次往返）
+                payload['recent'] = usage_store.recent(50, Path.cwd())
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
+        # API 端点：工作区文件（只给图片，供 Markdown 里内嵌图片用）
+        if path == '/api/file':
+            from urllib.parse import parse_qs
+
+            source = raw_path or path
+            query = parse_qs(source.split('?', 1)[1] if '?' in source else '')
+            raw = (query.get('path') or [''])[0]
+            img_mime = {
+                '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+            }
+            if not raw:
+                return _WsResponse(400, 'Bad Request', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                          ('Content-Length', '4'), ('Connection', 'close')]), b'need')
+            target = Path(raw)
+            if not target.is_absolute():
+                target = (Path.cwd() / raw)
+            try:
+                target = target.resolve()
+                root = Path.cwd().resolve()
+                if not target.is_relative_to(root):
+                    return _WsResponse(403, 'Forbidden', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                            ('Content-Length', '9'), ('Connection', 'close')]), b'forbidden')
+                mime = img_mime.get(target.suffix.lower())
+                if mime is None:
+                    return _WsResponse(403, 'Forbidden', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                            ('Content-Length', '9'), ('Connection', 'close')]), b'forbidden')
+                if not target.is_file() or target.stat().st_size > 8 * 1024 * 1024:
+                    return _WsResponse(404, 'Not Found', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                            ('Content-Length', '7'), ('Connection', 'close')]), b'notfound')
+                data = target.read_bytes()
+            except OSError:
+                return _WsResponse(404, 'Not Found', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                        ('Content-Length', '7'), ('Connection', 'close')]), b'notfound')
+            return _WsResponse(
+                200, 'OK',
+                _H([('Content-Type', mime), ('Content-Length', str(len(data))),
+                    ('Cache-Control', 'no-cache'), ('Connection', 'close')]),
+                data,
             )
 
         # API 端点：插件市场数据（JSON）

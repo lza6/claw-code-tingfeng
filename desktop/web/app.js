@@ -61,31 +61,100 @@
     scrollEnd();
   }
 
-  // —— 最小 Markdown 渲染（安全：全部用 textContent 拼节点） ——
-  // 支持：``` 围栏代码块、`行内代码`、**粗体**、换行保留。其余按纯文本。
+  // —— Markdown 渲染（安全：全部用 textContent / createElement，不碰 innerHTML） ——
+  // 支持：标题 / 无序·有序列表 / 引用 / 分隔线 / 表格 / 链接 / 图片 / 围栏代码块 / 行内代码 / 粗体斜体
   function renderRich(container, text) {
     container.textContent = '';
-    const src = String(text || '');
+    const src = String(text == null ? '' : text).replace(/\r\n/g, '\n');
     const lines = src.split('\n');
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
-      const fence = line.match(/^\s*```(\w*)\s*$/);
+
+      // 围栏代码块 ```lang
+      const fence = line.match(/^\s*```\s*([\w+-]*)\s*$/);
       if (fence) {
         const lang = fence[1] || '';
         const buf = [];
         i += 1;
         while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { buf.push(lines[i]); i += 1; }
-        i += 1; // 跳过结束围栏
-        const pre = document.createElement('pre');
-        pre.className = 'code-block';
-        const code = document.createElement('code');
-        if (lang) code.dataset.lang = lang;
-        code.textContent = buf.join('\n');
-        pre.appendChild(code);
-        container.appendChild(pre);
+        i += 1;
+        container.appendChild(makeCodeBlock(buf.join('\n'), lang));
         continue;
       }
+
+      // 标题
+      const heading = line.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (heading) {
+        const level = Math.min(heading[1].length, 3);
+        const el = document.createElement('h' + level);
+        appendInline(el, heading[2]);
+        container.appendChild(el);
+        i += 1;
+        continue;
+      }
+
+      // 分隔线
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+        container.appendChild(document.createElement('hr'));
+        i += 1;
+        continue;
+      }
+
+      // 引用
+      if (/^\s*>\s?/.test(line)) {
+        const block = document.createElement('blockquote');
+        const buf = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          buf.push(lines[i].replace(/^\s*>\s?/, ''));
+          i += 1;
+        }
+        appendInline(block, buf.join('\n'));
+        container.appendChild(block);
+        continue;
+      }
+
+      // 表格：| a | b |  +  |---|---|
+      if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s:\-|]+\|\s*$/.test(lines[i + 1])) {
+        const rows = [];
+        const header = splitTableRow(line);
+        i += 2;
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+          rows.push(splitTableRow(lines[i]));
+          i += 1;
+        }
+        container.appendChild(makeTable(header, rows));
+        continue;
+      }
+
+      // 无序列表
+      if (/^\s*[-*+]\s+/.test(line)) {
+        const ul = document.createElement('ul');
+        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+          const li = document.createElement('li');
+          appendInline(li, lines[i].replace(/^\s*[-*+]\s+/, ''));
+          ul.appendChild(li);
+          i += 1;
+        }
+        container.appendChild(ul);
+        continue;
+      }
+
+      // 有序列表
+      if (/^\s*\d+[.)]\s+/.test(line)) {
+        const ol = document.createElement('ol');
+        while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+          const li = document.createElement('li');
+          appendInline(li, lines[i].replace(/^\s*\d+[.)]\s+/, ''));
+          ol.appendChild(li);
+          i += 1;
+        }
+        container.appendChild(ol);
+        continue;
+      }
+
+      // 普通段落（保留空行分隔）
+      if (line.trim() === '') { i += 1; continue; }
       const para = document.createElement('div');
       para.className = 'para';
       appendInline(para, line);
@@ -94,9 +163,66 @@
     }
   }
 
-  // 行内：`code` 与 **bold**
+  // E2E 钩子：把渲染器暴露出来，便于用真实浏览器断言 Markdown/图片渲染
+  window.__clawdRenderRich = (container, text) => renderRich(container, text);
+
+  function splitTableRow(line) {
+    const body = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return body.split('|').map((c) => c.trim());
+  }
+
+  function makeTable(header, rows) {
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const tr = document.createElement('tr');
+    for (const cell of header) {
+      const th = document.createElement('th');
+      appendInline(th, cell);
+      tr.appendChild(th);
+    }
+    thead.appendChild(tr);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    for (const row of rows) {
+      const r = document.createElement('tr');
+      for (let c = 0; c < header.length; c += 1) {
+        const td = document.createElement('td');
+        appendInline(td, row[c] == null ? '' : row[c]);
+        r.appendChild(td);
+      }
+      tbody.appendChild(r);
+    }
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function makeCodeBlock(code, lang) {
+    const wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    const head = document.createElement('div');
+    head.className = 'code-head';
+    const langEl = document.createElement('span');
+    langEl.className = 'lang';
+    langEl.textContent = lang || 'text';
+    head.appendChild(langEl);
+    const copy = document.createElement('button');
+    copy.className = 'copy';
+    copy.textContent = '复制';
+    copy.onclick = () => { navigator.clipboard.writeText(code); copy.textContent = '已复制'; };
+    head.appendChild(copy);
+    wrap.appendChild(head);
+    const pre = document.createElement('pre');
+    pre.className = 'code-block';
+    const codeEl = document.createElement('code');
+    codeEl.textContent = code;
+    pre.appendChild(codeEl);
+    wrap.appendChild(pre);
+    return wrap;
+  }
+
+  // 行内：`code` / **粗体** / *斜体* / [文本](链接) / ![alt](图片)
   function appendInline(parent, line) {
-    const re = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\))/g;
     let last = 0;
     let m;
     while ((m = re.exec(line)) !== null) {
@@ -107,14 +233,48 @@
         code.className = 'inline-code';
         code.textContent = token.slice(1, -1);
         parent.appendChild(code);
-      } else {
+      } else if (token.startsWith('**')) {
         const strong = document.createElement('strong');
         strong.textContent = token.slice(2, -2);
         parent.appendChild(strong);
+      } else if (token.startsWith('*')) {
+        const em = document.createElement('em');
+        em.textContent = token.slice(1, -1);
+        parent.appendChild(em);
+      } else if (token.startsWith('![')) {
+        const mm = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+        parent.appendChild(makeImage(mm ? mm[1] : '', mm ? mm[2] : ''));
+      } else {
+        const mm = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        const a = document.createElement('a');
+        a.textContent = mm ? mm[1] : token;
+        a.href = mm ? mm[2] : '#';
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        parent.appendChild(a);
       }
       last = m.index + token.length;
     }
     if (last < line.length) parent.appendChild(document.createTextNode(line.slice(last)));
+  }
+
+  // 图片：http(s) 直接用；工作区相对路径走 Host 的 /api/file（只放行图片且有路径守卫）
+  function makeImage(alt, src) {
+    const img = document.createElement('img');
+    img.alt = alt || '';
+    img.loading = 'lazy';
+    if (/^https?:\/\//i.test(src) || src.startsWith('data:image/')) {
+      img.src = src;
+    } else {
+      img.src = '/api/file?path=' + encodeURIComponent(src.replace(/^\.?\//, ''));
+    }
+    img.onerror = () => {
+      const ph = document.createElement('span');
+      ph.className = 'inline-code';
+      ph.textContent = `[图片加载失败: ${alt || src}]`;
+      img.replaceWith(ph);
+    };
+    return img;
   }
 
   function addAssistant(text, opts) {
@@ -152,6 +312,7 @@
   }
   function appendStream(text) {
     if (!text) return;
+    window.__streamDeltas = (window.__streamDeltas || 0) + 1; // E2E 观测点
     if (!streamEl && (Date.now() - finalizedAt) < 3000) return; // 迟到的增量：丢弃
     const el = beginStream();
     const body = el.querySelector('.body');
@@ -225,10 +386,31 @@
     scrollEnd();
   }
 
-  function scrollEnd() {
+  // 仅当用户「本来就在底部附近」时才自动跟随；否则保持用户位置（消息一多也能往上翻）
+  const NEAR_BOTTOM_PX = 96;
+  function isNearBottom() {
     const view = document.querySelector('.view');
-    view.scrollTop = view.scrollHeight;
+    if (!view) return true;
+    return view.scrollHeight - view.scrollTop - view.clientHeight < NEAR_BOTTOM_PX;
   }
+  function scrollEnd(force) {
+    const view = document.querySelector('.view');
+    if (!view) return;
+    if (force || isNearBottom()) {
+      view.scrollTop = view.scrollHeight;
+      hideJump();
+    } else {
+      showJump();
+    }
+  }
+  function showJump() { const b = $('jumpBottom'); if (b) b.classList.add('show'); }
+  function hideJump() { const b = $('jumpBottom'); if (b) b.classList.remove('show'); }
+  document.addEventListener('DOMContentLoaded', () => {
+    const view = document.querySelector('.view');
+    const btn = $('jumpBottom');
+    if (btn) btn.onclick = () => scrollEnd(true);
+    if (view) view.addEventListener('scroll', () => { isNearBottom() ? hideJump() : showJump(); });
+  });
 
   // —— WS（断流重连） ——
   function connect() {
@@ -351,6 +533,240 @@
       return;
     }
     addToolRow(msg.type || '?', JSON.stringify(msg, null, 2).slice(0, 4000));
+  }
+
+  // —— 用量统计页 ——
+  function openUsage() {
+    $('usageOverlay').classList.add('show');
+    loadUsage();
+  }
+  function closeUsage() { $('usageOverlay').classList.remove('show'); }
+
+  function fmtNum(n) {
+    const v = Number(n || 0);
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return String(v);
+  }
+  function fmtTime(ts) {
+    const d = new Date(Number(ts) * 1000);
+    return d.toLocaleString('zh-CN', { hour12: false });
+  }
+
+  // Host 刚结束一轮任务时可能短暂不可用（同一端口上 WS/HTTP 共用一个事件循环）：
+  // 一次失败就清空面板对用户是"莫名其妙空了"，所以这里做一次短重试。
+  async function fetchJsonRetry(url, attempts = 3, delayMs = 700) {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return await resp.json();
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  let usageRange = 'today';
+  async function loadUsage() {
+    const kpis = $('usageKpis');
+    const rowsEl = $('usageRows');
+    kpis.innerHTML = '<div class="usage-empty">加载中…</div>';
+    try {
+      const data = await fetchJsonRetry('/api/usage?range=' + encodeURIComponent(usageRange));
+      const t = data.totals || {};
+      kpis.innerHTML = '';
+      const cards = [
+        ['总成本', '$' + Number(t.cost || 0).toFixed(4), '累计（今天）'],
+        ['总请求数', String(t.requests || 0), '今天'],
+        ['真实消耗 Tokens', fmtNum(t.total_tokens), `新增输入 ${fmtNum(t.prompt_tokens)} / 输出 ${fmtNum(t.completion_tokens)}`],
+        ['缓存命中率', (Number(t.cache_hit_rate || 0) * 100).toFixed(1) + '%', `缓存读 ${fmtNum(t.cache_read_tokens)}`],
+      ];
+      for (const [label, value, sub] of cards) {
+        const div = document.createElement('div');
+        div.className = 'kpi';
+        div.innerHTML = '<div class="k-label"></div><div class="k-value"></div><div class="k-sub"></div>';
+        div.querySelector('.k-label').textContent = label;
+        div.querySelector('.k-value').textContent = value;
+        div.querySelector('.k-sub').textContent = sub;
+        kpis.appendChild(div);
+      }
+      drawUsageChart(data.hourly || []);
+      renderUsageRows(data.recent || []);
+    } catch (e) {
+      kpis.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'usage-empty';
+      div.textContent = '用量服务不可用（Host 未提供 /api/usage）: ' + e;
+      kpis.appendChild(div);
+    }
+  }
+
+  function drawUsageChart(hourly) {
+    const svg = $('usageChart');
+    svg.innerHTML = '';
+    const W = 800, H = 180, pad = 26;
+    const NS = 'http://www.w3.org/2000/svg';
+    if (!hourly.length) {
+      const tx = document.createElementNS(NS, 'text');
+      tx.setAttribute('x', String(W / 2)); tx.setAttribute('y', String(H / 2));
+      tx.setAttribute('fill', '#8a8a8a'); tx.setAttribute('text-anchor', 'middle');
+      tx.setAttribute('font-size', '12');
+      tx.textContent = '暂无数据';
+      svg.appendChild(tx);
+      return;
+    }
+    const max = Math.max(...hourly.map((h) => Number(h.tokens || 0)), 1);
+    const bw = (W - pad * 2) / hourly.length;
+    hourly.forEach((h, idx) => {
+      const v = Number(h.tokens || 0);
+      const bh = Math.max(2, (H - pad * 2) * (v / max));
+      const rect = document.createElementNS(NS, 'rect');
+      rect.setAttribute('x', String(pad + idx * bw + bw * 0.15));
+      rect.setAttribute('y', String(H - pad - bh));
+      rect.setAttribute('width', String(bw * 0.7));
+      rect.setAttribute('height', String(bh));
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('fill', '#2ca6b8');
+      const title = document.createElementNS(NS, 'title');
+      title.textContent = `${h.time_label || ''} ${fmtNum(v)} tokens · $${Number(h.cost || 0).toFixed(4)}`;
+      rect.appendChild(title);
+      svg.appendChild(rect);
+      const label = document.createElementNS(NS, 'text');
+      label.setAttribute('x', String(pad + idx * bw + bw / 2));
+      label.setAttribute('y', String(H - 8));
+      label.setAttribute('fill', '#8a8a8a');
+      label.setAttribute('font-size', '10');
+      label.setAttribute('text-anchor', 'middle');
+      const dt = new Date(Number(h.bucket) * 1000);
+      label.textContent = String(dt.getHours()).padStart(2, '0') + ':00';
+      svg.appendChild(label);
+    });
+  }
+
+  function renderUsageRows(rows) {
+    const el = $('usageRows');
+    const empty = $('usageEmpty');
+    el.innerHTML = '';
+    if (!rows.length) { empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      const cells = [
+        fmtTime(r.ts), r.provider || '-', r.model || '-',
+        '$' + Number(r.cost || 0).toFixed(4), fmtNum(r.prompt_tokens), fmtNum(r.completion_tokens),
+        fmtNum(r.cache_read_tokens), String(r.steps || 0), r.status || '-',
+      ];
+      cells.forEach((c, idx) => {
+        const td = document.createElement('td');
+        if (idx >= 3 && idx <= 7) td.className = 'num';
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+      el.appendChild(tr);
+    }
+  }
+
+  // —— 多 provider 设置 ——
+  let providersCache = [];
+
+  function wsRequest(payload, idPrefix) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== 1) return reject(new Error('未连接'));
+      const id = (idPrefix || 'req') + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e4);
+      pending[id] = { resolve, reject };
+      ws.send(JSON.stringify({ ...payload, id }));
+      setTimeout(() => {
+        if (pending[id]) { delete pending[id]; reject(new Error('请求超时: ' + (payload.type || ''))); }
+      }, 15000);
+    });
+  }
+
+  async function loadProviders() {
+    try {
+      const res = await wsRequest({ type: 'providers_list' }, 'providers');
+      providersCache = (res.data && res.data.providers) || [];
+    } catch (_) {
+      try {
+        const data = await fetchJsonRetry('/api/providers', 2);
+        providersCache = data.providers || [];
+      } catch (__) { providersCache = []; }
+    }
+    renderProviders();
+  }
+
+  function renderProviders() {
+    const list = $('provList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!providersCache.length) {
+      const div = document.createElement('div');
+      div.className = 'usage-empty';
+      div.textContent = '还没有配置提供商 —— 填下面的表单保存一个（密钥建议用环境变量名）。';
+      list.appendChild(div);
+      return;
+    }
+    for (const p of providersCache) {
+      const item = document.createElement('div');
+      item.className = 'prov-item' + (p.is_default ? ' active' : '');
+      const info = document.createElement('div');
+      const name = document.createElement('div');
+      name.className = 'p-name';
+      name.textContent = p.name + (p.is_default ? ' · 默认' : '');
+      const sub = document.createElement('div');
+      sub.className = 'p-sub';
+      sub.textContent = `${p.kind} · ${p.model || '未填模型'} · ${p.key_env ? 'env:' + p.key_env : (p.key_masked || '无密钥')}`;
+      info.appendChild(name); info.appendChild(sub);
+      item.appendChild(info);
+      const actions = document.createElement('div');
+      actions.className = 'p-actions';
+      const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; return b; };
+      actions.appendChild(mk('设为默认', async () => {
+        await wsRequest({ type: 'providers_set_default', id_value: p.id }, 'provdef');
+        await loadProviders();
+        const note = $('setNote');
+        if (note) { note.className = 'snote ok'; note.textContent = '已设为默认，下一轮对话生效'; }
+        loadUsage();
+      }));
+      actions.appendChild(mk('编辑', () => {
+        $('provId').value = p.id; $('provName').value = p.name; $('provKind').value = p.kind;
+        $('provModel').value = p.model || ''; $('provBaseUrl').value = p.base_url || '';
+        $('provKeyEnv').value = p.key_env || ''; $('provKey').value = '';
+      }));
+      actions.appendChild(mk('删除', async () => {
+        await wsRequest({ type: 'providers_delete', id_value: p.id }, 'provdel');
+        await loadProviders();
+      }));
+      item.appendChild(actions);
+      list.appendChild(item);
+    }
+  }
+
+  async function saveProviderFromForm() {
+    const payload = {
+      id: $('provId').value.trim(),
+      name: $('provName').value.trim(),
+      kind: $('provKind').value,
+      model: $('provModel').value.trim(),
+      base_url: $('provBaseUrl').value.trim(),
+      key_env: $('provKeyEnv').value.trim(),
+      key: $('provKey').value.trim(),
+    };
+    const note = $('setNote');
+    try {
+      await wsRequest({ type: 'providers_save', provider: payload }, 'provsave');
+      note.className = 'snote ok';
+      note.textContent = '提供商已保存';
+      $('provKey').value = '';
+      await loadProviders();
+    } catch (e) {
+      note.className = 'snote err';
+      note.textContent = '保存失败: ' + e.message;
+    }
   }
 
   // —— 角色库（personas/*.md）：连上 Host 后拉一次，填进输入框左侧下拉 ——
@@ -484,7 +900,7 @@
   // —— 设置（占位：后续接入 Host 配置面） ——
   // —— 设置面板 ——
   const $setOverlay = $('settingsOverlay');
-  function openSettings() { $setOverlay.classList.add('show'); loadSettings(); }
+  function openSettings() { $setOverlay.classList.add('show'); loadSettings(); loadProviders(); }
   function closeSettings() { $setOverlay.classList.remove('show'); }
   $('btnSettings').onclick = openSettings;
   $('settingsClose').onclick = closeSettings;
@@ -497,6 +913,16 @@
     $('setPython').textContent = d.python || '—';
     $('setWorkdir').textContent = d.workdir || '—';
     $('setApiKey').textContent = d.api_key_set ? '已配置（不回显）' : '未配置';
+    const ap = d.active_provider || {};
+    const provField = $('setProvider');
+    if (provField) {
+      provField.value = ap.configured
+        ? `${ap.name}（${ap.kind}${ap.model ? ' · ' + ap.model : ''}）${ap.has_key ? '' : ' · 缺密钥'}`
+        : '';
+      provField.placeholder = ap.configured ? '' : '未选择默认 provider（走全局配置）';
+    }
+    const usageActive = $('usageActiveProvider');
+    if (usageActive) usageActive.textContent = ap.configured ? ('生效: ' + ap.name) : '';
     $('setProvider').value = d.provider || '';
     $('setModel').value = d.model || '';
     $('setBaseUrl').value = d.base_url || '';
@@ -550,6 +976,33 @@
     }
   }
   $('setSave').onclick = saveSettings;
+
+  // 用量页 / 多 provider 绑定
+  const usageBtn = $('btnUsage');
+  if (usageBtn) usageBtn.onclick = openUsage;
+  const usageClose = $('usageClose');
+  if (usageClose) usageClose.onclick = closeUsage;
+  const usageRangeBar = $('usageRangeBar');
+  if (usageRangeBar) {
+    usageRangeBar.querySelectorAll('.vb').forEach((b) => {
+      b.onclick = () => {
+        usageRangeBar.querySelectorAll('.vb').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        usageRange = b.dataset.range || 'today';
+        loadUsage();
+      };
+    });
+  }
+  const usageRefresh = $('usageRefresh');
+  if (usageRefresh) usageRefresh.onclick = loadUsage;
+  const usageOverlay = $('usageOverlay');
+  if (usageOverlay) usageOverlay.addEventListener('click', (e) => { if (e.target === usageOverlay) closeUsage(); });
+  const provSave = $('provSave');
+  if (provSave) provSave.onclick = saveProviderFromForm;
+  const provReset = $('provReset');
+  if (provReset) provReset.onclick = () => {
+    ['provId', 'provName', 'provModel', 'provBaseUrl', 'provKeyEnv', 'provKey'].forEach((k) => { if ($(k)) $(k).value = ''; });
+  };
   $('setReload').onclick = loadSettings;
 
   // —— 版本与更新 ——
