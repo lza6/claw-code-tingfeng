@@ -369,18 +369,18 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 | 覆盖率 | **47.44%**（26,861 / 56,624 行），数据 2026-10-23 | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 47`（**已生效**；原先 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
-| 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（642 模块，635 OK，DEP-MISSING 7 均为可选 extras） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **443**（补入 `src.__main__` 种子后的口径修正；此前 442） | `scripts/reachability.py --min-reachable 443` |
-| 死模块 | 199（完全不可达 134 / 24,667 行）；三问判定：NO_REFS 112 / DOC_ONLY 6 / HAS_REFS 16 | `计划书/死代码判定-2026-10-23.md`，**删除需产品决策** |
-| Ruff 全量违规 | 会随批次波动（2026-10-23 实测 **432**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
-| 第三方依赖缺失 | 7（celery / opentelemetry / pathspec 等可选 extras） | `scripts/import_sweep.py` 的 DEP-MISSING，属环境非缺陷 |
+| 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
+| 生产可达模块 | **478**（2026-10-29 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 死模块 | **76**（完全不可达；已删 47 文件 10,685 行，C 组 55 个裁定保留待接线） | `计划书/死代码判定-2026-10-28.md` §九 |
+| Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
+| 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
 | 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI 门禁 `--fail-over 172` | `scripts/check_silent_except.py --fail-over 172` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 2026-10-23 实跑，退出码 0 |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 
 > 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。
 
-> 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南.md`。
+> 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南-2026-10-28.md`（现行 v3）。
 > **注意**：删死代码会让覆盖率*百分比*上升但绝对覆盖行数不变，
 > 因此必须同时跟踪「已覆盖语句数」，防止分母变小造成的假象。
 

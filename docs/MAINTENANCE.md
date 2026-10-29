@@ -193,8 +193,10 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
    ralph-verify / precontext-intake 四个阶段都接的是真实实现
    （有替身驱动的阶段回归测试）。仍需注意：`src/workflow/stages/` 与
    `src/workflow/pipeline_stages/` 是**未被引用的平行实现**，不要误认为它们在生产路径上。
-2. **哪些指标没达标** —— 覆盖率 46.15%（目标 60%）、死模块 135、静默吞异常 101、收集 ~92s。
-3. **下一步最该做什么** —— 见 `计划书/下一步改进指南.md` 顶部的状态表。
+2. **哪些指标没达标** —— 2026-10-29 实测：覆盖率 **62.39%**（目标 60% ✅）、
+   死模块 **76**（完全不可达）、静默吞异常 **162**（门禁 ≤172）、收集 **4,964 / 18.6s**。
+   口径以 `scripts/baseline.py --out .clawd/baseline.json` 为准，不要手抄数字。
+3. **下一步最该做什么** —— 见 `计划书/下一步改进指南-2026-10-28.md`（v3，现行）顶部状态表。
 
 ---
 
