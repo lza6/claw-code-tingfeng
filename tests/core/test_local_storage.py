@@ -151,3 +151,54 @@ class TestProviderTakesEffect:
         providers_store.save_provider({"id": "a", "name": "A", "model": "m", "key": "sk-12345678"}, wd)
         desc = providers_store.describe_active(wd)
         assert desc["configured"] is True and desc["id"] == "a" and desc["model"] == "m"
+
+
+class TestUsageClientDimension:
+    """用量要能区分"谁在调用"（桌面端 / CLI / 外部引擎）——截图里那列「应用」"""
+
+    def test_client_recorded_and_grouped(self, wd: Path):
+        usage_store.record(model="m", cost=0.3, client="desktop", workdir=wd)
+        usage_store.record(model="m", cost=0.1, client="cli", workdir=wd)
+        data = usage_store.summary("today", wd)
+        by_client = {row["client"]: row for row in data["by_client"]}
+        assert set(by_client) == {"desktop", "cli"}
+        assert by_client["desktop"]["requests"] == 1
+        assert by_client["desktop"]["cost"] == pytest.approx(0.3)
+
+    def test_recent_rows_expose_client(self, wd: Path):
+        usage_store.record(model="m", client="desktop", workdir=wd)
+        assert usage_store.recent(1, wd)[0]["client"] == "desktop"
+
+    def test_blank_client_is_labelled(self, wd: Path):
+        usage_store.record(model="m", workdir=wd)  # 不传 client
+        data = usage_store.summary("today", wd)
+        assert data["by_client"][0]["client"] == "(未标注)"
+
+
+class TestUsageCli:
+    def test_usage_json(self, wd: Path, monkeypatch: pytest.MonkeyPatch):
+        import json
+
+        from typer.testing import CliRunner
+
+        from src.cli import entrypoint
+
+        monkeypatch.chdir(wd)
+        usage_store.record(model="m1", cost=0.02, client="cli", workdir=wd)
+        result = CliRunner().invoke(entrypoint.app, ["usage", "--json"])
+        assert result.exit_code == 0
+        payload = json.loads(result.output.strip().splitlines()[-1])
+        assert payload["totals"]["requests"] == 1
+        assert payload["recent"][0]["client"] == "cli"
+
+    def test_usage_table_renders(self, wd: Path, monkeypatch: pytest.MonkeyPatch):
+        from typer.testing import CliRunner
+
+        from src.cli import entrypoint
+
+        monkeypatch.chdir(wd)
+        usage_store.record(model="m1", cost=0.02, client="desktop", workdir=wd)
+        result = CliRunner().invoke(entrypoint.app, ["usage"])
+        assert result.exit_code == 0
+        assert "用量" in result.output
+        assert "desktop" in result.output

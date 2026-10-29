@@ -136,9 +136,66 @@ bad = {n for n in names if n in {"read_file", "edit_file", "write_file"}}
 check("P1-16 用例工具名", not bad,
       f"smoke.json 工具名={sorted(names)}，无 read_file/edit_file 旧名")
 
+# ==========================================================================
+# P2 台账（P2-1 ~ P2-6）
+# ==========================================================================
+
+# P2-1 trace 技能文档指引的工具必须真实存在
+try:
+    trace_skill = (ROOT / "skills/trace/SKILL.md").read_text(encoding="utf-8")
+    from src.core.mcp.trace_server import TRACE_SERVER_TOOLS  # noqa: E402
+
+    referenced = {"get_recent_traces", "get_trace", "summarize_trace", "export_trace"}
+    ok = referenced <= set(TRACE_SERVER_TOOLS) and "Use `trace_timeline`" not in trace_skill
+    check("P2-1 trace 技能可运行", ok,
+          f"文档引用的工具都在注册表={referenced <= set(TRACE_SERVER_TOOLS)}；旧的 trace_timeline 调用写法已移除")
+except Exception as e:  # noqa: BLE001
+    check("P2-1 trace 技能可运行", False, f"检查失败: {e}")
+
+# P2-2 skill 技能里 codex 路径已有 clawd 适配说明
+skill_md = (ROOT / "skills/skill/SKILL.md").read_text(encoding="utf-8")
+check("P2-2 技能路径适配", "clawd 路径适配" in skill_md,
+      "skills/skill/SKILL.md 已加『clawd 路径适配』说明块（原文 ~/.codex 路径是 Codex 时代遗留）")
+
+# P2-3 空目录已清
+empty_dirs = [d for d in ("src/autoresearch", "src/openclaw", "src/templates") if (ROOT / d).exists()]
+check("P2-3 空目录清理", not empty_dirs, f"仍存在的空目录={empty_dirs or '无'}")
+
+# P2-4 文档数字与实际一致（用专门的门禁脚本）
+proc_drift = None
+try:
+    import subprocess
+
+    proc_drift = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/check_doc_drift.py")],
+        cwd=str(ROOT), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=900,
+    )
+    check("P2-4 文档数字不漂移", proc_drift.returncode == 0,
+          "README 的 用例收集/静默吞异常/可达模块 与现跑一致"
+          if proc_drift.returncode == 0 else (proc_drift.stdout or "")[-300:])
+except Exception as e:  # noqa: BLE001
+    check("P2-4 文档数字不漂移", False, f"检查失败: {e}")
+
+# P2-5 评测数据集：用例够多 + 三态有样例
+try:
+    smoke = json.loads((ROOT / "src/eval/datasets/smoke.json").read_text(encoding="utf-8"))
+    honesty = json.loads((ROOT / "src/eval/datasets/honesty.json").read_text(encoding="utf-8"))
+    check("P2-5 评测用例与三态", len(smoke["cases"]) >= 7 and len(honesty["cases"]) >= 4,
+          f"smoke={len(smoke['cases'])} 条，honesty={len(honesty['cases'])} 条（含 UNKNOWN 样例）")
+except Exception as e:  # noqa: BLE001
+    check("P2-5 评测用例与三态", False, f"检查失败: {e}")
+
+# P2-6 getting-started 是产品教程
+gs = (ROOT / "docs/getting-started.md").read_text(encoding="utf-8")
+has_steps = all(k in gs for k in ("安装", "配置", "第一个任务", "看懂它刚才做了什么"))
+check("P2-6 上手教程", has_steps and "skills-distribution" in gs,
+      "docs/getting-started.md 是『安装→配置→第一个任务→看懂发生了什么』教程，技能分发已拆到 skills-distribution.md")
+
+
 # ---------- 输出 ----------
 print("=" * 78)
-print("审计 P1 台账复验（P1-1 ~ P1-16）")
+print("审计台账复验（P1-1 ~ P1-16、P2-1 ~ P2-6）")
 print("=" * 78)
 failed = 0
 for tag, ok, evidence in results:

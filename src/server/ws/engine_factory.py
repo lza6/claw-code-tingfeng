@@ -72,4 +72,6 @@ class EngineFactory(EngineFactoryProtocol):
             '已创建新的 AgentEngine 实例',
             provider=effective_config.provider.value if effective_config else 'default',
         )
+        # 用量面板要区分调用方（桌面端 / CLI / 外部引擎）
+        engine.client_tag = 'desktop'
         return engine

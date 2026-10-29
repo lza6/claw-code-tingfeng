@@ -7,6 +7,48 @@
 
 ---
 
+## [v0.82.0] (2026-10-30) — P2 台账全部闭环（机器可验）+ 文档漂移门禁 + CLI 用量 + 调用方维度
+
+**1. P2-1 ~ P2-6 全部闭环，并变成可执行断言**
+`scripts/verify_audit_p1.py` 扩成 **P1-1~P1-16 + P2-1~P2-6 共 22 条**，跑一次给结论（当前 22/22 PASS，失败即非 0）：
+- **P2-1** `skills/trace` 文档引用的工具真实存在（`get_recent_traces/get_trace/summarize_trace/export_trace` 都在注册表），
+  旧的 `trace_timeline` 调用写法已移除；
+- **P2-2** `skills/skill` 等 9 个移植技能已加「clawd 路径适配」块（原文 `~/.codex/...` 属 Codex 时代遗留）；
+- **P2-3** `src/autoresearch`、`src/openclaw`、`src/templates` 三个空目录已不存在；
+- **P2-4** 新增 `scripts/check_doc_drift.py` 门禁：README 的「用例收集 / 静默吞异常 / 生产可达」三项与现跑比对，
+  不一致直接退出 1。本轮据此把 README 从 `5190/482` 更正为实测 **`5260/493`**（静默 162 一致）；
+- **P2-5** 评测数据集 `smoke.json` 从 3 条扩到 **7 条**，另有 `honesty.json` **4 条**专演示三态（含 UNKNOWN）；
+- **P2-6** `docs/getting-started.md` 已是「安装 → 配置 → 第一个任务 → 看懂它做了什么 → 权限挂机 → 多引擎 → 常见失败」教程，
+  原「技能怎么分发给别的 agent」拆到 `docs/skills-distribution.md`。
+
+**2. 用量面板加「应用」维度（对齐你截图里那列）**
+- `usage` 表新增 `client` 列（**老库自动 ALTER 迁移**，只加列不动数据），引擎记账时带上调用方：
+  桌面端 `desktop`、CLI `cli`；
+- 汇总多一组 `by_client`（请求数/tokens/成本），桌面端用量表新增「应用」列，CLI 用量表同样展示。
+
+**3. `clawd usage` —— CLI 也能看用量**
+```bash
+clawd usage                    # 成本 / 请求数 / tokens / 缓存命中率 + 按模型 + 最近 20 条
+clawd usage --range week -n 50  # 近 7 天、最近 50 条
+clawd usage --json             # 机器可读（与桌面端面板同一份数据）
+```
+
+**3.5 侧栏「工作区」显示历史会话（点开即加载上下文）**
+- 新增 `/api/sessions`（列表）与 `/api/session?id=`（内容）；侧栏列出历史会话（标题 + 相对时间 + 状态），
+  点开就把那段对话渲染回主区（user/assistant/tool 三类都还原），每轮跑完自动刷新列表。
+- 之前侧栏那块一直是空的 —— 用户看不到历史，只能靠 `clawd session` 命令行。
+
+**4. 设置页语义消歧（P2 之外的顺手修）**
+「模型 / Base URL」明确标成**全局默认**（只在没选默认 provider 时生效），避免和上面的「API 提供商」列表打架。
+
+**验证（实跑）**
+- `scripts/verify_audit_p1.py` → **22/22 PASS**
+- `scripts/check_doc_drift.py` → 3/3 一致（exit 0）
+- `tests/core/test_local_storage.py` **23 条**（含 client 维度 + `clawd usage` CLI）
+- 安装 E2E（0.82.0）：装 → final_verify / 流式角色 / 控制台（滚动·Markdown·图片·用量·provider）→ 卸载 → 清理
+
+---
+
 ## [v0.81.0] (2026-10-30) — 滚动修复 + 完整 Markdown/图片 + 用量统计页 + 多 provider + 根目录卫生
 
 **1. 修「消息一多就滚不动」**

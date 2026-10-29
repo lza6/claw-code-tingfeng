@@ -21,7 +21,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DB_FILENAME = "clawd.db"
 
 
@@ -76,12 +76,18 @@ def init_schema(conn: sqlite3.Connection) -> None:
             duration_ms        INTEGER NOT NULL DEFAULT 0,
             steps              INTEGER NOT NULL DEFAULT 0,
             status             TEXT NOT NULL DEFAULT 'completed',
-            goal_chars         INTEGER NOT NULL DEFAULT 0
+            goal_chars         INTEGER NOT NULL DEFAULT 0,
+            client             TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage(ts);
         CREATE INDEX IF NOT EXISTS idx_usage_model ON usage(model);
         """
     )
+    # 老库迁移：usage 表补 client 列（只加列，不动老数据）
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(usage)").fetchall()}
+    if "client" not in cols:
+        conn.execute("ALTER TABLE usage ADD COLUMN client TEXT NOT NULL DEFAULT ''")
+
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")

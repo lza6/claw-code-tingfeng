@@ -38,6 +38,7 @@ def record(
     status: str = "completed",
     session_id: str = "",
     goal_chars: int = 0,
+    client: str = "",
     workdir: Path | str | None = None,
 ) -> bool:
     """写一条用量记录（失败只告警，绝不打断 agent 主流程）"""
@@ -46,12 +47,13 @@ def record(
         try:
             conn.execute(
                 "INSERT INTO usage (ts, session_id, provider, model, prompt_tokens, completion_tokens,"
-                " cache_read_tokens, cost, duration_ms, steps, status, goal_chars)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                " cache_read_tokens, cost, duration_ms, steps, status, goal_chars, client)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     local_db.now(), session_id, provider, model,
                     int(prompt_tokens or 0), int(completion_tokens or 0), int(cache_read_tokens or 0),
                     float(cost or 0.0), int(duration_ms or 0), int(steps or 0), status, int(goal_chars or 0),
+                    str(client or ""),
                 ),
             )
             conn.commit()
@@ -109,8 +111,16 @@ def summary(range_key: str = "today", workdir: Path | str | None = None) -> dict
             " FROM usage WHERE ts >= ? GROUP BY provider, model ORDER BY cost DESC",
             (since,),
         )
+        by_client = local_db.fetch_all(
+            conn,
+            "SELECT COALESCE(NULLIF(client,''),'(未标注)') AS client, COUNT(*) AS requests,"
+            " COALESCE(SUM(prompt_tokens+completion_tokens),0) AS tokens,"
+            " COALESCE(SUM(cost),0) AS cost"
+            " FROM usage WHERE ts >= ? GROUP BY client ORDER BY cost DESC",
+            (since,),
+        )
         return {"range": range_key, "since": since, "totals": totals,
-                "hourly": hourly, "by_model": by_model}
+                "hourly": hourly, "by_model": by_model, "by_client": by_client}
     finally:
         conn.close()
 

@@ -464,6 +464,7 @@
           authenticated = true; reconnectDelay = 1000; everConnected = true;
           hideBanner(); setConn(true, '已连接 · 就绪');
           loadPersonas();
+          loadSessions();
         } else {
           setConn(false, '认证失败');
           showBanner('认证失败：token 无效。请通过 Host 入口访问。');
@@ -486,6 +487,7 @@
         st.textContent = `${turnCount} 轮`;
         if (d.elapsed_seconds) $('stCalls').textContent = `工具 ${callCount} 次 · ${d.elapsed_seconds}s · ${d.steps} 步`;
         $send.disabled = false;
+        loadSessions(); // 跑完一轮刷新侧栏历史
         return;
       }
       const out = typeof d === 'string' ? d : (d.result || JSON.stringify(d, null, 2));
@@ -657,13 +659,13 @@
     for (const r of rows) {
       const tr = document.createElement('tr');
       const cells = [
-        fmtTime(r.ts), r.provider || '-', r.model || '-',
+        fmtTime(r.ts), r.client || '-', r.provider || '-', r.model || '-',
         '$' + Number(r.cost || 0).toFixed(4), fmtNum(r.prompt_tokens), fmtNum(r.completion_tokens),
         fmtNum(r.cache_read_tokens), String(r.steps || 0), r.status || '-',
       ];
       cells.forEach((c, idx) => {
         const td = document.createElement('td');
-        if (idx >= 3 && idx <= 7) td.className = 'num';
+        if (idx >= 4 && idx <= 8) td.className = 'num';
         td.textContent = c;
         tr.appendChild(td);
       });
@@ -766,6 +768,75 @@
     } catch (e) {
       note.className = 'snote err';
       note.textContent = '保存失败: ' + e.message;
+    }
+  }
+
+  // —— 会话列表（侧栏"工作区"）：列历史会话，点开加载上下文 ——
+  function fmtRel(ts) {
+    const t = Number(ts || 0);
+    if (!t) return '';
+    const diff = Date.now() / 1000 - t;
+    if (diff < 3600) return Math.max(1, Math.round(diff / 60)) + ' 分钟前';
+    if (diff < 86400) return Math.round(diff / 3600) + ' 小时前';
+    return Math.round(diff / 86400) + ' 天前';
+  }
+
+  async function loadSessions() {
+    const list = $('sessionList');
+    if (!list) return;
+    try {
+      const data = await fetchJsonRetry('/api/sessions', 2);
+      const items = data.sessions || [];
+      list.innerHTML = '';
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:8px 10px;font-size:12px;color:var(--label-tertiary)';
+        empty.textContent = '还没有历史会话';
+        list.appendChild(empty);
+        return;
+      }
+      for (const it of items) {
+        const row = document.createElement('div');
+        row.className = 'session-item';
+        const ico = document.createElement('span');
+        ico.textContent = '💬';
+        const title = document.createElement('span');
+        title.textContent = it.title || it.id;
+        title.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px';
+        const time = document.createElement('span');
+        time.className = 'time';
+        time.textContent = fmtRel(it.updated_at);
+        row.appendChild(ico); row.appendChild(title); row.appendChild(time);
+        row.title = `${it.id} · ${it.status || ''} · ${it.messages || 0} 条消息`;
+        row.onclick = () => openSession(it.id);
+        list.appendChild(row);
+      }
+    } catch (e) {
+      list.innerHTML = '';
+      const err = document.createElement('div');
+      err.style.cssText = 'padding:8px 10px;font-size:12px;color:var(--label-tertiary)';
+      err.textContent = '会话列表不可用: ' + e.message;
+      list.appendChild(err);
+    }
+  }
+
+  async function openSession(id) {
+    try {
+      const data = await fetchJsonRetry('/api/session?id=' + encodeURIComponent(id), 2);
+      $chat.innerHTML = '';
+      $('sessionTitle').textContent = data.title || id;
+      for (const m of (data.messages || [])) {
+        if (m.role === 'user') {
+          addUser(m.content || '');
+        } else if (m.role === 'assistant') {
+          addAssistant(m.content || '');
+        } else if (m.role === 'tool') {
+          addToolRow(`✓ 工具完成: ${m.name || 'tool'}`, String(m.content || '').slice(0, 2000));
+        }
+      }
+      scrollEnd(true);
+    } catch (e) {
+      showBanner('会话加载失败: ' + e.message);
     }
   }
 

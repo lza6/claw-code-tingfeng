@@ -434,6 +434,77 @@ class ClawdWebSocketServer:
                 body,
             )
 
+        # API 端点：会话列表（侧栏"工作区"里那些历史会话）
+        if path == '/api/sessions':
+            from ..core import session_bridge
+
+            try:
+                views = session_bridge.list_all(Path.cwd() / '.clawd' / 'sessions')
+                items = [
+                    {
+                        'id': v.session_id,
+                        'title': (v.title or '')[:80],
+                        'status': v.status,
+                        'updated_at': v.updated_at,
+                        'turns': v.turn_count,
+                        'messages': len(v.messages),
+                    }
+                    for v in views[:50]
+                ]
+                body = json.dumps({'sessions': items, 'count': len(items)}, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
+        # API 端点：单个会话内容（点开历史会话时加载）
+        if path == '/api/session':
+            from urllib.parse import parse_qs
+
+            from ..core import session_bridge
+
+            source = raw_path or path
+            q = parse_qs(source.split('?', 1)[1] if '?' in source else '')
+            sid = (q.get('id') or [''])[0]
+            if not sid:
+                return _WsResponse(400, 'Bad Request', _H([('Content-Type', 'text/plain; charset=utf-8'),
+                                                          ('Content-Length', '4'), ('Connection', 'close')]), b'need')
+            try:
+                view = session_bridge.load(sid, Path.cwd() / '.clawd' / 'sessions')
+                payload = {
+                    'id': view.session_id,
+                    'title': view.title,
+                    'status': view.status,
+                    'messages': [
+                        {'role': m.get('role'), 'content': m.get('content'), 'name': m.get('name')}
+                        for m in (view.messages or [])[:200]
+                    ],
+                }
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except (FileNotFoundError, ValueError) as exc:
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 404
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else ('Not Found' if status == 404 else 'Internal Server Error'),
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
         # API 端点：工作区文件（只给图片，供 Markdown 里内嵌图片用）
         if path == '/api/file':
             from urllib.parse import parse_qs

@@ -269,6 +269,80 @@ def role_show(name: str = typer.Argument(..., help="角色名（见 clawd role l
     raise typer.Exit(code=0)
 
 
+@app.command(name="usage")
+def usage_cmd(
+    range_key: str = typer.Option("today", "--range", help="统计范围: today | week | month | all"),
+    limit: int = typer.Option(20, "--limit", "-n", help="展示最近多少条请求"),
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
+):
+    """
+    查看本机用量（成本 / 请求数 / token / 缓存命中率）
+
+    数据来自 `<工作区>/.clawd/clawd.db` 的 usage 表 —— 引擎每跑完一轮就记一行。
+    桌面端的「用量统计」面板读的是同一份数据。
+    """
+    import json as _json
+
+    from rich.table import Table
+
+    from ..core import usage_store
+
+    try:
+        data = usage_store.summary(range_key)
+        rows = usage_store.recent(limit)
+    except Exception as e:  # noqa: BLE001 — 存储坏了要如实报错
+        console.print(f"[bold red]读取用量失败:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    if as_json:
+        payload = dict(data)
+        payload["recent"] = rows
+        typer.echo(_json.dumps(payload, ensure_ascii=False, default=str))
+        raise typer.Exit(code=0)
+
+    t = data["totals"]
+    console.print(
+        f"[bold]用量（{range_key}）[/bold]  成本 ${t.get('cost', 0):.4f}"
+        f" · 请求 {t.get('requests', 0)} · tokens {t.get('total_tokens', 0)}"
+        f" · 缓存命中率 {t.get('cache_hit_rate', 0) * 100:.1f}%"
+    )
+
+    if data.get("by_model"):
+        table = Table(title="按模型", show_lines=False)
+        table.add_column("模型")
+        table.add_column("请求", justify="right")
+        table.add_column("输入", justify="right")
+        table.add_column("输出", justify="right")
+        table.add_column("缓存读", justify="right")
+        table.add_column("成本", justify="right")
+        for row in data["by_model"]:
+            table.add_row(
+                str(row.get("model") or "-"), str(row.get("requests")),
+                str(row.get("prompt_tokens")), str(row.get("completion_tokens")),
+                str(row.get("cache_read_tokens")), f"${float(row.get('cost') or 0):.4f}",
+            )
+        console.print(table)
+
+    if rows:
+        recent = Table(title=f"最近 {len(rows)} 条", show_lines=False)
+        for col in ("时间", "应用", "模型", "成本", "输入", "输出", "状态"):
+            recent.add_column(col, justify="right" if col in ("成本", "输入", "输出") else "left")
+        import datetime as _dt
+
+        for row in rows:
+            ts = _dt.datetime.fromtimestamp(float(row.get("ts") or 0)).strftime("%m-%d %H:%M:%S")
+            recent.add_row(
+                ts, str(row.get("client") or "-"), str(row.get("model") or "-"),
+                f"${float(row.get('cost') or 0):.4f}",
+                str(row.get("prompt_tokens")), str(row.get("completion_tokens")),
+                str(row.get("status") or "-"),
+            )
+        console.print(recent)
+    else:
+        console.print("[dim]还没有用量记录 —— 跑一次 `clawd run` 或桌面端对话就会出现在这里。[/dim]")
+    raise typer.Exit(code=0)
+
+
 @app.command(name="onboard")
 def onboard(
     as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于脚本/CI 使用）"),

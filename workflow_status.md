@@ -243,3 +243,18 @@
 - [x] 多 provider **真正生效**：`_handle_run` 未传 llm_config 时用默认 provider 构造 LLMConfig（含密钥）；
       没密钥则告警并回退全局。`/api/info` 暴露 active_provider；用量页支持 当天/7天/30天 切换。
       测试：`tests/core/test_local_storage.py` +4、`tests/server/test_streaming_and_persona.py` +1。
+
+## 2026-10-30 v0.82.0 —— P2 台账闭环 + 文档漂移门禁 + CLI 用量 + 调用方维度
+
+- [x] `scripts/verify_audit_p1.py` 扩到 **P1×16 + P2×6 = 22 条**，当前 22/22 PASS（失败即非 0，可挂 CI）。
+- [x] 新增 `scripts/check_doc_drift.py`：README 的 用例收集/静默吞异常/可达 与现跑比对，不一致退出 1；
+      据此把 README 从 5190/482 更正为 **5260/493**（静默 162 一致）。
+- [x] P2-5：smoke 7 条 + honesty 4 条（三态）；P2-6：getting-started 已是产品教程；P2-3：三个空目录已清；
+      P2-1/P2-2：trace 技能工具真实存在、9 个技能已加 clawd 路径适配块。
+- [x] 用量 `client` 维度（老库自动 ALTER 迁移）：桌面端 desktop / CLI cli；汇总多一组 by_client；
+      桌面用量表 + CLI 用量表都显示「应用」列。
+- [x] 新增 `clawd usage [--range] [-n] [--json]`：成本/请求数/tokens/缓存命中率 + 按模型 + 最近请求。
+- [x] 设置页把「模型/Base URL」标成"全局默认"，与「API 提供商」列表语义分开。
+- 验证：tests/core+server+cli 1438+ passed；tests/core/test_local_storage.py 23 条；ruff 全过。
+- [x] 侧栏「工作区」历史会话：`/api/sessions` + `/api/session?id=`，点开还原 user/assistant/tool 三类消息；
+      `desktop/ui_console_e2e.mjs` 从 12 项扩到 **14 项**（实测 25 条历史、点开加载 3 个气泡、14/14 PASS）。

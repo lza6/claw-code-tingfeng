@@ -135,6 +135,24 @@ const imgOk = await page.evaluate(async () => {
 });
 check('图片内联渲染（/api/file 出图）', imgOk.ok === true, JSON.stringify(imgOk));
 
+// ---------- 2.5 会话列表（侧栏历史） ----------
+await page.waitForTimeout(800);
+const sess = await page.evaluate(() => {
+  const items = Array.from(document.querySelectorAll('#sessionList .session-item'));
+  const empty = (document.querySelector('#sessionList')?.textContent || '').includes('还没有历史会话');
+  return { count: items.length, empty, firstText: items[0]?.textContent || '' };
+});
+check('侧栏会话列表可用（有历史或明确空态）', sess.count > 0 || sess.empty === true, JSON.stringify(sess));
+if (sess.count > 0) {
+  await page.click('#sessionList .session-item');
+  await page.waitForTimeout(900);
+  const loaded = await page.evaluate(() => ({
+    title: (document.querySelector('#sessionTitle')?.textContent || '').trim(),
+    bubbles: document.querySelectorAll('#chat .msg-assistant, #chat .msg-user').length,
+  }));
+  check('点开会话能加载历史', loaded.bubbles >= 1 && loaded.title.length > 0, JSON.stringify(loaded));
+}
+
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
 await page.waitForTimeout(1200);

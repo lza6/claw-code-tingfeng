@@ -805,6 +805,7 @@ class AgentEngine:
                     status='completed' if getattr(session, 'is_complete', True) else 'incomplete',
                     session_id=f'sess-{stamp}',
                     goal_chars=len(str(getattr(session, 'goal', '') or '')),
+                    client=str(getattr(self, 'client_tag', 'cli') or 'cli'),
                     workdir=self.workdir,
                 )
             except Exception as e:  # noqa: BLE001 — 记账失败不影响主流程
