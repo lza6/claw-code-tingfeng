@@ -127,6 +127,19 @@ def _print_final_answer(self, session: Any) -> None:
     self._safe_print(str(answer))
 
 
+def _print_markdown(text: str, repl: Any) -> bool:
+    """用 rich 渲染 Markdown（CLI 也要有标题/列表/表格/代码块）；失败返回 False 由调用方降级"""
+    try:
+        from rich.console import Console
+        from rich.markdown import Markdown
+
+        console = getattr(getattr(repl, '_rich_hud', None), 'console', None) or Console()
+        console.print(Markdown(str(text)))
+        return True
+    except Exception:  # noqa: BLE001 — 渲染失败不该吃掉答案
+        return False
+
+
 def _run_task_plain(self, goal: str) -> None:
     """使用原始 HUD 运行任务"""
     self._safe_print()
@@ -153,14 +166,17 @@ def _run_task_plain(self, goal: str) -> None:
         self._record_turn(goal, session)
         last_session = session
 
-        # 显示结果
+        # 显示结果（Markdown 渲染；rich 不可用则降级纯文本）
+        answer = ''
         if hasattr(session, 'final_answer') and session.final_answer:
-            self._safe_print(f'\n{session.final_answer}')
+            answer = session.final_answer
         elif hasattr(session, 'steps') and session.steps:
             last_step = session.steps[-1]
-            content = getattr(last_step, 'content', '') or getattr(last_step, 'response', '')
-            if content:
-                self._safe_print(f'\n{content}')
+            answer = getattr(last_step, 'content', '') or getattr(last_step, 'response', '')
+        if answer:
+            self._safe_print()
+            if not _print_markdown(answer, self):
+                self._safe_print(str(answer))
 
         # 更新 HUD 状态
         self._update_hud()

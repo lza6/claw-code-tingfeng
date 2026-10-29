@@ -153,11 +153,52 @@ if (sess.count > 0) {
   check('点开会话能加载历史', loaded.bubbles >= 1 && loaded.title.length > 0, JSON.stringify(loaded));
 }
 
+// ---------- 2.7 图片附件（粘贴 → chip → 发送） ----------
+const pasted = await page.evaluate(async () => {
+  // 造一个 1x1 PNG，模拟"从剪贴板粘贴图片"
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8AAAwAB/wD/AL0AAAAASUVORK5CYII=';
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const file = new File([bytes], 'pasted.png', { type: 'image/png' });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+  document.querySelector('#input').dispatchEvent(evt);
+  await new Promise((r) => setTimeout(r, 400));
+  return {
+    chips: document.querySelectorAll('#attachBar .attach-chip').length,
+    hasImg: !!document.querySelector('#attachBar .attach-chip img'),
+  };
+});
+check('粘贴图片出现附件缩略图', pasted.chips >= 1 && pasted.hasImg, JSON.stringify(pasted));
+
+if (pasted.chips >= 1) {
+  await page.fill('#input', '这张图是什么颜色？一句话即可。');
+  await page.click('#send');
+  const deadline2 = Date.now() + 150000;
+  let done = false;
+  while (Date.now() < deadline2) {
+    await page.waitForTimeout(1500);
+    const busy = await page.$eval('#send', (b) => b.disabled);
+    if (!busy) { done = true; break; }
+  }
+  const after = await page.evaluate(() => ({
+    chips: document.querySelectorAll('#attachBar .attach-chip').length,
+    last: (() => {
+      const all = document.querySelectorAll('.msg-assistant .body');
+      return all.length ? (all[all.length - 1].textContent || '').slice(0, 120) : '';
+    })(),
+    base64Leak: (document.querySelector('#chat')?.textContent || '').includes('data:image/png;base64'),
+  }));
+  check('带图消息发送完成且附件已清空', done && after.chips === 0, JSON.stringify(after));
+  check('消息里没有把 base64 直接铺到对话区', after.base64Leak === false);
+}
+
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
 await page.waitForTimeout(1200);
 const usage = await page.evaluate(() => ({
   open: document.querySelector('#usageOverlay').classList.contains('show'),
+  panelText: (document.querySelector('#usageKpis')?.textContent || '').slice(0, 160),
   kpis: document.querySelectorAll('#usageKpis .kpi').length,
   bars: document.querySelectorAll('#usageChart rect').length,
   rows: document.querySelectorAll('#usageRows tr').length,

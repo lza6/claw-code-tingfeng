@@ -158,7 +158,22 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .msg-assistant .code-block{margin:8px 0;padding:10px 12px;border-radius:var(--radius-m);background:var(--bg-layer-2);border:1px solid var(--border-l1);overflow-x:auto}
 .msg-assistant .code-block code{font-family:Consolas,"Cascadia Mono",monospace;font-size:12.5px;line-height:1.55;color:#cfd6e4;white-space:pre}
 .msg-assistant .inline-code{font-family:Consolas,"Cascadia Mono",monospace;font-size:12.5px;background:var(--bg-layer-2);border:1px solid var(--border-l1);border-radius:4px;padding:0 4px}
-/* ===== 输入区 ===== */
+/* 深色表单控件（此前 select 是系统白色，和整体割裂） */
+select,input[type=text],input[type=password],input:not([type]){background:var(--bg-layer-3);color:var(--label-primary);border:1px solid var(--border-l2);border-radius:var(--radius-m);height:32px;padding:0 8px;font-size:13px;outline:none}
+select:focus,input:focus{border-color:var(--brand)}
+select option{background:var(--bg-layer-2);color:var(--label-primary)}
+
+/* 附件条（粘贴/拖拽的图片） */
+.attach-bar{display:none;gap:8px;padding:0 0 8px;flex-wrap:wrap}
+.attach-bar.show{display:flex}
+.attach-chip{position:relative;width:64px;height:64px;border-radius:var(--radius-m);overflow:hidden;border:1px solid var(--border-l2)}
+.attach-chip img{width:100%;height:100%;object-fit:cover;display:block}
+.attach-chip button{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
+.composer.dragover{border-color:var(--brand);background:var(--bg-layer-3)}
+.session-hint{display:none;padding:0 24px 6px;font-size:11px;color:var(--label-tertiary)}
+.session-hint.show{display:block}
+
+/* ===== 输入区 ===== *//* ===== 输入区 ===== */
 .composer-wrap{padding:12px 20px 8px;flex-shrink:0}
 .composer{border-radius:16px;background:var(--bg-layer-2);border:1px solid var(--border-l1);padding:12px 14px;transition:border-color .15s}
 .composer:focus-within{border-color:var(--brand)}
@@ -257,11 +272,13 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
         <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
       </div>
     </div>
+    <div class="session-hint" id="sessionHint"></div>
     <div class="view" id="view"><div id="chat"></div><div id="trace" style="display:none;padding:20px 28px"></div></div>
     <button class="jump-bottom" id="jumpBottom" title="回到最新">↓</button>
     <div class="banner" id="banner"></div>
     <div class="composer-wrap">
-      <div class="composer">
+      <div class="composer" id="composer">
+        <div class="attach-bar" id="attachBar"></div>
         <textarea id="input" rows="1" placeholder="给智能体发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
         <div class="composer-row">
           <select class="persona-select" id="persona" title="角色（系统提示词模板）">
@@ -369,8 +386,9 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
         <button class="sbtn" id="provReset">清空表单</button>
       </div>
 
+      <div class="srow"><label>当前生效</label><span id="activeProviderLine">—</span></div>
       <div class="sfield">
-        <label for="setProvider">当前生效 Provider（只读）</label>
+        <label for="setProvider">全局 Provider（高级，仅在没有默认 provider 时生效）</label>
         <input id="setProvider" placeholder="openai / anthropic / openrouter …">
       </div>
       <div class="srow" style="border-bottom:none;padding-top:12px"><label>全局默认</label><span style="color:var(--label-tertiary);font-size:12px">没有选默认 provider 时才用这里的值</span></div>

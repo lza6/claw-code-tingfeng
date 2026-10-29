@@ -261,7 +261,9 @@ def persist_agent_session(
             message["ok"] = bool(step["ok"])
         messages.append(message)
     if final_result:
-        messages.append({"role": "assistant", "content": final_result, "timestamp": time.time()})
+        last_ai = next((m for m in reversed(messages) if m.get("role") == "assistant"), None)
+        if not (last_ai and str(last_ai.get("content") or "").strip() == str(final_result).strip()):
+            messages.append({"role": "assistant", "content": final_result, "timestamp": time.time()})
 
     view = SessionView(
         session_id=session_id,

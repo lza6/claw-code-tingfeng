@@ -130,9 +130,18 @@ class CodeGraph:
                 )
                 files = [f for f in result.stdout.splitlines() if f.endswith(('.py', '.js', '.ts', '.tsx', '.jsx'))]
             except Exception:
-                files = [str(p.relative_to(self.root)).replace('\\', '/')
-                        for p in self.root.glob('**/*')
-                        if p.is_file() and not any(part.startswith('.') or part == '__pycache__' for part in p.parts)]
+                # 兜底（无 git 时）：走统一排除规则，避免把 site-packages 全量当源码
+                try:
+                    from ..core.source_scan import scan_source_files
+
+                    scan = scan_source_files(
+                        self.root, suffixes=('.py', '.js', '.ts', '.tsx', '.jsx')
+                    )
+                    files = [str(p.relative_to(self.root)).replace(chr(92), '/') for p in scan.files]
+                except Exception:
+                    files = [str(p.relative_to(self.root)).replace(chr(92), '/')
+                            for p in self.root.glob('**/*')
+                            if p.is_file() and not any(part.startswith('.') or part == '__pycache__' for part in p.parts)]
 
         # 2. 过滤掉未变更的文件 (基于 mtime 缓存)
         changed_files = []

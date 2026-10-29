@@ -18,6 +18,8 @@
   let everConnected = false;
   let turnCount = 0;
   let streamEl = null;        // 当前正在流式输出的助手气泡
+  let loadedHistory = [];   // 点开旧会话后载入的历史（续聊时作为 prior_messages 发送）
+  let attachments = [];     // 待发送图片（data URL）
   let pendingFinal = null;    // 已收到 response 的最终文本，等 STREAM_COMPLETED 收尾
   let finalizedAt = 0;        // 上次收尾时间（用于丢弃迟到 delta）
   let callCount = 0;
@@ -537,6 +539,69 @@
     addToolRow(msg.type || '?', JSON.stringify(msg, null, 2).slice(0, 4000));
   }
 
+  // —— 图片附件（粘贴 / 拖拽）：交给 Host 落盘，模型能读到路径；不支持视觉就如实说看不到 ——
+  function renderAttachments() {
+    const bar = $('attachBar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    bar.classList.toggle('show', attachments.length > 0);
+    attachments.forEach((a, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'attach-chip';
+      const img = document.createElement('img');
+      img.src = a.dataUrl;
+      img.alt = a.name || 'image';
+      const del = document.createElement('button');
+      del.textContent = 'x';
+      del.title = '移除';
+      del.onclick = () => { attachments.splice(idx, 1); renderAttachments(); };
+      chip.appendChild(img); chip.appendChild(del);
+      bar.appendChild(chip);
+    });
+  }
+
+  function clearAttachments() {
+    attachments = [];
+    renderAttachments();
+  }
+
+  function addFiles(fileList) {
+    for (const file of Array.from(fileList || [])) {
+      if (!file || !file.type || !file.type.startsWith('image/')) continue;
+      if (attachments.length >= 4) break;
+      const reader = new FileReader();
+      reader.onload = () => {
+        attachments.push({ name: file.name || 'pasted.png', dataUrl: String(reader.result || '') });
+        renderAttachments();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  const composerEl = $('composer');
+  const inputEl = $('input');
+  if (inputEl) {
+    inputEl.addEventListener('paste', (e) => {
+      const items = (e.clipboardData || {}).items || [];
+      const files = [];
+      for (const it of items) {
+        if (it.kind === 'file') { const f = it.getAsFile(); if (f) files.push(f); }
+      }
+      if (files.length) { e.preventDefault(); addFiles(files); }
+    });
+  }
+  if (composerEl) {
+    ['dragenter', 'dragover'].forEach((ev) => composerEl.addEventListener(ev, (e) => {
+      e.preventDefault(); composerEl.classList.add('dragover');
+    }));
+    ['dragleave', 'drop'].forEach((ev) => composerEl.addEventListener(ev, (e) => {
+      e.preventDefault(); composerEl.classList.remove('dragover');
+    }));
+    composerEl.addEventListener('drop', (e) => {
+      addFiles((e.dataTransfer && e.dataTransfer.files) || []);
+    });
+  }
+
   // —— 用量统计页 ——
   function openUsage() {
     $('usageOverlay').classList.add('show');
@@ -623,14 +688,29 @@
       return;
     }
     const max = Math.max(...hourly.map((h) => Number(h.tokens || 0)), 1);
-    const bw = (W - pad * 2) / hourly.length;
+    const slot = (W - pad * 2) / hourly.length;
+    const bw = Math.min(slot * 0.7, 42);  // 柱宽上限：只有 1~2 个小时时不要把柱子糊满
+    [0, 0.5, 1].forEach((ratio) => {
+      const y = H - pad - (H - pad * 2) * ratio;
+      const line = document.createElementNS(NS, 'line');
+      line.setAttribute('x1', String(pad)); line.setAttribute('x2', String(W - pad));
+      line.setAttribute('y1', String(y)); line.setAttribute('y2', String(y));
+      line.setAttribute('stroke', '#3a3a3a'); line.setAttribute('stroke-dasharray', '3 3');
+      svg.appendChild(line);
+      const tick = document.createElementNS(NS, 'text');
+      tick.setAttribute('x', String(pad - 6)); tick.setAttribute('y', String(y + 3));
+      tick.setAttribute('fill', '#8a8a8a'); tick.setAttribute('font-size', '9');
+      tick.setAttribute('text-anchor', 'end');
+      tick.textContent = fmtNum(Math.round(max * ratio));
+      svg.appendChild(tick);
+    });
     hourly.forEach((h, idx) => {
       const v = Number(h.tokens || 0);
       const bh = Math.max(2, (H - pad * 2) * (v / max));
       const rect = document.createElementNS(NS, 'rect');
-      rect.setAttribute('x', String(pad + idx * bw + bw * 0.15));
+      rect.setAttribute('x', String(pad + idx * slot + (slot - bw) / 2));
       rect.setAttribute('y', String(H - pad - bh));
-      rect.setAttribute('width', String(bw * 0.7));
+      rect.setAttribute('width', String(bw));
       rect.setAttribute('height', String(bh));
       rect.setAttribute('rx', '3');
       rect.setAttribute('fill', '#2ca6b8');
@@ -639,7 +719,7 @@
       rect.appendChild(title);
       svg.appendChild(rect);
       const label = document.createElementNS(NS, 'text');
-      label.setAttribute('x', String(pad + idx * bw + bw / 2));
+      label.setAttribute('x', String(pad + idx * slot + slot / 2));
       label.setAttribute('y', String(H - 8));
       label.setAttribute('fill', '#8a8a8a');
       label.setAttribute('font-size', '10');
@@ -825,13 +905,30 @@
       const data = await fetchJsonRetry('/api/session?id=' + encodeURIComponent(id), 2);
       $chat.innerHTML = '';
       $('sessionTitle').textContent = data.title || id;
+      loadedHistory = (data.messages || [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: String(m.content || '') }));
+      const hintEl = $('sessionHint');
+      if (hintEl) {
+        hintEl.textContent = loadedHistory.length
+          ? ('已载入该会话 ' + loadedHistory.length + ' 条历史，继续发消息会带上上下文')
+          : '';
+        hintEl.classList.toggle('show', loadedHistory.length > 0);
+      }
+      let lastRendered = null;
       for (const m of (data.messages || [])) {
+        const content = String(m.content || '');
         if (m.role === 'user') {
-          addUser(m.content || '');
+          addUser(content);
+          lastRendered = 'user:' + content;
         } else if (m.role === 'assistant') {
-          addAssistant(m.content || '');
+          // 历史会话里可能同时存了"步骤结果"和"最终回答"（旧版本落盘行为）——同内容只显示一次
+          if (lastRendered === 'assistant:' + content.trim()) continue;
+          addAssistant(content);
+          lastRendered = 'assistant:' + content.trim();
         } else if (m.role === 'tool') {
-          addToolRow(`✓ 工具完成: ${m.name || 'tool'}`, String(m.content || '').slice(0, 2000));
+          addToolRow(`✓ 工具完成: ${m.name || 'tool'}`, content.slice(0, 2000));
+          lastRendered = null;
         }
       }
       scrollEnd(true);
@@ -873,7 +970,11 @@
     addUser(text);
     turnCount++; updateStats();
     const persona = ($('persona') && $('persona').value) || '';
-    ws.send(JSON.stringify({ type: 'run', goal: text, stream: true, persona, id: 'run-' + Date.now() }));
+    const payload = { type: 'run', goal: text, stream: true, persona, id: 'run-' + Date.now() };
+    if (loadedHistory.length) payload.prior_messages = loadedHistory.slice(-20);
+    if (attachments.length) payload.images = attachments.map((a) => ({ data_url: a.dataUrl }));
+    ws.send(JSON.stringify(payload));
+    clearAttachments();
     $input.value = '';
     $send.disabled = true;
     hideBanner();
@@ -892,6 +993,9 @@
     $chat.innerHTML = ''; $trace.innerHTML = '';
     turnCount = 0; callCount = 0; updateStats();
     $('sessionTitle').textContent = '新会话';
+    loadedHistory = [];
+    const hintReset = $('sessionHint');
+    if (hintReset) { hintReset.textContent = ''; hintReset.classList.remove('show'); }
     hideBanner();
   };
 
@@ -985,12 +1089,11 @@
     $('setWorkdir').textContent = d.workdir || '—';
     $('setApiKey').textContent = d.api_key_set ? '已配置（不回显）' : '未配置';
     const ap = d.active_provider || {};
-    const provField = $('setProvider');
-    if (provField) {
-      provField.value = ap.configured
-        ? `${ap.name}（${ap.kind}${ap.model ? ' · ' + ap.model : ''}）${ap.has_key ? '' : ' · 缺密钥'}`
-        : '';
-      provField.placeholder = ap.configured ? '' : '未选择默认 provider（走全局配置）';
+    const activeLine = $('activeProviderLine');
+    if (activeLine) {
+      activeLine.textContent = ap.configured
+        ? ('provider 列表里的「' + ap.name + '」' + (ap.has_key ? '' : '（缺密钥，会回退全局）'))
+        : '未选择 provider —— 走下面的全局配置';
     }
     const usageActive = $('usageActiveProvider');
     if (usageActive) usageActive.textContent = ap.configured ? ('生效: ' + ap.name) : '';

@@ -324,6 +324,64 @@ class MessageRouter:
                     f'LLM 提供商初始化失败: {exc}',
                 )
 
+        # 图片附件：客户端把图片以 data URL 塞进 run 消息（HTTP 侧只有 GET，不做 multipart）
+        # 我们把它落盘到 .clawd/uploads/ 并把路径写进 goal —— **不假装视觉能力**：
+        # 模型能用 FileReadTool 读到文件；读不出图就如实说看不到，而不是编造图片内容。
+        attachments: list[str] = []
+        raw_images = message.get('images')
+        if isinstance(raw_images, list) and raw_images:
+            import base64
+            import hashlib
+
+            upload_dir = self._workdir() / '.clawd' / 'uploads'
+            try:
+                upload_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                self.logger.warning(f"创建上传目录失败: {exc}")
+            for item in raw_images[:4]:
+                data_url = ''
+                if isinstance(item, dict):
+                    data_url = str(item.get('data_url') or item.get('dataUrl') or '')
+                elif isinstance(item, str):
+                    data_url = item
+                if not data_url.startswith('data:image/'):
+                    continue
+                try:
+                    head, _, payload = data_url.partition(',')
+                    ext = 'png'
+                    if ';' in head:
+                        mime = head[5:].split(';')[0]
+                        ext = {'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
+                               'image/webp': 'webp', 'image/bmp': 'bmp'}.get(mime, 'png')
+                    raw = base64.b64decode(payload, validate=False)
+                    if len(raw) > 8 * 1024 * 1024:
+                        self.logger.warning("附件超过 8MB，已忽略")
+                        continue
+                    digest = hashlib.sha256(raw).hexdigest()[:12]
+                    target = upload_dir / f"img-{digest}.{ext}"
+                    target.write_bytes(raw)
+                    attachments.append(str(target.relative_to(self._workdir())).replace(chr(92), '/'))
+                except Exception as exc:  # noqa: BLE001 — 坏图片不能挡住消息
+                    self.logger.warning(f"附件解析失败（已忽略）: {exc}")
+            if attachments:
+                note = (
+                    "\n\n[随消息附图 " + str(len(attachments)) + " 张，已保存到工作区: "
+                    + ", ".join(attachments)
+                    + "。若你的模型不支持视觉输入，请直接说明看不到图片，不要猜内容；"
+                    "需要时可用 FileReadTool 读取该路径。]"
+                )
+                goal = goal + note
+
+        # 续聊：客户端可带上一段历史（点开旧会话后继续对话）
+        prior_messages: list[dict[str, Any]] = []
+        raw_prior = message.get('prior_messages')
+        if isinstance(raw_prior, list):
+            for item in raw_prior[-40:]:
+                if isinstance(item, dict) and item.get('role') in ('user', 'assistant'):
+                    content = str(item.get('content') or '').strip()
+                    if content:
+                        prior_messages.append({'role': item['role'], 'content': content[:8000]})
+
         try:
             start_time = time.time()
             if stream:
@@ -362,6 +420,7 @@ class MessageRouter:
                 session = await engine.run_stream(
                     goal=goal,
                     on_chunk=_on_chunk,
+                    prior_messages=prior_messages,
                 )
                 _flush()
                 # 事件总线 → WS 的投递是排队进行的：让出一次循环，
@@ -373,7 +432,7 @@ class MessageRouter:
                     source='websocket_server',
                 ))
             else:
-                session = await engine.run(goal=goal)
+                session = await engine.run(goal=goal, prior_messages=prior_messages)
 
             elapsed = time.time() - start_time
 
@@ -396,6 +455,7 @@ class MessageRouter:
                 message.get('id'),
                 {
                     'status': 'completed',
+                    'attachments': attachments,
                     'result': session.final_result or '',
                     'steps': len(session.steps),
                     'elapsed_seconds': round(elapsed, 3),

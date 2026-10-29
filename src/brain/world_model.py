@@ -209,8 +209,27 @@ class RepositoryWorldModel:
             logger.warning(f"并行代码图谱构建失败: {e}")
             await self.dependency_graph.build_async("**/*.py")
 
-        # 3. 智能增量文本索引
-        files = list(self.root_dir.glob("**/*.py"))
+        # 3. 智能增量文本索引（带排除规则；绝不把 site-packages 当项目源码）
+        from ..core.source_scan import DEFAULT_MAX_FILES, scan_source_files
+
+        max_files = DEFAULT_MAX_FILES
+        try:
+            import os as _os
+
+            max_files = int(_os.environ.get("CLAWD_WM_MAX_FILES", str(DEFAULT_MAX_FILES)))
+        except (TypeError, ValueError):
+            max_files = DEFAULT_MAX_FILES
+
+        scan = scan_source_files(self.root_dir, suffixes=(".py",), max_files=max_files)
+        if scan.truncated:
+            logger.warning(
+                f"世界模型跳过全量索引：{self.root_dir} 下源码文件超过 {max_files} 个"
+                "（多半是把依赖/运行时目录也扫了）。可用 ProjectMapTool / grep 做轻量查询，"
+                "或设 CLAWD_WM_MAX_FILES 调大上限。"
+            )
+            self._is_initialized = True
+            return
+        files = scan.files
         changed_files = []
         new_fingerprints = {}
 

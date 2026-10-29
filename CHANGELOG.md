@@ -7,6 +7,58 @@
 
 ---
 
+## [v0.83.0] (2026-10-30) — UI 走查迭代（自己截图逐项修）+ 图片可粘贴上传 + 续聊历史 + CLI Markdown + 签名脚本
+
+按你"自己截图验证、迭代优化"的要求，我用真实浏览器/真实窗口截了 6 张图逐项挑毛病并修掉：
+
+**1. 截图发现并修掉的 UI 缺陷**
+- **打开历史会话答案显示两遍**：落盘时 `steps` 里已经有一条 assistant 结果，又追加了 `final_result`。
+  两处都修：落盘去重（内容相同就不再追加）+ 加载历史时对连续相同 assistant 去重（老数据也不再重复）。
+- **用量柱状图"一根柱子糊满"**：柱宽改为 `min(slot*0.7, 42px)` 居中，并补 Y 轴三条参考线 + 数值刻度。
+- **设置里的下拉是系统白色**：select/input 统一深色主题（含 option 背景），不再和暗色界面割裂。
+- **「当前生效 Provider」显示错乱**：拆成只读行（显示"provider 列表里的 X"或"未选择 → 走全局配置"），
+  全局 provider 输入框明确标注"高级，仅在没有默认 provider 时生效"。
+
+**2. 图片输入（粘贴 / 拖拽）——做了，且不假装视觉**
+- 输入框支持 **Ctrl+V 粘贴图片 / 拖拽图片**（最多 4 张，缩略图可单个移除）；
+- 发送时图片以 data URL 随 `run` 消息发出，Host 落盘到 `.clawd/uploads/img-<sha>.png`，并把路径写进目标文本；
+- **模型不支持视觉时如实说"看不到图片"，不编造内容**（实测：`step-5-preview` 回的就是
+  "我的模型不支持视觉输入，无法查看该图片内容"），对话区也不会把 base64 铺出来。
+
+**3. 续聊：点开历史会话后能带着上下文继续**
+- 加载会话时记录历史，下一条消息把 `prior_messages` 一起发出（Host 侧透传给引擎 `run/run_stream`）；
+- 界面显示"已载入该会话 N 条历史，继续发消息会带上上下文"。
+
+**4. CLI 端也有 Markdown 渲染**
+- `clawd chat` 的 plain 模式原来直接打印原文；现在最终答案走 `rich.markdown`（标题/列表/表格/代码块），
+  rich 不可用时自动降级纯文本。
+
+**5. 签名：一条命令 + 缺证书时说清缺什么**
+- 新增 `scripts/build_desktop_signed.ps1`：`-Pfx/-Password` 走真实证书，`-SelfSigned` 走自签名验证管线；
+  **没有证书时退出码 2 并打印"缺什么、为什么产物不会被信任"**，不会假装签过。
+- 之前的自签名验证已证明管线可用（`Status=UnknownError` = 签名存在但不在信任链）；要消 SmartScreen 必须 CA 证书。
+
+**6. 根目录再清一次**
+- `hermes-agent-tmp/`（390MB 参考克隆）**移出仓库**到 `听风自研智能体/hermes-agent-tmp-moved`（没删，数据还在）。
+
+**7. 装到机器上才暴露的第三个 bug（也是最关键的）：索引把 UI 拖死**
+实装 E2E 里用量/provider 面板一直停在"加载中…"，Host 日志显示
+`检测到 11606 个文件发生语义变更，触发索引更新`。
+根因：打包版 Host 的 cwd 是 `resources/host`，里面有内嵌 Python 运行时；
+`WorldModel.initialize()` 用 `root.glob("**/*.py")` 把 `python/Lib/site-packages` 里的
+**1.1 万个 .py** 全当项目源码，后台索引把事件循环与 CPU 占满，HTTP 请求排队。
+修法：新增 `src/core/source_scan.py`（排除 site-packages / node_modules / venv / dist / .git / .clawd …），
+`world_model` 与 `CodeGraph` 兜底扫描都改用它；超过 `CLAWD_WM_MAX_FILES`（默认 5000）时**跳过全量索引并如实告知**，
+而不是静默截断。实测同一目录：**11606 → 635** 个源码文件。
+
+**验证（实跑）**
+- `desktop/ui_console_e2e.mjs` 从 14 项扩到 **17 项**，全绿：粘贴出现缩略图 / 带图发送完成且附件清空 /
+  对话区无 base64 泄漏 / 会话列表可点开 / 用量图表 / provider 掩码…
+- 走查截图：`screenshots/20-main-empty.png`…`25-settings-providers.png`（每次改完重新截）
+- `tests/core+server+cli` 全绿（含 sessions 去重、prior_messages、附件解析）
+
+---
+
 ## [v0.82.0] (2026-10-30) — P2 台账全部闭环（机器可验）+ 文档漂移门禁 + CLI 用量 + 调用方维度
 
 **1. P2-1 ~ P2-6 全部闭环，并变成可执行断言**

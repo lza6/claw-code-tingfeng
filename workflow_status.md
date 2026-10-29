@@ -258,3 +258,24 @@
 - 验证：tests/core+server+cli 1438+ passed；tests/core/test_local_storage.py 23 条；ruff 全过。
 - [x] 侧栏「工作区」历史会话：`/api/sessions` + `/api/session?id=`，点开还原 user/assistant/tool 三类消息；
       `desktop/ui_console_e2e.mjs` 从 12 项扩到 **14 项**（实测 25 条历史、点开加载 3 个气泡、14/14 PASS）。
+
+## 2026-10-30 v0.83.0 —— UI 截图走查迭代 + 图片可粘贴上传 + 续聊 + CLI Markdown + 签名脚本
+
+- [x] 截图走查（20~25 六张）发现并修：历史会话答案重复两遍（落盘去重 + 加载去重）、
+      用量柱状图一根柱子糊满（柱宽上限 42px + Y 轴刻度/网格）、设置下拉是系统白色（统一深色）、
+      「当前生效 Provider」显示错乱（拆只读行）。
+- [x] 图片输入：粘贴/拖拽 → 缩略图 → data URL 随 run 发送 → Host 落盘 `.clawd/uploads/`；
+      模型不支持视觉就如实说看不到（实测 `step-5-preview` 回"不支持视觉输入"），对话区无 base64 泄漏。
+- [x] 续聊：点开历史会话记录 prior_messages，下一条消息带上下文；界面提示"已载入 N 条历史"。
+- [x] CLI：plain 模式最终答案走 rich.markdown（失败降级纯文本）。
+- [x] 签名脚本 `scripts/build_desktop_signed.ps1`（-Pfx 真证书 / -SelfSigned 验证管线；无证书退出 2 并说明）。
+- [x] `hermes-agent-tmp/` 390MB 移出仓库（未删除）。
+- 测试：console E2E 17 项全绿；core+server+cli+agent 全绿；ruff 全过。
+
+### v0.83.0 追加：装到机器上最关键的 bug —— 索引把 UI 拖死
+- 现象：安装版里用量/provider 面板一直"加载中…"；Host 日志 `检测到 11606 个文件发生语义变更`。
+- 根因：打包版 cwd = `resources/host`（含内嵌 Python 运行时），`WorldModel.initialize()` 用
+  `root.glob("**/*.py")` 把 `python/Lib/site-packages` 里 1.1 万个 .py 当源码索引，占满事件循环。
+- 修法：新增 `src/core/source_scan.py`（排除 site-packages/node_modules/venv/dist/.git/.clawd…），
+  `world_model` 与 `CodeGraph` 兜底扫描都改用它；超 `CLAWD_WM_MAX_FILES`（默认 5000）→ 跳过索引并如实告知。
+- 实测：同一目录 11606 → **635**；`/api/usage` 响应 **83ms**；tests/brain+rag+core **1074 passed**。
