@@ -61,6 +61,17 @@ def chat(
     project_ctx = ProjectContext(workdir=workdir)
     project_ctx.ensure_dirs()
 
+    # 首次上手体检（onboarding 零件此前零调用点）：只在"真的什么都没配"时打扰一次
+    try:
+        from ..utils.onboarding import preflight_report
+
+        preflight = preflight_report()
+        if not preflight["ready"]:
+            console.print(f"[yellow]提示:[/yellow] {preflight['hint']}")
+            console.print("  运行 [bold]clawd onboard[/bold] 查看已有的密钥与推荐模型。")
+    except Exception as e:  # noqa: BLE001 — 体检失败绝不能挡住 chat 启动
+        console.print(f"[dim]上手体检跳过: {e}[/dim]")
+
     console.print(Panel(f"进入交互模式 (工作目录: [bold]{workdir}[/bold])", border_style="cyan"))
 
     try:
@@ -198,6 +209,35 @@ def server(
         asyncio.run(_serve())
     except KeyboardInterrupt:
         console.print("\n[dim]服务端已停止[/dim]")
+
+
+@app.command(name="onboard")
+def onboard(
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于脚本/CI 使用）"),
+):
+    """
+    首次上手体检：检测环境里的 LLM 密钥、推断默认模型、给出下一步
+
+    这是 `src/utils/onboarding.py` 的真实接线入口（此前该模块零调用点）。
+    """
+    import json as _json
+
+    from ..utils.onboarding import preflight_report
+
+    report = preflight_report()
+    if as_json:
+        # 用 typer.echo 而不是 console.print：rich 会按终端宽度折行，把 JSON 断成多行
+        typer.echo(_json.dumps(report, ensure_ascii=False))
+        raise typer.Exit(code=0 if report["ready"] else 1)
+
+    if report["keys"]:
+        console.print("[green]检测到的密钥:[/green] " + ", ".join(sorted(report["keys"])))
+    else:
+        console.print("[yellow]未检测到任何 LLM 密钥[/yellow]")
+    if report["model"]:
+        console.print(f"[green]推荐模型:[/green] {report['model']}")
+    console.print(report["hint"])
+    raise typer.Exit(code=0 if report["ready"] else 1)
 
 
 @app.command(name="doctor")
@@ -1097,7 +1137,7 @@ def eval_dataset(
     """
     from ..eval import (
         compare_with_baseline,
-        load_baseline,
+        load_baseline_strict,
         load_dataset,
         run_dataset,
         save_baseline,
@@ -1121,24 +1161,50 @@ def eval_dataset(
     console.print(f"[bold]{report.summary_line()}[/bold]")
     for outcome in report.failures:
         console.print(f"  [red]FAIL[/red] {outcome.case_id}: {outcome.detail}")
+    for outcome in report.unknowns:
+        console.print(f"  [yellow]UNKNOWN[/yellow] {outcome.case_id}: {outcome.detail}")
 
     exit_code = 0
+
+    # 基线比对：基线文件不存在 / 损坏 → 明确报错。
+    # 旧实现把 `load_baseline() is None` 当成"无回归通过"，指向不存在的路径也
+    # 会打印"基线比对通过"并 exit 0 —— 假成功。
     if baseline is not None:
-        problems = compare_with_baseline(
-            report, load_baseline(baseline), tolerance=tolerance
-        )
-        if problems:
-            console.print("[bold red]基线回归:[/bold red]")
-            for problem in problems:
-                console.print(f"  - {problem}")
-            exit_code = 1
+        if not Path(baseline).is_file() and save:
+            # 首次建立基线：--save 与 --baseline 同时给出时允许文件还不存在
+            console.print(f"[yellow]基线尚不存在（{baseline}），本轮结果将作为初始基线写入[/yellow]")
         else:
-            console.print("[green]基线比对通过（无回归）[/green]")
+            try:
+                baseline_data = load_baseline_strict(baseline)
+            except (FileNotFoundError, ValueError) as e:
+                console.print(f"[bold red]基线不可用:[/bold red] {e}")
+                console.print("  （不能在没有基线的情况下宣称「无回归」）")
+                raise typer.Exit(code=2)
+            problems = compare_with_baseline(report, baseline_data, tolerance=tolerance)
+            if problems:
+                console.print("[bold red]基线回归:[/bold red]")
+                for problem in problems:
+                    console.print(f"  - {problem}")
+                exit_code = 1
+            else:
+                console.print("[green]基线比对通过（无回归）[/green]")
 
     if save:
         target = baseline or Path(".clawd/eval_baseline.json")
-        written = save_baseline(report, target)
+        try:
+            written = save_baseline(report, target)
+        except OSError as e:
+            console.print(f"[bold red]基线写入失败:[/bold red] {e}")
+            raise typer.Exit(code=2)
         console.print(f"[green]基线已写入:[/green] {written}")
+
+    # 全都没判定 → 无法给出结论，用独立退出码（3）与"失败"(1) 区分开
+    if report.determined == 0 and report.total:
+        console.print(
+            "[bold yellow]没有一条用例被真正判定[/bold yellow]："
+            "请补 recorded 数据或改用 --live。"
+        )
+        raise typer.Exit(code=3)
 
     if report.failed:
         exit_code = exit_code or 1

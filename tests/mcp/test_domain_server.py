@@ -220,3 +220,43 @@ class TestWorldModelTools:
     def test_empty_file_path_rejected(self, wm_server):
         res = self._call(wm_server, "clawd_world_model_predict", {"current_file": "  "})
         assert res["result"]["isError"] is True
+
+
+class TestProjectMapUsesRealRepoMap:
+    """回归：`clawd_project_map` 曾因签名写错永远走降级分支
+
+    旧代码 `RepoMap(root=...)` + `get_map()`（缺必填 files）两处 TypeError，
+    对外只返回 Python 文件清单，却带着"符号图谱不可用"的字样当结果。
+    """
+
+    def test_returns_real_symbols_not_fallback(self, tmp_path: Path):
+        from src.mcp.domain_server import DomainServer
+
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "alpha.py").write_text(
+            "def alpha_func(x):\n    return x\n\nclass AlphaClass:\n    pass\n",
+            encoding="utf-8",
+        )
+        server = DomainServer(tmp_path)
+        text = server._tool_project_map({"max_files": 10})["content"][0]["text"]
+
+        assert "符号图谱不可用" not in text
+        assert "alpha_func" in text
+        assert "AlphaClass" in text
+
+    def test_empty_project_reports_honestly(self, tmp_path: Path):
+        from src.mcp.domain_server import DomainServer
+
+        server = DomainServer(tmp_path)
+        text = server._tool_project_map({"max_files": 10})["content"][0]["text"]
+        assert "没有 Python 文件" in text
+
+    def test_max_files_is_respected(self, tmp_path: Path):
+        from src.mcp.domain_server import DomainServer
+
+        for i in range(6):
+            (tmp_path / f"m{i}.py").write_text(f"def f{i}():\n    pass\n", encoding="utf-8")
+        server = DomainServer(tmp_path)
+        text = server._tool_project_map({"max_files": 2})["content"][0]["text"]
+        assert text.count("//") <= 2

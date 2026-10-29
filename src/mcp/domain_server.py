@@ -212,26 +212,39 @@ class DomainServer:
         return _text_content("\n".join(matches) if matches else "(无匹配)")
 
     def _tool_project_map(self, args: dict[str, Any]) -> dict[str, Any]:
+        """符号级项目图谱（Aider 风格 RepoMap）
+
+        回归背景：旧实现写的是 `RepoMap(root=...)`，而真实签名是
+        `RepoMap(token_budget, root_dir, ...)`；即便构造成功，`get_map()` 还必须
+        传 `files`。两处都会 TypeError —— 于是本工具**永远走降级分支**，
+        只吐一份 Python 文件清单，却带着"符号图谱不可用"的字样当结果返回。
+        """
         max_files = int(args.get("max_files") or MAX_MAP_FILES)
+
+        files = sorted(
+            str(p)
+            for p in self.root.rglob("*.py")
+            if ".git" not in p.parts and len(p.parts) < 12 and p.is_file()
+        )[:max_files]
+        if not files:
+            return _text_content("(项目里没有 Python 文件)")
+
         try:
             from ..rag.repo_map import RepoMap
 
-            mapper = RepoMap(root=str(self.root))
-            text = mapper.get_map() if callable(getattr(mapper, "get_map", None)) else ""
-            if not text:
-                return _text_content("(项目图谱为空)")
-            lines = str(text).splitlines()[: max_files * 20]
-            return _text_content("\n".join(lines))
-        except Exception as e:
-            files = sorted(
-                str(p.relative_to(self.root))
-                for p in self.root.rglob("*.py")
-                if ".git" not in p.parts and len(p.parts) < 8
-            )[:max_files]
+            mapper = RepoMap(token_budget=4096, root_dir=self.root)
+            text = mapper.get_map(files)
+        except Exception as e:  # noqa: BLE001 — 图谱失败要如实说明，不能假装有结果
+            rel = [str(Path(f).relative_to(self.root)) for f in files]
             return _text_content(
-                f"(符号图谱不可用: {type(e).__name__}; 降级为 Python 文件清单)\n"
-                + "\n".join(files)
+                f"(符号图谱不可用: {type(e).__name__}: {e}; 降级为 Python 文件清单)\n"
+                + "\n".join(rel)
             )
+
+        if not text or not str(text).strip():
+            return _text_content("(项目图谱为空)")
+        lines = str(text).splitlines()[: max_files * 20]
+        return _text_content("\n".join(lines))
 
     def _tool_list(self, args: dict[str, Any]) -> dict[str, Any]:
 

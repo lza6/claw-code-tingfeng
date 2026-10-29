@@ -99,7 +99,11 @@ class TaskPlanner:
     def validate_and_sort_dependencies(tasks: list[WorkflowTask]) -> list[WorkflowTask]:
         """校验任务依赖关系并进行拓扑排序。
 
-        如果检测到循环依赖，将抛出 ValueError。
+        如果检测到循环依赖**或悬空依赖**（依赖了不存在的任务 id），抛出 ValueError。
+
+        回归背景：悬空依赖原先只 `logger.warning(... 已忽略)` 就继续排序，
+        执行顺序会静默失真（被依赖的任务根本不存在，图却"排好了"）。
+        计划是机器生成的，静默容忍比报错危险得多 —— 必须让调用方看到。
         """
         if not tasks:
             return []
@@ -108,13 +112,20 @@ class TaskPlanner:
         adj = {t.task_id: [] for t in tasks}
         in_degree = {t.task_id: 0 for t in tasks}
 
+        dangling: list[str] = []
         for t in tasks:
             for dep_id in t.depends_on:
                 if dep_id in task_map:
                     adj[dep_id].append(t.task_id)
                     in_degree[t.task_id] += 1
                 else:
-                    logger.warning(f"任务 {t.task_id} 依赖不存在的任务 {dep_id}，已忽略")
+                    dangling.append(f"{t.task_id} -> {dep_id}")
+
+        if dangling:
+            raise ValueError(
+                f"存在悬空依赖（指向不存在的任务 id）: {dangling}；"
+                f"已知任务: {sorted(task_map)}"
+            )
 
         # Kahn's algorithm
         queue = deque([t_id for t_id, deg in in_degree.items() if deg == 0])

@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import re
+import sys
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -66,29 +68,33 @@ budget_guard = true        # 预算守卫
 # MCP 服务器列表 - 由 generator 动态填充
 """
 
+# MCP 服务器用的解释器：必须是**当前正在运行 clawd 的那个 Python**
+# （本机裸 `python` 指向 3.14，缺 loguru 等运行依赖，spawn 起来会立刻失败）
+MCP_PYTHON = sys.executable or "python"
+
 # MCP 服务器定义 (参考 oh-my-codex-main/src/config/)
 DEFAULT_MCP_SERVERS = {
     "clawd-state": MCPConfig(
         name="clawd-state",
-        command="python",
+        command=MCP_PYTHON,
         args=["-m", "src.core.mcp.state_server"],
         description="项目状态持久化服务器 (Surface管理)",
     ),
     "clawd-memory": MCPConfig(
         name="clawd-memory",
-        command="python",
+        command=MCP_PYTHON,
         args=["-m", "src.core.mcp.memory_server"],
         description="长期记忆存储服务器",
     ),
     "clawd-trace": MCPConfig(
         name="clawd-trace",
-        command="python",
+        command=MCP_PYTHON,
         args=["-m", "src.core.mcp.trace_server"],
         description="执行追踪服务器",
     ),
     "clawd-team": MCPConfig(
         name="clawd-team",
-        command="python",
+        command=MCP_PYTHON,
         args=["-m", "src.core.mcp.team_server"],
         description="团队协调服务器",
     ),

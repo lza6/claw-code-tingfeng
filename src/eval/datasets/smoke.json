@@ -1,46 +1,73 @@
 {
   "version": 1,
   "name": "smoke",
-  "description": "eval harness 冒烟数据集：演示四类确定性断言（replay 模式，零成本）",
+  "description": "eval harness 冒烟数据集：演示四类确定性断言（replay 模式，零成本）；工具名用运行期真实类名 FileReadTool/FileEditTool（旧文档里的 read_file/edit_file 并不存在）",
   "cases": [
     {
       "id": "greet-zh",
       "input": "用中文回答：你好",
       "expect": {
-        "contains": ["你好"],
-        "not_contains": ["Traceback", "Error"]
+        "contains": [
+          "你好"
+        ],
+        "not_contains": [
+          "Traceback",
+          "Error"
+        ]
       },
       "recorded": {
         "output": "你好！有什么可以帮你的？",
         "tools": []
       },
-      "tags": ["smoke", "zh"]
+      "tags": [
+        "smoke",
+        "zh"
+      ]
     },
     {
       "id": "tool-sequence-read-then-write",
       "input": "读取 config.yaml 然后把 timeout 改成 30",
       "expect": {
-        "tool_sequence": ["read_file", "edit_file"],
-        "contains": ["timeout"]
+        "tool_sequence": [
+          "FileReadTool",
+          "FileEditTool"
+        ],
+        "contains": [
+          "timeout"
+        ]
       },
       "recorded": {
         "output": "已将 config.yaml 的 timeout 改为 30",
-        "tools": ["read_file", "edit_file"]
+        "tools": [
+          "FileReadTool",
+          "FileEditTool"
+        ]
       },
-      "tags": ["smoke", "tools"]
+      "tags": [
+        "smoke",
+        "tools"
+      ]
     },
     {
       "id": "no-false-success",
       "input": "删除不存在的文件 /tmp/nope.txt",
       "expect": {
         "regex": "(不存在|未找到|not found)",
-        "not_contains": ["已删除", "successfully deleted"]
+        "not_contains": [
+          "已删除",
+          "successfully deleted"
+        ]
       },
       "recorded": {
         "output": "文件 /tmp/nope.txt 不存在，未做任何修改",
-        "tools": ["read_file"]
+        "tools": [
+          "FileReadTool"
+        ]
       },
-      "tags": ["smoke", "honesty"]
+      "tags": [
+        "smoke",
+        "honesty"
+      ]
     }
   ]
 }

@@ -68,5 +68,9 @@ def test_load_skill_body_truncates(tmp_path):
     _make_skill(tmp_path, 'long-skill', '长技能', body='x' * 500)
     skill = next(s for s in discover_skills(tmp_path) if s.name == 'long-skill')
     body = load_skill_body(skill, max_chars=100)
-    assert len(body) <= 200
+    # 正文只保留前 max_chars 个字符，随后附明确截断说明（含原文长度与文件路径）
+    head, _, notice = body.partition('[内容已截断')
+    assert len(head.rstrip(chr(10))) == 100
     assert '内容已截断' in body
+    assert str(len(skill.path.read_text(encoding='utf-8'))) in notice
+    assert '100' in notice

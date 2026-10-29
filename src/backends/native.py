@@ -84,17 +84,51 @@ class NativeBackend:
             return pool.submit(asyncio.run, coro).result()
 
     def run(self, goal: str, timeout: float = 900.0) -> BackendResult:
+        """执行一次原生 agent 任务
+
+        `timeout` 是**真实生效**的墙钟上限（不是装饰参数）：协程在线程池里跑，
+        超时即放弃等待并返回 `timed_out=True`。
+        诚实限制：Python 无法强杀线程，超时后协程线程可能仍在后台收尾
+        （LLM 请求结束后自然退出）；调用方据此判定失败即可。
+        """
         if not goal or not goal.strip():
             raise BackendUnavailable("goal 不能为空")
+        if timeout is not None and timeout <= 0:
+            raise BackendUnavailable("timeout 必须为正数")
+
         engine = self._get_engine()
         started = time.perf_counter()
+
+        import concurrent.futures
+
+        def _invoke() -> Any:
+            # 协程在目标线程里创建：若提前取消，不会留下 "never awaited" 协程
+            return self._run_coro(engine.run(goal))
+
+        pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="clawd-native"
+        )
         try:
-            session = self._run_coro(engine.run(goal))
-        except Exception as e:  # noqa: BLE001 — 统一转成 BackendResult 的错误
-            return BackendResult(
-                engine="native", text="", errors=[f"{type(e).__name__}: {e}"],
-                exit_code=1, duration_s=time.perf_counter() - started,
-            )
+            future = pool.submit(_invoke)
+            try:
+                session = future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                future.cancel()
+                return BackendResult(
+                    engine="native",
+                    text="",
+                    errors=[f"执行超时（{timeout:g}s）：已放弃等待原生引擎"],
+                    exit_code=1,
+                    duration_s=time.perf_counter() - started,
+                    timed_out=True,
+                )
+            except Exception as e:  # noqa: BLE001 — 统一转成 BackendResult 的错误
+                return BackendResult(
+                    engine="native", text="", errors=[f"{type(e).__name__}: {e}"],
+                    exit_code=1, duration_s=time.perf_counter() - started,
+                )
+        finally:
+            pool.shutdown(wait=False)
 
         text = getattr(session, "final_result", "") or ""
         steps = getattr(session, "steps", []) or []

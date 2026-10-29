@@ -167,6 +167,28 @@ class TestRegistry:
     def test_known_engines_registered(self):
         assert set(registry.ENGINES) == {"codex", "opencode", "openclaw"}
 
+    def test_native_engine_registered_alongside_cli_engines(self):
+        """native 是内置引擎（不是 CLI），必须出现在 ALL_ENGINES 里
+
+        回归背景：曾只把 native 加进 get_backend 分支，忘了 probe_all 的过滤
+        条件仍是 `in ENGINES`，导致 `clawd engines` / collaborate 默认引擎
+        看不见 native —— 自相矛盾。
+        """
+        assert registry.NATIVE_ENGINE == "native"
+        assert "native" in registry.ALL_ENGINES
+        assert registry.ALL_ENGINES[0] == "native"
+
+    def test_get_backend_native_returns_native_backend(self):
+        backend = registry.get_backend("native")
+        assert backend.__class__.__name__ == "NativeBackend"
+        assert backend.name == "native"
+
+    def test_probe_native_is_ready(self):
+        probe = registry.probe_engine("native")
+        assert probe.status == "ready"
+        assert probe.usable is True
+        assert probe.version == "builtin"
+
     def test_non_engines_are_explicitly_not_engines(self):
         """grok 是模型代理、pi 是插件包、hermes 无源码 —— 不能当引擎驱动"""
         assert set(registry.NON_ENGINES) == {"grok", "pi", "hermes"}
@@ -189,7 +211,11 @@ class TestRegistry:
 
     def test_describe_covers_engines_and_non_engines(self):
         described = registry.describe()
-        assert set(described) == {"codex", "opencode", "openclaw", "grok", "pi", "hermes"}
+        assert set(described) == {
+            "native", "codex", "opencode", "openclaw", "grok", "pi", "hermes",
+        }
+        assert described["native"]["kind"] == "engine"
+        assert described["native"]["status"] == "ready"
         assert described["codex"]["kind"] == "engine"
         assert described["grok"]["kind"] == "non-engine"
         # 状态必须是真实探活结果之一
@@ -197,5 +223,13 @@ class TestRegistry:
 
     def test_probe_all_returns_entry_per_engine(self):
         probes = registry.probe_all()
-        assert len(probes) == len(registry.ENGINES)
-        assert {p.name for p in probes} == set(registry.ENGINES)
+        assert len(probes) == len(registry.ALL_ENGINES)
+        assert {p.name for p in probes} == set(registry.ALL_ENGINES)
+
+    def test_ready_engines_always_includes_native(self):
+        """内置引擎零外部依赖，必须始终可用（否则 collaborate 默认引擎会失效）"""
+        assert "native" in registry.ready_engines()
+
+    def test_probe_all_ignores_unknown_names(self):
+        probes = registry.probe_all(["native", "nope"])
+        assert [p.name for p in probes] == ["native"]

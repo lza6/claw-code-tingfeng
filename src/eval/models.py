@@ -53,13 +53,19 @@ class EvalCase:
 
 @dataclass
 class EvalOutcome:
-    """单条用例的执行结果"""
+    """单条用例的执行结果
+
+    三态而不是两态：``unknown=True`` 表示**这条根本没判定**（缺录制数据、
+    缺少工具调用记录、用例规格非法）。把"没测"记成"失败"会污染通过率，
+    把"没测"记成"通过"就是假成功 —— 两种都不允许。
+    """
 
     case_id: str
     passed: bool
     detail: str
     elapsed_ms: float = 0.0
     tags: list[str] = field(default_factory=list)
+    unknown: bool = False
 
 
 @dataclass
@@ -77,19 +83,33 @@ class EvalReport:
 
     @property
     def passed(self) -> int:
-        return sum(1 for o in self.outcomes if o.passed)
+        return sum(1 for o in self.outcomes if o.passed and not o.unknown)
 
     @property
     def failed(self) -> int:
-        return self.total - self.passed
+        return sum(1 for o in self.outcomes if not o.passed and not o.unknown)
+
+    @property
+    def unknown(self) -> int:
+        return sum(1 for o in self.outcomes if o.unknown)
+
+    @property
+    def determined(self) -> int:
+        """真正判定过的用例数（passed + failed）"""
+        return self.passed + self.failed
 
     @property
     def pass_rate(self) -> float:
-        return self.passed / self.total if self.total else 0.0
+        """已判定用例里的通过率（未判定的不进分母）"""
+        return self.passed / self.determined if self.determined else 0.0
 
     @property
     def failures(self) -> list[EvalOutcome]:
-        return [o for o in self.outcomes if not o.passed]
+        return [o for o in self.outcomes if not o.passed and not o.unknown]
+
+    @property
+    def unknowns(self) -> list[EvalOutcome]:
+        return [o for o in self.outcomes if o.unknown]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -99,11 +119,13 @@ class EvalReport:
             "total": self.total,
             "passed": self.passed,
             "failed": self.failed,
+            "unknown": self.unknown,
             "pass_rate": round(self.pass_rate, 4),
             "outcomes": [
                 {
                     "case_id": o.case_id,
                     "passed": o.passed,
+                    "unknown": o.unknown,
                     "detail": o.detail,
                     "elapsed_ms": round(o.elapsed_ms, 2),
                     "tags": o.tags,
@@ -113,7 +135,10 @@ class EvalReport:
         }
 
     def summary_line(self) -> str:
-        return (
-            f"eval[{self.mode}] {self.passed}/{self.total} passed "
+        line = (
+            f"eval[{self.mode}] {self.passed}/{self.determined} passed "
             f"({self.pass_rate * 100:.1f}%)"
         )
+        if self.unknown:
+            line += f" · {self.unknown} 未判定"
+        return line

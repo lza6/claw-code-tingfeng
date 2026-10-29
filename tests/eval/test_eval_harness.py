@@ -172,7 +172,8 @@ class TestRunDataset:
         assert report.passed == 1
         assert report.pass_rate == 1.0
 
-    def test_replay_without_recorded_fails_case_not_whole_run(self):
+    def test_replay_without_recorded_marks_unknown_not_failed(self):
+        """缺 recorded = **没测**（unknown），不是失败；也不得计入通过率分母"""
         cases = [
             EvalCase(case_id="c1", input="x", expect={"contains": ["ok"]}),
             EvalCase(
@@ -186,9 +187,14 @@ class TestRunDataset:
         report = run_dataset(cases)
 
         assert report.total == 2
-        assert report.failed == 1
-        assert report.failures[0].case_id == "c1"
-        assert "recorded" in report.failures[0].detail
+        assert report.unknown == 1
+        assert report.unknowns[0].case_id == "c1"
+        assert "recorded" in report.unknowns[0].detail
+        assert report.failed == 0, "没测不该被记成失败"
+        assert report.passed == 1
+        assert report.determined == 1
+        assert report.pass_rate == 1.0, "通过率只在已判定用例里算"
+        assert "未判定" in report.summary_line()
 
     def test_live_requires_env_gate(self, monkeypatch):
         monkeypatch.delenv("CLAWD_EVAL_ALLOW_PAID", raising=False)

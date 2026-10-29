@@ -16,6 +16,7 @@ class AgentRole(str, Enum):
     DB_OPTIMIZER = "db_optimizer"    # 数据库优化专家
     DIAGNOSTICIAN = "diagnostician"  # 诊断专家 (企业级新增)
     SYNTHESIZED = "synthesized"      # 动态合成专家 (v0.50.0 新增)
+    CRITIC = "critic"                # 批判性审查专家（ralplan 挑战分支默认开启，缺这个成员会 AttributeError）
 
 
 # 角色描述
@@ -30,6 +31,7 @@ ROLE_DESCRIPTIONS = {
     AgentRole.DB_OPTIMIZER: "负责数据库 Schema 设计、SQL 查询优化、索引策略",
     AgentRole.DIAGNOSTICIAN: "负责深度故障回溯、错误根因分析、恢复路径建议",
     AgentRole.SYNTHESIZED: "根据任务上下文实时合成的临时专项专家，具备动态定义的特定技能集",
+    AgentRole.CRITIC: "负责对计划/设计做对抗式批判，找出弱点、风险与遗漏（ralplan 挑战分支使用）",
 }
 
 # 角色系统提示模板
@@ -120,4 +122,12 @@ ROLE_SYSTEM_PROMPTS = {
 3. 保持高度专注，不输出与任务无关的冗余信息。
 
 身份指令: {dynamic_instruction}""",
+
+    AgentRole.CRITIC: """你是一位极其挑剔的批判性审查专家。你的职责是：
+1. 对给定的计划做对抗式挑战，而不是附和。
+2. 指出技术可行性上的硬伤、被忽略的边界情况、以及不可验证的成功标准。
+3. 每条意见必须可执行：指出问题、给出替代方案、说明为什么替代方案更好。
+
+请按以下结构输出：
+弱点、风险、建议（每节用「- 」开头的列表）。""",
 }

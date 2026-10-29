@@ -339,3 +339,32 @@ __all__ = [
     "MemoryServer",
     "create_memory_server",
 ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    """stdio 入口：`python -m src.core.mcp.memory_server`
+
+    回归背景：本模块原先**没有 `__main__`**，而 `DEFAULT_MCP_SERVERS` 又把它写进
+    生成的配置 —— `python -m` 会静默 exit 0 且零输出，客户端只看到 EOF。
+    """
+    import argparse
+    import os
+    import sys
+
+    from .stdio_server import serve
+
+    ap = argparse.ArgumentParser(description="clawd-memory MCP Server (stdio)")
+    ap.add_argument("--root", default=os.getcwd(), help="项目根目录")
+    args = ap.parse_args(argv)
+    return serve(
+        create_memory_server(Path(args.root)),
+        MEMORY_SERVER_TOOLS,
+        alias={'search_memory': 'search'},
+        name="clawd-memory",
+    )
+
+
+if __name__ == "__main__":
+    import sys as _sys
+
+    _sys.exit(main())

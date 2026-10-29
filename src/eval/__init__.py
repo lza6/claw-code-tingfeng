@@ -7,18 +7,26 @@
 - **基线比对**：与基线 JSON 对比，pass_rate 下降即回归。
 """
 
-from .baseline import compare_with_baseline, load_baseline, save_baseline
-from .metrics import evaluate_case
+from .baseline import (
+    compare_with_baseline,
+    load_baseline,
+    load_baseline_strict,
+    save_baseline,
+)
+from .metrics import evaluate_case, evaluate_case_status
 from .models import EvalCase, EvalOutcome, EvalReport
-from .runner import load_dataset, run_dataset
+from .runner import CaseNotRun, load_dataset, run_dataset
 
 __all__ = [
     "EvalCase",
     "EvalOutcome",
     "EvalReport",
+    "CaseNotRun",
     "compare_with_baseline",
     "evaluate_case",
+    "evaluate_case_status",
     "load_baseline",
+    "load_baseline_strict",
     "load_dataset",
     "run_dataset",
     "save_baseline",

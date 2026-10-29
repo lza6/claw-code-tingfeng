@@ -64,6 +64,11 @@ ENGINES: dict[str, CliEngineProfile] = {
     p.name: p for p in (CODEX, OPENCODE, OPENCLAW)
 }
 
+#: 内置引擎（我们自己的 AgentEngine）。它不是 CLI 驱动，故不在 ENGINES 里，
+#: 但必须能被 `get_backend("native")` / `describe()` / `probe_all()` 识别——
+#: 否则 "collaborate 默认 native" 与 "clawd engines 看不到 native" 自相矛盾（实测）。
+NATIVE_ENGINE = "native"
+
 #: 非引擎项（避免把它们当引擎驱动，造成"看起来支持其实跑不通"）
 NON_ENGINES: dict[str, str] = {
     "grok": "模型代理：把 Claude Code 的请求路由到 Grok 模型；属 provider 层，不是 agent 引擎",
@@ -77,9 +82,17 @@ def get_backend(engine: str, **kwargs):
 
     codex 走专用驱动（需要自定义 provider 注册等额外配置），其余走通用 CliBackend。
     """
+    # 内置引擎优先：它不是 CLI，不能走 ENGINES 查表
+    if engine == NATIVE_ENGINE:
+        from .native import NativeBackend
+
+        allowed = {k: v for k, v in kwargs.items()
+                   if k in ("workdir", "max_iterations", "engine")}
+        return NativeBackend(**allowed)
+
     profile = ENGINES.get(engine)
     if profile is None:
-        known = ", ".join(sorted(ENGINES))
+        known = ", ".join(sorted(ALL_ENGINES))
         raise KeyError(f"未知引擎: {engine}（已注册: {known}）")
     if engine == "codex":
         from .codex import CodexBackend
@@ -93,15 +106,23 @@ def get_backend(engine: str, **kwargs):
 
 
 def probe_engine(engine: str, **kwargs) -> EngineProbe:
+    if engine == NATIVE_ENGINE:
+        from .native import NativeBackend
+
+        return NativeBackend().probe()
     profile = ENGINES.get(engine)
     if profile is None:
         return EngineProbe(name=engine, status="not_installed", detail="未注册的引擎")
     return CliBackend(profile, **kwargs).probe()
 
 
+#: 全部已注册引擎名（含内置 native，按可读顺序）
+ALL_ENGINES: tuple[str, ...] = (NATIVE_ENGINE, *ENGINES)
+
+
 def probe_all(engines: Iterable[str] | None = None) -> list[EngineProbe]:
-    names = list(engines) if engines else list(ENGINES)
-    return [probe_engine(n) for n in names if n in ENGINES]
+    names = list(engines) if engines else list(ALL_ENGINES)
+    return [probe_engine(n) for n in names if n in ALL_ENGINES]
 
 
 def ready_engines() -> list[str]:

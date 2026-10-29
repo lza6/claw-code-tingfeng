@@ -298,40 +298,114 @@ class WorktreeManager:
         target_worktree_id: str,
         strategy: str = "keep",  # "keep" | "integrator" | "prompt"
     ) -> bool:
-        """合并工作区变更
+        """把源工作区的改动合并到目标工作区
 
         Args:
             source_worktree_id: 源工作区（提供变更）
             target_worktree_id: 目标工作区（接收变更）
             strategy: 合并策略
-                - "keep": 保留各自变更（并行模式）
-                - "integrator": 通过 integrator 代理智能合并
-                - "prompt": 提示用户解决冲突
+                - "keep": 不合并，两边各自保留（并行模式的默认边界）
+                - "integrator": 真的把源码改动落到目标工作区（tracked 差异 + 未跟踪新文件）；
+                  冲突时不覆盖、不猜，返回 False 并记录冲突文件
+                - "prompt": 留给人工解决，直接返回 False
 
         Returns:
-            True 如果合并成功
+            True **仅当改动确实进入目标工作区**。keep / prompt 策略不落地任何改动，因此返回 False
+            —— 旧实现这两种情况都返回 True，等于"报成功但什么都没做"（假成功）。
+
+        说明：integrator 用 git 三方补丁做机械合并，不做"LLM 猜冲突"。
+        需要语义级合并时应在目标工作区里显式跑 IntegratorAgent，而不是在这里假装成功。
         """
         source = self._active_worktrees.get(source_worktree_id)
         target = self._active_worktrees.get(target_worktree_id)
 
         if not source or not target:
+            logger.warning(
+                f"合并失败：工作区不存在（source={source_worktree_id}, target={target_worktree_id}）"
+            )
             return False
 
         if strategy == "keep":
-            # 简单策略：不自动合并，仅记录
-            logger.info(f"Skipping automatic merge (keep strategy): {source_worktree_id} → {target_worktree_id}")
-            return True
-
-        elif strategy == "prompt":
-            # 提示用户手动解决
-            logger.warning(f"Merge conflict requires manual resolution: {source_worktree_id} → {target_worktree_id}")
+            logger.info(
+                f"keep 策略：两侧变更各自保留，不做合并（{source_worktree_id} → {target_worktree_id}）"
+            )
             return False
 
-        elif strategy == "integrator":
-            # TODO: 通过 IntegratorAgent 智能合并
-            logger.info(f"Integrator merge requested: {source_worktree_id} → {target_worktree_id}")
+        if strategy == "prompt":
+            logger.warning(
+                f"prompt 策略：需要人工解决冲突（{source_worktree_id} → {target_worktree_id}）"
+            )
+            return False
+
+        if strategy == "integrator":
+            ok = self._apply_changes_via_git(source, target)
+            if ok:
+                target.files_modified = sorted(set(target.files_modified) | set(source.files_modified))
+                target.last_accessed = import_time()
+                self._persist_state()
+                logger.info(f"integrator 合并完成：{source_worktree_id} → {target_worktree_id}")
+            else:
+                logger.warning(f"integrator 合并未落地：{source_worktree_id} → {target_worktree_id}")
+            return ok
+
+        logger.warning(f"未知合并策略 {strategy}，未做任何改动")
+        return False
+
+    def _apply_changes_via_git(self, source: WorktreeState, target: WorktreeState) -> bool:
+        """把源工作区的改动落到目标工作区（**文件级**合并，不猜冲突）
+
+        为什么不用 `git apply --3way`：Windows 上 autocrlf 会让补丁的上下文行
+        与实际工作区不一致，`--3way` 回退后照样报 "patch does not apply"，
+        表现为"明明只改了一行却合不了"。文件级迁移在任何换行/编码配置下都稳定。
+
+        规则（全有或全无）：
+        1. 取两侧 `git status --porcelain`；
+        2. 若**同一文件**两侧都改了 → 冲突，一个字节都不动，返回 False；
+        3. 否则把源侧改动逐文件复制到目标（新增/修改 → 复制；删除 → 删除）；
+        4. 真正落地了至少一个文件才返回 True。
+        """
+        spath, tpath = source.path, target.path
+        if not _is_git_worktree(spath):
+            logger.warning(f"源工作区不是 git 工作树，无法机械合并：{spath}")
+            return False
+        if not _is_git_worktree(tpath):
+            logger.warning(f"目标工作区不是 git 工作树，无法机械合并：{tpath}")
+            return False
+
+        src_changes = _git_status_paths(spath)
+        dst_changes = _git_status_paths(tpath)
+        if not src_changes:
+            logger.info("源工作区没有改动，无需合并")
+            return False
+
+        conflicts = sorted(set(src_changes) & set(dst_changes))
+        if conflicts:
+            logger.warning(
+                f"合并冲突（两侧都改了这些文件，未做任何改动）：{conflicts[:10]}"
+            )
+            return False
+
+        applied: list[str] = []
+        for rel, code in sorted(src_changes.items()):
+            src_file = spath / rel
+            dst_file = tpath / rel
+            if "D" in code:
+                if dst_file.exists():
+                    dst_file.unlink()
+                    applied.append(f"删除 {rel}")
+                continue
+            if not src_file.is_file():
+                continue
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            applied.append(f"{'新增' if '?' in code or 'A' in code else '更新'} {rel}")
+
+        if applied:
+            logger.info(f"integrator 已落地 {len(applied)} 个文件改动：{applied[:10]}")
+            source.files_modified = sorted(set(source.files_modified) | set(src_changes))
             return True
 
+        logger.warning("源工作区有状态记录但没有任何文件可迁移（可能已被移动或忽略）")
         return False
 
     def cleanup(self, worktree_id: str) -> bool:
@@ -384,3 +458,48 @@ __all__ = [
     "WorktreeManager",
     "WorktreeState",
 ]
+
+
+def _is_git_worktree(path: Path) -> bool:
+    """`path` 是否位于 git 工作树内（worktree 的 .git 是文件而不是目录）"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=20, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _git_status_paths(path: Path) -> dict[str, str]:
+    """返回 {相对路径: 状态码}（含未跟踪文件 `??`）"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "status", "--porcelain=v1", "-z",
+             "--untracked-files=all"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=60, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.warning(f"读取 {path} 的 git 状态失败: {e}")
+        return {}
+    if result.returncode != 0:
+        logger.warning(f"读取 {path} 的 git 状态失败: {(result.stderr or '').strip()[:300]}")
+        return {}
+
+    changes: dict[str, str] = {}
+    entries = (result.stdout or "").split(chr(0))
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if not entry or len(entry) < 4:
+            continue
+        code, rel = entry[:2], entry[3:]
+        changes[rel] = code
+        # 重命名/复制条目后面还跟着"原路径"，跳过它
+        if "R" in code or "C" in code:
+            index += 1
+    return changes

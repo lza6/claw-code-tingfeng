@@ -79,13 +79,16 @@ def offer_openrouter_oauth(io, analytics=None) -> bool:
 
 
 def start_oauth_flow(io) -> str | None:
-    """Start OAuth flow and return API key."""
-    # Simple OAuth placeholder - actual implementation would use
-    # HTTP server and browser redirect flow
-    io.tool_output("Opening OpenRouter in browser...")
-    io.tool_output("After login, copy your API key and paste it here.")
+    """OpenRouter OAuth —— **尚未实现**，如实告知而不是假装在跳浏览器
 
-    # For now, just return None - full OAuth requires more setup
+    旧实现会打印 "Opening OpenRouter in browser..."，但什么都不会发生，
+    用户会一直等一个永远不来的浏览器窗口。宁可直接给出可操作的手工步骤。
+    """
+    io.tool_error("内置 OpenRouter OAuth 尚未实现（不会打开浏览器）。")
+    io.tool_output("请手动获取 API key 后设置环境变量：")
+    io.tool_output("  PowerShell:  $env:OPENROUTER_API_KEY = 'sk-or-...'")
+    io.tool_output("  Bash:        export OPENROUTER_API_KEY=sk-or-...")
+    io.tool_output(f"详见 {CLAWD_URLS['models_and_keys']}")
     return None
 
 
@@ -140,10 +143,35 @@ def print_available_keys():
         print("No API keys detected in environment.")
 
 
+def preflight_report() -> dict:
+    """给 CLI/REPL 用的首次上手体检（**真实接线入口**）
+
+    返回:
+        {"keys": {...}, "model": str|None, "ready": bool, "hint": str}
+
+    接线背景（审计 P1-5）：`detect_api_keys` / `try_select_default_model` 原先
+    全仓零调用点，只在 `__init__` 里 re-export —— 上手引导形同没有。
+    """
+    keys = detect_api_keys()
+    model = try_select_default_model()
+    ready = bool(keys) or bool(os.environ.get("CLAWD_API_KEY"))
+    if ready and model:
+        hint = f"检测到密钥，可直接使用推荐模型: {model}"
+    elif ready:
+        hint = "检测到密钥，但未能推断默认模型，请在配置里显式指定 model"
+    else:
+        hint = (
+            "未检测到任何 LLM API 密钥：请设置 ANTHROPIC_API_KEY / OPENAI_API_KEY / "
+            f"DEEPSEEK_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY 之一，或写入配置。见 {CLAWD_URLS['models_and_keys']}"
+        )
+    return {"keys": keys, "model": model, "ready": ready, "hint": hint}
+
+
 __all__ = [
     "check_openrouter_tier",
     "detect_api_keys",
     "offer_openrouter_oauth",
+    "preflight_report",
     "print_available_keys",
     "select_default_model",
     "start_oauth_flow",

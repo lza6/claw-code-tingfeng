@@ -86,6 +86,10 @@ def _run_task_rich(self, goal: str) -> None:
             last_session = session
             self._record_turn(goal, session)
             live.update(self._rich_hud.renderer.render_full_layout())
+
+        # Live(screen=True) 退出时会清屏 —— 最终答案必须在退出之后单独打印，
+        # 否则用户在富 HUD 模式下看不到任务结果（旧实现确实什么都没打印）。
+        self._print_final_answer(last_session)
     except KeyboardInterrupt:
         self._safe_print(f'\n  {status_warn("任务已中止")}')
     except Exception as e:
@@ -93,6 +97,34 @@ def _run_task_rich(self, goal: str) -> None:
 
     # 自动进化和内存护栏
     self._post_task_hook(last_session)
+
+
+def _print_final_answer(self, session: Any) -> None:
+    """打印任务最终输出（富 HUD 退出后调用）"""
+    if session is None:
+        self._safe_print(f'\n  {status_warn("本轮没有产生结果会话")}')
+        return
+
+    answer = (
+        getattr(session, 'final_result', '')
+        or getattr(session, 'final_answer', '')
+        or ''
+    )
+    if not str(answer).strip():
+        self._safe_print(f'\n  {dim("（模型没有给出最终文本，可看上面的步骤）")}')
+        return
+
+    self._safe_print()
+    md = getattr(self, '_md_renderer', None)
+    if md is not None:
+        try:
+            md.reset()
+            md.append(str(answer))
+            self._rich_hud.console.print(md.render_current())
+            return
+        except Exception as e:  # noqa: BLE001 — 渲染失败必须降级到纯文本，不能吞掉答案
+            self._safe_print(f'  {dim(f"Markdown 渲染失败，改用纯文本: {e}")}')
+    self._safe_print(str(answer))
 
 
 def _run_task_plain(self, goal: str) -> None:

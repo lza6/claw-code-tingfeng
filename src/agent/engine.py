@@ -563,10 +563,18 @@ class AgentEngine:
         """
         # 装配扩展工具（幂等，失败降级）
         await self._load_extended_tools()
-        result = await self._run_agent_core(
-            goal=goal, is_stream=False, on_step=on_step, prior_messages=prior_messages
-        )
+        self._execute_hook_point("session_start", {"goal": goal, "stream": False})
+        try:
+            result = await self._run_agent_core(
+                goal=goal, is_stream=False, on_step=on_step, prior_messages=prior_messages
+            )
+        except Exception as e:
+            self._execute_hook_point(
+                "session_end", {"goal": goal, "ok": False, "error": f"{type(e).__name__}: {e}"}
+            )
+            raise
         self._persist_session(result['session'])
+        self._execute_hook_point("session_end", {"goal": goal, "ok": True, "stream": False})
         return result['session']
 
     async def run_stream(
@@ -576,12 +584,94 @@ class AgentEngine:
         on_step: Callable | None = None,
         prior_messages: list[Any] | None = None,
     ) -> AgentSession:
-        result = await self._run_agent_core(
-            goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step,
-            prior_messages=prior_messages,
-        )
+        self._execute_hook_point("session_start", {"goal": goal, "stream": True})
+        try:
+            result = await self._run_agent_core(
+                goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step,
+                prior_messages=prior_messages,
+            )
+        except Exception as e:
+            self._execute_hook_point(
+                "session_end", {"goal": goal, "ok": False, "error": f"{type(e).__name__}: {e}"}
+            )
+            raise
         self._persist_session(result['session'])
+        self._execute_hook_point("session_end", {"goal": goal, "ok": True, "stream": True})
         return result['session']
+
+    # ---------- Hook 接线（hook_registry 此前在引擎里零调用点）----------
+    def _execute_hook_point(self, point_name: str, data: dict[str, Any]):
+        """执行一个 Hook 点
+
+        返回 `HookExecutionResult`；**未注册任何 hook 时返回 None 且几乎零开销**
+        （只是一次 dict 查表）。这样既能真的把 hooks 接上，又不会给默认路径
+        增加可感知成本。
+
+        接线背景（审计 P1-4）：`src/hooks/` + `src/core/hook_registry/` 共 2.5k 行
+        造好却没人调用 —— 配置里写 hook 等于写了不生效的配置。
+        """
+        try:
+            from ..core.hook_registry import enums as hook_enums
+            from ..core.hook_registry.registry import execute_hook, get_hook_point_specs
+            from ..core.hook_registry.specs import HookContext
+        except ImportError:  # 精简安装/裁剪环境：hook 系统可能不存在
+            return None
+
+        try:
+            point = hook_enums.HookPoint(point_name)
+        except ValueError:
+            return None
+        try:
+            specs = get_hook_point_specs(point)
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug(f"读取 hook 规格失败: {e}")
+            return None
+        if not specs:
+            return None
+        try:
+            return execute_hook(point, HookContext(hook_point=point, data=dict(data)))
+        except Exception as e:  # noqa: BLE001 — hook 出错不能打断主流程
+            self.logger.warning(f"Hook {point_name} 执行异常（已忽略）: {e}")
+            return None
+
+    async def _execute_tool_with_hooks(self, tool_name: str, tool_args: dict[str, Any]):
+        """工具执行的三点接线：PRE_TOOL_USE → 执行 → POST_TOOL_USE / TOOL_ERROR
+
+        PRE_TOOL_USE 返回 DENY 时**不执行工具**，直接把拒绝原因作为失败结果返回
+        （而不是抛异常打断整轮）。
+        """
+        from ..tools_runtime.base import ToolResult
+
+        pre = self._execute_hook_point(
+            "pre_tool_use", {"tool": tool_name, "args": dict(tool_args or {})}
+        )
+        denied = pre is not None and str(getattr(pre.result, "value", pre.result)) == "deny"
+        if denied:
+            message = str(getattr(pre, "message", "") or "被 hook 拒绝")
+            self.logger.warning(f"PRE_TOOL_USE 拒绝执行 {tool_name}: {message}")
+            return ToolResult(success=False, output="", error=f"Hook 拒绝执行 {tool_name}: {message}")
+
+        try:
+            result = await self.tool_manager.execute_tool(tool_name, tool_args)
+        except Exception as e:
+            self._execute_hook_point(
+                "tool_error",
+                {"tool": tool_name, "args": dict(tool_args or {}),
+                 "error": f"{type(e).__name__}: {e}"},
+            )
+            raise
+
+        self._execute_hook_point(
+            "post_tool_use",
+            {
+                "tool": tool_name,
+                "args": dict(tool_args or {}),
+                "success": bool(getattr(result, "success", False)),
+                "output": str(getattr(result, "output", "") or "")[:500],
+                "error": str(getattr(result, "error", "") or "")[:500],
+            },
+        )
+        return result
 
     def _system_prompt_with_autonomy_hint(self) -> str:
         """挂机模式下把"能用什么命令"的清单塞进系统提示
@@ -675,7 +765,7 @@ class AgentEngine:
             _metrics_lock=self._metrics_lock,
             _truncator=self._truncator,
             _parse_tool_calls=self.tool_manager.parse_tool_calls,
-            _execute_tool=self.tool_manager.execute_tool,
+            _execute_tool=self._execute_tool_with_hooks,
             tool_schemas=tool_schemas,
             _count_tokens=self._truncator.count_tokens,
             _missing_info_patterns=self._missing_info_patterns,

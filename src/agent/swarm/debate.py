@@ -4,6 +4,14 @@ if TYPE_CHECKING:
     from .orchestrator import OrchestratorAgent
 
 
+class DebateUnavailable(RuntimeError):
+    """辩论无法真正进行（没有 orchestrator / 调用失败）
+
+    以前这里会返回 "[模拟 CRITIC 响应] ..." 这样的字符串，
+    调用方把它当成人话摘要打印出去 —— 用户以为看到了评审意见，其实是占位符。
+    """
+
+
 class DebateRole:
     ADVOCATE = "advocate"
     CRITIC = "critic"
@@ -220,7 +228,10 @@ class DebateEngine:
         真正通过 OrchestratorAgent 调用 LLM 产生角色响应
         """
         if not self.orchestrator:
-            return f"[模拟 {role.upper()} 响应] 由于 Orchestrator 未就绪，无法生成真实辩论。提示词: {prompt[:30]}..."
+            raise DebateUnavailable(
+                f"辩论需要 OrchestratorAgent（角色 {role}），但当前未注入；"
+                "请用 DebateEngine(orchestrator=...) 构造，或不要走辩论模式"
+            )
 
         # 使用编排器创建一个临时任务并让 Agent 执行
         # 这里假设 OrchestratorAgent 有一个可以直接处理 prompt 的简易方法
@@ -231,5 +242,5 @@ class DebateEngine:
                 role_hint=role
             )
             return response
-        except Exception as e:
-            return f"[{role.upper()} 出错] {e!s}"
+        except Exception as e:  # noqa: BLE001 — 统一转成可识别的不可用错误
+            raise DebateUnavailable(f"角色 {role} 调用失败: {type(e).__name__}: {e}") from e

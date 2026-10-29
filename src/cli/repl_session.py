@@ -339,11 +339,17 @@ from .repl_handlers import (
     _handle_provider_switch,
     _handle_undo,
 )
-from .repl_task import _run_task, _run_task_plain, _run_task_rich
+from .repl_task import (
+    _print_final_answer,
+    _run_task,
+    _run_task_plain,
+    _run_task_rich,
+)
 
 ReplSession._run_task = _run_task
 ReplSession._run_task_rich = _run_task_rich
 ReplSession._run_task_plain = _run_task_plain
+ReplSession._print_final_answer = _print_final_answer
 ReplSession._handle_builtin = _handle_builtin
 ReplSession._handle_undo = _handle_undo
 ReplSession._handle_diff = _handle_diff

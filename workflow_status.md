@@ -64,3 +64,40 @@
 - js-reverse-skill 上游未声明 LICENSE（已在 skills/reverse/js-reverse/ 放 LICENSE-WARNING.md）
 - 快检的 17 个存量失败：装 redis 包 + 修 Windows bash 依赖可消除，属环境治理
 - reasoning 与 WorkflowEngine 的深度集成（当前通过 CLI handler 胶水接入）
+
+## 2026-10-29 v0.76.5 —— 审计 P0/P1 清零（每条都有实跑证据）
+
+**P0**
+- [x] `clawd workflow ralplan` 默认参数崩溃：`AgentRole.CRITIC` 缺成员 → 补枚举/描述/系统提示；
+      新增静态测试扫描 `src/` 里所有 `AgentRole.X` 引用必须真实存在。
+
+**P1**
+- [x] worktree `integrator` 合并假成功 → 真实文件级合并（全有或全无；冲突不覆盖目标）；
+      8 测试用临时 git 仓库验证（`tests/agent/swarm/test_worktree_merge.py`）。
+- [x] 四个 core MCP server 无 `__main__`（`python -m` 静默 exit 0）→ 新增
+      `src/core/mcp/stdio_server.py` + 各模块 `main()`；真实 spawn 握手 + tools/call 往返通过。
+- [x] `sumsummarize_trace` 拼写错误 → `summarize_trace`（有测试守"注册工具必须有真实方法"）。
+- [x] `clawd_project_map` 因 `RepoMap` 签名不匹配 100% 降级 → 修复后返回 8.8k 字符符号图谱。
+- [x] 悬空依赖静默忽略 → 抛 `ValueError` 并列出两侧。
+- [x] `QualityGate.overall` 只看 `results[0]` → 走 `_calculate_overall` 聚合。
+- [x] `discover_skills` 一层 glob（reverse 51 个技能不可发现）→ `rglob`，实测 63 → 113；
+      正文上限 20000 → 26000（现有最大 23,159），截断改为告警 + 明确说明。
+- [x] `RichLiveHud` 空壳 + 富 HUD 模式不打印最终答案 → 真实 rich 渲染 + 退出后打印答案。
+- [x] 评测假成功（`--baseline` 不存在仍"通过"）→ EXIT=2；三态 pass/fail/**unknown**；
+      `smoke.json` 工具名对齐 `FileReadTool`/`FileEditTool`。
+- [x] hooks 零调用点 → 引擎接线 SESSION_START/END + PRE/POST_TOOL_USE + TOOL_ERROR（可 DENY）。
+- [x] onboarding 零调用点 → `clawd onboard [--json]` + `chat` 启动体检；OAuth 不再假装开浏览器。
+- [x] 辩论模式返回 `"[模拟 CRITIC 响应]"` → 抛 `DebateUnavailable`。
+- [x] 重复 MCP 实现漂移 → `src/core/mcp/` 为唯一真相源，`src/mcp/*_server.py` 冻结 legacy + ADR 0018。
+
+**本轮验证（实跑）**
+- `pytest tests/backends tests/core tests/mcp tests/eval tests/cli -q -m "not slow"` → 1500 passed
+- `pytest tests/agent tests/workflow -q -m "not slow"` → 1208 passed（`test_locked_atomic_write_*` 并发锁偶发超时，单跑通过，属既有 flaky）
+- `pytest tests/contracts -q` → 39 passed；`pytest tests/cli tests/backends -q` → 497 passed
+- 门禁：F821/F811/E9 全过 · IMPORT-FAIL 0 · 静默吞异常 162（≤162）· 可达 480（≥443）· 收集 5122 / 0 errors
+- 新增测试 9 个文件 / 90 用例（backend、critic role、worktree merge、skill loader、rich hud、onboard、debate、eval honesty、mcp stdio、quality gate、task planner dag）
+
+**未闭环（需外部条件，不伪造）**
+- 代码签名证书（P2-4）；桌面安装包与 `desktop/package.json` 仍为 0.76.4（需重跑 electron-builder）
+- P1-14 残余：34 个 review prompt 模板仍无并行调度器（本轮只修了"假响应"部分）
+- `scripts/e2e_smoke.py` 未跑：本机真实 LLM 端点调用属付费红线（默认预算 0），未获单独批准

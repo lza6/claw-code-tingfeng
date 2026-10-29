@@ -291,7 +291,12 @@ class QualityGate:
 
     @property
     def overall(self) -> GateResult:
-        return self.results[0].result if self.results else GateResult.PASS
+        """全部门禁项的聚合结论（不是只看第一项）
+
+        回归背景：曾写成 `self.results[0].result` —— 第 2 项之后无论怎么失败，
+        `must_block()` 都判放行，门禁形同虚设。
+        """
+        return self._calculate_overall(self.results)
 
 
 # ==================== 便捷函数 ====================

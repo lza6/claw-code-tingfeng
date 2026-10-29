@@ -3,6 +3,14 @@ Trace Server - 追踪服务器
 
 从 oh-my-codex-main/src/mcp/trace-server.ts 转换。
 提供执行追踪、日志记录和调试信息收集。
+
+.. note:: **同一能力有两套实现，本文件是历史实现（legacy）**
+
+   生成配置（`src/core/config/generator.py::DEFAULT_MCP_SERVERS`）与所有 CLI 路径都用
+   `src/core/mcp/` 下的同名模块（已具备 stdio `__main__` 入口）。本文件的 API
+   （如 `MemoryEntry` / 按模式组织的 state）与 `src/core/mcp/` 的不同，尚无调用方，
+   保留仅为兼容历史导入路径。**新增代码请直接用 `src/core/mcp/`**，
+   不要再往这里加功能，否则两套实现会继续漂移。见 `docs/adr/0018`。
 """
 
 from __future__ import annotations

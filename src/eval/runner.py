@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .metrics import evaluate_case
+from .metrics import evaluate_case_status
 from .models import EvalCase, EvalOutcome, EvalReport
 
 PAID_ENV_GATE = "CLAWD_EVAL_ALLOW_PAID"
@@ -20,6 +20,10 @@ AgentFn = Callable[[EvalCase], dict[str, Any]]
 
 class EvalConfigError(RuntimeError):
     """数据集非法或模式不被允许"""
+
+
+class CaseNotRun(RuntimeError):
+    """用例无法执行（不是失败，是"没测"）→ 记 unknown，不污染通过率"""
 
 
 def load_dataset(path: str | Path) -> list[EvalCase]:
@@ -64,7 +68,7 @@ def load_dataset(path: str | Path) -> list[EvalCase]:
 
 def _replay_agent(case: EvalCase) -> dict[str, Any]:
     if not case.recorded:
-        raise EvalConfigError(
+        raise CaseNotRun(
             f"用例 {case.case_id} 缺少 recorded 字段，replay 模式无法执行"
             "（如需真实调用请用 live 模式并显式授权）"
         )
@@ -115,11 +119,18 @@ def run_dataset(
 
     for case in cases:
         started = time.perf_counter()
+        unknown = False
         try:
             result = runner(case)
-            passed, detail = evaluate_case(case, result)
-        except Exception as e:  # 执行异常记为失败用例，不中断整轮
-            passed, detail = False, f"执行异常: {type(e).__name__}: {e}"
+            status, detail = evaluate_case_status(case, result)
+            passed = status == "pass"
+            unknown = status == "unknown"
+            if unknown:
+                detail = f"未判定: {detail}"
+        except CaseNotRun as e:
+            passed, detail, unknown = False, f"未执行: {e}", True
+        except Exception as e:  # 执行异常是真实失败，不中断整轮
+            passed, detail, unknown = False, f"执行异常: {type(e).__name__}: {e}", False
         elapsed_ms = (time.perf_counter() - started) * 1000
         report.outcomes.append(
             EvalOutcome(
@@ -128,6 +139,7 @@ def run_dataset(
                 detail=detail,
                 elapsed_ms=elapsed_ms,
                 tags=case.tags,
+                unknown=unknown,
             )
         )
 

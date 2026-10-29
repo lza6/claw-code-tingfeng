@@ -7,6 +7,64 @@
 
 ---
 
+## [v0.76.5] (2026-10-29) — 审计 P0/P1 清零：P0 ralplan 默认路径崩溃 + 9 项假成功/坏承诺
+
+按 `参考的结果计划指南.md` 的 P0/P1 台账逐条修，**每条都有实跑证据**。本轮不动架构，只修"说得到做不到"。
+
+**P0（阻塞）**
+1. **`clawd workflow ralplan` 用默认参数必崩**：`CriticAgent.__init__` 用 `AgentRole.CRITIC`，
+   而枚举里没有该成员 → `AttributeError: CRITIC`；`enable_critic_challenge` 默认为 True。
+   已补 `CRITIC` 成员 + 角色描述 + 系统提示，并加"所有 `AgentRole.X` 引用必须真实存在"的静态测试。
+
+**P1（假成功 / 坏承诺 / 造了没接）**
+2. **worktree 合并假成功**：`strategy="integrator"` 只打日志就 `return True`（"keep" 同样）。
+   现在真的把改动落到目标工作区（文件级，全有或全无）；冲突不覆盖目标并返回 False；
+   无改动返回 False。8 个测试用真实临时 git 仓库验证。
+3. **四个 MCP server 起不来**：生成的配置指向 `src.core.mcp.{state,memory,trace,team}_server`，
+   但这些模块没有 `__main__` → `python -m` 静默 exit 0、零输出。新增通用
+   `src/core/mcp/stdio_server.py`（initialize/tools/list/tools/call/ping，UTF-8 逐行 flush），
+   四个模块各补 `main()`；生成配置的 `command` 从裸 `"python"` 改为 `sys.executable`。
+   真实 spawn 验证：四台全部握手成功，`set_surface`/`get_surface`/`create_entity`/`search_memory` 完成往返。
+4. **工具名拼写错误** `sumsummarize_trace` → `summarize_trace`（客户端调用必失败）。
+5. **`clawd_project_map` 100% 失效**：`RepoMap(root=...)` + `get_map()` 两处签名不匹配 →
+   永远走降级分支只吐文件清单。改用真实签名后返回 8.8k 字符符号图谱。
+6. **悬空依赖静默忽略**：任务依赖指向不存在的 id 时只 `logger.warning` 就继续拓扑排序。
+   现在抛 `ValueError` 并列出两侧。
+7. **质量门只看第一项**：`QualityGate.overall` 返回 `results[0].result`，
+   第 2 项之后失败也放行。改为走 `_calculate_overall` 聚合。
+8. **技能不可发现 + 静默截断**：`discover_skills` 只做一层 `glob('*/SKILL.md')` →
+   `skills/reverse/*` 的 51 个子技能一个都扫不到（实测 63 → 递归后 113）；`MAX_SKILL_BODY_CHARS=20000`
+   而 4 个技能正文 20,550~23,159 字符 → 尾部指令被静默砍掉。改为 `rglob` + 上限 26,000 + 截断告警。
+9. **富 HUD 空壳 + 最终答案不打印**：`RichLiveHud` 全部方法 `pass`、`render_full_layout()` 返回常量 `""`；
+   `_run_task_rich` 从不输出结果。现在实现真实 rich 渲染（迭代/步骤/流式尾巴实时刷新），
+   `Live(screen=True)` 退出后单独打印最终答案。
+10. **评测假成功 + 无法表达"没测"**：`--baseline 不存在的路径` 曾打印"基线比对通过"并 EXIT=0；
+    缺 `recorded`/非法 regex/缺工具记录一律判 FAIL。现在：基线缺失 → EXIT=2 明确报错（`--save` 时允许首次建立）；
+    评测改为三态（pass/fail/**unknown**），通过率只在已判定用例里算；未判定增加视为回归；
+    `smoke.json` 的工具名对齐运行期真实类名 `FileReadTool`/`FileEditTool`。
+11. **hooks 造了没接**：`src/hooks/` + `hook_registry` 2.5k 行在引擎里零调用点。
+    引擎现在在 `SESSION_START`/`SESSION_END`/`PRE_TOOL_USE`（可 DENY，拒绝则不执行工具）/
+    `POST_TOOL_USE`/`TOOL_ERROR` 五点接线；未注册 hook 时零额外开销。
+12. **上手引导零调用点**：新增 `clawd onboard [--json]`，`chat` 启动时做一次体检
+    （只在真的没有任何密钥时提示）；`start_oauth_flow` 不再假装"正在打开浏览器"。
+13. **辩论模式输出占位符**：缺 orchestrator 时曾返回 `"[模拟 CRITIC 响应] ..."` 当辩论总结。
+    现在抛 `DebateUnavailable`，调用方按失败处理。
+14. **重复实现漂移**：`src/core/mcp/` 定为唯一真相源，`src/mcp/{memory,state,trace}_server.py`
+    冻结为 legacy（文件头标注 + `docs/adr/0018` 记录判断依据）。
+
+**验证（实跑）**
+- `pytest tests/backends tests/core tests/mcp tests/eval tests/cli -q -m "not slow"` → **1500 passed**
+- `pytest tests/agent tests/workflow -q -m "not slow"` → **1208 passed**（1 项并发锁 flaky，单跑通过）
+- 四个 MCP server 真实 spawn 握手 + tools/call 往返全通过
+- 门禁：`F821/F811/E9` 全过、静默吞异常 162（≤162）、生产可达 480（≥443）、收集 5021 / 0 errors
+
+**仍未闭环（需外部条件，不伪造）**
+- 代码签名证书（P2-4，需 `CSC_LINK`）；桌面安装包未重跑（版本号仍 0.76.4）
+- P1-14 剩余部分：34 个 review prompt 模板仍无并行调度器（本轮只修了"假响应"）
+- 价格数据、桌面实装验证等需网络/用户确认的项保持原状
+
+---
+
 ## [v0.76.4] (2026-10-29) — 桌面安装包重建：P2-3 已修，自动更新元数据恢复真实
 
 **修复前**：`desktop/host` 内嵌的是 **v0.60.10** 的源码（落后 16 个版本），
