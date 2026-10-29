@@ -259,6 +259,28 @@ TRACE_SERVER_TOOLS = {
             "required": ["trace_id"],
         },
     },
+    "get_recent_traces": {
+        "name": "get_recent_traces",
+        "description": "List recent traces (newest first)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 10},
+            },
+        },
+    },
+    "export_trace": {
+        "name": "export_trace",
+        "description": "Export a trace as json or text",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "trace_id": {"type": "string"},
+                "format": {"type": "string", "enum": ["json", "text"], "default": "json"},
+            },
+            "required": ["trace_id"],
+        },
+    },
     "summarize_trace": {
         "name": "summarize_trace",
         "description": "Summarize a trace",

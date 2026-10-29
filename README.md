@@ -386,24 +386,24 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 「属性名漂移」类缺陷。v0.51.0 修复的 11 个阻塞问题中，有 5 个只有在把
 真实请求完整打通时才会逐层暴露。
 
-### 质量基线（2026-10-23 实测）
+### 质量基线（2026-10-29 实测；每轮只更新**本轮真的跑过**的项）
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **3254 passed / 0 failed / 5 skipped / 2 xfailed**（单进程一次跑完 639.98s） | `py -3.10 -m pytest tests/ -q` |
-| 快速层（不含 slow） | **3245 passed / 237.23s**（slow 层 9 个用例占 410s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **3261 / 0 errors**（含新增用例；热缓存 3.6s） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **本轮未重跑全量**（上一轮 `not slow` 实测 4979 passed / 0 failed）；本轮按目录回归 1500 + 1208 + 497 passed | `py -3.10 -m pytest tests/ -q` |
+| 快速层（不含 slow） | 本轮分目录跑：backends+core+mcp+eval+cli **1500 passed / 78s**、agent+workflow **1208 passed / 554s** | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5122 / 0 errors**（2026-10-29 实测，新增 90 个审计回归用例） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | 39 passed | `pytest tests/contracts -q`（历史值，本轮含在全量内） |
-| 覆盖率 | **47.44%**（26,861 / 56,624 行），数据 2026-10-23 | `py -3.10 -m pytest tests/ -q --cov=src` |
-| 覆盖率门禁 | `fail_under = 47`（**已生效**；原先 60 写在 `[tool.coverage.run]`，coverage 不识别 → 从未生效） | 见 `pyproject.toml` 注释 |
+| 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
+| 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **478**（2026-10-29 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
-| 死模块 | **76**（完全不可达；已删 47 文件 10,685 行，C 组 55 个裁定保留待接线） | `计划书/死代码判定-2026-10-28.md` §九 |
+| 生产可达模块 | **480**（2026-10-29 v0.76.5 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
-| 静默吞异常 | **172**（AST 口径），基线文件 `.clawd/baseline-silent.json`，CI 门禁 `--fail-over 172` | `scripts/check_silent_except.py --fail-over 172` |
-| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 2026-10-23 实跑，退出码 0 |
+| 静默吞异常 | **162**（AST 口径，门禁 ≤162），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 162` |
+| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 上一轮实跑（退出码 0）；v0.76.5 未跑：真实 LLM 端点属付费红线 |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 
 > 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。

@@ -191,3 +191,27 @@ class TestRealServersExposeHandshake:
 class TestHandleRequestDirect:
     def test_returns_none_for_notification(self):
         assert handle_request(_FakeServer(), TOOLS, {"jsonrpc": "2.0", "method": "initialize"}) is None
+
+
+class TestTraceSkillDocMatchesTools:
+    def test_skill_doc_tools_exist(self):
+        """skills/trace/SKILL.md 里点名的工具必须真实存在
+
+        旧文档写 `trace_timeline` / `trace_summary` —— 全仓零实现，照着调只会
+        得到「未知工具」。文档与实现必须一致。
+        """
+        from pathlib import Path
+
+        skill = Path(__file__).resolve().parents[2] / "skills" / "trace" / "SKILL.md"
+        text = skill.read_text(encoding="utf-8")
+        referenced = {
+            name for name in (
+                "get_recent_traces", "get_trace", "summarize_trace", "export_trace",
+            )
+            if name in text
+        }
+        assert referenced, "技能文档应当引用真实工具名"
+        assert referenced <= set(TRACE_SERVER_TOOLS)
+        # 旧文档的"调用指令"必须消失（历史说明里提到名字是允许的）
+        assert "Use `trace_timeline`" not in text
+        assert "Use `trace_summary`" not in text
