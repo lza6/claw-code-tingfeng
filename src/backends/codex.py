@@ -158,6 +158,8 @@ class CodexBackend:
     api_key_env: str = "OPENAI_API_KEY"
     #: 兼容端点协议：responses（Codex 0.165 起 chat 已废弃）
     wire_api: str = "responses"
+    #: 跳过 Codex 的审批与沙箱（挂机/CI 用；会让 MCP 工具调用不再等人批）
+    dangerously_bypass_approvals: bool = False
     #: 注入给 Codex 的 MCP server（把我们的领域工具交给它调用）
     #: 形如 {"clawd": {"command": "python", "args": ["-m", "src.mcp.domain_server"]}}
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -187,6 +189,10 @@ class CodexBackend:
         argv = [*_resolve_binary(self.binary), "exec", "--json", "--sandbox", self.sandbox]
         if self.skip_git_check:
             argv.append("--skip-git-repo-check")
+        if self.dangerously_bypass_approvals:
+            # 实测：MCP 工具调用默认需要审批；不跳过会返回
+            # "MCP tool call requires approval, but approval policy is never"
+            argv.append("--dangerously-bypass-approvals-and-sandbox")
         if self.model:
             argv += ["-c", f'model="{self.model}"']
 

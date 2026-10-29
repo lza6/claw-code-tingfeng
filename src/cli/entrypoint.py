@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import os
 from pathlib import Path
 
@@ -46,6 +47,9 @@ def common(
 def chat(
     max_iterations: int = typer.Option(10, "--max-iterations", "-i", help="最大迭代次数"),
     tui: bool = typer.Option(False, "--tui", help="使用全屏 TUI 仪表盘"),
+    resume: str | None = typer.Option(
+        None, "--resume", "-r", help="续聊某个已保存会话 ID（历史作为上下文，多轮累积）"
+    ),
 ):
     """
     启动交互式 AI 编程对话 (类似 Claude Code)
@@ -65,6 +69,7 @@ def chat(
             max_iterations=max_iterations,
             use_textual_tui=tui,
             project_ctx=project_ctx,
+            resume_session_id=resume,
         )
     except typer.Exit:
         raise
@@ -828,6 +833,55 @@ app.add_typer(session_app, name="session")
 _REGISTRATION_FAILURES = _register_command_modules()
 
 
+@app.command(name="collaborate")
+def collaborate_run(
+    goal: str = typer.Argument(..., help="要完成的任务"),
+    planner: str = typer.Option("native", "--planner", help="规划引擎（native/codex/opencode）"),
+    executor: str = typer.Option("native", "--executor", help="执行引擎"),
+    reviewer: str = typer.Option("native", "--reviewer", help="审查引擎（建议与 executor 不同）"),
+    rounds: int = typer.Option(1, "--rounds", help="审查不通过时的返工轮数（默认 1）"),
+    timeout: float = typer.Option(900.0, "--timeout", help="单阶段硬超时（秒）"),
+):
+    """
+    多引擎协同：规划 → 执行 → 独立审查 → 不合格返工 → 再审查
+
+    用另一个引擎审你的活，能抓出"自己审自己"放过的问题。默认全用内置引擎，
+    也可混搭：--planner codex --executor native --reviewer opencode
+    """
+    from ..workflow.collaborate import Collaborator
+
+    console.print(f"[dim]协同：规划={planner} 执行={executor} 审查={reviewer}[/dim]")
+    collab = Collaborator(
+        goal,
+        planner=planner,
+        executor=executor,
+        reviewer=reviewer,
+        max_repair_rounds=rounds,
+        timeout=timeout,
+        workdir=Path.cwd(),
+    )
+    result = collab.run()
+
+    for phase in result.phases:
+        mark = "[green]OK[/green]" if phase.ok else "[red]FAIL[/red]"
+        console.print(
+            f"  {mark} {phase.phase}({phase.engine}) {phase.seconds}s"
+            + (f" — {phase.error[:80]}" if phase.error else "")
+        )
+
+    console.print("")
+    console.print("[bold]执行结果[/bold]")
+    console.print(result.final or "(无输出)")
+    console.print("")
+    console.print(f"[bold]{result.summary()}[/bold]")
+    if result.issues:
+        console.print("[yellow]审查意见：[/yellow]")
+        for i, issue in enumerate(result.issues, 1):
+            console.print(f"  {i}. {issue}")
+
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
 @app.command(name="permissions")
 def permissions_explain(
     rules: bool = typer.Option(False, "--rules", help="额外列出命令策略规则明细"),
@@ -945,6 +999,14 @@ def codex_run(
     ),
     timeout: float = typer.Option(900.0, "--timeout", help="硬超时（秒）"),
     json_out: bool = typer.Option(False, "--json", help="输出归一化后的 JSON 结果"),
+    bypass_approvals: bool = typer.Option(
+        False, "--bypass-approvals",
+        help="跳过 Codex 审批与沙箱（MCP 工具调用需要；仅隔离环境/挂机用）",
+    ),
+    with_clawd_tools: bool = typer.Option(
+        False, "--with-clawd-tools",
+        help="把我们自己的领域工具（读文件/grep/项目图谱/世界模型）通过 MCP 交给 Codex",
+    ),
 ):
     """
     用 Codex 内核执行任务（外部成熟 agent 后端，不重复造轮子）
@@ -957,12 +1019,21 @@ def codex_run(
 
     import os as _os
 
+    mcp_servers: dict = {}
+    if with_clawd_tools:
+        # 把我们的领域工具反向供给 Codex（stdlib 起 MCP server，无需额外依赖）
+        mcp_servers["clawd"] = {
+            "command": sys.executable,
+            "args": ["-m", "src.mcp.domain_server", "--root", str(workdir or Path.cwd())],
+        }
     backend = CodexBackend(
         model=model or _os.environ.get("LLM_MODEL"),
         provider=provider or _os.environ.get("LLM_PROVIDER"),
         base_url=base_url or _os.environ.get("LLM_BASE_URL"),
         sandbox=sandbox,
         workdir=workdir or Path.cwd(),
+        dangerously_bypass_approvals=bypass_approvals,
+        mcp_servers=mcp_servers,
     )
     if not backend.available():
         console.print(

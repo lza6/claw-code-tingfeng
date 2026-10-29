@@ -7,6 +7,54 @@
 
 ---
 
+## [v0.75.0] (2026-10-29) — 多引擎协同 + 两处误判更正 + REPL 多轮记忆
+
+### 一、两处"未闭环"其实是**我测错了**（更正）
+| 之前我写的 | 实测真相 | 结论 |
+|---|---|---|
+| Codex 多轮 MCP 工具循环受网关 Responses 续传限制 | **只是慢**。`--dangerously-bypass-approvals-and-sandbox` + 900s 超时后：`mcp_calls: 2`、`clawd_tool_list status=completed`、最终答 `19` | **已跑通** |
+| OpenCode 凭据未配置 | 真因是 `ProviderModelNotFoundError`：模型未注册。在 `opencode.json` 注册自定义模型（baseURL 用 `{env:OPENAI_BASE_URL}`，不落密钥）后 `opencode run` 返回 `PONG` | **已跑通** |
+
+CLI 全链路验证：`clawd codex --with-clawd-tools --bypass-approvals "用 clawd_grep 搜索 'clawd-domain'"`
+→ 正确返回 `tests/mcp/test_domain_server.py`、`src/mcp/domain_server.py`。
+
+### 二、多引擎协同（用户要的"合成一个"）
+新增 `src/workflow/collaborate.py` + `src/backends/native.py` + `clawd collaborate`：
+
+```
+规划(planner) → 执行(executor) → 独立审查(reviewer) → 不合格返工 → 再审查
+```
+- **引擎可混搭**：`--planner codex --executor native --reviewer opencode`；默认全用内置引擎
+- **判定确定性**：审查者必须输出 `VERDICT: APPROVE` / `VERDICT: NEEDS_FIX`，正则解析；
+  **两种都写判不通过**、**无标记判 UNKNOWN（不误放行）**
+- **返工有上限**（`--rounds`，默认 1），实测 `max_repair_rounds=2` 只跑 2 轮
+- **引擎实例按名字缓存**：实测三阶段各建一次引擎 → 世界模型重复初始化 3 次；缓存后跨阶段复用
+
+### 三、REPL 多轮记忆 + `chat --resume`
+此前 REPL 每轮 `engine.run_stream(goal)` 都是**无状态**的——对话没有记忆。
+- `ReplSession` 自攒 `_history`（user + assistant），每轮作为 `prior_messages` 带入
+- 历史过长自动压成检查点摘要（Pi 阈值 + Codex 检查点）
+- 新命令：`clawd chat --resume <会话ID>`（载入历史续聊）
+
+### 四、验证
+- `tests/workflow/test_collaborate.py` **15 passed**（结论解析/三阶段顺序/返工上限/规划失败中止/异常记录/引擎缓存/CLI）
+- `tests/cli/test_repl_history.py` **9 passed**（历史累积/空结果不记/续聊载入/缺失会话不崩/长历史压缩/CLI 选项）
+- `clawd codex --with-clawd-tools` 真实链路：Codex 用我们的 `clawd_grep` 返回正确文件
+- `opencode run` 真实链路：返回 `PONG` / `OK`
+- **`clawd collaborate` 真实链路（部分）**：规划+执行阶段跑通 —— 执行者确实创建了
+  `collab_done.txt` 且内容为 `collab-ok`；**但三阶段（含审查结论）在 880s 窗口内未跑完**，
+  瓶颈是网关每轮约 3 分钟（27k+ prompt tokens）。所以协同的**机制**已由 15 个确定性测试覆盖，
+  **端到端三阶段**仍属"待完整验证"（需更快端点或更长窗口）
+- 全量回归、IMPORT、ruff 硬指标见下
+
+### 五、边界
+- 协同是**串行**流水线，不是并行多智能体辩论
+- 每阶段重新起一次 agent 调用（只靠 prompt 传计划与结果，无跨阶段状态）
+- 真实 E2E 单阶段约 2-3 分钟（网关 27k+ prompt tokens/轮），三阶段+返工耗时长
+- 审查者仍是被提示词约束的同一模型族，不替代测试与人工验收
+
+---
+
 ## [v0.74.0] (2026-10-29) — 工程卫生回归修复（ruff -70 / 静默异常 -6）+ 第三条红线
 
 ### 背景：自己跑基线抓到的两个回归

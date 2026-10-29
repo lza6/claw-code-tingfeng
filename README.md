@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.74.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.75.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -51,6 +51,34 @@ DSH 式桌面客户端，**双击即用**：
 | 安全工具 | `SafeCatalogRunner` | YAML 目录 + scope 授权门禁 + 注入拦截（仅限授权测试目标） |
 | 逆向知识库 | `skills/reverse/` | 51 个场景 SKILL.md（固件/Ghidra/IDA/恶意软件/协议/pwn/CTF） |
 | 插件开发 | `.agent/skills/clawd-extension-sop.md` | 四件套 SOP（manifest/DI/接入面/CLI） |
+
+## 🤝 多引擎协同（v0.75.0 新增）
+
+不只是"能分别接上引擎"，而是**让它们合起来跑一件事**：
+
+```bash
+# 默认全用内置引擎；也可混搭
+clawd collaborate "实现登录接口并补测试"   --planner codex --executor native --reviewer opencode --rounds 1
+```
+
+流程：**规划 → 执行 → 独立审查 → 不合格返工 → 再审查**
+
+- 审查者必须输出 `VERDICT: APPROVE` 或 `VERDICT: NEEDS_FIX`（**确定性解析**，两种都写判不通过、无标记判 UNKNOWN 不放行）
+- 返工有上限（`--rounds`，默认 1），不会两引擎互相挑刺无限循环
+- 换另一个引擎来审，能抓出"自己审自己"放过的问题
+- 引擎实例按名字缓存，三阶段共用同一个引擎（避免重复初始化世界模型）
+
+**把我们自己的领域工具交给外部引擎**（Codex 实测可用）：
+```bash
+clawd codex --with-clawd-tools --bypass-approvals   "用 clawd MCP 的 clawd_grep 搜索 'clawd-domain'，只回复文件名"
+# → 真实返回 tests/mcp/test_domain_server.py、src/mcp/domain_server.py
+```
+
+**续聊（会话记忆）**：
+```bash
+clawd chat --resume <会话ID>     # 载入历史续聊；REPL 多轮已自动累积上下文
+clawd session resume <会话ID> "<本次目标>"   # 非交互续跑
+```
 
 ## 🧩 多引擎整合（v0.64.0 新增）
 
@@ -380,7 +408,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 > 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。
 
-> 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南-2026-10-28.md`（现行 v3）。
+> 覆盖率爬升与死代码收敛计划见 `计划书/下一步改进指南.md`（现行 v4）。
 > **注意**：删死代码会让覆盖率*百分比*上升但绝对覆盖行数不变，
 > 因此必须同时跟踪「已覆盖语句数」，防止分母变小造成的假象。
 

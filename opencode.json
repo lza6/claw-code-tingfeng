@@ -11,5 +11,17 @@
       ],
       "enabled": true
     }
+  },
+  "provider": {
+    "openai": {
+      "options": {
+        "baseURL": "{env:OPENAI_BASE_URL}"
+      },
+      "models": {
+        "step-5-preview": {
+          "name": "step-5-preview"
+        }
+      }
+    }
   }
 }

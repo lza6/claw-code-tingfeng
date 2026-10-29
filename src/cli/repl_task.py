@@ -78,9 +78,13 @@ def _run_task_rich(self, goal: str) -> None:
             screen=True,
         ) as live:
             session = self._loop.run_until_complete(
-                self.engine.run_stream(goal, on_chunk=on_chunk, on_step=on_step)
+                self.engine.run_stream(
+                    goal, on_chunk=on_chunk, on_step=on_step,
+                    prior_messages=self._context_messages(),
+                )
             )
             last_session = session
+            self._record_turn(goal, session)
             live.update(self._rich_hud.renderer.render_full_layout())
     except KeyboardInterrupt:
         self._safe_print(f'\n  {status_warn("任务已中止")}')
@@ -111,7 +115,10 @@ def _run_task_plain(self, goal: str) -> None:
     last_session = None
     try:
         # 运行 Agent 循环
-        session = self._loop.run_until_complete(self.engine.run(goal, on_step=on_step))
+        session = self._loop.run_until_complete(
+            self.engine.run(goal, on_step=on_step, prior_messages=self._context_messages())
+        )
+        self._record_turn(goal, session)
         last_session = session
 
         # 显示结果

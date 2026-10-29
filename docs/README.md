@@ -11,7 +11,7 @@
 | [`../skills/clawd-change-workflow/SKILL.md`](../skills/clawd-change-workflow/SKILL.md) | 变更流程、已知陷阱、验收标准 | **每次动手前** |
 | [`MAINTENANCE.md`](MAINTENANCE.md) | 新增 Provider/Tool/CLI 的 SOP、发布检查单、排障索引 | 要加东西时 |
 | [`adr/README.md`](adr/README.md) | 架构决策与理由 | 想改既有设计时 |
-| [`../计划书/下一步改进指南-2026-10-28.md`](../计划书/下一步改进指南-2026-10-28.md) | 剩余路线图（v3，顶部有实跑核验状态表） | 规划下一轮时 |
+| [`../计划书/下一步改进指南.md`](../计划书/下一步改进指南.md) | 剩余路线图（v4，顶部有实跑核验状态表） | 规划下一轮时 |
 
 ## 主题文档
 

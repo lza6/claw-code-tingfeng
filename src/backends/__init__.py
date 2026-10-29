@@ -12,6 +12,17 @@
 - **可测试**：`binary` 允许传 argv 前缀，测试用假进程注入 JSONL，不依赖真实安装。
 """
 
+from .base import BackendResult, BackendUnavailable, CliBackend, EngineProbe
 from .codex import CodexBackend, CodexRunResult, parse_events
+from .native import NativeBackend
 
-__all__ = ["CodexBackend", "CodexRunResult", "parse_events"]
+__all__ = [
+    "BackendResult",
+    "BackendUnavailable",
+    "CliBackend",
+    "CodexBackend",
+    "CodexRunResult",
+    "EngineProbe",
+    "NativeBackend",
+    "parse_events",
+]

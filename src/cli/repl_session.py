@@ -31,6 +31,7 @@ class ReplSession:
         max_iterations: int = 10,
         use_rich_hud: bool = True,
         project_ctx: Any = None,
+        resume_session_id: str | None = None,
     ) -> None:
         from ..core.project_context import ProjectContext
 
@@ -64,6 +65,11 @@ class ReplSession:
         self._turn_count = 0
         self._last_session: Any = None
         self._memory_guard: Any = None
+        # 多轮对话历史：REPL 每轮 engine 调用是无状态的，必须自己攒
+        self._history: list[dict[str, Any]] = []
+        self.resume_session_id = resume_session_id
+        if resume_session_id:
+            self._load_history(resume_session_id)
         # 持久化事件循环（避免每次任务 asyncio.run() 创建/销毁循环）
         self._loop = asyncio.new_event_loop()
         # Initialize command registry (ClawGod integration)
@@ -75,6 +81,38 @@ class ReplSession:
         # Rich HUD
         self._rich_hud: Any = None
         self._md_renderer: StreamingMarkdownRenderer | None = None
+
+    def _load_history(self, session_id: str) -> None:
+        """从会话存储载入历史（续聊用），失败只告警不阻断启动。"""
+        try:
+            from ..core.session_bridge import load as load_view
+
+            view = load_view(session_id, self.workdir / ".clawd" / "sessions")
+            self._history = [m for m in view.messages if m.get("content")]
+            self._safe_print(f"  已载入会话 {session_id}（{len(self._history)} 条历史，标题：{view.title or '无标题'}）")
+        except (FileNotFoundError, ValueError) as e:
+            self._safe_print(f"  续聊失败（会话不存在或损坏），按新会话开始：{e}")
+
+    def _context_messages(self) -> list[dict[str, Any]] | None:
+        """本轮要带上的历史；过长时先压成检查点（Pi 阈值 + Codex 检查点）"""
+        if not self._history:
+            return None
+        try:
+            from ..agent.compaction import prepare_resume_messages
+
+            prepared, checkpoint = prepare_resume_messages(list(self._history))
+            if checkpoint is not None:
+                self._safe_print(f"  （历史较长，已压缩为检查点摘要：{checkpoint.dropped_entries} 条）")
+            return prepared or None
+        except Exception:  # noqa: BLE001 — 压缩失败就直接全量带上
+            return list(self._history)
+
+    def _record_turn(self, goal: str, session: Any) -> None:
+        """记录一轮对话（供下一轮作为上下文）"""
+        self._history.append({"role": "user", "content": goal})
+        result = getattr(session, "final_result", "") if session is not None else ""
+        if result:
+            self._history.append({"role": "assistant", "content": str(result)[:4000]})
 
     def _init_engine(self) -> None:
         """延迟初始化 AgentEngine，并挂载 MemoryGuard + Evolution。"""

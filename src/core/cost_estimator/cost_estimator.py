@@ -372,14 +372,50 @@ def check_pricing_freshness() -> dict[str, Any]:
         }
 
 
+#: 定价过期提醒的节流标记（每 24h 最多提醒一次，避免每条命令都刷屏）
+_PRICING_WARN_MARKER = "pricing_warned"
+
+
+def _should_warn_pricing(now: float | None = None) -> bool:
+    """是否该提醒定价过期（24 小时内只提醒一次）
+
+    实测问题：定价数据过期后，**每条 CLI 命令**都会打印 5 行提示，
+    把真正的输出挤没了。提醒仍有价值，但不该每次都刷。
+    设 CLAWD_PRICING_WARN=always 可恢复每次都提醒；=never 可完全关闭。
+    """
+    import os as _os
+    import time as _time
+
+    mode = (_os.environ.get("CLAWD_PRICING_WARN") or "").strip().lower()
+    if mode in ("never", "off", "0"):
+        return False
+    if mode in ("always", "on", "1"):
+        return True
+
+    try:
+        from pathlib import Path as _Path
+
+        marker = _Path(".clawd") / _PRICING_WARN_MARKER
+        now_ts = now if now is not None else _time.time()
+        if marker.is_file():
+            last = float(marker.read_text(encoding="utf-8").strip() or "0")
+            if now_ts - last < 86400:
+                return False
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(str(now_ts), encoding="utf-8")
+    except (OSError, ValueError):
+        return True  # 拿不到标记文件就照常提醒（宁可吵一次，不可漏掉）
+    return True
+
+
 def log_pricing_check() -> None:
     """启动时自动检查定价数据新鲜度并输出日志
 
     如果定价数据过期或即将过期，输出警告信息。
-    此函数应在应用启动时调用一次。
+    此函数应在应用启动时调用一次；提醒按 24h 节流（见 _should_warn_pricing）。
     """
     freshness = check_pricing_freshness()
-    if freshness.get('warning'):
+    if freshness.get('warning') and _should_warn_pricing():
         # 延迟导入避免循环依赖
         try:
             from ...utils import warn

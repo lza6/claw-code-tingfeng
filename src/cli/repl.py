@@ -30,6 +30,7 @@ def start_repl(
     max_iterations: int = 10,
     use_textual_tui: bool = False,
     project_ctx: Any = None,
+    resume_session_id: str | None = None,
 ) -> int:
     """启动交互式 REPL
 
@@ -38,6 +39,7 @@ def start_repl(
         max_iterations: 最大迭代次数
         use_textual_tui: 是否使用 Textual TUI 全屏仪表盘
         project_ctx: 项目上下文 (可选，用于共享 .clawd 目录)
+        resume_session_id: 续聊某个已保存会话（历史会作为上下文带入，且多轮累积）
 
     返回:
         退出码
@@ -54,6 +56,7 @@ def start_repl(
         workdir=workdir,
         max_iterations=max_iterations,
         project_ctx=project_ctx,
+        resume_session_id=resume_session_id,
     )
     return session.run()
 

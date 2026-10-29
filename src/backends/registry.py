@@ -86,7 +86,8 @@ def get_backend(engine: str, **kwargs):
 
         allowed = {k: v for k, v in kwargs.items()
                    if k in ("model", "provider", "base_url", "sandbox", "workdir",
-                            "extra_config", "skip_git_check", "api_key_env", "wire_api")}
+                            "extra_config", "skip_git_check", "api_key_env", "wire_api",
+                            "mcp_servers", "dangerously_bypass_approvals")}
         return CodexBackend(**allowed)
     return CliBackend(profile, **kwargs)
 

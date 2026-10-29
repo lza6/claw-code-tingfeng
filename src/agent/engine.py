@@ -569,8 +569,17 @@ class AgentEngine:
         self._persist_session(result['session'])
         return result['session']
 
-    async def run_stream(self, goal: str, on_chunk: Callable | None = None, on_step: Callable | None = None) -> AgentSession:
-        result = await self._run_agent_core(goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step)
+    async def run_stream(
+        self,
+        goal: str,
+        on_chunk: Callable | None = None,
+        on_step: Callable | None = None,
+        prior_messages: list[Any] | None = None,
+    ) -> AgentSession:
+        result = await self._run_agent_core(
+            goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step,
+            prior_messages=prior_messages,
+        )
         self._persist_session(result['session'])
         return result['session']
 

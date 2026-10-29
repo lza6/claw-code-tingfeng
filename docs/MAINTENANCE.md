@@ -11,7 +11,7 @@
 # 1) 读
 #    workflow_status.md                       —— 顶部「当前状态」区块
 #    skills/clawd-change-workflow/SKILL.md
-#    计划书/下一阶段执行计划-2026-10-23.md     —— 当前计划（W0-W6）
+#    计划书/下一步改进指南.md                —— 当前计划（v4，2026-10-29 实测版）
 
 # 2) 建立事实基线（3 分钟，别信文档里的数字）
 py scripts/reachability.py                                   # 生产可达数
@@ -196,7 +196,7 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 2. **哪些指标没达标** —— 2026-10-29 实测：覆盖率 **62.39%**（目标 60% ✅）、
    死模块 **76**（完全不可达）、静默吞异常 **162**（门禁 ≤172）、收集 **4,964 / 18.6s**。
    口径以 `scripts/baseline.py --out .clawd/baseline.json` 为准，不要手抄数字。
-3. **下一步最该做什么** —— 见 `计划书/下一步改进指南-2026-10-28.md`（v3，现行）顶部状态表。
+3. **下一步最该做什么** —— 见 `计划书/下一步改进指南.md`（v4，现行）§3 问题清单与 §6 批次拆解。
 
 ---
 
