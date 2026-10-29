@@ -373,12 +373,13 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
         <label for="setProvider">当前生效 Provider（只读）</label>
         <input id="setProvider" placeholder="openai / anthropic / openrouter …">
       </div>
+      <div class="srow" style="border-bottom:none;padding-top:12px"><label>全局默认</label><span style="color:var(--label-tertiary);font-size:12px">没有选默认 provider 时才用这里的值</span></div>
       <div class="sfield">
-        <label for="setModel">模型</label>
+        <label for="setModel">模型（全局默认）</label>
         <input id="setModel" placeholder="如 gpt-4o-mini / claude-sonnet-4">
       </div>
       <div class="sfield">
-        <label for="setBaseUrl">Base URL（兼容 OpenAI 的端点）</label>
+        <label for="setBaseUrl">Base URL（全局默认，兼容 OpenAI 的端点）</label>
         <input id="setBaseUrl" placeholder="可留空使用默认">
       </div>
       <label class="scheck"><input type="checkbox" id="setRag"> 启用 RAG 索引（CLAWD_ENABLE_RAG）</label>
