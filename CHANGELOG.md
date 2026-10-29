@@ -7,6 +7,28 @@
 
 ---
 
+## [v0.76.4] (2026-10-29) — 桌面安装包重建：P2-3 已修，自动更新元数据恢复真实
+
+**修复前**：`desktop/host` 内嵌的是 **v0.60.10** 的源码（落后 16 个版本），
+成品名 `0.1.0`、`latest.yml` 也指向 0.1.0 —— 自动更新"检查到新版本"却下载到老包，事实失效（P2-3）。
+
+**已修**：
+1. 重跑 `scripts/prepare_host_bundle.py` → host 从 **v0.60.10 → v0.76.3**（235MB，含 collaborate/native 等新模块）
+2. 重跑 `electron-builder --win nsis portable` →
+   - `Clawd Desktop Setup 0.76.3.exe`（168MB）
+   - `ClawdDesktop-Portable-0.76.3.exe`（146MB）
+3. `latest.yml` 现为 `version: 0.76.3` + 对应 sha512 → 更新元数据与产物一致
+4. 清理旧的 0.1.0 产物（避免"latest.yml 指向老包"的混淆）
+
+**验证（静态确认）**：`desktop/dist/win-unpacked/resources/host/pyproject.toml` → `version = "0.76.3"`；
+`latest.yml` 的 url/sha512 与新建安装包一致。
+
+**仍未闭环**：`no signing info identified, signing is skipped` —— **无代码签名证书**（P2-4），
+安装时仍会 SmartScreen"未知发布者"；需要证书文件 + `CSC_LINK`/`CSC_KEY_PASSWORD`（外部条件）。
+本轮**未实跑安装流程**（安装会修改用户系统，需你确认后再做）。
+
+---
+
 ## [v0.76.2/v0.76.3] (2026-10-29) — 指令文件保鲜 + skill 陷阱整改 + 测试提速
 
 ### 指令文件过期修复（最关键）
