@@ -132,3 +132,34 @@ class TestSmokeDatasetMatchesRuntime:
         assert report.failed == 0
         assert report.unknown == 0
         assert report.passed == report.total
+
+
+class TestHonestyDataset:
+    """`src/eval/datasets/honesty.json` 专门演示三态：pass / fail / UNKNOWN"""
+
+    def _dataset(self):
+        path = Path(__file__).resolve().parents[2] / "src" / "eval" / "datasets" / "honesty.json"
+        return path
+
+    def test_three_states_all_present(self):
+        report = run_dataset(load_dataset(self._dataset()), dataset_name="honesty")
+        assert report.total == 4
+        assert report.passed == 1
+        assert report.failed == 1
+        assert report.unknown == 2
+        assert report.determined == 2
+
+    def test_unknown_cases_have_reasons(self):
+        report = run_dataset(load_dataset(self._dataset()), dataset_name="honesty")
+        reasons = " ".join(o.detail for o in report.unknowns)
+        assert "recorded" in reasons or "工具调用记录" in reasons
+
+    def test_pass_rate_ignores_unknown(self):
+        report = run_dataset(load_dataset(self._dataset()), dataset_name="honesty")
+        assert report.pass_rate == 0.5, "1 通过 / 2 已判定 = 50%，未知的不进分母"
+
+    def test_smoke_dataset_grew(self):
+        """P2-5：只有 3 条用例覆盖不到 equals / 错误暴露等断言"""
+        report = run_dataset(load_dataset(SMOKE_DATASET), dataset_name="smoke")
+        assert report.total >= 7
+        assert report.passed == report.total

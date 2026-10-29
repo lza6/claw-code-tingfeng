@@ -1117,6 +1117,110 @@ def codex_run(
     raise typer.Exit(code=0 if result.ok else 1)
 
 
+@app.command(name="explain")
+def explain(
+    session_id: str = typer.Argument(None, help="会话 ID（缺省=最近一次会话）"),
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于脚本核对）"),
+):
+    """
+    用中文讲清上一轮它到底做了什么（零成本：不调用 LLM）
+
+    输出：目标/模型/轮次/用量、每次工具调用及其成败、失败片段、最终回答。
+    没有记录的地方会明确写"没有记录"，不会替你猜成功。
+    """
+    import json as _json
+
+    from .explain import explain_session
+
+    try:
+        explanation = explain_session(session_id)
+    except FileNotFoundError as e:
+        console.print(f"[yellow]{e}[/yellow]")
+        raise typer.Exit(code=2)
+    except ValueError as e:
+        console.print(f"[bold red]会话损坏:[/bold red] {e}")
+        raise typer.Exit(code=2)
+
+    if as_json:
+        typer.echo(_json.dumps(explanation.to_dict(), ensure_ascii=False))
+    else:
+        console.print(explanation.to_text())
+    raise typer.Exit(code=0)
+
+
+@app.command(name="review")
+def review(
+    paths: list[str] = typer.Argument(None, help="要评审的文件/目录（缺省=未提交改动）"),
+    roles: str = typer.Option(
+        "", "--roles", help="逗号分隔的评审角色（默认四个：code/security/performance/style）"
+    ),
+    include_diff: bool = typer.Option(True, "--diff/--no-diff", help="是否把未提交 diff 一起给评审"),
+    as_json: bool = typer.Option(False, "--json", help="输出 JSON（便于 CI）"),
+    timeout: float = typer.Option(180.0, "--timeout", help="单角色超时（秒）"),
+):
+    """
+    多角色并行评审（真正的并行调度，不是单点审计）
+
+    角色模板来自 `prompts/agents/<role>.md`。裁决由确定性解析得到：
+    `VERDICT: APPROVE|NEEDS_FIX` + `CRITICAL/HIGH/MEDIUM/LOW` 分级。
+    任一角色失败 → 整体 INCOMPLETE（**不会**把"没评审"算成"没问题"）。
+
+    退出码：0=APPROVE · 1=NEEDS_FIX · 2=INCOMPLETE（含无目标/角色失败）
+    注意：这会发起真实 LLM 调用（按你配置的 provider 计费）。
+    """
+    import asyncio as _asyncio
+    import json as _json
+
+    from ..agent.review_team import (
+        DEFAULT_ROLES,
+        VERDICT_APPROVE,
+        VERDICT_NEEDS_FIX,
+        ReviewTeam,
+        available_review_roles,
+        collect_review_targets,
+        get_git_diff,
+    )
+
+    role_list = tuple(r.strip() for r in roles.split(",") if r.strip()) or DEFAULT_ROLES
+    known_roles = available_review_roles()
+    unknown = [r for r in role_list if r not in known_roles]
+    if unknown:
+        console.print(f"[bold red]未知角色:[/bold red] {unknown}")
+        console.print(f"  可用: {sorted(known_roles)}")
+        raise typer.Exit(code=2)
+
+    targets = collect_review_targets(paths, Path.cwd())
+    if not targets:
+        console.print("[yellow]没有评审目标[/yellow]（既没给路径，也没有未提交改动）")
+        raise typer.Exit(code=2)
+
+    diff_text = get_git_diff(Path.cwd()) if include_diff else ""
+    team = ReviewTeam(roles=role_list, timeout=timeout)
+    try:
+        report = _asyncio.run(team.review(targets, diff_text=diff_text))
+    except Exception as e:  # noqa: BLE001 — 配置/网络问题要如实报错，不能装作评审过
+        console.print(f"[bold red]评审无法进行:[/bold red] {type(e).__name__}: {e}")
+        raise typer.Exit(code=2)
+
+    if as_json:
+        typer.echo(_json.dumps(report.to_dict(), ensure_ascii=False))
+    else:
+        console.print(f"[bold]{report.summary_line()}[/bold]")
+        for role_review in report.roles:
+            if role_review.error:
+                console.print(f"  [red]FAILED[/red] {role_review.role}: {role_review.error}")
+                continue
+            console.print(f"  [cyan]{role_review.role}[/cyan]: {role_review.verdict}")
+        for finding in report.blocking_findings:
+            console.print(f"  [red]{finding[:200]}[/red]")
+
+    if report.verdict == VERDICT_APPROVE:
+        raise typer.Exit(code=0)
+    if report.verdict == VERDICT_NEEDS_FIX:
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=2)
+
+
 @app.command(name="eval")
 def eval_dataset(
     dataset: Path = typer.Argument(..., help="评测数据集 JSON 路径"),

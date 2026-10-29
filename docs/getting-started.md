@@ -1,145 +1,147 @@
-# Getting Started with Clawd Code Skills
+# 上手 Clawd Code（产品教程）
 
-Clawd Code skills work with any AI coding agent that accepts Markdown instructions. This guide covers the universal approach. For tool-specific setup, see the dedicated guides.
+> 这份文档回答「我装了它，接下来怎么用、怎么确认它真的在干活」。
+> 想了解**技能文件怎么分发给别的 agent**，见 [skills-distribution.md](skills-distribution.md)。
+> 想新增 Provider / Tool / CLI 命令，见 [MAINTENANCE.md](MAINTENANCE.md)。
 
-## How Skills Work
+---
 
-Each skill is a Markdown file (`SKILL.md`) that describes a specific engineering workflow. When loaded into an agent's context, the agent follows the workflow — including verification steps, anti-patterns to avoid, and exit criteria.
+## 0. 前置条件
 
-**Skills are not reference docs.** They're step-by-step processes the agent follows.
+- **Python 3.10+**（本仓库实测解释器矩阵见 `CLAUDE.md`：`venv/Scripts/python.exe` 与 `py -3.10`）
+- **git**（会话分叉、worktree 隔离、评审取 diff 都依赖它）
+- 至少一个 LLM API 密钥（OpenAI / Anthropic / DeepSeek / Gemini / OpenRouter 任一）
 
-## Quick Start (Any Agent)
+---
 
-### 1. Clone the repository
+## 1. 安装（源码可编辑安装）
+
+```powershell
+# Windows PowerShell（在仓库根目录）
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install -e . --no-deps --no-build-isolation
+venv\Scripts\python.exe -m pip install -r requirements.txt     # 首次装依赖
+```
 
 ```bash
-git clone https://github.com/your-org/claw-code-tingfeng.git
+# macOS / Linux
+python3.10 -m venv venv
+venv/bin/python -m pip install -e . --no-deps --no-build-isolation
+venv/bin/python -m pip install -r requirements.txt
 ```
 
-### 2. Choose a skill
+验证安装：
 
-Browse the `skills/` directory. Each subdirectory contains a `SKILL.md` with:
-- **When to use** — triggers that indicate this skill applies
-- **Process** — step-by-step workflow
-- **Verification** — how to confirm the work is done
-- **Common rationalizations** — excuses the agent might use to skip steps
-- **Red flags** — signs the skill is being violated
-
-### 3. Load the skill into your agent
-
-Copy the relevant `SKILL.md` content into your agent's system prompt, rules file, or conversation. The most common approaches:
-
-**System prompt:** Paste the skill content at the start of the session.
-
-**Rules file:** Add skill content to your project's rules file (CLAUDE.md, .cursorrules, etc.).
-
-**Conversation:** Reference the skill when giving instructions: "Follow the test-driven-development process for this change."
-
-### 4. Use the meta-skill for discovery
-
-Start with the `using-agent-skills` skill loaded. It contains a flowchart that maps task types to the appropriate skill.
-
-## Recommended Setup
-
-### Minimal (Start here)
-
-Load three essential skills into your rules file:
-
-1. **spec-driven-development** — For defining what to build
-2. **test-driven-development** — For proving it works
-3. **code-review-and-quality** — For verifying quality before merge
-
-These three cover the most critical quality gaps in AI-assisted development.
-
-### Full Lifecycle
-
-For comprehensive coverage, load skills by phase:
-
-```
-Starting a project:  spec-driven-development → planning-and-task-breakdown
-During development:  incremental-implementation + test-driven-development
-Before merge:        code-review-and-quality + security-and-hardening
-Before deploy:       shipping-and-launch
+```powershell
+venv\Scripts\python.exe -m src --version
+venv\Scripts\python.exe -m src doctor      # 逐项检查 Python/依赖/密钥/provider
 ```
 
-### Context-Aware Loading
+> `python -m src` 就是 `clawd`。下面统一写 `clawd`，你实际敲同样一行时把前缀换成
+> `venv\Scripts\python.exe -m src`。
 
-Don't load all skills at once — it wastes context. Load skills relevant to the current task:
+---
 
-- Working on UI? Load `frontend-ui-engineering`
-- Debugging? Load `debugging-and-error-recovery`
-- Setting up CI? Load `ci-cd-and-automation`
+## 2. 配置密钥与默认模型
 
-## Skill Anatomy
-
-Every skill follows the same structure:
-
-```
-YAML frontmatter (name, description)
-├── Overview — What this skill does
-├── When to Use — Triggers and conditions
-├── Core Process — Step-by-step workflow
-├── Examples — Code samples and patterns
-├── Common Rationalizations — Excuses and rebuttals
-├── Red Flags — Signs the skill is being violated
-└── Verification — Exit criteria checklist
+```powershell
+$env:OPENAI_API_KEY = "sk-..."     # 或 ANTHROPIC_API_KEY / DEEPSEEK_API_KEY / ...
+clawd onboard                      # 检测已有密钥 + 推断推荐模型 + 给出下一步
+clawd onboard --json               # 同样的信息，给脚本/CI 用
+clawd config                       # 管理配置文件里的 key/model/provider
 ```
 
-See [skill-anatomy.md](skill-anatomy.md) for the full specification.
+`onboard` 的判定是**基于环境里真实存在的密钥**，不会假装成功：没有密钥时退出码 1，
+并明确告诉你缺什么。`chat` 启动时也会做一次同样的体检（只在真的什么都没有时提示一次）。
 
-## Using Agents
+---
 
-The `agents/` directory contains pre-configured agent personas:
+## 3. 第一个任务
 
-| Agent | Purpose |
-|-------|---------|
-| `code-reviewer.md` | Five-axis code review |
-| `test-engineer.md` | Test strategy and writing |
-| `security-auditor.md` | Vulnerability detection |
+```powershell
+clawd explore "这个仓库里 RAG 索引是怎么预热的？"   # 只读，不改文件
+clawd run "把 src/utils/version_check.py 的超时从 5s 改成 10s 并跑它的测试"
+clawd chat                                          # 进入交互式 REPL（可 --resume 续聊）
+```
 
-Load an agent definition when you need specialized review. For example, ask your coding agent to "review this change using the code-reviewer agent persona" and provide the agent definition.
+三种模式的分工：
 
-## Using Commands
+| 命令 | 会不会改文件 | 适合 |
+|---|---|---|
+| `explore` | 不改 | 先摸清代码，再决定动不动 |
+| `run` | 会（受权限门禁约束） | 一次性把目标做完：识别→规划→执行→审查→发现 |
+| `chat` | 会（受权限门禁约束） | 多轮迭代、需要来回确认 |
 
-The `.claude/commands/` directory contains slash commands for Claude Code:
+`chat` 支持续聊：`clawd chat --resume <session_id>`（`clawd session list` 查看已有会话）。
 
-| Command | Skill Invoked |
-|---------|---------------|
-| `/spec` | spec-driven-development |
-| `/plan` | planning-and-task-breakdown |
-| `/build` | incremental-implementation + test-driven-development |
-| `/test` | test-driven-development |
-| `/review` | code-review-and-quality |
-| `/ship` | shipping-and-launch |
+---
 
-## Using References
+## 4. 看懂它刚才做了什么
 
-The `references/` directory contains supplementary checklists:
+这一步是 Clawd Code 与"黑盒 agent"的主要区别，全部是本地文件 / 命令，不需要额外服务：
 
-| Reference | Use With |
-|-----------|----------|
-| `testing-patterns.md` | test-driven-development |
-| `performance-checklist.md` | performance-optimization |
-| `security-checklist.md` | security-and-hardening |
-| `accessibility-checklist.md` | frontend-ui-engineering |
+```powershell
+clawd session list                      # 会话清单（.clawd/sessions/）
+clawd session show <session_id>         # 某个会话的步骤与结果
+clawd hud                               # 状态面板：模型/迭代/token/成本
+clawd review --json                     # 多角色并行评审未提交改动（code/security/performance/style）
+clawd eval src\eval\datasets\smoke.json # 行为回归（replay，零成本）
+```
 
-Load a reference when you need detailed patterns beyond what the skill covers.
+- **日志**：`.clawd/logs/*.jsonl`（结构化事件，可直接 `Select-String` / `grep`）
+- **评审裁决**：`clawd review` 输出 `VERDICT: APPROVE | NEEDS_FIX`，
+  任一角色失败会显示 `INCOMPLETE` —— **不会**把"没评审"算成"没问题"
+- **评测三态**：`pass` / `fail` / `UNKNOWN`。缺录制数据 = `UNKNOWN`（未判定），
+  不计入通过率。示例见 `src/eval/datasets/honesty.json`
 
-## Clawd Code Specifics
+---
 
-Clawd Code is a Python 3.10+ application. When using skills in this project:
+## 5. 权限与挂机（要不要让它自己跑）
 
-- Tests use `pytest`: `python -m pytest tests/ -v --tb=short`
-- Linting uses `ruff`: `ruff check src/`
-- Formatting uses `ruff`: `ruff format src/`
-- Settings follow a 6-layer priority: defaults → .env → runtime → CLI → file → API
-- Feature flags are managed in `.clawd/features.json`
-- The patch engine (`src/core/`) is used for declarative code modifications
+```powershell
+clawd permissions                       # 中文说明：审批模式 / 挂机级别 / 受保护路径 / 拒绝理由
+clawd autonomy list                     # 当前预授权的命令前缀
+clawd autonomy allow "git status"       # 只放行这一条（前缀匹配）
+clawd autonomy stop                     # 立刻叫停（写 STOP 文件，引擎每轮检查）
+clawd autonomy log                      # 无人值守期间的决策审计（JSONL，中文）
+```
 
-## Tips
+三档挂机级别：`supervised`（默认，每步问你）/ `semi`（读操作放行、写操作问）/
+`unattended`（按预授权自动决策，越界即停）。所有决策都会进审计日志，
+所以"它自己跑了什么"是可回查的，不是猜的。
 
-1. **Start with spec-driven-development** for any non-trivial work
-2. **Always load test-driven-development** when writing code
-3. **Don't skip verification steps** — they're the whole point
-4. **Load skills selectively** — more context isn't always better
-5. **Use the agents for review** — different perspectives catch different issues
+---
+
+## 6. 多引擎（可选）
+
+```powershell
+clawd engines                                   # 探活：native / codex / opencode ... 真实可用性
+clawd collaborate "重构 X" --planner codex --executor native --reviewer opencode
+clawd codex "用 Codex 内核做这件事"
+```
+
+`native` 是内置引擎（我们自己的 agent，含 19 个工具 / LSP / 世界模型），
+不装任何外部 CLI 也能用。外部引擎装上才会显示 `ready`，没装就是 `not_installed`——
+探活结果不会撒谎。
+
+---
+
+## 7. 常见失败与定位
+
+| 现象 | 真实原因 | 怎么查 |
+|---|---|---|
+| `NameError: loguru` / 导入就炸 | 用了裸 `python`（本机指向 3.14，缺运行依赖） | 改用 `venv\Scripts\python.exe` 或 `py -3.10` |
+| `未检测到任何 LLM 密钥` | 环境变量没设 / 设在了别的 shell | `clawd onboard --json` |
+| MCP 客户端连不上我们的 server | 命令里的解释器不是当前 venv | `clawd doctor`；生成配置的 `command` 已是 `sys.executable` |
+| `python -m src.core.mcp.xxx_server` 秒退无输出 | v0.76.5 之前确实没有 `__main__`（已修） | 升级到 ≥ v0.76.5 |
+| 评测打印 `UNKNOWN` | 用例缺 `recorded` / 缺工具记录 | 补录制数据，或用 `--live`（需 `CLAWD_EVAL_ALLOW_PAID=1`，会真花钱） |
+| 门禁数字对不上 | 文档过期 | `py -3.10 scripts/baseline.py --out .clawd/baseline.json` 现跑 |
+
+---
+
+## 8. 下一步
+
+- 变更本项目前先读：`workflow_status.md` → `skills/clawd-change-workflow/SKILL.md`
+- 新增 Provider / Tool / CLI 的逐步 SOP：`docs/MAINTENANCE.md`
+- 影响后续判断的设计决策：`docs/adr/README.md`
+- 质量门禁与硬指标口径：根目录 `CLAUDE.md` 的「最短验证路径」

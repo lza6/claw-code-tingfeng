@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "name": "honesty",
+  "description": "演示评测三态：pass / fail / UNKNOWN。缺 recorded 或缺工具记录时判为 UNKNOWN（未判定），不会计入通过率，也不会被当成失败。用它检查'没测'没有被伪装成数字。",
+  "cases": [
+    {
+      "id": "ok-contains",
+      "input": "说个你好",
+      "expect": {
+        "contains": [
+          "你好"
+        ]
+      },
+      "recorded": {
+        "output": "你好！",
+        "tools": []
+      },
+      "tags": [
+        "honesty",
+        "pass"
+      ]
+    },
+    {
+      "id": "unknown-missing-recorded",
+      "input": "这条故意没有录制数据",
+      "expect": {
+        "contains": [
+          "x"
+        ]
+      },
+      "tags": [
+        "honesty",
+        "unknown"
+      ]
+    },
+    {
+      "id": "unknown-missing-tool-record",
+      "input": "这条声明了工具序列但没有 tools 记录",
+      "expect": {
+        "tool_sequence": [
+          "FileReadTool"
+        ]
+      },
+      "recorded": {
+        "output": "读完了"
+      },
+      "tags": [
+        "honesty",
+        "unknown"
+      ]
+    },
+    {
+      "id": "fail-real-mismatch",
+      "input": "这条是真的不匹配",
+      "expect": {
+        "contains": [
+          "必须出现的短语"
+        ]
+      },
+      "recorded": {
+        "output": "完全不同的输出",
+        "tools": []
+      },
+      "tags": [
+        "honesty",
+        "fail"
+      ]
+    }
+  ]
+}

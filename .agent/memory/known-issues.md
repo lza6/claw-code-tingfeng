@@ -75,3 +75,14 @@
 - `anthropics__sandbox-runtime`：OS 级沙箱依赖 macOS `sandbox-exec` / Linux `bubblewrap`，**Windows 无对应原语**，
   本项目本机为 Windows 10；其 proxy-based 网络过滤思路可借鉴，但落地需另建代理层，成本 > 收益。
   本项目已有 Docker 沙箱（src/tools_runtime/sandbox/docker.py）+ MCP 检疫审批，安全边界不裸奔。
+
+## 2026-10-29 本轮新增的已知限制（未闭环，需外部条件或后续排期）
+
+1. **桌面安装包未签名**：`electron-builder` 日志 `no signing info identified, signing is skipped`。
+   需要证书文件 + `CSC_LINK` / `CSC_KEY_PASSWORD`。未签名会触发 SmartScreen"未知发布者"。
+2. **`src/hooks/`（2,541 行 / 10 模块）仍不可达**：判定为上游参考快照，见 ADR 0019。
+   若要采用需按本项目重写契约（例如把 prompt guidance 断言改成我们自己的模板校验并进 CI）。
+3. **`clawd review` 只看代码文本 + diff**：不执行代码、不看运行期行为（见 D-20 的代价）。
+4. **`clawd explain` 的工具成败是启发式**：只扫描输出前 400 字符的失败标志；误判方向选"宁可放过"，
+   所以 `ok` 只用于展示，不能作为对外"通过"承诺。
+5. **`scripts/e2e_smoke.py` 本轮未跑**：真实 LLM 端点属付费红线（预算默认 0），需单独批准。

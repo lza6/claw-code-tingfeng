@@ -101,3 +101,30 @@
 - 代码签名证书（P2-4）；桌面安装包与 `desktop/package.json` 仍为 0.76.4（需重跑 electron-builder）
 - P1-14 残余：34 个 review prompt 模板仍无并行调度器（本轮只修了"假响应"部分）
 - `scripts/e2e_smoke.py` 未跑：本机真实 LLM 端点调用属付费红线（默认预算 0），未获单独批准
+
+## 2026-10-29 v0.76.6 —— 功能面缺口收口（真并行评审 / 讲人话入口 / 桌面重建）
+
+**新增能力（有实跑证据）**
+- [x] `src/agent/review_team.py` + `clawd review`：34 个 prompt 模板里 4 个评审角色
+      **真并行**跑（`asyncio.gather`），裁决确定性解析（VERDICT + CRITICAL/HIGH/MEDIUM/LOW）；
+      失败/超时/缺裁决 → `INCOMPLETE`；退出码 0/1/2；`--json` 给 CI。18 测试（假 provider，零付费）。
+- [x] `src/cli/explain.py` + `clawd explain [session_id] [--json]`：零成本中文解释
+      （目标/模型/用量/工具调用成败/失败片段/最终回答）；缺记录就说缺记录。13 测试。
+- [x] `docs/getting-started.md` 重写为产品上手教程；原内容移入 `docs/skills-distribution.md`。
+- [x] 9 个移植技能的 `~/.codex/...` 路径加"clawd 路径适配"说明块。
+- [x] `smoke.json` 3→7 条；新增 `honesty.json`（1 pass / 1 fail / 2 UNKNOWN）。
+- [x] ADR 0019：`src/hooks/`（2,541 行全不可达）保留为参考快照、不接线，逐模块列对位关系。
+- [x] 桌面端：`prepare_host_bundle.py` + `electron-builder` 重建安装包（本轮最后一次构建对应 v0.76.6）。
+
+**验证（实跑）**
+- `pytest tests/agent tests/cli tests/eval tests/mcp tests/backends -q -m "not slow"` → **1403 passed / 0 failed（931.80s）**
+- 门禁：F821/F811/E9 全过 · 静默吞异常 **162**（≤162）· 可达 **482**（≥443）· 收集 **5166 / 0 errors**
+- wheel 打包：`pip wheel .` 产物含 `prompts/agents/*.md` **34 个**（修前 0 个 → review 在安装态必失败）
+- 桌面 0.76.6：`Clawd Desktop Setup 0.76.6.exe`(161M) + Portable(160M)；
+  `latest.yml` version=0.76.6 且 sha512 与产物一致；`dist/win-unpacked/resources/host/pyproject.toml` = 0.76.6；
+  旧 0.76.4/0.76.5 产物已删（避免 latest.yml 指向老包）。签名仍被跳过（无证书）
+
+**未闭环**
+- 代码签名证书（P2-4，外部条件）
+- `src/hooks/` 若采用需按本项目重写契约（ADR 0019）
+- `scripts/e2e_smoke.py` 未跑（真实 LLM 付费红线）

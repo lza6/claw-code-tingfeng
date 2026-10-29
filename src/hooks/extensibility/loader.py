@@ -1,4 +1,11 @@
 """
+.. note:: **参考快照，不接线（ADR 0019）**
+
+    本模块移植自 oh-my-codex，当前**没有任何生产调用点**（`scripts/reachability.py`
+    列为不可达）。仓库里与之对应的活实现见 `docs/adr/0019` 的对位表；
+    真正生效的 Hook 系统是 `src/core/hook_registry/`（引擎已接线）。
+    **不要在这里新增功能**，否则会造出第二套真相源。
+
 Hook Loader - 钩子插件发现和加载
 
 从 oh-my-codex-main/src/hooks/extensibility/loader.ts 转换而来。

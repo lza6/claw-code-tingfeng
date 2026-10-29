@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawd-code"
-version = "0.76.5"
+version = "0.76.6"
 description = "AI 编程代理框架 - 多 LLM 提供商 + 工具调用 + RAG + WebSocket 远程访问"
 readme = "README.md"
 license = {text = "MIT"}
@@ -116,10 +116,13 @@ all-extras = [
 clawd = "src.cli.entrypoint:main"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+# `prompts` 必须一起装：`clawd review` 的角色模板来自 prompts/agents/*.md，
+# 只装 src* 的话非 editable 安装下 review 会直接报「找不到角色模板」
+include = ["src*", "prompts*"]
 
 [tool.setuptools.package-data]
 "src.eval" = ["datasets/*.json"]
+"prompts.agents" = ["*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "."]

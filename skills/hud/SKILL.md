@@ -5,6 +5,17 @@ role: "display"
 scope: ".omx/**"
 ---
 
+> **clawd 路径适配（重要）**：本技能移植自 oh-my-codex，文中所有 `~/.codex/...`、
+> `.codex/skills/`、`CODEX_HOME` 都是 **Codex 时代的路径**。在 clawd 里真实生效的是：
+>
+> - 技能位置：`<项目>/skills/<name>/SKILL.md`（**支持分组子目录**，如
+>   `skills/reverse/<sub>/SKILL.md`，发现逻辑是递归的）
+> - 运行期数据/配置：`<项目>/.clawd/`（`sessions/`、`logs/`、`features.json` 等）
+> - 查当前实际发现到的技能：`clawd hud` 或直接调 `skill` 工具；诊断环境用 `clawd doctor`
+>
+> 只有当你**确实在 Codex 里**运行本技能时，`~/.codex/...` 那套路径才成立。
+> 在 clawd 里照着 `~/.codex/...` 找文件只会得到"不存在"。
+
 # HUD Skill
 
 The OMX HUD uses a two-layer architecture:

@@ -7,6 +7,63 @@
 
 ---
 
+## [v0.76.6] (2026-10-29) — P1-14 收口（真并行评审）+ 讲人话入口 + 桌面端 0.76.5 重建
+
+v0.76.5 把"假成功"清完之后，本轮补的是**功能面缺口**，同样每条都有实跑证据。
+
+**1. 多角色并行评审（P1-14 收口）**
+`src/agent/review_team.py` + `clawd review`：仓库原有 34 个 prompt 模板 / 6 个 REVIEW 角色定义，
+但生产侧只有 `get_prompt()` 一个调用方，实际评审是单点 `AuditorAgent` 扫全文件 —— "review 面有名无实"。
+现在 `ReviewTeam` 用 `asyncio.gather` **真并行**跑 4 个角色（code/security/performance/style），
+裁决由确定性正则解析（`VERDICT: APPROVE|NEEDS_FIX` + `CRITICAL/HIGH/MEDIUM/LOW`）：
+
+- 任一角色报错/超时/不给裁决 → 整体 `INCOMPLETE`（**不会**把"没评审"算成"没问题"）
+- 只报 CRITICAL 却漏写 VERDICT → 仍判 `NEEDS_FIX`
+- 退出码：0=APPROVE · 1=NEEDS_FIX · 2=INCOMPLETE
+- `--json` 给 CI 用；`provider_factory` 可注入，18 个测试全程假 provider（**零付费调用**）
+
+**2. `clawd explain`（讲人话入口）**
+P3 缺口：CLI 没有 explain/why，用户只能自己翻 JSONL。新增零成本解释器：目标/模型/轮次/用量、
+每次工具调用及成败、失败原始片段、最终回答。**没有记录就写"没有记录"**（缺结果 ≠ 成功）。
+13 个测试覆盖原生 function calling 与 legacy 存储两种格式。
+
+**3. 桌面端安装包随版本重建（P2-3/P2-4 版本一致性）**
+`prepare_host_bundle.py` 刷新 host（275MB）→ `electron-builder --win nsis portable` 产出
+`Clawd Desktop Setup <ver>.exe` / `ClawdDesktop-Portable-<ver>.exe`，`latest.yml` 的
+`version` 与 `sha512` 与产物一致，`dist/win-unpacked/resources/host/pyproject.toml` 版本同步。
+**仍未签名**（无证书，构建日志 `signing is skipped`，P2-4 属外部条件）。
+
+**4. 技能文档与路径适配**
+9 个从 oh-my-codex 移植的技能（doctor/skill/hud/worker/autopilot/...）文中 `~/.codex/...`
+在 clawd 下**不存在**；统一加了"clawd 路径适配"说明块（真实路径是 `<项目>/skills/` 与 `.clawd/`），
+不改其原有步骤。
+
+**5. 评测覆盖（P2-5）**
+`smoke.json` 3 → 7 条（补 equals 精确匹配、错误必须被暴露、中文不得夹英文套话、不得谎报创建）；
+新增 `honesty.json` 专门演示三态：1 pass / 1 fail / 2 UNKNOWN，用来检查"没测"没被伪装成数字。
+
+**6. 文档**
+`docs/getting-started.md` 重写为**产品上手教程**（安装→配置→第一个任务→看懂发生了什么→权限挂机→多引擎→常见失败定位）；
+原"技能怎么分发给别的 agent"移到 `docs/skills-distribution.md`。新增 ADR 0019：
+`src/hooks/`（2,541 行、10 模块、全部不可达）保留为参考快照**不接线**，逐模块列出与仓库现实现的重复关系。
+
+**验证（实跑）**
+- `py -3.10 -m pytest tests/agent tests/cli tests/eval tests/mcp tests/backends -q -m "not slow"` →
+  **1403 passed / 0 failed**（931.80s）
+- 新增用例：review_team 18 + review CLI 6 + explain 15 + eval honesty 4 = 43
+- 门禁：`F821/F811/E9` 全过 · 静默吞异常 **162**（≤162）· 生产可达 **482**（≥443）· 收集 **5166 / 0 errors**
+- 打包验证（非 editable 安装的真实缺口）：`pip wheel .` 产出的 wheel 里
+  `prompts/agents/*.md` **34 个**齐全（pyproject 原来只 `include = ["src*"]`，
+  `clawd review` 在安装态会报「找不到角色模板」）
+- 桌面构建退出码 0，`latest.yml` 的 version/sha512 与产物一致（签名仍被跳过：无证书）
+
+**仍未闭环**
+- 代码签名证书（需 `CSC_LINK` + 密码；当前 `signing is skipped`）
+- `src/hooks/` 的 omx 语义若要采用，需改写成本项目自己的契约（见 ADR 0019）
+- `scripts/e2e_smoke.py` 未跑：真实 LLM 端点属付费红线
+
+---
+
 ## [v0.76.5] (2026-10-29) — 审计 P0/P1 清零：P0 ralplan 默认路径崩溃 + 9 项假成功/坏承诺
 
 按 `参考的结果计划指南.md` 的 P0/P1 台账逐条修，**每条都有实跑证据**。本轮不动架构，只修"说得到做不到"。

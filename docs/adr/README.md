@@ -23,6 +23,7 @@
 | 0016 | 挂机自主决策引擎 + 权限全中文表达 | [0016-autonomy-and-chinese-permissions.md](0016-autonomy-and-chinese-permissions.md) |
 | 0017 | 多引擎协同（plan→execute→review→返工）+ 两处误判更正 | [0017-multi-engine-collaboration.md](0017-multi-engine-collaboration.md) |
 | 0018 | MCP 状态/记忆/追踪服务器的单一真相源（core/mcp 为准，其余冻结） | [0018-mcp-servers-single-source.md](0018-mcp-servers-single-source.md) |
+| 0019 | `src/hooks/` 是上游参考快照，不接线；活的 Hook 系统是 `src/core/hook_registry` | [0019-hooks-package-is-reference-only.md](0019-hooks-package-is-reference-only.md) |
 
 > 判断某个改动"为什么要这么做"时，先查 ADR 再查 commit；两者冲突以 ADR 为准（commit 可能只写了当时的一半理由）。
 

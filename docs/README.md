@@ -23,7 +23,8 @@
 | [`world_model.md`](world_model.md) / [`brain_world_model.md`](brain_world_model.md) | 代码库感知 |
 | [`aider_commands.md`](aider_commands.md) | Aider 风格命令 |
 | [`skill-anatomy.md`](skill-anatomy.md) | 技能文件结构 |
-| [`getting-started.md`](getting-started.md) | 新手上手 |
+| [`getting-started.md`](getting-started.md) | **产品上手**：安装 → 配置密钥 → 第一个任务 → 看懂它做了什么 |
+| [`skills-distribution.md`](skills-distribution.md) | 把技能文件分发给别的 agent（原 getting-started 的真身） |
 | [`copilot-setup.md`](copilot-setup.md) 等 | 各家 AI 编辑器接入 |
 
 ## 待排期（不是"已完成"）

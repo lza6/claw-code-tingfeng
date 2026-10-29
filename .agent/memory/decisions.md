@@ -94,3 +94,24 @@ B904/RUF012/E741（本版 ruff 无 autofix，需逐点人工判断）。
 本轮安全做法：解析 ruff 的 RUF100 清单 → 只删该行 noqa 指令 → AST 校验通过才写盘 →
 对 `repl.py` 等兼容块**主动恢复 `# noqa: F401` 加"勿删"注释**。
 结果：ruff src 410 → 374（-36，实测；清理 78 条 unused-noqa 后其余项浮出）。
+
+
+## D-20 多角色评审用「provider 级并行 + 确定性裁决」
+- 决策：`ReviewTeam` 直接用 `create_llm_provider(...)` 的 `chat()` 并行跑 4 个评审角色，
+  不套完整 AgentEngine（评审不需要工具循环）；裁决由正则解析 VERDICT 与 CRITICAL/HIGH/MEDIUM/LOW。
+- 理由：AgentEngine 每实例都要装配工具/世界模型，4 个角色并发实例化成本高且无收益；
+  裁决必须确定性，"模型自称通过"不能作为通过依据。
+- 代价：评审看不到工具执行结果，只能看代码文本 + diff（够用，也不越权）。
+- 重新考虑：需要评审"运行行为"（而非代码文本）时，再改为 native 引擎驱动。
+
+## D-21 `clawd explain` 不调 LLM
+- 决策：只摊开会话存储里的事实（工具调用、成败、错误片段、用量、最终回答），零成本。
+- 理由：用户要的是"刚才发生了什么"的可核对版本；用 LLM 总结会再引入一次幻觉与一次付费。
+- 代价：解释是结构化的，不会替用户"讲成故事"。
+- 重新考虑：需要跨会话归因时，再叠加 LLM 摘要（仍以结构化事实为唯一输入）。
+
+## D-22 `prompts/` 必须进发行包
+- 决策：`pyproject.toml` 的 `packages.find.include` 加 `prompts*`，并声明 `prompts.agents = ["*.md"]`。
+- 理由：`clawd review` 的角色模板来自 `prompts/agents/*.md`；只装 `src*` 时非 editable
+  安装下 review 直接报"找不到角色模板"（实测 wheel 里原本 0 个 prompts 条目）。
+- 代价：wheel 增大（34 个 md，约 250KB）。
