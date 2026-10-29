@@ -158,3 +158,23 @@
 4. **Agent 管理 Agent 未持续长跑**：只做了两轮定向扫描
 5. **W8 流式原生 function calling** 仍默认关闭（流式 delta 收集不可靠）
 6. **55 个死码模块**仍是"保留待接线"，hooks 体系 2,580 行为首选接线目标
+
+---
+
+## 附录 A：2026-10-29 第二轮追加闭环（v0.76.2）
+
+| 项 | 内容 | 证据 |
+|---|---|---|
+| **指令文件保鲜** | 项目 `CLAUDE.md` 仍写着 `fail_under=47` / 静默≤172 / 3261 用例 / 覆盖率 47.44% → 按 baseline 实测刷新为 5007 用例·5.1s / 4979 passed / 62.39% / 门禁 ≤162·≥60%，并注明"改一处必须同步另一处，有测试守着" | `CLAUDE.md:20,37,100` |
+| **skill 陷阱自查（1/2）** | 补齐 5 个测试子目录缺失的 `__init__.py`（mcp/plugins/reasoning/reverse_tools/security）—— 本项目有 8 组重名测试文件（test_engine.py 等），缺 `__init__.py` 是 `import file mismatch` 的经典成因 | `ls tests/*/__init__.py`；收集 5007/0 errors；这 5 个目录 136 passed |
+| **skill 陷阱自查（2/2）** | `NativeBackend.run` 加事件循环守卫：已在 loop 中时改用线程跑，避免 `asyncio.run()` 在运行中的 loop 抛 RuntimeError（实测 async 上下文调用返回正确） | 实测 `asyncio.run(inside_loop())` → `result ok: ok` |
+| **P2-9** | desktop `playwright` 从 `dependencies` 移到 `devDependencies`（只被 `*.mjs` E2E 脚本使用，不该随应用安装） | `desktop/package.json` |
+| **P3-5** | 清理 4 个历史 coverage 产物（16MB，已 gitignore；保留 `coverage.json` 为当前基线） | 根目录 `coverage*.json` 5→1 |
+| **P3-4 核查** | `x/`、`test-run/` **已在** `.gitignore:98` 覆盖 → v4 审计该项为误报，无需处理 | `git check-ignore -v x/ test-run/` |
+| **P2-10 根因定位并修复** | `--durations` 实测最慢 5 个里 **3 个是我上一轮写的测试**（120,000 字符假文本跑正则，共 ~121s）→ 改用 `min_tokens=1` 小阈值，同 3 个测试 **121s → 1.33s** | `pytest --durations=25` 前后对比 |
+| **ADR 索引补齐** | `docs/adr/README.md` 只覆盖 0001~0006，0009~0017 是独立文件却无索引 → 新增索引表（9 条，含一句话决策摘要） | `docs/adr/README.md` |
+
+## 附录 B：覆盖率门禁实测复核
+
+`pytest --cov=src` 实测 **62.49% ≥ 60%**，`Required test coverage of 60.0% reached` —— 
+P1-5 收紧后的门禁**真实生效且当前通过**（旧门禁 47 下即使掉 15 个点也全绿）。

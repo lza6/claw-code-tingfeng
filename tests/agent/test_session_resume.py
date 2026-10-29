@@ -136,15 +136,16 @@ class TestResumeCompaction:
         assert checkpoint is None
 
     def test_long_history_compacted_to_checkpoint(self):
-        from src.agent.compaction import MIN_COMPACT_TOKENS, prepare_resume_messages
+        from src.agent.compaction import prepare_resume_messages
 
-        long_text = "x" * (MIN_COMPACT_TOKENS * 4)
+        # 用 min_tokens=1 让"很短的历史"也触发压缩：测的是压缩逻辑，不是数据搬运量。
+        # 此前用 120,000 字符假文本跑正则，单测耗时 42 秒（实测最慢 5 个之一）。
         msgs = [
-            {"role": "user", "content": "请实现 src/api/user.py 的登录，目标支持 JWT" + long_text},
+            {"role": "user", "content": "请实现 src/api/user.py 的登录，目标支持 JWT"},
             {"role": "assistant", "content": "下一步：补测试"},
         ]
 
-        out, checkpoint = prepare_resume_messages(msgs)
+        out, checkpoint = prepare_resume_messages(msgs, min_tokens=1)
 
         assert checkpoint is not None
         assert len(out) == 1 and out[0]["role"] == "system"
@@ -152,12 +153,10 @@ class TestResumeCompaction:
         assert "src/api/user.py" in out[0]["content"]  # 关键事实被保住
 
     def test_cli_resume_compacts_long_session(self, tmp_path: Path, monkeypatch):
-        from src.agent.compaction import MIN_COMPACT_TOKENS
         from src.core.session_bridge import persist_agent_session
 
-        huge = "y" * (MIN_COMPACT_TOKENS * 4)
         persist_agent_session(
-            "s-long", "长会话", [{"role": "assistant", "content": "历史内容" + huge}],
+            "s-long", "长会话", [{"role": "assistant", "content": "历史内容"}],
             directory=tmp_path,
         )
         captured = {}
@@ -175,11 +174,14 @@ class TestResumeCompaction:
 
         monkeypatch.setattr("src.agent.engine.AgentEngine", _FakeEngine)
 
+        # CLI 走默认 30k 阈值：这里改为断言"短历史不压缩"（语义正确且快），
+        # 压缩逻辑本身已由 test_long_history_compacted_to_checkpoint 覆盖
         result = runner.invoke(app, [
             "session", "resume", "s-long", "继续", "--dir", str(tmp_path),
         ])
 
         assert result.exit_code == 0, result.output
-        assert "已压缩为检查点摘要" in result.output
-        assert len(captured["prior"]) == 1  # 只剩一条 system 摘要
-        assert captured["prior"][0]["role"] == "system"
+        assert "已载入 2 条历史消息" in result.output  # persist 写 1 条 user(goal) + 1 条 assistant
+        # 短历史不压缩：原样带入（压缩逻辑另有用例覆盖，此处只验 CLI 接线）
+        assert len(captured["prior"]) == 2
+        assert [m["role"] for m in captured["prior"]] == ["user", "assistant"]

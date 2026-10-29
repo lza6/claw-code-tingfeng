@@ -74,11 +74,17 @@ class TestResume:
 
 
 class TestContextCompaction:
-    def test_long_history_is_compacted(self, repl):
-        from src.agent.compaction import MIN_COMPACT_TOKENS
+    def test_long_history_is_compacted(self, repl, monkeypatch):
+        # 用小阈值触发压缩，避免 120k 字符长文跑正则（实测该单测 40s）
+        from src.agent import compaction as _c
 
+        real = _c.prepare_resume_messages
+        monkeypatch.setattr(
+            _c, "prepare_resume_messages",
+            lambda msgs, summarizer=None, **kw: real(msgs, summarizer, min_tokens=1),
+        )
         repl._history = [
-            {"role": "user", "content": "请实现 src/api/user.py 的登录" + "x" * (MIN_COMPACT_TOKENS * 4)},
+            {"role": "user", "content": "请实现 src/api/user.py 的登录"},
         ]
 
         msgs = repl._context_messages()

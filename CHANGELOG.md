@@ -7,6 +7,36 @@
 
 ---
 
+## [v0.76.2/v0.76.3] (2026-10-29) — 指令文件保鲜 + skill 陷阱整改 + 测试提速
+
+### 指令文件过期修复（最关键）
+项目 `CLAUDE.md` 仍写着 `fail_under=47` / 静默≤172 / 3261 用例 / 覆盖率 47.44%，
+而实际早已是 62% / 162 / 5007。**指令文件写错会让后续会话按错基线办事**，已按 baseline 实测刷新。
+
+### 按 skills/clawd-change-workflow 陷阱清单自查（2 条命中）
+- **缺 `__init__.py` + 重名测试文件**：补齐 `tests/mcp`、`plugins`、`reasoning`、`reverse_tools`、`security`
+  五个目录的 `__init__.py` —— 本项目有 8 组重名测试文件（`test_engine.py` 等），这是 `import file mismatch` 的经典成因
+- **同步调用 async**：`NativeBackend.run` 增加事件循环守卫（已在 loop 中时改用线程跑），
+  避免 `asyncio.run()` 在运行中的 loop 里抛 RuntimeError（实测 async 上下文调用正确返回）
+
+### P2-10 测试耗时：根因定位在**我自己的测试**上
+`--durations=25` 实测最慢 5 个里 3 个是上一轮写的：用 120,000 字符假文本跑正则（共 ~121s）。
+改用 `min_tokens=1` 小阈值后 **121s → 1.33s**；套件总时长 **840s → 665s**。
+
+### 其他
+- **P2-9** desktop `playwright` 从 `dependencies` 移到 `devDependencies`（只被 `*.mjs` E2E 脚本使用）
+- **P3-5** 清理 4 个历史 coverage 产物（16MB，已 gitignore）
+- **P3-4 核查为误报**：`x/`、`test-run/` 已在 `.gitignore:98` 覆盖
+- **ADR 索引补齐**：`docs/adr/README.md` 此前只覆盖 0001~0006，新增 0009~0017 索引表（9 条）
+- **修 1 个 flaky 测试**：`test_load_returns_none_when_file_changed` 依赖 mtime 精度，
+  改为显式 `os.utime(+10s)`；连跑 3 次稳定 76 passed
+
+### 覆盖率门禁实测复核
+`pytest --cov=src` → **62.49% ≥ 60%**，`Required test coverage of 60.0% reached`——
+P1-5 收紧后的门禁真实生效且当前通过（旧门禁 47 下掉 15 个点也全绿）。
+
+---
+
 ## [v0.76.1] (2026-10-29) — 门禁自纠：v0.76.0 引入 1 处静默吞异常已修
 
 **诚实记录**：v0.76.0 提交信息写"静默异常门禁 162/162 通过"，但提交后复跑发现 **163 > 162 FAILED**

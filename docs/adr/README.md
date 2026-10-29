@@ -5,6 +5,28 @@
 
 ---
 
+## 📑 ADR 索引（先看这里）
+
+**汇总在本文件内**：0001~0006（见下）
+
+**独立文件**（每条一个文件，含完整背景/代价/边界）：
+
+| 编号 | 决策 | 文件 |
+|:---|:---|:---|
+| 0009 | 采用 OpenAI Codex 作为外部 agent 内核后端 | [0009-adopt-codex-as-backend.md](0009-adopt-codex-as-backend.md) |
+| 0010 | 多引擎整合：统一驱动 + MCP 领域工具反向供给 | [0010-multi-engine-integration.md](0010-multi-engine-integration.md) |
+| 0011 | 领域能力内置优先 + 索引自动预热 + 大仓库保护 | [0011-native-domain-tools-and-warmup.md](0011-native-domain-tools-and-warmup.md) |
+| 0012 | 定向汲优补缺：LSP / 检查点压缩 / 笔记本（含两级删除） | [0012-targeted-absorb-lsp-compaction-notebook.md](0012-targeted-absorb-lsp-compaction-notebook.md) |
+| 0013 | 权限决策引擎：会话授权 / 拒绝理由回灌 / 写入边界 | [0013-permission-engine.md](0013-permission-engine.md) |
+| 0014 | 命令执行策略（execpolicy）+ 会话分叉元数据 | [0014-exec-policy-and-session-fork.md](0014-exec-policy-and-session-fork.md) |
+| 0015 | 会话存储收敛：两套并存 + 无人写盘的连环缺陷 | [0015-session-storage-consolidation.md](0015-session-storage-consolidation.md) |
+| 0016 | 挂机自主决策引擎 + 权限全中文表达 | [0016-autonomy-and-chinese-permissions.md](0016-autonomy-and-chinese-permissions.md) |
+| 0017 | 多引擎协同（plan→execute→review→返工）+ 两处误判更正 | [0017-multi-engine-collaboration.md](0017-multi-engine-collaboration.md) |
+
+> 判断某个改动"为什么要这么做"时，先查 ADR 再查 commit；两者冲突以 ADR 为准（commit 可能只写了当时的一半理由）。
+
+---
+
 ## ADR-0001：用「可达性 + 导入扫描」双闸门判断模块是否可用
 
 **背景**
