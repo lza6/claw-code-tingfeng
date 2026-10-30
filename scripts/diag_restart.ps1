@@ -3,7 +3,9 @@
 $ErrorActionPreference = 'Continue'
 function Say($m) { Write-Output ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $m) }
 $repo = Split-Path -Parent $PSScriptRoot
-$setup = Join-Path $repo 'desktop\dist\Clawd Desktop Setup 0.86.0.exe'
+# 取 dist 下最新的 Setup 包（不写死版本号）
+$setup = Get-ChildItem (Join-Path $repo 'desktop\dist') -Filter 'Clawd Desktop Setup *.exe' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\Clawd Desktop'
 $exe = Join-Path $installDir 'Clawd Desktop.exe'
 $userData = Join-Path $env:APPDATA 'clawd-desktop'

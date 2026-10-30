@@ -1,5 +1,19 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.87.0 真多模态视觉输入
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 新增 | src/llm/vision.py | `supports_vision()`（模型白名单 + CLAWD_VISION 双向强制）+ `build_image_blocks()`（路径→image_url 内容块，≤2MB/≤4 张） |
+| 修改 | src/llm/config.py | `LLMMessage.content: str \| list[dict]`（无图仍是 str） |
+| 修改 | src/agent/engine_loop.py | `AgentLoopConfig.images` + `build_initial_messages` 拼内容块 |
+| 修改 | src/agent/engine.py | `run/run_stream(images=)` 透传 |
+| 修改 | src/server/handlers.py | `/run` 按 `supports_vision(模型)` 分流（视觉→内容块；否则路径告知）；`models_list` 带 `vision` 字段 |
+| 修改 | src/server/websocket_server.py | `/api/models` 带 `vision` 字段 |
+| 修改 | desktop/web/app.js + index.html | 模型列表标「👁 可看图」；不支持视觉时附件 chip 加 `👁✕` 虚线角标 |
+| 新增 | tests/llm/test_vision_blocks.py（13）+ tests/server/test_vision_pass_through.py（6） | 能力判定/块构造/回退/透传 |
+| 修改 | desktop/ui_console_e2e.mjs | 27 → 28 项（模型视觉标注与后端一致） |
+| 修改 | scripts/diag_restart*.ps1、%TEMP%/clawd-install-e2e.ps1 | 安装包改为动态查找最新 Setup（不再写死版本号） |
+
 ## 2026-10-30 v0.86.0 桌面端收口（会话分组 / toast / 两个启动级 bug）
 | 类型 | 路径 | 说明 |
 |------|------|------|
