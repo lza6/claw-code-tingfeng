@@ -1,8 +1,11 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.88.4 core 边界清零 + 视觉链路实测**（2026-10-30）：core 5 处越界全部处理（3 处是死引用）+ 修 3 个调用即崩的缺陷 + 带图失败自动降级；覆盖率 **65.54%**（门槛 60）· 全量 5340+ passed · core_surface 存量 **0**
+> 状态: **v0.88.5 计划台账对账完毕**（2026-10-30）：P1 6/6、P2 9/10（仅签名需 CA）已闭环；M5 团队状态接线（270 行首次真跑）、定价接 litellm、requirements.lock；全量 5357 passed/0 failed · 收集 5384 · 静默 156 · 可达 500 · core_surface 存量 0
 
 ## 下一轮待办（已闭环 / 待外部条件）
+> 《下一步改进指南》对账结果（v0.88.5）：**P1 6/6 · P2 9/10 · 批次 M1~M5/G1~G4 已接线**，
+> 只剩「正式代码签名（需 CA）」与「110 个不可达模块（需单轮 + reachability 复核）」。
+
 - ~~真多模态视觉输入~~ **v0.87.0 落地 + v0.88.4 实测定性**（26 条测试）：
   强试（`CLAWD_VISION=1`）打出两个真 bug 并修好 —— ①`message_truncator.count_tokens()` 把
   内容块列表喂 tiktoken 直接 TypeError（整轮失败）；②该端点拒绝 `image_url` 的方式是**断连**
@@ -10,15 +13,15 @@
   实测结论：当前 `step-5-preview` 端点**不支持图像输入**（纯文本 PONG／带图断连，有直连对比脚本
   `scripts/probe_vision_endpoint.py`）。换一个真支持视觉的模型即可真看图，代码路径已通
 - ~~结构化日志目录走 `data_path`~~ **v0.88.3 已修**（`resolve_log_dir()` + 6 条测试）
-- **core 边界 5 处存量越界**（`scripts/core_surface_allow.json`）需要单独一轮设计，不顺手改：
-  1. `core/patch/atomic_patcher.py` → `tools_runtime.code_edit.fuzzy_matcher`（纯函数，可下沉到 core/patch）
-  2. `core/security/allowlist.py` → `tools_runtime.bash_constants`（常量表，可下沉到 core）
-  3. `core/args_parser.py` → `tools_runtime.code_edit`（构造补丁引擎参数）
-  4. `core/config/generator.py` → `tools_runtime.tool_manager`（枚举工具签名，需 core 侧协议）
-  5. `core/persistence/run_state.py` → `workflow.models`（需要 TaskProtocol）
-  1/2 风险低可做；3/4/5 要先定协议，否则只是把环搬家
+- ~~core 边界 5 处存量越界~~ **v0.88.4 已清零**（`core_surface_allow.json` 空；3 处是死引用被删，
+  2 处下沉到 core；顺带修 3 个"调用即崩"缺陷）
+- ~~M5 团队状态持久化未接线~~ **v0.88.5 已接线**（`TeamExecStage.run()` 三处落盘 + 4 条测试；
+  状态目录改走 `data_path('state')`；接线时抓到 2 个位置参数错位陷阱）
+- ~~P2-2 定价表过期 172 天~~ **v0.88.5 已修**（`resolve_pricing()`：自有表 → litellm 内置 → 默认价）
+- ~~P2-6 Python 无锁文件~~ **v0.88.5 已加** `requirements.lock`（149 精确版本）
+- ~~P2-5 更新源占位地址~~ **已确认保持未配置**（UI 明确提示"更新源未配置"，不静默失败）
 - **110 个不可达模块**（33 个完全不可达）：按"发现死码只提示不删"的约定登记，
-  删除需单独一轮 + reachability 复核（当前门禁 ≥443，实测 498）
+  删除需单独一轮 + reachability 复核（当前门禁 ≥443，实测 500）
 - **正式代码签名**：需 CA 证书（现在是自签名，`Status=UnknownError` 属预期）
 
 ## 桌面端进度（DSH 模式 + Electron）
