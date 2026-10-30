@@ -463,7 +463,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 |:---|:---|:---|
 | 测试用例 | **5440 passed / 7 skipped / 8 xfailed / 0 failed**（2026-10-31 v0.89.0 实测，375.04s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
 | 快速层（不含 slow） | **5440 passed / 0 failed / 6 分 15 秒**（同一命令，v0.89.0 实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5464 / 0 errors**（2026-10-31 v0.89.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 用例收集 | **5467 / 0 errors**（2026-10-31 v0.89.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **66.27%**（2026-10-31 v0.89.0 实测，38699/58394 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
