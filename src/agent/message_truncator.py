@@ -41,29 +41,6 @@ class MessageTruncator:
     #: 一张图片按固定 token 估算（各家算法不同，取常见值 85，够用于"要不要截断"的判断）
     IMAGE_TOKEN_ESTIMATE = 85
 
-    def _content_text(self, content: object) -> str:
-        """把消息 content 归一化成字符串
-
-        多模态消息的 content 是内容块列表（`[{"type":"text",...},
-        {"type":"image_url",...}]`），直接喂 tiktoken 会抛
-        `TypeError: a bytes-like object is required, not 'list'`（真实踩到：
-        CLAWD_VISION=1 传图时整轮任务直接失败）。这里只取文本部分，图片单独估算。
-        """
-        if isinstance(content, str):
-            return content
-        if isinstance(content, (list, tuple)):
-            parts: list[str] = []
-            for block in content:
-                if isinstance(block, str):
-                    parts.append(block)
-                elif isinstance(block, dict):
-                    if block.get("type") == "text":
-                        parts.append(str(block.get("text") or ""))
-                    elif block.get("type") == "image_url":
-                        parts.append(" " * (self.IMAGE_TOKEN_ESTIMATE * 4))  # 近似占位
-            return chr(10).join(parts)
-        return str(content or "")
-
     def count_tokens(self, messages: list[LLMMessage]) -> int:
         """计算消息列表的 token 数量
 
@@ -75,10 +52,35 @@ class MessageTruncator:
         如果 tiktoken 可用，使用精确 token 计数；
         否则回退到字符计数（1 token ≈ 4 字符）。
         """
+        total = 0
+        for m in messages:
+            content = getattr(m, "content", "")
+            total += self._count_content(content)
+        return total
+
+    def _count_content(self, content: object) -> int:
+        """按 content 形态精确计数：图片块直接加常量，文本块单独 encode
+
+        以前是把图片块换成 `" " * (85 * 4)` 再整体 encode —— 既浪费内存又只是个近似；
+        现在图片直接按 `IMAGE_TOKEN_ESTIMATE` 累加，文本才走 tiktoken。
+        """
+        if isinstance(content, (list, tuple)):
+            total = 0
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "image_url":
+                        total += self.IMAGE_TOKEN_ESTIMATE
+                    elif block.get("type") == "text":
+                        total += self._count_text(str(block.get("text") or ""))
+                elif isinstance(block, str):
+                    total += self._count_text(block)
+            return total
+        return self._count_text(str(content or ""))
+
+    def _count_text(self, text: str) -> int:
         if self._encoding:
-            return sum(len(self._encoding.encode(self._content_text(m.content))) for m in messages)
-        # 回退：字符计数（粗略估算 1 token ≈ 4 字符）
-        return sum(len(self._content_text(m.content)) for m in messages) // 4
+            return len(self._encoding.encode(text))
+        return len(text) // 4  # 回退：1 token ≈ 4 字符
 
     async def truncate_messages(self, messages: list[LLMMessage]) -> list[LLMMessage]:
         """截断消息列表，防止上下文过长

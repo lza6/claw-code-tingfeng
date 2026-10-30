@@ -349,6 +349,16 @@ class MessageRouter:
         # 续聊：客户端带上会话 id，则本轮结果追加到该会话（而不是每轮新开一条）
         sid_hint = str(message.get('session_id') or '').strip()
         if sid_hint:
+            # WS 传进来的 id 与 HTTP query 一样不可信：复用同一个白名单，
+            # 否则 `../x` 之类会被写进 metadata / 影响落盘路径（R9）
+            try:
+                from ..core.session_bridge import _safe_session_id
+
+                sid_hint = _safe_session_id(sid_hint)
+            except (ValueError, ImportError) as exc:
+                self.logger.warning(f'忽略非法的 session_id（本轮新开会话）: {exc}')
+                sid_hint = ''
+        if sid_hint:
             try:
                 engine.session_id_hint = sid_hint
             except AttributeError as exc:
@@ -443,6 +453,14 @@ class MessageRouter:
                     cfg_obj = getattr(getattr(engine, 'llm_provider', None), 'config', None)
                     model_name = str(getattr(cfg_obj, 'model', '') or '')
                 use_vision = supports_vision(model_name)
+                if use_vision:
+                    # 只有**真能变成图像块**才算走视觉：全部超限 / 读不到时
+                    # 必须如实回退成"路径告知"，否则模型会以为图在上下文里（R5）
+                    from ..llm.vision import build_image_blocks as _build_blocks
+
+                    if not _build_blocks(attachments):
+                        use_vision = False
+                        self.logger.warning("附件都无法作为图像输入（过大/不可读），回退路径告知")
                 if use_vision:
                     goal = goal + (
                         "\n\n[随消息附图 " + str(len(attachments))

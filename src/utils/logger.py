@@ -31,6 +31,10 @@ def resolve_log_dir(workdir: str | Path | None = None) -> Path:
     """
     from ..core.data_dir import data_path
 
+    # `WORK_DIR` 是既有约定（CLI/脚本会设它）；不显式传 workdir 时用它，
+    # 否则 data_dir() 只会看 CLAWD_DATA_DIR，WORK_DIR 形同虚设（R7）
+    if workdir is None:
+        workdir = os.environ.get('WORK_DIR') or None
     try:
         return data_path('logs', workdir=workdir)
     except (OSError, ValueError) as exc:  # pragma: no cover - 极端路径异常

@@ -654,10 +654,14 @@ def create_team_exec_stage(
                     intent=self.agent_type,
                 )
                 result = await engine.run(ctx.task)
-            except Exception as exc:
-                self._logger.error("team-exec 阶段失败: %s: %s", type(exc).__name__, exc)
+            except BaseException as exc:  # noqa: BLE001 — 含 CancelledError/KeyboardInterrupt
+                # 异常/取消也要收尾，否则 team-state.json 永远停在 "executing"、
+                # 成员一直是 busy（R8）。收尾后再按语义决定是否继续抛。
                 _finish_team_state(self, ctx, member_ids, ok=False,
-                                   note=f"team-exec 失败: {type(exc).__name__}: {exc}")
+                                   note=f"team-exec 异常: {type(exc).__name__}: {exc}")
+                if not isinstance(exc, Exception):
+                    raise  # CancelledError / KeyboardInterrupt 不能吞掉
+                self._logger.error("team-exec 阶段失败: %s: %s", type(exc).__name__, exc)
                 return StageResult(
                     status=StageStatus.FAILED,
                     artifacts={"execution_implemented": True, "execution_completed": False},

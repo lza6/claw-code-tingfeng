@@ -7,6 +7,35 @@
 
 ---
 
+## [v0.88.10] (2026-10-30) — 采纳 Critic 的 P2 建议（5 项）+ 修 E2E 自身脆弱断言
+
+独立 Critic 除 P0/P1 外还列了 R4~R9。本轮落地 5 项，1 项如实不做（理由见下）。
+
+| 项 | 内容 | 验证 |
+|---|---|---|
+| **R9** | WS 传入的 `session_id` 同 HTTP query 一样不可信 → 复用 `_safe_session_id()` 白名单，非法则回落新开会话 | `tests/server` 全绿 |
+| **R4** | 图片 token 改**常量累加**（`IMAGE_TOKEN_ESTIMATE`），不再用 `" " * (85*4)` 占位近似；顺手删掉被取代的 `_content_text` 死代码 | `tests/agent+server+llm` 1169 passed |
+| **R5** | 视觉分支先用 `build_image_blocks()` 拿**真实块数**：全部超限/读不到时回退"路径告知"（否则模型以为图已在上下文里） | 同上 |
+| **R7** | `resolve_log_dir()` 支持既有 `WORK_DIR` 约定（此前只认 `CLAWD_DATA_DIR`，`WORK_DIR` 形同虚设） | `test_log_dir` 6 passed |
+| **R8** | team-exec 异常/取消路径统一收尾（`except BaseException` → 先 `_finish_team_state` 再 `raise`），避免 `team-state.json` 永远停在 `executing`、成员一直 busy | `tests/workflow` 488 passed |
+| **R6（部分）** | 新增 **loop 级**降级测试：provider 首次抛连接错误 → 第二次自动改发纯文本（证明降级在整条链路生效，不只是 helper） | `test_vision_degrade_loop.py` 2 passed |
+
+**R6 的"降级不占迭代"没做**（如实记录）：循环是 `for iteration in range(max_iterations)`，
+要改成"原地重试"必须把整段 LLM 调用抽成函数再包重试 —— 属核心循环重构，风险大于收益
+（当前降级只在"最后一轮恰好失败"时无效）。留作下轮 P3。
+
+**顺带修了 E2E 自身的两处脆弱断言**（0.88.9 装机时暴露）：
+- 「工具调用默认折叠成一组」原断言 `groupsAfter > before`、"展开后逐条可见"原断言 `items === 3`
+  —— 但真实 run 已经产生过工具组，新事件会**复用同一组**，于是 `before=1`、`items=7` 让断言假红。
+  改为 `groupsAfter >= 1 && collapsedByDefault` 与 `items >= 3 && openAfterClick`。
+
+**验证**
+- 全量非 slow：见下（本轮复跑）
+- 0.88.9 装机终验：STEP2b/2c exit 0、**「未带 token 的写操作被拒绝（403）」PASS（P0 修复装机态确认）**、
+  STEP2e/2f PASS、STEP3 残留 0、STEP5 注册表残留 0
+
+---
+
 ## [v0.88.9] (2026-10-30) — 独立审查抓到的 P0/P1 修复（路径穿越删配置 / 任务丢失 / 跨 provider 选型）
 
 独立 Critic（只读、不继承实现方推理）审 v0.86→v0.88.5，实跑后给出 **CONDITIONAL PASS**，
