@@ -7,6 +7,35 @@
 
 ---
 
+## [v0.87.0] (2026-10-30) — 真多模态：图片作为图像内容块进消息
+
+此前桌面端粘贴图片只是"落盘 + 把路径写进 goal"，模型没有视觉能力就只能说看不到。
+现在按模型能力分流：
+
+- **视觉模型**（`gpt-4o`/`gpt-4.1`/`claude-3|4`/`gemini`/`qwen-vl`/`glm-4v`/`llava`/`pixtral`/
+  `step-1v` 等，见 `src/llm/vision.py` 的 `VISION_MODEL_HINTS`）：
+  图片转成 `[{"type":"text",…},{"type":"image_url","image_url":{"url":"data:image/png;base64,…"}}]`
+  内容块随消息发出，模型直接看图回答；
+- **其他模型**：保持原行为 —— 路径写进 goal + "看不到就直说，不要猜内容"；
+- 开关：`CLAWD_VISION=1` / `0` 可强制开/关（模型名认不出来时**保守回退**，不硬塞内容块换 400）。
+
+实现要点：
+- `LLMMessage.content` 放宽为 `str | list[dict]`（没图时仍是纯字符串，旧行为不变）；
+- `AgentLoopConfig.images` + `build_initial_messages()` 负责拼内容块；
+  `engine.run/run_stream(images=…)` 透传；`/run` 按 `supports_vision(model)` 决定走哪条路；
+- 单图 ≤ 2MB、单条消息 ≤ 4 张（base64 会膨胀 ~33%，超限直接跳过并记 debug 日志）；
+- 读不到/超限的图**跳过而不是让整条消息失败**；全读不到时退回纯文本。
+
+验证：
+- `tests/llm/test_vision_blocks.py`（13 条：模型判定/环境变量强制/块构造/超大跳过/缺文件跳过/
+  有图用块、无图用字符串、全读不到回退）；
+- `tests/server/test_vision_pass_through.py`（6 条：视觉模型收到 images 且 goal 不含本机路径、
+  非视觉模型 `images=None` 且 goal 有路径与"不要猜"、`CLAWD_VISION` 双向强制、非流式路径同样带图）；
+- 真实视觉对话**待验证**：当前配置的 `step-5-preview` 不在白名单（无视觉证据），
+  需要一个支持视觉的模型才能端到端跑通；单测已覆盖块构造与回退，真实调用留给有模型的环境。
+
+---
+
 ## [v0.86.0] (2026-10-30) — 客户端照抄参考项目 + 会话按项目分组 + 右下角 toast + 修 3 个启动级 bug
 
 按"先抄完再改"的要求，把参考客户端最核心的四块照抄过来（结构对齐、实现用我们的后端）：
@@ -117,10 +146,10 @@ dist-info 跟包一起拷；`.pth` 一律不拷（venv 的 editable finder 会�
   "附件落盘数=0"是查错目录；STEP2f 增加了重读端口 + 重试，STEP5 先留证再清理。
 
 **验证（实跑）**
-- 控制台 E2E 从 20 项扩到 **24 项全绿**：添加项目后出现在侧栏并可选中、
+- 控制台 E2E **28 项全绿**：添加项目后出现在侧栏并可选中、
   模型选择器（列表 + 5 档推理强度 + 快速模式切换后按钮标注「… · 快速」）、工具折叠（命令 2 · 读取 1）、
   上下文面板（20.1k/200k 10%）、用量页、provider 掩码。
-- 再扩 3 项（会话分组数=唯一项目数、`workdir` 字段、toast 出现在右下角）→ **27 项**。
+- 再扩 3 项（会话分组数=唯一项目数、`workdir` 字段、toast 出现在右下角）→ 27 项；v0.87.0 又加 1 项（模型列表视觉能力标注与后端一致）→ **28 项**。
 - 新增 `tests/core/test_projects_store.py`（7 条：增删/切换/持久化/目录消失标记/active_workdir）。
 - 走查截图：`29-add-project.png`、`30-model-picker.png`、`26-tool-fold.png`、`28-context-panel.png`、
   `31-session-groups.png`、`32-toast.png`。

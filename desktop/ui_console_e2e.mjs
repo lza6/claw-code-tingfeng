@@ -273,6 +273,22 @@ const fastState = await page.evaluate(() => ({
 check('快速模式可切换且按钮标注变化',
   fastState.pressed === 'true' && fastState.label.includes('快速'), JSON.stringify(fastState));
 
+// 模型列表要标出"能不能看图"，且 UI 标记必须与后端判定一致
+await page.click('#btnModel');
+await page.waitForTimeout(600);
+const visionUi = await page.evaluate(async () => {
+  const r = await fetch('/api/models');
+  const d = await r.json();
+  const apiVision = (d.models || []).filter((m) => m.vision).length;
+  const rows = Array.from(document.querySelectorAll('#modelList .model-item'));
+  const uiVision = rows.filter((el) => (el.querySelector('.m-sub')?.textContent || '').includes('👁')).length;
+  return { apiVision, uiVision, total: rows.length, hasField: (d.models || []).every((m) => 'vision' in m) };
+});
+check('模型列表标注视觉能力（UI 与后端一致）',
+  visionUi.hasField && visionUi.uiVision === visionUi.apiVision && visionUi.total >= 1,
+  JSON.stringify(visionUi));
+await page.evaluate(() => document.querySelector('#modelClose')?.click());
+
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
 await page.waitForTimeout(1200);

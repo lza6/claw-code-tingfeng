@@ -367,6 +367,7 @@ class MessageRouter:
         # 我们把它落盘到 .clawd/uploads/ 并把路径写进 goal —— **不假装视觉能力**：
         # 模型能用 FileReadTool 读到文件；读不出图就如实说看不到，而不是编造图片内容。
         attachments: list[str] = []
+        use_vision = False  # 无附件 / 模型不支持视觉时保持 False（走纯文本 + 路径告知）
         raw_images = message.get('images')
         if isinstance(raw_images, list) and raw_images:
             import base64
@@ -409,12 +410,30 @@ class MessageRouter:
                 except Exception as exc:  # noqa: BLE001 — 坏图片不能挡住消息
                     self.logger.warning(f"附件解析失败（已忽略）: {exc}")
             if attachments:
-                note = (
-                    "\n\n[随消息附图 " + str(len(attachments)) + " 张，已保存到本机: "
-                    + ", ".join(attachments)
-                    + "。若你的模型不支持视觉输入，请直接说明看不到图片，不要猜内容。]"
+                # 模型能看图 → 图片以 image_url 内容块随消息发出（真多模态）；
+                # 否则回退成"路径告知 + 如实说看不到"，绝不让模型猜图里有什么。
+                from ..llm.vision import supports_vision
+
+                model_name = str(getattr(llm_config_from_msg, 'model', '') or '')
+                if not model_name:
+                    cfg_obj = getattr(getattr(engine, 'llm_provider', None), 'config', None)
+                    model_name = str(getattr(cfg_obj, 'model', '') or '')
+                use_vision = supports_vision(model_name)
+                if use_vision:
+                    goal = goal + (
+                        "\n\n[随消息附图 " + str(len(attachments))
+                        + " 张，已作为图像内容一并提供，请直接看图回答。]"
+                    )
+                else:
+                    goal = goal + (
+                        "\n\n[随消息附图 " + str(len(attachments)) + " 张，已保存到本机: "
+                        + ", ".join(attachments)
+                        + "。若你的模型不支持视觉输入，请直接说明看不到图片，不要猜内容。]"
+                    )
+                self.logger.info(
+                    f"附件 {len(attachments)} 张，模型={model_name or '(未知)'} "
+                    f"视觉={'开' if use_vision else '关'}"
                 )
-                goal = goal + note
 
         # 续聊：客户端可带上一段历史（点开旧会话后继续对话）
         prior_messages: list[dict[str, Any]] = []
@@ -465,6 +484,7 @@ class MessageRouter:
                     goal=goal,
                     on_chunk=_on_chunk,
                     prior_messages=prior_messages,
+                    images=attachments if use_vision else None,
                 )
                 _flush()
                 # 事件总线 → WS 的投递是排队进行的：让出一次循环，
@@ -476,7 +496,10 @@ class MessageRouter:
                     source='websocket_server',
                 ))
             else:
-                session = await engine.run(goal=goal, prior_messages=prior_messages)
+                session = await engine.run(
+                    goal=goal, prior_messages=prior_messages,
+                    images=attachments if use_vision else None,
+                )
 
             elapsed = time.time() - start_time
 
@@ -652,6 +675,14 @@ class MessageRouter:
             if item['id'] in seen:
                 continue
             seen.add(item['id'])
+            # 标出"这个模型能不能看图"——UI 据此提示，用户才知道为什么模型看不到图
+            try:
+                from ..llm.vision import supports_vision
+
+                item['vision'] = supports_vision(item.get('id', ''))
+            except Exception as exc:  # noqa: BLE001 — 能力标注失败不影响模型列表
+                self.logger.debug(f'模型视觉标注失败（{item.get("id")}）: {exc}')
+                item['vision'] = False
             unique.append(item)
         return build_response(message.get('id'), {
             'models': unique,

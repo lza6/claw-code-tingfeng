@@ -564,6 +564,7 @@ class AgentEngine:
         goal: str,
         on_step: Callable | None = None,
         prior_messages: list[Any] | None = None,
+        images: list[str] | None = None,
     ) -> AgentSession:
         """执行一次 agent 任务
 
@@ -571,13 +572,15 @@ class AgentEngine:
             goal: 本次目标
             on_step: 步骤回调
             prior_messages: 续跑时注入的历史消息（LLMMessage 或 {role, content} 字典）
+            images: 随消息发送的本地图片绝对路径（模型支持视觉时变成图像内容块）
         """
         # 装配扩展工具（幂等，失败降级）
         await self._load_extended_tools()
         self._execute_hook_point("session_start", {"goal": goal, "stream": False})
         try:
             result = await self._run_agent_core(
-                goal=goal, is_stream=False, on_step=on_step, prior_messages=prior_messages
+                goal=goal, is_stream=False, on_step=on_step, prior_messages=prior_messages,
+                images=images,
             )
         except Exception as e:
             self._execute_hook_point(
@@ -594,12 +597,13 @@ class AgentEngine:
         on_chunk: Callable | None = None,
         on_step: Callable | None = None,
         prior_messages: list[Any] | None = None,
+        images: list[str] | None = None,
     ) -> AgentSession:
         self._execute_hook_point("session_start", {"goal": goal, "stream": True})
         try:
             result = await self._run_agent_core(
                 goal=goal, is_stream=True, on_chunk=on_chunk, on_step=on_step,
-                prior_messages=prior_messages,
+                prior_messages=prior_messages, images=images,
             )
         except Exception as e:
             self._execute_hook_point(

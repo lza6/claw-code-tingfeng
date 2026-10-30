@@ -39,7 +39,7 @@ class _FakeEngine:
     def apply_persona(self, persona: Any) -> None:
         self.persona = persona
 
-    async def run_stream(self, goal: str, on_chunk=None, prior_messages=None):
+    async def run_stream(self, goal: str, on_chunk=None, prior_messages=None, images=None):
         self.streamed = True
         self.prior_messages = prior_messages
         for chunk in self._chunks:
@@ -47,7 +47,7 @@ class _FakeEngine:
                 on_chunk(chunk)
         return _FakeSession()
 
-    async def run(self, goal: str, prior_messages=None):
+    async def run(self, goal: str, prior_messages=None, images=None):
         self.prior_messages = prior_messages
         return _FakeSession()
 

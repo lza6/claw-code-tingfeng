@@ -791,6 +791,14 @@
       del.title = '移除';
       del.onclick = () => { attachments.splice(idx, 1); renderAttachments(); };
       chip.appendChild(img); chip.appendChild(del);
+      // 当前模型不支持看图时说清楚，别让用户以为模型"装看不见"
+      const cur = (modelsCache || []).find((m) => m.id === selectedModel);
+      if (cur && cur.vision === false) {
+        chip.title = '当前模型不支持图像输入：图片会保存到本机，模型只能看到路径';
+        chip.classList.add('no-vision');
+      } else if (cur && cur.vision) {
+        chip.title = '当前模型支持看图：图片会作为图像内容一起发送';
+      }
       bar.appendChild(chip);
     });
   }
@@ -1233,7 +1241,10 @@
       idEl.textContent = model.id;
       const subEl = document.createElement('span');
       subEl.className = 'm-sub';
-      subEl.textContent = (model.label || '') + (model.source === 'global' ? ' · 全局默认' : '');
+      subEl.textContent = (model.label || '')
+        + (model.source === 'global' ? ' · 全局默认' : '')
+        + (model.vision ? ' · 👁 可看图' : '');
+      if (model.vision) subEl.title = '这个模型支持图像输入：粘贴的图片会以图像内容块发送';
       row.appendChild(idEl); row.appendChild(subEl);
       row.onclick = () => {
         selectedModel = model.id;

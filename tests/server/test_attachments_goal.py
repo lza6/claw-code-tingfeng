@@ -39,13 +39,13 @@ class _Engine:
     def apply_persona(self, persona: Any) -> None:  # noqa: D401 — 测试桩
         self._captured["persona"] = persona
 
-    async def run_stream(self, goal: str, on_chunk=None, prior_messages=None):
+    async def run_stream(self, goal: str, on_chunk=None, prior_messages=None, images=None):
         self._captured["goal"] = goal
         if on_chunk:
             on_chunk("好")
         return _Session()
 
-    async def run(self, goal: str, prior_messages=None):
+    async def run(self, goal: str, prior_messages=None, images=None):
         self._captured["goal"] = goal
         return _Session()
 

@@ -1,6 +1,6 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.86.0 桌面客户端收口**（2026-10-30）：数据目录分离 + 会话按项目分组 + 更新提示走右下角 toast + 修三个启动级 bug（TDZ / ipcMain 解构 / 打包缺 annotated_doc）；收集 **5325/0 errors** · 全量非 slow **5295 passed/0 failed**（6m33s）· 静默吞异常 **158** · 可达 **497** · `verify_audit_p1` **28/28** · `check_doc_drift` 全一致 · 控制台 UI E2E **27 项** · Electron 静态检查 **7 条**
+> 状态: **v0.86.0 桌面客户端收口**（2026-10-30）：数据目录分离 + 会话按项目分组 + 更新提示走右下角 toast + 修三个启动级 bug（TDZ / ipcMain 解构 / 打包缺 annotated_doc）；收集 **5344/0 errors** · 全量非 slow **5314 passed/0 failed**（5m52s）· 静默吞异常 **158** · 可达 **498** · `verify_audit_p1` **28/28** · `check_doc_drift` 全一致 · 控制台 UI E2E **27 项** · Electron 静态检查 **7 条**
 
 ## 下一轮待办（用户已拍板）
 - **真多模态视觉输入**（用户批准做）：改造点已勘察 ——

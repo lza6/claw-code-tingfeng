@@ -469,6 +469,7 @@ class ClawdWebSocketServer:
         if path == '/api/models':
             try:
                 from ..core import providers_store
+                from ..llm.vision import supports_vision
 
                 models: list[dict[str, Any]] = []
                 seen: set[str] = set()
@@ -477,7 +478,8 @@ class ClawdWebSocketServer:
                         seen.add(item['model'])
                         models.append({'id': item['model'],
                                        'label': item['name'] + ' · ' + item['model'],
-                                       'source': 'provider', 'provider': item['id']})
+                                       'source': 'provider', 'provider': item['id'],
+                                       'vision': supports_vision(item['model'])})
                 body = json.dumps({'models': models, 'count': len(models)}, ensure_ascii=False).encode('utf-8')
                 status = 200
             except Exception as exc:  # noqa: BLE001

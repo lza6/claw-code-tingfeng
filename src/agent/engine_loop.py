@@ -22,6 +22,7 @@ from typing import Any
 
 from ..core.exceptions import LLMProviderError, ToolExecutionError
 from ..llm import LLMMessage, LLMResponse
+from ..llm.vision import build_image_blocks
 from ..utils import debug, error, info, warn
 
 
@@ -97,6 +98,9 @@ class AgentLoopConfig:
     patcher: Any | None = None
 
 
+    #: 随本轮目标一起发送的本地图片（绝对路径）；空 = 纯文本
+    #: 是否真的变成图像内容块由模型能力决定（src.llm.vision.supports_vision）
+    images: list[str] | None = None
     #: 续跑时注入的历史消息（置于 system 之后、本次新目标之前）
     prior_messages: list[LLMMessage] | None = None
     #: 挂机自主决策引擎（None = 有人盯，行为不变）
@@ -117,7 +121,13 @@ def build_initial_messages(config: AgentLoopConfig, user_content: str) -> list[L
         content = getattr(prior, 'content', '')
         if content:
             messages.append(LLMMessage(role=role, content=content))
-    messages.append(LLMMessage(role='user', content=user_content))
+    # 带图：content 变成 [text, image_url, ...] 内容块；图全读不到时退回纯文本
+    blocks = build_image_blocks(getattr(config, 'images', None))
+    if blocks:
+        content: str | list[dict] = [{'type': 'text', 'text': user_content}, *blocks]
+    else:
+        content = user_content
+    messages.append(LLMMessage(role='user', content=content))
     return messages
 
 

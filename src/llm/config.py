@@ -29,7 +29,9 @@ class LLMMessage:
     不使用原生调用时这些字段均为 None，行为与旧版一致。
     """
     role: str  # system | user | assistant | tool
-    content: str
+    #: 纯文本用 str；带图消息用内容块列表（OpenAI 兼容的
+    #: `[{"type": "text", ...}, {"type": "image_url", ...}]`），见 src/llm/vision.py
+    content: str | list[dict]
     tool_calls: list[dict] | None = None
     tool_call_id: str | None = None
     name: str | None = None
