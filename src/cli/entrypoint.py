@@ -409,12 +409,27 @@ def onboard(
 
 
 @app.command(name="doctor")
-def doctor():
+def doctor(
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+):
     """
     运行环境诊断 (检查 API、依赖和配置)
+
+    `--json` 输出 `{ok, code, ready, checks, count, failed}`；两种模式下**退出码一致**
+    （无 fail 项 → 0，有 fail 项 → 1），这样 CI 能直接用。
     """
-    from ..cli.repl_commands import _handle_doctor
+    from ..cli.repl_commands import _handle_doctor, collect_doctor_report
+
+    report = collect_doctor_report()
+    if json_out:
+        from .command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(ok=bool(report["ready"]), data=report),
+            as_json=True,
+        ))
     _handle_doctor()
+    raise typer.Exit(code=0 if report["ready"] else 1)
 
 @app.command(name="reason")
 def reason(

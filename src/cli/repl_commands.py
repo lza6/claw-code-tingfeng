@@ -95,35 +95,42 @@ def _handle_version() -> None:
     _print(f'  Python: {sys.version.split()[0]}')
 
 
-def _handle_doctor() -> None:
-    """运行环境诊断"""
-    _print(f'\n  {bold_cyan("环境诊断")}\n')
+def collect_doctor_report() -> dict[str, Any]:
+    """收集环境诊断（结构化）—— `clawd doctor --json` 与终端渲染共用同一份数据
 
+    以前 `_handle_doctor()` 是"边查边打印"，机器读不到；现在先收集再渲染，
+    单一来源，避免 JSON 与人读两份逻辑漂移。
+
+    **密钥只报"已设置"，不回显任何片段**：JSON 比人读更容易被采集/上报。
+    """
+    checks: list[dict[str, Any]] = []
+
+    def add(section: str, level: str, text: str) -> None:
+        checks.append({'section': section, 'level': level, 'text': text})
+
+    # ---------- 环境诊断 ----------
     py_ver = sys.version_info
     if py_ver >= (3, 10):
-        _print(f'  {status_pass()} Python {py_ver.major}.{py_ver.minor}.{py_ver.micro}')
+        add('env', 'pass', f'Python {py_ver.major}.{py_ver.minor}.{py_ver.micro}')
     else:
-        _print(f'  {status_fail()} Python {py_ver.major}.{py_ver.minor} (需要 >=3.10)')
+        add('env', 'fail', f'Python {py_ver.major}.{py_ver.minor} (需要 >=3.10)')
 
-    deps = ['openai', 'anthropic', 'websockets', 'tiktoken', 'httpx']
-    for dep in deps:
+    for dep in ['openai', 'anthropic', 'websockets', 'tiktoken', 'httpx']:
         try:
             mod = __import__(dep)
             ver = getattr(mod, '__version__', getattr(mod, 'VERSION', '已安装'))
-            _print(f'  {status_pass()} {dep} {dim(str(ver))}')
+            add('env', 'pass', f'{dep} {ver}')
         except ImportError:
-            if dep in ('tiktoken', 'httpx'):
-                _print(f'  {status_warn()} {dep} {dim("未安装（可选）")}')
-            else:
-                _print(f'  {status_fail()} {dep} {dim("未安装")}')
+            optional = dep in ('tiktoken', 'httpx')
+            add('env', 'warn' if optional else 'fail',
+                f'{dep} 未安装' + ('（可选）' if optional else ''))
 
     provider = os.environ.get('LLM_PROVIDER', '')
     if provider:
-        _print(f'  {status_pass()} LLM_PROVIDER={provider}')
+        add('env', 'pass', f'LLM_PROVIDER={provider}')
     else:
-        _print(f'  {status_warn()} LLM_PROVIDER 未设置 {dim("(默认 openai)")}')
+        add('env', 'warn', 'LLM_PROVIDER 未设置 (默认 openai)')
 
-    key_found = False
     key_map = {
         'openai': 'OPENAI_API_KEY',
         'anthropic': 'ANTHROPIC_API_KEY',
@@ -133,56 +140,50 @@ def _handle_doctor() -> None:
         'mistral': 'MISTRAL_API_KEY',
         'deepseek': 'DEEPSEEK_API_KEY',
     }
+    key_found = False
     for _p, k in key_map.items():
-        val = os.environ.get(k, '')
-        if val:
-            masked = val[:8] + '...' + val[-4:] if len(val) > 16 else '***'
-            _print(f'  {status_pass()} {k}={dim(masked)}')
+        if os.environ.get(k, ''):
+            add('env', 'pass', f'{k}=已设置（不回显）')
             key_found = True
-
     if not key_found:
-        _print(f'  {status_fail()} 未发现任何 API Key')
+        add('env', 'fail', '未发现任何 API Key')
 
     workdir = Path(os.environ.get('WORK_DIR', os.getcwd()))
     if workdir.exists():
-        _print(f'  {status_pass()} 工作目录: {dim(str(workdir))}')
+        add('env', 'pass', f'工作目录: {workdir}')
     else:
-        _print(f'  {status_fail()} 工作目录不存在: {workdir}')
+        add('env', 'fail', f'工作目录不存在: {workdir}')
 
-    _print(f'\n  {bold_cyan("框架一致性")}\n')
+    # ---------- 框架一致性 ----------
     try:
-        pyproject = workdir / "pyproject.toml"
-        readme = workdir / "README.md"
+        import re
 
-        py_version = ""
+        pyproject = workdir / 'pyproject.toml'
+        readme = workdir / 'README.md'
+        py_version = ''
         if pyproject.exists():
-            import re
-            content = pyproject.read_text(encoding='utf-8')
-            match = re.search(r'version\s*=\s*"([^"]+)"', content)
+            match = re.search(r'version\s*=\s*"([^"]+)"', pyproject.read_text(encoding='utf-8'))
             if match:
                 py_version = match.group(1)
-
-        rd_version = ""
+        rd_version = ''
         if readme.exists():
-            content = readme.read_text(encoding='utf-8')
-            # README 可能写作 "**当前版本**: vX" 或 "当前版本：vX"；
-            # 两种冒号都要匹配，否则版本一致性检查永远显示"无法提取"。
-            match = re.search(r'当前版本\**\s*[:：]\s*\**\s*v?([\d\.]+)', content)
+            match = re.search(
+                r'当前版本\**\s*[:：]\s*\**\s*v?([\d\.]+)', readme.read_text(encoding='utf-8')
+            )
             if match:
                 rd_version = match.group(1)
-
         if py_version and rd_version:
             if py_version == rd_version:
-                _print(f'  {status_pass()} 版本一致性: {dim(py_version)}')
+                add('consistency', 'pass', f'版本一致性: {py_version}')
             else:
-                _print(f'  {status_fail()} 版本不匹配: pyproject({py_version}) vs README({rd_version})')
+                add('consistency', 'fail',
+                    f'版本不匹配: pyproject({py_version}) vs README({rd_version})')
         else:
-            _print(f'  {status_warn()} 无法提取完整版本信息进行比对')
+            add('consistency', 'warn', '无法提取完整版本信息进行比对')
+    except Exception as e:  # noqa: BLE001 — 诊断本身不能因为检查项异常而中断
+        add('consistency', 'warn', f'框架一致性检查过程中出现异常: {e}')
 
-    except Exception as e:
-        _print(f'  {status_warn()} 框架一致性检查过程中出现异常: {e}')
-
-    _print(f'\n  {bold_cyan("能力状态（默认是否启用）")}\n')
+    # ---------- 能力状态 ----------
     try:
         import importlib.util
 
@@ -192,24 +193,51 @@ def _handle_doctor() -> None:
         rag_on = os.environ.get('CLAWD_ENABLE_RAG', '').lower() in ('1', 'true', 'yes')
         if _has('src.rag.text_indexer'):
             if rag_on:
-                _print(f'  {status_pass()} RAG 索引: 已启用 (CLAWD_ENABLE_RAG=1)')
+                add('capabilities', 'pass', 'RAG 索引: 已启用 (CLAWD_ENABLE_RAG=1)')
             else:
-                _print(f'  {status_warn()} RAG 索引: 默认关闭 {dim("(设置 CLAWD_ENABLE_RAG=1 启用)")}')
+                add('capabilities', 'warn', 'RAG 索引: 默认关闭 (设置 CLAWD_ENABLE_RAG=1 启用)')
         else:
-            _print(f'  {status_fail()} RAG 索引: 模块不可导入')
+            add('capabilities', 'fail', 'RAG 索引: 模块不可导入')
 
         if _has('src.brain.world_model'):
-            _print(f'  {status_pass()} World Model: 可用 {dim("(Agent 启动时后台初始化)")}')
+            add('capabilities', 'pass', 'World Model: 可用 (Agent 启动时后台初始化)')
         else:
-            _print(f'  {status_warn()} World Model: 模块不可导入')
+            add('capabilities', 'warn', 'World Model: 模块不可导入')
 
         if _has('src.server.websocket_server'):
-            _print(f'  {status_pass()} WebSocket 服务端: 模块可用')
+            add('capabilities', 'pass', 'WebSocket 服务端: 模块可用')
         else:
-            _print(f'  {status_warn()} WebSocket 服务端: 模块不可导入')
-    except Exception as e:
-        _print(f'  {status_warn()} 能力状态检查失败: {e}')
+            add('capabilities', 'warn', 'WebSocket 服务端: 模块不可导入')
+    except Exception as e:  # noqa: BLE001
+        add('capabilities', 'warn', f'能力状态检查失败: {e}')
 
+    failed = sum(1 for c in checks if c['level'] == 'fail')
+    return {
+        'ready': failed == 0,
+        'checks': checks,
+        'count': len(checks),
+        'failed': failed,
+    }
+
+
+_SECTION_TITLES = {
+    'env': '环境诊断',
+    'consistency': '框架一致性',
+    'capabilities': '能力状态（默认是否启用）',
+}
+
+
+def _handle_doctor() -> None:
+    """运行环境诊断（终端渲染；`--json` 走 `collect_doctor_report()`，同一份数据）"""
+    report = collect_doctor_report()
+    marks = {'pass': status_pass(), 'warn': status_warn(), 'fail': status_fail()}
+    current = None
+    for check in report['checks']:
+        section = check['section']
+        if section != current:
+            _print(f'\n  {bold_cyan(_SECTION_TITLES.get(section, section))}\n')
+            current = section
+        _print(f"  {marks[check['level']]} {dim(check['text'])}")
     _print()
 
 

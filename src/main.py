@@ -83,7 +83,7 @@ def initialize() -> None:
 
         tracing_providers = setup_tracing()
         if tracing_providers:
-            print(f'[*] Tracing 已启用: {", ".join(tracing_providers)}')
+            print(f'[*] Tracing 已启用: {", ".join(tracing_providers)}', file=sys.stderr)
     except Exception as e:
         print(f'[警告] Tracing 初始化失败: {e}', file=sys.stderr)
 
@@ -98,7 +98,7 @@ def initialize() -> None:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / f"clawd_{int(time.time())}.jsonl"
             setup_logging(level=logging.INFO, log_file=str(log_file))
-            print(f"[*] 结构化日志已启用: {log_file}")
+            print(f"[*] 结构化日志已启用: {log_file}", file=sys.stderr)
         except Exception as e:
             print(f'[警告] 文件日志启用失败: {e}', file=sys.stderr)
 
@@ -337,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from .agent.evolution.optimizer import IterativeOptimizer
         optimizer = IterativeOptimizer(interval=args.interval)
-        print(f"[*] 启动自主迭代优化引擎 (间隔: {args.interval}s)...")
+        print(f"[*] 启动自主迭代优化引擎 (间隔: {args.interval}s)...", file=sys.stderr)
 
         async def _run_forever():
             await optimizer.start()
@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             asyncio.run(_run_forever())
         except KeyboardInterrupt:
-            print("\n[*] 正在停止优化引擎...")
+            print("\n[*] 正在停止优化引擎...", file=sys.stderr)
         return 0
 
     # 按需导入：只有真正要分发命令时才拉起 cli_handlers 的重依赖链。

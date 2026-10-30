@@ -7,6 +7,32 @@
 
 ---
 
+## [v0.88.7] (2026-10-30) — X-7 第二批：doctor --json + stdout 纯净
+
+**1. `clawd doctor --json`（重构为"先收集再渲染"，单一来源）**
+`_handle_doctor()` 以前是"边查边打印"，机器读不到。现在拆成：
+- `collect_doctor_report()` → `{ready, checks[], count, failed}`（每项带 `section`/`level`/`text`）
+- `_handle_doctor()` 只负责渲染；`--json` 用同一份数据 `emit`
+两种模式**退出码一致**（无 fail 项 → 0，有 fail 项 → 1），CI 可直接用。
+
+**2. 顺带修一个会毁掉所有 `--json` 的缺陷：启动提示污染 stdout**
+`clawd doctor --json | jq` 本来必崩 —— 因为 CLI 启动时会往 **stdout** 打
+`[*] 结构化日志已启用: ...`。这类人读提示按 Unix 惯例应走 stderr。
+已把 4 处启动期提示改到 stderr（Tracing 已启用 / 结构化日志已启用 / 启动与停止优化引擎），
+**stdout 现在只留命令结果**。实测 `python -m src doctor --json` 首字节就是 `{`。
+
+**3. 密钥不回显（安全）**
+诊断里 API Key 以前会打印 `前8位...后4位` 掩码；JSON 比人读更容易被采集/上报，
+现在只报 `KEY=已设置（不回显）`，一个字符都不给。
+
+**验证**
+- 新增 `tests/cli/test_doctor_json.py` 4 条：报告结构、JSON 契约（`ok` 与 `code` 一致、
+  退出码与 code 一致）、**明文密钥不泄漏**、人读模式仍可用
+- 真实调用：`python -m src doctor --json` 输出单行合法 JSON（首字节 `{`）
+- `tests/cli` **481 passed**
+
+---
+
 ## [v0.88.6] (2026-10-30) — 死码清理（1804 行）：删"确定死"的，保留参考快照与真实能力
 
 按《死代码判定-2026-10-28》的方法复核当前 33 个"完全不可达"模块（5904 行），删掉确定死的部分。
