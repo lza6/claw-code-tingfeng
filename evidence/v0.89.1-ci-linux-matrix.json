@@ -1,0 +1,186 @@
+{
+  "task_id": "v0.89.1-ci-linux-matrix-zero",
+  "status": "DONE",
+  "timestamp": "2026-10-31T07:20:00+08:00",
+  "scope": "ci.yml Linux 测试矩阵：35 failed + 4 errors → 0（8 个产品缺陷 + 5 个测试缺陷）",
+  "root_causes": [
+    {
+      "id": "C1",
+      "severity": "P1",
+      "file": "src/tools_runtime/file_read_tool.py",
+      "err": "signal only works in main thread of the main interpreter",
+      "why": "BaseTool.execute_async 走 asyncio.to_thread → 子线程调 signal.alarm 必抛；Windows 走 win32 分支所以本机看不见",
+      "fix": "非主线程或 win32 → 直接读（validate 里已有大小校验兜底）",
+      "affected": 9
+    },
+    {
+      "id": "C2",
+      "severity": "P0",
+      "file": "src/core/utils/platform_command.py",
+      "err": "'in <string>' requires string as left operand, not NoneType",
+      "why": "Linux 上 os.altsep 为 None，`None in command` 抛 TypeError（Windows 上 os.altsep='/' 掩盖）",
+      "fix": "altsep = os.altsep; if os.sep in command or (altsep and altsep in command)；另加空 command 防御",
+      "affected": 4
+    },
+    {
+      "id": "C3",
+      "severity": "P1",
+      "file": "src/core/git/worktree/manager.py",
+      "err": "PermissionError: [Errno 13] Permission denied: '/nonexistent'",
+      "why": "WorktreeManager.__init__ 无条件 mkdir(parents=True)，探活构造就写盘",
+      "fix": "构造函数不 mkdir（延迟到 create()），失败只告警",
+      "affected": 4
+    },
+    {
+      "id": "C4",
+      "severity": "P0",
+      "file": "src/core/security/path_guard.py",
+      "err": "循环符号链接 a->b->a 被判 is_valid=True",
+      "why": "循环链上 stat() 跟随链接 → ELOOP 抛 OSError → except OSError: pass 跳过记录 → inode 永不命中 → depth 用尽后当成功（沙箱逃逸面）",
+      "fix": "改用 lstat()（不跟随链接）+ 路径字符串指纹兜底",
+      "affected": 1
+    },
+    {
+      "id": "C5",
+      "severity": "P1",
+      "file": "src/core/security/path_guard.py",
+      "err": "损坏符号链接（-> 不存在目标）被判 is_valid=True",
+      "why": "resolve(strict=False) 把链接替换成目标路径并『成功』返回",
+      "fix": "链上有链接且最终路径不存在 → broken；边界（escape）检查前置，越权优先",
+      "affected": 1
+    },
+    {
+      "id": "C6",
+      "severity": "P1",
+      "file": "src/config/generator.py",
+      "err": "[XPASS(strict)] Windows 上 config.toml 无法被 TOML 解析",
+      "why": "MCP 参数用 str(Path) 直接嵌 TOML 字符串，C:\\pkg\\dist 的 \\p 是保留转义（Windows-only 缺陷，Linux CI 上 XPASS 暴露）",
+      "fix": "路径统一转 POSIX 斜杠；xfail 标记移除转正向断言",
+      "affected": 1
+    },
+    {
+      "id": "C7",
+      "severity": "P2",
+      "file": "src/core/config/injector.py",
+      "err": "assert 0 > 0（features.json 加载恒空）",
+      "why": "_load_features_config() 只查 ~/.clawd 与 cwd/.clawd，CLAWD_CONFIG_DIR 被静默忽略",
+      "fix": "环境变量纳入搜索链首位（与 core/data_dir.py 同名约定一致）",
+      "affected": 1
+    },
+    {
+      "id": "C8",
+      "severity": "P2",
+      "file": "src/backends/codex.py",
+      "err": "CodexBackendError: 未找到 codex 可执行文件（codex）",
+      "why": "显式 binary=['codex'] 时把裸命令名当路径做 Path(...).exists() 校验，本机没装就抛",
+      "fix": "裸命令名不在解析期抛（留给运行时）；available() 如实返回 False；run() 给明确错误",
+      "affected": 6
+    },
+    {
+      "id": "T1",
+      "severity": "P1",
+      "file": "tests/integration/test_phase3_4_integration.py",
+      "err": "CalledProcessError: git commit exit 128",
+      "why": "CI 容器 git 无 user.name/email",
+      "fix": "显式传 GIT_AUTHOR_*/GIT_COMMITTER_*",
+      "affected": 4
+    },
+    {
+      "id": "T2",
+      "severity": "P1",
+      "file": "tests/cli/test_repl_history.py + tests/workflow/test_collaborate.py",
+      "err": "assert '--resume' in output",
+      "why": "rich 按终端宽度把 --resume 断成 '-'+换行+'-resume'，且带 ANSI 码",
+      "fix": "剥 ANSI + 去空白后断言",
+      "affected": 2
+    },
+    {
+      "id": "T3",
+      "severity": "P2",
+      "file": "tests/core/test_local_storage.py",
+      "err": "assert True is False / JSONDecodeError",
+      "why": "Z:/... 在 Linux 是合法相对路径；usage --json 取最后一行拿到 stderr 横幅",
+      "fix": "monkeypatch 精确触发失败路径；按 JSON 行提取",
+      "affected": 2
+    },
+    {
+      "id": "T4",
+      "severity": "P2",
+      "file": "tests/core/test_git_integration_deep.py",
+      "err": "ImportError: Bad git executable（整文件收集失败）",
+      "why": "顶层 import git",
+      "fix": "pytest.importorskip('git')",
+      "affected": 36
+    },
+    {
+      "id": "T5",
+      "severity": "P2",
+      "file": "pyproject.toml",
+      "err": "pathspec 未安装，gitignore 规则将不生效",
+      "why": "pathspec 只在 watch extra 里，CI 只装 .[dev]",
+      "fix": "dev extras 补 pathspec",
+      "affected": 6
+    }
+  ],
+  "commands_executed": [
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/core tests/config tests/backends tests/test_security -q",
+      "exit_code": 0,
+      "summary": "1213 passed / 4 xfailed（本机 Windows）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m ruff check src tests --select F821,F811,E9",
+      "exit_code": 0,
+      "summary": "All checks passed"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/cli/test_repl_history.py tests/workflow/test_collaborate.py tests/core/test_local_storage.py -q",
+      "exit_code": 0,
+      "summary": "全部通过（含修复后的断言）"
+    },
+    {
+      "cmd": "docker run python:3.11-slim + git，pip install -r requirements.txt + pytest（复刻 ci.yml Linux 矩阵）",
+      "exit_code": 0,
+      "summary": "**464 passed / 1 skipped / 4 xfailed / 0 failed**（修复前同一批：35 failed + 4 errors）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ -q -m 'not slow'",
+      "exit_code": 0,
+      "summary": "5441 passed / 7 skipped / 7 xfailed / 0 failed（378.51s，Windows 本机）"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/prepare_host_bundle.py",
+      "exit_code": 0,
+      "summary": "[5/5] 自检全过（自动补齐 exceptiongroup/fastuuid/attr），bundle 304MB"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/build_desktop_signed.ps1 -SelfSigned",
+      "exit_code": 0,
+      "summary": "Setup 0.89.1 + Portable 0.89.1 构建并自签名（Status=UnknownError 属预期，CA 签名列为外部阻塞）"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/e2e_desktop_install.ps1",
+      "exit_code": 0,
+      "summary": "装机 E2E **0 失败**：STEP1 版本/内嵌 host/prompts PASS · STEP2 API×5 + 无 token 403 · STEP2b UI E2E 32/32 · STEP2c 重启持久化 · STEP3 残留 0 · STEP4 卸载 exit 0 · STEP5 注册表 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 154",
+      "exit_code": 0,
+      "summary": "静默吞异常 155→154（path_guard 的 `except OSError: pass` 已消除），门禁同步收紧"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_doc_drift.py",
+      "exit_code": 0,
+      "summary": "全一致"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/baseline.py --out .clawd/baseline.json",
+      "exit_code": 0,
+      "summary": "版本三处一致 0.89.1 · ruff hard ok · 静默 154 · 收集 5464/0 · IMPORT 0 · 可达 503"
+    }
+  ],
+  "limitations": [
+    "正式 CA 代码签名仍需外部证书（已与用户确认：保持自签名，记录为外部阻塞）",
+    "Linux 矩阵验证用 python:3.11-slim + git 复刻，与 CI 的 ubuntu-latest 略有差异（git 版本/系统库），但失败用例集完全覆盖"
+  ]
+}

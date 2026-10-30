@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.89.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.89.1 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -473,7 +473,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
-| 静默吞异常 | **155**（AST 口径，门禁 ≤155），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 155` |
+| 静默吞异常 | **154**（AST 口径，门禁 ≤154），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 154` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | v0.89.0 实跑（退出码 0；真实端点按 policy.md 最小配额） |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 

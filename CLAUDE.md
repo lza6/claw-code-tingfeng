@@ -21,7 +21,7 @@
 > venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
 > py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
 > venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降
-> venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 155  # 静默吞异常只降不升
+> venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 154  # 静默吞异常只降不升
 > # 桌面端出包（改了 src/ prompts/ personas/ desktop/web/ 都必须重跑，否则装出来的还是旧代码）
 > venv/Scripts/python.exe scripts/prepare_host_bundle.py  # 必须看到 [5/5] 自检全过（缺依赖会自动补齐）
 > pwsh -NoProfile -File scripts/build_desktop_signed.ps1 -SelfSigned
@@ -46,11 +46,11 @@
 > `py -3.10` = 测试与 lint 工具齐全；`py`（默认 3.14）缺 `loguru`，**不要用**。
 >
 > **本项目的硬指标**（v0.57.0 起作为基线，现已全部接入 CI）：
-> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0` · `IMPORT-EXIT = 0` · 生产可达 ≥ 443 · 静默吞异常 ≤ **155** · 覆盖率 ≥ **60%**。
+> `F821 = 0` · `F811 = 0` · `IMPORT-FAIL = 0` · `IMPORT-EXIT = 0` · 生产可达 ≥ 443 · 静默吞异常 ≤ **154** · 覆盖率 ≥ **60%**。
 > 任何一项回升都视为回归，先修再谈其他。
 >
 > **门禁 2026-10-29 已收紧**（原 172 / 47，远低于实际 → 掉 15 个点仍能全绿，尺子失效）：
-> 静默吞异常 172→162→158→156→**155**、覆盖率 `fail_under` 47→**60**。单一来源分别在
+> 静默吞异常 172→162→158→156→155→**154**、覆盖率 `fail_under` 47→**60**。单一来源分别在
 > `scripts/hard_metrics.py` 与 `pyproject.toml`，改一处必须同步另一处（有测试守着）。
 
 ## Project Overview

@@ -24,7 +24,7 @@ from __future__ import annotations
 MIN_REACHABLE = 443
 
 # 静默吞异常上限（AST 口径：except 体只含 pass / ...），只允许下降
-MAX_SILENT_EXCEPT = 155
+MAX_SILENT_EXCEPT = 154
 
 # 覆盖率下限（百分比），必须与 pyproject.toml 的 [tool.coverage.report] fail_under 相等
 # （tests/scripts/test_baseline_gate.py::test_thresholds_are_single_source_of_truth 会检查）

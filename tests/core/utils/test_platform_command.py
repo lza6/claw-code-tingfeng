@@ -216,3 +216,39 @@ def test_run_command_check():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestLinuxAltsepRegression:
+    """回归：Linux 上 `os.altsep` 是 None（Windows 是 '/'），`None in command` 直接 TypeError
+
+    真实缺陷（CI Linux 矩阵 35 failed 之一）：probe/which/is_command_available 5 个测试全红，
+    而 Windows 本机因为 os.altsep='/' 完全看不见。这里在 Windows 上模拟 Linux 行为，
+    让这条 bug 无论在哪台机器跑测试都能被抓住。
+    """
+
+    def test_altsep_none_does_not_crash(self, monkeypatch):
+        import os as _os
+
+        from src.core.utils.platform_command import resolve_command_path_for_platform
+
+        monkeypatch.setattr(_os, "altsep", None)
+        # 不应抛 TypeError；找不到就返回 None
+        assert resolve_command_path_for_platform("definitely-not-here-xyz") is None
+
+    def test_altsep_none_still_resolves_existing_path(self, monkeypatch, tmp_path):
+        """altsep=None 时，带路径分隔符的**已存在**路径仍要能解析成功。"""
+        import os as _os
+
+        from src.core.utils.platform_command import resolve_command_path_for_platform
+
+        monkeypatch.setattr(_os, "altsep", None)
+        exe = tmp_path / "tool.sh"
+        exe.write_text("#!/bin/sh" + chr(10), encoding="utf-8")
+        exe.chmod(0o755)
+        assert resolve_command_path_for_platform(str(exe)) == str(exe)
+
+    def test_empty_command_returns_none(self):
+        from src.core.utils.platform_command import is_command_available, resolve_command_path_for_platform
+
+        assert resolve_command_path_for_platform("") is None
+        assert is_command_available("") is False
