@@ -145,3 +145,45 @@ class TestExplainUsesRecordedOk:
         explanation = explain_session("s-ok", tmp_path)
         assert explanation.tool_calls[0].ok is False
         assert explanation.failed_tools == 1
+
+
+class TestSessionWorkdirForProjectGrouping:
+    """桌面端侧栏要按项目分组，会话必须带 workdir（此前只有 persona）
+
+    没有 workdir 就只能把全部会话平铺成一列 —— 用户真实反馈"分不清哪个是哪个项目"。
+    """
+
+    def test_workdir_written_into_metadata(self, tmp_path: Path):
+        view = persist_agent_session(
+            session_id="s-wd",
+            goal="在项目 A 里改代码",
+            steps=[{"role": "assistant", "content": "好"}],
+            final_result="完成",
+            directory=tmp_path,
+            workdir=r"D:\work\project-a",
+        )
+        assert view.metadata.get("workdir") == r"D:\work\project-a"
+        saved = session_bridge.load("s-wd", tmp_path)
+        assert saved.metadata.get("workdir") == r"D:\work\project-a"
+
+    def test_persona_and_workdir_coexist(self, tmp_path: Path):
+        view = persist_agent_session(
+            session_id="s-both",
+            goal="带角色",
+            steps=[{"role": "assistant", "content": "好"}],
+            persona="安全审计员",
+            directory=tmp_path,
+            workdir="/tmp/proj",
+        )
+        assert view.metadata.get("persona") == "安全审计员"
+        assert view.metadata.get("workdir") == "/tmp/proj"
+
+    def test_no_workdir_means_no_key(self, tmp_path: Path):
+        """没传 workdir 时不要写空串（前端据此区分"未关联项目"）"""
+        view = persist_agent_session(
+            session_id="s-nowd",
+            goal="无项目",
+            steps=[{"role": "assistant", "content": "好"}],
+            directory=tmp_path,
+        )
+        assert "workdir" not in view.metadata

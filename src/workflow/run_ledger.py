@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import logging
-import time
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -139,8 +138,9 @@ class RunLedger:
                         issues.append(
                             f"两本账更新时间相差 {int(abs(dm - dp) // 60)} 分钟（> {DRIFT_SECONDS // 60}），可能 split-brain"
                         )
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    # 时间戳格式不认识（旧数据/手改）→ 跳过这条漂移判断，但要留痕
+                    logger.debug(f"账本时间戳无法解析（跳过漂移判断）: {last_progress!r} / {exc}")
         return issues
 
     # ---------- 写 ----------

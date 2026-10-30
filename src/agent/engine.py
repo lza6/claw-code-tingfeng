@@ -799,6 +799,7 @@ class AgentEngine:
                 model=model,
                 provider=provider,
                 directory=_session_dir(),
+                workdir=str(getattr(self, "workdir", "") or ""),
             )
 
             # 用量记账（CLI 与桌面端共用这条路径）：用户面板里的成本/请求数/缓存命中率就靠它

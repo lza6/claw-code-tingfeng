@@ -84,6 +84,42 @@ py -3.10 -m ruff check src/ --select F821,F811               # 静态缺陷数
 
 ---
 
+## 3.5 新增一个桌面端接口（WS handler 或 HTTP 端点）
+
+桌面端 UI 的所有数据都来自这两类接缝，加功能基本都落在这里。
+
+### WS handler（`src/server/handlers.py`）
+
+| 步骤 | 位置 | 要点 |
+|:---|:---|:---|
+| 1 | `MessageRouter` 的 handlers 字典 | 加 `'<msg_type>': self._handle_<x>` |
+| 2 | 处理函数 | 必须接受 **3 个参数** `(self, ws, message, engine_factory)` |
+| 3 | 前端 | `wsRequest({type: '<msg_type>'}, '<msg_type>')` 等响应 |
+| 4 | 验证 | `pytest tests/server -q` + 装好的 UI 上点一次 |
+
+**硬约束（真实事故）**：`dispatch()` 永远按三个位置参数调用 handler。
+少写 `engine_factory` 时 TypeError 会被外层 `except Exception` 吞成 `E_INTERNAL_ERROR`，
+UI 表现为"面板一直是空的"，日志里只有一行通用错误 —— 排查方向容易跑偏。
+
+### HTTP 端点（`src/server/websocket_server.py`）
+
+1. 在 HTTP 分支里加 `if path == '/api/<x>':`，返回 `_WsResponse(200, 'OK', _H([...]), body)`；
+2. **数据目录一律走 `data_path(...)`**（`src/core/data_dir.py`），禁止 `Path.cwd() / '.clawd'`：
+   桌面端的数据在 `userData/data`，硬编码 cwd 会让端点永远返回空（`/api/sessions` 就这么空了很久）；
+3. 敏感字段只回掩码/环境变量名，不回明文；
+4. 验证：`pytest tests/server -q`，并在装好的安装版上 `Invoke-WebRequest http://127.0.0.1:<port>/api/<x>`。
+
+### Electron 壳（`desktop/electron/`）
+
+1. 主进程用 `ipcMain.handle('<ch>:<action>')`，**顶部** `require('electron')` 的解构里必须有这个符号；
+2. **禁止在函数体内再写一次 `const { ipcMain, app } = require('electron')`** —— 函数作用域 const
+   会提升成 TDZ，上方所有 `ipcMain.handle(...)` 抛 `Cannot access 'ipcMain' before initialization`，
+   主进程在开窗前就挂掉（安装包表现为"双击没反应"）。`node --check` 查不出来；
+3. preload 用 `contextBridge.exposeInMainWorld` 暴露最小能力，渲染端 `window.clawdDesktop.<x>()`；
+4. 验证：`py -3.10 -m pytest tests/test_electron_main_static.py -q`（7 条静态检查）+ 真实装一次。
+
+---
+
 ## 4. 改公共 API
 
 1. 先看 `tests/contracts/` 是否锁定了该接口。
@@ -147,6 +183,19 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 [ ] 提交信息用约定式格式，不含密钥
 ```
 
+**桌面端出包额外三步（少一步就会装出坏包）**：
+
+```text
+[ ] python scripts/prepare_host_bundle.py   → [5/5] 自检全过（含 CLI --help）
+[ ] pwsh -File scripts/build_desktop_signed.ps1 [-SelfSigned|-Pfx ...] → DONE
+[ ] pwsh -File %TEMP%\clawd-install-e2e.ps1  → STEP2/2c/2d/2e/2f 全 PASS，STEP5 残留 0
+```
+
+打包自检为什么不能省：bundle 里少一个包/一个 DLL，源码、单测、`node --check`、静态检查**全是绿的**，
+只有装到别人机器上双击才发现（本项目一天内踩了三次：`annotated_doc`、`exceptiongroup`、
+`python3.dll`）。`prepare_host_bundle.py` 的 [5/5] 用**打包后的解释器**真实 import + 起 CLI，
+缺什么自动从 venv 补齐，补不齐就中断打包。
+
 ---
 
 ## 7. 排障索引
@@ -159,6 +208,14 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 | 测试单独跑绿、合并跑红 | 进程级全局泄漏（`set_allowed_workdirs`、`set_config`） |
 | 断点续跑行为异常 | `PipelineState` / `_deserialize_result` 的枚举还原 |
 | 长任务扫描变慢 | 是否在缓存命中路径上付了线程池调度开销 |
+| 安装版双击没反应 / 只有 Error 窗口 | 用内嵌解释器手工跑 `resources/host/python/python.exe -m src serve`，缺依赖会直接报 ModuleNotFoundError；再看 `%APPDATA%\clawd-desktop\shell.log` |
+| 安装版停在"首次配置"窗口、Host 不启动 | 正常行为：`userData/.env` 不存在时会先引导填 API。自动化必须先预置 `.env`，否则会卡在这里（装机 E2E 的 STEP1b 就是干这个） |
+| 装机 E2E 报"连不上/落盘 0" | 先怀疑脚本：userData 目录是 `clawd-desktop`（package.json `name`，不是 productName）；探针文件必须写进**当前项目**目录 |
+| 模型说"我没有可用的 FileReadTool" | 不是工具没了（打包版注册 7 个且能执行）：`prepare_host_bundle.py` 的 [5/5] 会真实执行一次 FileReadTool。模型遵从性不记在产品账上 |
+
+**排查原则（2026-10-30 三次假阴性换来的）**：断言要分层 —— 确定性事实（能 import、能执行、文件落盘、
+接口返回结构）做门禁；依赖模型/外部行为的（"模型是否按预期调工具"）只做信息输出。
+E2E 红了先问"是不是断言本身写错了"，再动产品代码。
 
 ---
 

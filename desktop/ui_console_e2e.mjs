@@ -195,25 +195,34 @@ if (pasted.chips >= 1) {
 
 // ---------- 2.8 工具调用折叠组 ----------
 const fold = await page.evaluate(async () => {
+  // 真实 run 可能已经产生过一组；这里先"换组"（发一条用户消息会关闭当前组），再模拟 3 次工具
+  const before = document.querySelectorAll('.tool-group').length;
+  const u = document.createElement('div');
+  u.className = 'msg-user';
+  u.textContent = '__e2e_fold_probe__';
+  document.querySelector('#chat').appendChild(u);
+  // addUser 会把当前组关掉；再模拟新的 3 条工具事件
   window.__clawdAddTool('BashTool', '{"command":"pytest -q"}', true);
   window.__clawdAddTool('FileReadTool', '{"file_path":"app.js"}', true);
   window.__clawdAddTool('BashTool', '{"command":"false"}', false, 'Error: exit 1');
   await new Promise((r) => setTimeout(r, 200));
-  const group = document.querySelector('.tool-group');
+  const groups = document.querySelectorAll('.tool-group');
+  const group = groups[groups.length - 1];
   const collapsed = group ? !group.classList.contains('open') : false;
-  const summary = (document.querySelector('.tg-summary')?.textContent || '').trim();
-  const items = document.querySelectorAll('.tg-item').length;
+  const summary = (group?.querySelector('.tg-summary')?.textContent || '').trim();
+  const items = group ? group.querySelectorAll('.tg-item').length : 0;
   if (group) group.querySelector('.tg-head').click();
   await new Promise((r) => setTimeout(r, 200));
   return {
-    groups: document.querySelectorAll('.tool-group').length,
+    groupsAfter: groups.length,
+    before,
     collapsedByDefault: collapsed,
     summary,
     items,
-    openAfterClick: !!document.querySelector('.tool-group.open'),
+    openAfterClick: !!group?.classList.contains('open'),
   };
 });
-check('工具调用默认折叠成一组', fold.groups === 1 && fold.collapsedByDefault === true, JSON.stringify(fold));
+check('工具调用默认折叠成一组', fold.collapsedByDefault === true && fold.groupsAfter > fold.before, JSON.stringify(fold));
 check('折叠标题带分类计数', fold.summary.includes('命令') && fold.summary.includes('读取'), fold.summary);
 check('展开后逐条可见', fold.items === 3 && fold.openAfterClick === true, JSON.stringify(fold));
 await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '26-tool-fold.png') });
@@ -229,6 +238,40 @@ const ctx = await page.evaluate(() => ({
 check('上下文面板可用', ctx.open && ctx.items >= 2, JSON.stringify(ctx));
 await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '28-context-panel.png') });
 await page.evaluate(() => document.querySelector('#ctxClose')?.click());
+
+// ---------- 2.95 项目 / 模型选择器 / 会话计时 ----------
+await page.click('#btnAddProject');
+await page.waitForTimeout(500);
+await page.fill('#projPathInput', process.cwd().replace(/\desktop$/, ''));
+await page.click('#projPathSave');
+await page.waitForTimeout(1200);
+const projects = await page.evaluate(() => ({
+  count: document.querySelectorAll('#projectList .project-item').length,
+  active: document.querySelectorAll('#projectList .project-item.active').length,
+  first: (document.querySelector('#projectList .project-item .p-name')?.textContent || '').trim(),
+}));
+check('添加项目后出现在侧栏并可选中', projects.count >= 1 && projects.active === 1, JSON.stringify(projects));
+
+await page.click('#btnModel');
+await page.waitForTimeout(800);
+const modelUi = await page.evaluate(() => ({
+  open: document.querySelector('#modelOverlay').classList.contains('show'),
+  items: document.querySelectorAll('#modelList .model-item').length,
+  efforts: document.querySelectorAll('#modelEffort button').length,
+  hasFast: !!document.querySelector('#modelFast'),
+}));
+check('模型选择器可用（列表+推理强度+快速模式）',
+  modelUi.open && modelUi.items >= 1 && modelUi.efforts === 5 && modelUi.hasFast, JSON.stringify(modelUi));
+await page.evaluate(() => {
+  const fast = document.querySelector('#modelFast'); if (fast) fast.click();
+  document.querySelector('#modelClose')?.click();
+});
+const fastState = await page.evaluate(() => ({
+  pressed: document.querySelector('#modelFast')?.getAttribute('aria-pressed'),
+  label: (document.querySelector('#modelBtnLabel')?.textContent || ''),
+}));
+check('快速模式可切换且按钮标注变化',
+  fastState.pressed === 'true' && fastState.label.includes('快速'), JSON.stringify(fastState));
 
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
@@ -267,6 +310,60 @@ const prov = await page.evaluate(() => {
 check('provider 保存后出现在列表', prov.count >= 1 && prov.texts.some((t) => t.includes('E2E DeepSeek')), JSON.stringify(prov));
 check('列表只显示 env 名/掩码（无明文密钥）', prov.texts.some((t) => t.includes('env:DEEPSEEK_API_KEY')), JSON.stringify(prov.texts));
 await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '11-providers.png') });
+
+// ---------- 5. 会话按项目分组 ----------
+await page.click('#settingsClose').catch(() => {});
+await page.waitForTimeout(300);
+const grouped = await page.evaluate(async () => {
+  const r = await fetch('/api/sessions');
+  const d = await r.json();
+  const list = (d.sessions || []);
+  const workdirs = new Set(list.map((x) => x.workdir || ''));
+  const doc = document.querySelector('#sessionList');
+  const heads = doc ? doc.querySelectorAll('.session-group') : [];
+  const items = doc ? doc.querySelectorAll('.session-item') : [];
+  return {
+    api: list.length,
+    apiWorkdirs: workdirs.size,
+    apiHasWorkdirField: list.length === 0 || list.every((x) => 'workdir' in x),
+    heads: heads.length,
+    items: items.length,
+    headTexts: Array.from(heads).map((h) => h.textContent.trim()).slice(0, 4),
+    itemCountsSum: Array.from(doc ? doc.querySelectorAll('.session-group-count') : []).map((c) => Number(c.textContent)).reduce((a, b) => a + b, 0),
+  };
+});
+check('会话接口返回 workdir 字段', grouped.apiHasWorkdirField, JSON.stringify(grouped));
+check('侧栏分组数 = 唯一项目数 且条目数一致',
+  grouped.heads === grouped.apiWorkdirs && grouped.items === grouped.api && grouped.itemCountsSum === grouped.api,
+  JSON.stringify(grouped));
+if (grouped.heads > 0) {
+  await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '31-session-groups.png') });
+}
+
+// ---------- 6. 右下角 toast（更新提示不再挤正文） ----------
+const toastInfo = await page.evaluate(() => {
+  const handle = window.__clawdToast({ title: 'E2E 更新提示', detail: '右下角非阻塞', kind: 'ok', timeout: 0 });
+  const host = document.getElementById('toastHost');
+  if (!host || !handle) return { error: 'no-toast-host' };
+  const rect = host.getBoundingClientRect();
+  const el = host.lastElementChild;
+  const text = el ? el.textContent : '';
+  const style = el ? getComputedStyle(el) : null;
+  const out = {
+    count: host.children.length,
+    offsetRight: Math.round(window.innerWidth - rect.right),
+    offsetBottom: Math.round(window.innerHeight - rect.bottom),
+    text,
+    position: style ? style.position : '',
+    hasActionSlot: !!el.querySelector('.t-btn') || !!el.querySelector('.t-act'),
+  };
+  handle.close();
+  return out;
+});
+check('toast 出现在右下角',
+  !toastInfo.error && toastInfo.offsetRight < 40 && toastInfo.offsetBottom < 40 && toastInfo.text.includes('E2E 更新提示'),
+  JSON.stringify(toastInfo));
+await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '32-toast.png') });
 
 await browser.close();
 const failed = results.filter(([, ok]) => !ok);

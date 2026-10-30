@@ -14,6 +14,14 @@ import sys
 
 from pathlib import Path
 
+# 证据里含中文/符号，Windows 控制台默认 GBK 会在 print 时直接抛
+# UnicodeEncodeError，把"全绿"变成"脚本崩了"（真实踩过）。强制 UTF-8 + 替换。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # 老解释器/已重定向
+        pass
+
 ROOT = Path(__file__).resolve().parents[1]
 results: list[tuple[str, bool, str]] = []
 

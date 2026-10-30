@@ -7,6 +7,126 @@
 
 ---
 
+## [v0.86.0] (2026-10-30) — 客户端照抄参考项目 + 会话按项目分组 + 右下角 toast + 修 3 个启动级 bug
+
+按"先抄完再改"的要求，把参考客户端最核心的四块照抄过来（结构对齐、实现用我们的后端）：
+
+**1. 项目（工作区）侧栏**
+- 侧栏新增「项目」区：列出项目、点一下就切换（高亮当前）、`✕` 从列表移除（**不删文件**）；
+- 项目存 `<数据目录>/projects.json`（JSON）；**新会话的工作目录 = 当前项目**（`run` 消息带 `workdir`，
+  Host 传给引擎 `create(workdir=...)`）；
+- `＋` 打开「添加项目」对话框（和你给的截图一致：主机下拉 / 浏览文件夹 / 从 URL 克隆）。
+
+**2. 添加项目两条真实路径**
+- **浏览文件夹**：走 Electron 原生选择器（`ipcMain.handle('clawd:pick-folder')` + preload `pickFolder()`）；
+  非 Electron（纯网页）时自动降级为"粘贴路径"输入；
+- **从 URL 克隆**：Host 真跑 `git clone --depth 1` 到 `<数据目录>/clones/<name>` 并自动加入项目列表。
+
+**3. 模型选择器（照抄：搜索 + 推理强度 + 快速模式）**
+- composer 左侧「模型 ⌄」按钮打开面板：搜索框、模型列表（含 provider 来源）、
+  **推理强度 低/中/高/极高/最大**、**快速模式**开关（按钮会显示「模型 · 快速」）；
+- `run` 消息带 `model` / `reasoning_effort` / `fast_mode`：Host 侧把推理强度映射成 temperature
+  （0.9→0.0），快速模式把 max_tokens 压到 ≤1024；`/api/models` 与 WS `models_list` 提供清单。
+
+**4. 会话计时**
+- 会话栏显示「工作了 12s / 2m 3s」（每轮开始计时、结束停止）—— 对齐截图里那行"工作了 32m 3s"。
+
+**装到机器上又抓到 1 个启动级 bug（已修）**
+第一次打出来的 0.86.0 安装包**根本打不开**：`main.js` 里用了 `ipcMain.handle(...)`（新增的文件夹选择器），
+但顶部 `require('electron')` 解构里**没有 ipcMain** → `registerIpcHandlers()` 抛 ReferenceError →
+主进程在创建窗口前就挂了，Host 不启动、E2E 只看到"120s 内未生成端口文件"。
+`node --check` 查不出来（语法合法），已补导入；并新增 `tests/test_electron_main_static.py`（6 条）
+静态核对"用到的 electron 符号必须都解构导入 / 不再有默认菜单 / preload 不透 Node 能力"。
+
+**第二处启动级 bug（同一天修完）**
+补完导入后装出来还是打不开，日志是 `Cannot access 'ipcMain' before initialization`：
+`registerIpcHandlers()` **函数体内**又写了一次 `const { ipcMain, app } = require('electron')`，
+函数作用域里的 `const` 把整段提升成 TDZ，上方几十个 `ipcMain.handle(...)` 全部访问到未初始化绑定。
+删掉函数内重复解构（改成注释说明为什么不能写），并把静态检查加到 **7 条**
+（新增"同一函数内先用后声明"检测，**反向验证过**：故意注入重复解构 → 立刻 FAIL，恢复 → PASS）。
+
+**会话按项目分组 + 更新提示改右下角 toast（本轮收口）**
+- 会话落盘时把 `workdir` 写进 metadata；侧栏按 workdir 分组，组标题用项目名、右侧显示条数，
+  未关联项目的会话沉到最下面（此前所有会话平铺一列，分不清哪个项目）。
+- 更新提示不再挤在侧栏文字行里：右下角 toast 单条贯穿"检查→下载中→已就绪"，
+  就绪时给「重启安装 / 稍后」，新增 `clawd:quit-and-install` IPC + preload 桥（此前只有 autoUpdater 内部会自动装，用户点不到）。
+- **顺带修一个"侧栏永远空着"的根因**：`/api/sessions` 与 `/api/session` 把会话目录硬编码成
+  `Path.cwd() / '.clawd' / 'sessions'`，而桌面端数据在 `userData/data/sessions` ——
+  引擎写得再多侧栏也读不到。两个端点改走 `data_path('sessions')`（数据目录唯一入口）。
+- 新增 `tests/server/test_sessions_api.py`（4 条**真 HTTP**：cwd 指向空目录仍能列出、条目带 `workdir`、
+  详情能读回、缺失 404）+ 会话 workdir 3 条单测。
+
+**第三处启动级 bug：打包版 Host 缺依赖（同一天修完）**
+补完 TDZ 后再装，应用起来了但窗口只有 `Error`、端口文件不生成、userData 里连日志都没有。
+手工用内嵌解释器跑一次就现形：
+```
+desktop/host/python/python.exe -m src serve
+→ ModuleNotFoundError: No module named 'annotated_doc'
+```
+根因在 `scripts/prepare_host_bundle.py` 的依赖闭包：它把包名用**逗号**拼成一个参数
+（`pip show a,b,c`），pip 只当作"一个不存在的包名" → **闭包永远为空**，
+白名单实际只有「AST 扫到的直接 import + 人工补的名字」。typer 0.27 的间接依赖
+`annotated-doc` 因此从来没进过 bundle（这也解释了为什么 `WHITELIST_EXTRA` 里要手工补
+`pydantic_core`/`anyio`/`certifi` 等一长串传递依赖）。
+修法：空格分隔 + 分批（40/批）+ 新增 **[5/5] 自检**——用**打包后的解释器**跑
+`import typer, rich, click` 与 `-m src --help`，失败直接中断打包；
+另外把 loguru 的 Windows 可选依赖 `win32_setctime` 也带上（它只在 loguru 的 extra 里，
+缺了每次启动都打一条"模块导入失败"噪音）。白名单 91 → 101 个包。
+修完再装，又暴露两个更深的：`No module named 'exceptiongroup'`（anyio 在 py3.10 的依赖，
+**这个 venv 里 anyio 的 METADATA 根本没有 Requires-Dist**，靠元数据推闭包永远推不出来）
+和 `ImportError: DLL load failed while importing _psutil_windows`（手写 DLL 清单漏了 `python3.dll`），
+以及 `PackageNotFoundError: No package metadata was found for httpx2`
+（只拷包目录、没拷 `*.dist-info`，而 anthropic 等包 import 时会读自己的版本元数据）。
+于是 [5/5] 从"打勾检查"升级为**真实 import + 缺什么自动补什么**：
+用打包后的解释器逐个 probe（typer/openai/anthropic/litellm/httpx/tiktoken/websockets/pydantic/
+loguru/psutil/toml + `src.cli.entrypoint` + `src.server`），从 `ModuleNotFoundError` 里解析缺的模块名，
+从 venv 补齐后重试（最多 30 轮），补不齐就中断；顶层 `*.dll` 改成全量复制；
+dist-info 跟包一起拷；`.pth` 一律不拷（venv 的 editable finder 会把 sys.path 指回本机源码目录）；
+自检子进程禁用文件日志，跑完清掉 `.clawd/`，避免把开发机日志打进安装包。
+契约测试新增 6 条钉住这些（含"不得复制 .pth"、"dist-info 必须随包复制"）。
+
+**图片附件"传上去了模型却不知道"（装机验证发现，已修）**
+粘贴图片确实落到了 `<数据目录>/uploads/img-<hash>.png`，但代码用
+`target.relative_to(self._workdir())` 转相对路径 —— 上传目录在数据目录（userData/data），
+根本不在工作目录这棵树里，`relative_to` 抛 ValueError 被 `except` 吞掉，
+**goal 里一条附件路径都没有**。用户看到的现象就是"图传上去了，模型说没看到图"。
+改为写**绝对路径**并明确告知"模型不支持视觉就直说看不到，不要猜"，新增
+`tests/server/test_attachments_goal.py`（4 条，含"工作目录与数据目录不同树"的场景）。
+
+顺带把"验证什么"分层，别再拿不可控的东西当门禁：
+- `scripts/prepare_host_bundle.py` 的 [5/5] 增加**真实执行一次 FileReadTool** 的探针
+  （工具本体能不能跑是确定性事实）；
+- `desktop/final_verify.mjs` 的硬断言改为"真实 LLM 有实质回复"，
+  "模型是否按预期调工具"降级为信息输出 —— 实测 `step-5-preview` 会回"我没有可用的
+  FileReadTool"，而打包版实际注册了 7 个工具且能执行，模型遵从性不该记在产品账上。
+
+还有一处"自己把自己测挂"的乌龙（值得记）：STEP2e 段末尾残留一句
+`taskkill /PID $app2.Id /T /F`，把刚重启起来的实例杀了，紧接着 STEP2f 检查
+"重启后应用是否存活" → 永远 False、退出码 1。定位花了三轮：`diag_restart.ps1`
+（装→启动→杀→再启动）存活 120s、`/api/providers` 200；`diag_restart_after_e2e.ps1`
+（先跑完 27 项 Playwright 再重启）存活 60s；最后在"等端口循环"里逐轮查存活，
+抓到"端口就绪 2s、app2 存活=True"→ 死亡点锁在 STEP2e 末尾两行。
+教训：E2E 报"进程自己退了"时，先通读脚本里所有 `taskkill`/`Stop-Process`，再怀疑产品。
+
+另外排错时修了 E2E 自身的两处假阴性：
+- `final_verify.mjs` 把探针文件写到 `resources/host`，而 UI 当前项目是别的目录 →
+  引擎按越界拒绝，回复"文件不存在: <repo>/desktop/final_probe.txt"。改为先读
+  `/api/projects` 把探针写进**当前项目**目录。
+- 装机脚本按 productName 猜 userData 目录（`%APPDATA%\Clawd Desktop`），
+  实际是 `%APPDATA%\clawd-desktop`（Electron 用 package.json 的 `name`）→
+  "附件落盘数=0"是查错目录；STEP2f 增加了重读端口 + 重试，STEP5 先留证再清理。
+
+**验证（实跑）**
+- 控制台 E2E 从 20 项扩到 **24 项全绿**：添加项目后出现在侧栏并可选中、
+  模型选择器（列表 + 5 档推理强度 + 快速模式切换后按钮标注「… · 快速」）、工具折叠（命令 2 · 读取 1）、
+  上下文面板（20.1k/200k 10%）、用量页、provider 掩码。
+- 再扩 3 项（会话分组数=唯一项目数、`workdir` 字段、toast 出现在右下角）→ **27 项**。
+- 新增 `tests/core/test_projects_store.py`（7 条：增删/切换/持久化/目录消失标记/active_workdir）。
+- 走查截图：`29-add-project.png`、`30-model-picker.png`、`26-tool-fold.png`、`28-context-panel.png`、
+  `31-session-groups.png`、`32-toast.png`。
+
+---
+
 ## [v0.85.0] (2026-10-30) — 修「重启后数据丢」+ provider 改 JSON + 工具调用折叠 + 上下文面板
 
 **1. 修致命问题：重启/升级后 provider、用量、会话全丢**

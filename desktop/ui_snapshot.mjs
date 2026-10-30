@@ -39,6 +39,18 @@ if (hasSession > 0) {
 await page.evaluate(() => document.querySelector('#persona')?.focus());
 await shot('22-composer-persona.png');
 
+// 添加项目对话框
+await page.click('#btnAddProject');
+await page.waitForTimeout(700);
+await shot('29-add-project.png');
+await page.evaluate(() => document.querySelector('#projectClose')?.click());
+
+// 模型选择器
+await page.click('#btnModel');
+await page.waitForTimeout(900);
+await shot('30-model-picker.png');
+await page.evaluate(() => document.querySelector('#modelClose')?.click());
+
 // 用量面板
 await page.click('#btnUsage');
 await page.waitForTimeout(1500);

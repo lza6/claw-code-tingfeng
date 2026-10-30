@@ -18,6 +18,14 @@
   let everConnected = false;
   let turnCount = 0;
   let streamEl = null;        // 当前正在流式输出的助手气泡
+  let projectsCache = [];
+  let activeProject = null;
+  let modelsCache = [];
+  let selectedModel = '';
+  let reasoningEffort = '最大';
+  let fastMode = false;
+  let sessionStartedAt = 0;
+  let elapsedTimer = null;
   let loadedHistory = [];   // 点开旧会话后载入的历史（续聊时作为 prior_messages 发送）
   let attachments = [];     // 待发送图片（data URL）
   let pendingFinal = null;    // 已收到 response 的最终文本，等 STREAM_COMPLETED 收尾
@@ -49,6 +57,75 @@
   }
   function showBanner(t) { $banner.textContent = t; $banner.style.display = 'block'; }
   function hideBanner() { $banner.style.display = 'none'; }
+
+  // —— 右下角 toast ——
+  // 非阻塞信息（更新提示等）走这里，不挤占正文；返回句柄支持原地更新同一条。
+  function toast(opts) {
+    const host = $('toastHost');
+    if (!host) return { close() {}, update() {} };
+    const o = opts || {};
+    const el = document.createElement('div');
+    el.className = 'toast' + (o.kind ? ' ' + o.kind : '');
+    const ico = document.createElement('span');
+    ico.className = 't-ico';
+    ico.textContent = o.icon || '🔔';
+    const body = document.createElement('div');
+    body.className = 't-body';
+    const title = document.createElement('div');
+    title.className = 't-title';
+    const detail = document.createElement('div');
+    detail.className = 't-detail';
+    const act = document.createElement('div');
+    act.className = 't-act';
+    body.appendChild(title); body.appendChild(detail); body.appendChild(act);
+    const close = document.createElement('button');
+    close.className = 't-close';
+    close.type = 'button';
+    close.textContent = '✕';
+    close.title = '关闭';
+    el.appendChild(ico); el.appendChild(body); el.appendChild(close);
+    host.appendChild(el);
+
+    let timer = null;
+    const api = {
+      el,
+      close() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        el.classList.add('out');
+        setTimeout(() => el.remove(), 180);
+      },
+      update(next) {
+        const n = next || {};
+        if (n.kind !== undefined) el.className = 'toast' + (n.kind ? ' ' + n.kind : '');
+        if (n.icon !== undefined) ico.textContent = n.icon;
+        if (n.title !== undefined) title.textContent = n.title;
+        if (n.detail !== undefined) { detail.textContent = n.detail; detail.style.display = n.detail ? '' : 'none'; }
+        act.innerHTML = '';
+        for (const a of n.actions || []) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 't-btn' + (a.primary ? ' primary' : '');
+          b.textContent = a.label;
+          b.onclick = () => { if (a.onClick) a.onClick(); if (a.keepOpen !== true) api.close(); };
+          act.appendChild(b);
+        }
+        act.style.display = (n.actions || []).length ? '' : 'none';
+        if (n.timeout !== undefined) {
+          if (timer) { clearTimeout(timer); timer = null; }
+          if (n.timeout > 0) timer = setTimeout(() => api.close(), n.timeout);
+        }
+      },
+    };
+    close.onclick = () => api.close();
+    api.update({ title: o.title || '', detail: o.detail || '', actions: o.actions || [] });
+    detail.style.display = o.detail ? '' : 'none';
+    act.style.display = (o.actions || []).length ? '' : 'none';
+    const timeout = o.timeout === undefined ? 4000 : o.timeout;
+    if (timeout > 0) timer = setTimeout(() => api.close(), timeout);
+    return api;
+  }
+  window.__clawdToast = toast;
+
   function updateStats() {
     $('stTurns').textContent = turnCount + ' 轮';
     $('stCalls').textContent = '工具 ' + callCount + ' 次';
@@ -558,6 +635,8 @@
           authenticated = true; reconnectDelay = 1000; everConnected = true;
           hideBanner(); setConn(true, '已连接 · 就绪');
           loadPersonas();
+          loadProjects();
+          loadModels();
           loadSessions();
         } else {
           setConn(false, '认证失败');
@@ -581,6 +660,7 @@
         st.textContent = `${turnCount} 轮`;
         if (d.elapsed_seconds) $('stCalls').textContent = `工具 ${callCount} 次 · ${d.elapsed_seconds}s · ${d.steps} 步`;
         $send.disabled = false;
+        stopElapsed();
         loadSessions(); // 跑完一轮刷新侧栏历史
         return;
       }
@@ -1006,6 +1086,187 @@
     }
   }
 
+  // —— 项目（工作区）——
+  async function loadProjects() {
+    const list = $('projectList');
+    if (!list) return;
+    try {
+      const data = await wsRequest({ type: 'projects_list' }, 'projects');
+      projectsCache = (data.data && data.data.projects) || [];
+      activeProject = (data.data && data.data.active) || null;
+    } catch (_) {
+      try {
+        const resp = await fetch('/api/projects');
+        const data = await resp.json();
+        projectsCache = data.projects || [];
+        activeProject = data.active || null;
+      } catch (__) { projectsCache = []; }
+    }
+    renderProjects();
+  }
+
+  function renderProjects() {
+    const list = $('projectList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!projectsCache.length) {
+      const empty = document.createElement('div');
+      empty.className = 'session-item';
+      empty.style.cssText = 'font-size:12px;color:var(--label-tertiary);cursor:default';
+      empty.textContent = '还没有项目 —— 点上面的 ＋ 添加';
+      list.appendChild(empty);
+      return;
+    }
+    for (const project of projectsCache) {
+      const row = document.createElement('div');
+      row.className = 'project-item' + (project.is_active ? ' active' : '');
+      const ico = document.createElement('span');
+      ico.className = 'p-ico';
+      ico.textContent = '📁';
+      const name = document.createElement('span');
+      name.className = 'p-name';
+      name.textContent = project.name || project.path;
+      name.title = project.path + (project.exists ? '' : '（目录不存在）');
+      const del = document.createElement('button');
+      del.className = 'p-del';
+      del.textContent = '✕';
+      del.title = '从列表移除（不删文件）';
+      del.onclick = async (ev) => {
+        ev.stopPropagation();
+        await wsRequest({ type: 'projects_remove', project_id: project.id }, 'projrm');
+        await loadProjects();
+      };
+      row.appendChild(ico); row.appendChild(name); row.appendChild(del);
+      row.onclick = async () => {
+        await wsRequest({ type: 'projects_set_active', project_id: project.id }, 'projact');
+        await loadProjects();
+        await loadSessions();
+        $('sessionScope').textContent = (project.name || '当前项目');
+      };
+      list.appendChild(row);
+    }
+  }
+
+  async function addProjectByPath(path, name) {
+    const note = $('projNote');
+    try {
+      await wsRequest({ type: 'projects_add', path, name: name || '' }, 'projadd');
+      if (note) { note.className = 'snote ok'; note.textContent = '已添加：' + path; }
+      await loadProjects();
+      return true;
+    } catch (e) {
+      if (note) { note.className = 'snote err'; note.textContent = '添加失败: ' + e.message; }
+      return false;
+    }
+  }
+
+  async function pickFolder() {
+    const api = window.clawdDesktop;
+    if (api && typeof api.pickFolder === 'function') {
+      try {
+        const picked = await api.pickFolder();
+        if (picked) await addProjectByPath(picked);
+        return;
+      } catch (_) { /* 落到手动输入 */ }
+    }
+    const input = $('projPathInput');
+    if (input) { input.focus(); input.placeholder = '当前环境没有原生选择器，请粘贴路径'; }
+  }
+
+  async function cloneProject(url) {
+    const note = $('projNote');
+    if (!url) { if (note) { note.className = 'snote err'; note.textContent = '请先填仓库 URL'; } return; }
+    if (note) { note.className = 'snote'; note.textContent = '克隆中…'; }
+    try {
+      await wsRequest({ type: 'projects_clone', url }, 'projclone');
+      if (note) { note.className = 'snote ok'; note.textContent = '克隆完成'; }
+      await loadProjects();
+    } catch (e) {
+      if (note) { note.className = 'snote err'; note.textContent = '克隆失败: ' + e.message; }
+    }
+  }
+
+  // —— 模型选择器 ——
+  async function loadModels() {
+    try {
+      const res = await wsRequest({ type: 'models_list' }, 'models');
+      modelsCache = (res.data && res.data.models) || [];
+      if (!selectedModel && modelsCache.length) selectedModel = modelsCache[0].id;
+    } catch (_) {
+      try {
+        const resp = await fetch('/api/models');
+        const data = await resp.json();
+        modelsCache = data.models || [];
+        if (!selectedModel && modelsCache.length) selectedModel = modelsCache[0].id;
+      } catch (__) { modelsCache = []; }
+    }
+    renderModelList();
+    updateModelButton();
+  }
+
+  function updateModelButton() {
+    const label = $('modelBtnLabel');
+    if (!label) return;
+    const short = String(selectedModel || '').split('/').pop() || '模型';
+    label.textContent = short + (fastMode ? ' · 快速' : '');
+  }
+
+  function renderModelList() {
+    const list = $('modelList');
+    if (!list) return;
+    const keyword = ($('modelSearch').value || '').toLowerCase();
+    list.innerHTML = '';
+    const items = modelsCache.filter((m) =>
+      !keyword || (m.id + ' ' + (m.label || '')).toLowerCase().includes(keyword));
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'usage-empty';
+      empty.textContent = '没有可用模型 —— 先在设置里加一个 API 提供商';
+      list.appendChild(empty);
+      return;
+    }
+    for (const model of items) {
+      const row = document.createElement('div');
+      row.className = 'model-item' + (model.id === selectedModel ? ' active' : '');
+      const idEl = document.createElement('span');
+      idEl.className = 'm-id';
+      idEl.textContent = model.id;
+      const subEl = document.createElement('span');
+      subEl.className = 'm-sub';
+      subEl.textContent = (model.label || '') + (model.source === 'global' ? ' · 全局默认' : '');
+      row.appendChild(idEl); row.appendChild(subEl);
+      row.onclick = () => {
+        selectedModel = model.id;
+        renderModelList();
+        updateModelButton();
+        $('modelOverlay').classList.remove('show');
+      };
+      list.appendChild(row);
+    }
+  }
+
+  function openModelPicker() {
+    $('modelOverlay').classList.add('show');
+    loadModels();
+    $('modelSearch').value = '';
+    setTimeout(() => $('modelSearch').focus(), 50);
+  }
+
+  // —— 会话计时 ——
+  function startElapsed() {
+    sessionStartedAt = Date.now();
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+      const el = $('sessionElapsed');
+      if (!el) return;
+      const sec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+      el.textContent = '工作了 ' + (sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's');
+    }, 1000);
+  }
+  function stopElapsed() {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  }
+
   // —— 会话列表（侧栏"工作区"）：列历史会话，点开加载上下文 ——
   function fmtRel(ts) {
     const t = Number(ts || 0);
@@ -1016,12 +1277,24 @@
     return Math.round(diff / 86400) + ' 天前';
   }
 
+  // 会话按项目分组：workdir 相同的归一组，组标题用项目名，未关联的放最后
+  function projectLabelFor(workdir) {
+    if (!workdir) return '未关联项目';
+    const norm = (v) => String(v || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const target = norm(workdir);
+    const hit = (projectsCache || []).find((p) => norm(p.path) === target);
+    if (hit && hit.name) return hit.name;
+    const parts = String(workdir).replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : workdir;
+  }
+
   async function loadSessions() {
     const list = $('sessionList');
     if (!list) return;
     try {
       const data = await fetchJsonRetry('/api/sessions', 2);
       const items = data.sessions || [];
+      window.__sessionCount = items.length;
       list.innerHTML = '';
       if (!items.length) {
         const empty = document.createElement('div');
@@ -1030,21 +1303,50 @@
         list.appendChild(empty);
         return;
       }
+      // 分组（保持最近的在前）
+      const groups = new Map();
       for (const it of items) {
-        const row = document.createElement('div');
-        row.className = 'session-item';
-        const ico = document.createElement('span');
-        ico.textContent = '💬';
-        const title = document.createElement('span');
-        title.textContent = it.title || it.id;
-        title.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px';
-        const time = document.createElement('span');
-        time.className = 'time';
-        time.textContent = fmtRel(it.updated_at);
-        row.appendChild(ico); row.appendChild(title); row.appendChild(time);
-        row.title = `${it.id} · ${it.status || ''} · ${it.messages || 0} 条消息`;
-        row.onclick = () => openSession(it.id);
-        list.appendChild(row);
+        const key = (it.workdir || '');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(it);
+      }
+      const ordered = Array.from(groups.entries()).sort((a, b) => {
+        const ta = Math.max(...a[1].map((x) => x.updated_at || 0));
+        const tb = Math.max(...b[1].map((x) => x.updated_at || 0));
+        if (!a[0] !== !b[0]) return a[0] ? -1 : 1; // 未关联项目沉底
+        return tb - ta;
+      });
+      for (const [workdir, rows] of ordered) {
+        const head = document.createElement('div');
+        head.className = 'session-group';
+        const name = document.createElement('span');
+        name.className = 'session-group-name';
+        name.textContent = projectLabelFor(workdir);
+        const cnt = document.createElement('span');
+        cnt.className = 'session-group-count';
+        cnt.textContent = String(rows.length);
+        head.appendChild(name);
+        head.appendChild(cnt);
+        if (workdir) head.title = workdir;
+        list.appendChild(head);
+        for (const it of rows) {
+          const row = document.createElement('div');
+          row.className = 'session-item';
+          const ico = document.createElement('span');
+          ico.textContent = '💬';
+          const title = document.createElement('span');
+          title.textContent = it.title || it.id;
+          title.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px';
+          const time = document.createElement('span');
+          time.className = 'time';
+          time.textContent = fmtRel(it.updated_at);
+          row.appendChild(ico); row.appendChild(title); row.appendChild(time);
+          row.title = `${it.id} · ${it.status || ''} · ${it.messages || 0} 条消息`
+            + (it.model ? ` · ${it.provider ? it.provider + '/' : ''}${it.model}` : '')
+            + (workdir ? ` · ${workdir}` : '');
+          row.onclick = () => openSession(it.id);
+          list.appendChild(row);
+        }
       }
     } catch (e) {
       list.innerHTML = '';
@@ -1125,10 +1427,17 @@
     addUser(text);
     turnCount++; updateStats();
     const persona = ($('persona') && $('persona').value) || '';
-    const payload = { type: 'run', goal: text, stream: true, persona, id: 'run-' + Date.now() };
+    const payload = {
+      type: 'run', goal: text, stream: true, persona, id: 'run-' + Date.now(),
+      model: selectedModel || undefined,
+      reasoning_effort: reasoningEffort,
+      fast_mode: fastMode,
+      workdir: (activeProject && activeProject.path) || undefined,
+    };
     if (loadedHistory.length) payload.prior_messages = loadedHistory.slice(-20);
     if (attachments.length) payload.images = attachments.map((a) => ({ data_url: a.dataUrl }));
     ws.send(JSON.stringify(payload));
+    startElapsed();
     clearAttachments();
     $input.value = '';
     $send.disabled = true;
@@ -1227,7 +1536,6 @@
   }
   $('marketSearch').addEventListener('input', renderPlugins);
 
-  // —— 设置（占位：后续接入 Host 配置面） ——
   // —— 设置面板 ——
   const $setOverlay = $('settingsOverlay');
   function openSettings() { $setOverlay.classList.add('show'); loadSettings(); loadProviders(); }
@@ -1326,6 +1634,48 @@
   if (usageRefresh) usageRefresh.onclick = loadUsage;
   const usageOverlay = $('usageOverlay');
   if (usageOverlay) usageOverlay.addEventListener('click', (e) => { if (e.target === usageOverlay) closeUsage(); });
+  const btnAddProject = $('btnAddProject');
+  if (btnAddProject) btnAddProject.onclick = () => $('projectOverlay').classList.add('show');
+  const projectClose = $('projectClose');
+  if (projectClose) projectClose.onclick = () => $('projectOverlay').classList.remove('show');
+  const projBrowse = $('projBrowse');
+  if (projBrowse) projBrowse.onclick = pickFolder;
+  const projPathSave = $('projPathSave');
+  if (projPathSave) projPathSave.onclick = async () => {
+    const value = ($('projPathInput').value || '').trim();
+    if (value && await addProjectByPath(value)) {
+      $('projPathInput').value = '';
+      $('projectOverlay').classList.remove('show');
+    }
+  };
+  const projCloneBtn = $('projCloneBtn');
+  if (projCloneBtn) projCloneBtn.onclick = () => cloneProject(($('projCloneUrl').value || '').trim());
+
+  const btnModel = $('btnModel');
+  if (btnModel) btnModel.onclick = openModelPicker;
+  const modelClose = $('modelClose');
+  if (modelClose) modelClose.onclick = () => $('modelOverlay').classList.remove('show');
+  const modelSearch = $('modelSearch');
+  if (modelSearch) modelSearch.oninput = renderModelList;
+  const modelEffort = $('modelEffort');
+  if (modelEffort) {
+    modelEffort.querySelectorAll('button').forEach((b) => {
+      b.onclick = () => {
+        modelEffort.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        reasoningEffort = b.dataset.effort || '最大';
+      };
+    });
+  }
+  const modelFast = $('modelFast');
+  if (modelFast) {
+    modelFast.onclick = () => {
+      fastMode = !fastMode;
+      modelFast.setAttribute('aria-pressed', fastMode ? 'true' : 'false');
+      updateModelButton();
+    };
+  }
+
   const ctxBtn = $('btnContext');
   if (ctxBtn) ctxBtn.onclick = openContext;
   const ctxClose = $('ctxClose');
@@ -1355,28 +1705,74 @@
 
   function setUpdateLine(text, cls) {
     const el = $('updateLine');
+    if (!el) return;
     el.textContent = text;
     el.className = 'update-line' + (cls ? ' ' + cls : '');
   }
 
   // Electron preload 暴露的桥（浏览器直接访问时为 undefined）
   const bridge = (typeof window !== 'undefined' && window.clawdDesktop) || null;
+  // 更新流程共用一条 toast：下载中不自动消失，就绪时原地换成"重启安装"
+  let updateToast = null;
+  function updateToastFor(status) {
+    if (!updateToast) return null;
+    if (status === 'checking' || status === 'downloading') {
+      updateToast.update({
+        kind: 'warn',
+        icon: '⬇',
+        title: status === 'checking' ? '正在检查更新…' : '发现新版本，后台下载中…',
+        detail: status === 'checking' ? '' : '下载完成后会提示你安装，不影响当前使用。',
+        timeout: 0,
+        actions: [],
+      });
+    }
+    return updateToast;
+  }
   if (bridge && typeof bridge.onUpdateStatus === 'function') {
     bridge.onUpdateStatus((status, detail) => {
+      // 设置页里那行文字保留（用户主动点"检查更新"时有就地反馈）
       if (status === 'checking') setUpdateLine('正在检查更新…', '');
       else if (status === 'downloading') setUpdateLine('发现新版本，后台下载中…', 'warn');
       else if (status === 'none') setUpdateLine('已是最新版本', 'ok');
       else if (status === 'ready') setUpdateLine('新版本已下载，退出后自动安装', 'ok');
       else if (status === 'error') setUpdateLine(detail || '更新检查失败', 'err');
       else if (status === 'unsupported') setUpdateLine(detail || '当前版本不支持自动更新', 'warn');
+
+      // 右下角 toast：只有"有新进展"才弹，避免用户没点检查就被打扰
+      if (status === 'downloading' || status === 'ready') {
+        if (!updateToast) {
+          updateToast = toast({ kind: 'warn', icon: '⬇', title: '检查更新…', timeout: 0 });
+        }
+        updateToastFor(status);
+        if (status === 'ready') {
+          updateToast.update({
+            kind: 'ok',
+            icon: '✔',
+            title: '新版本已就绪',
+            detail: '退出 Clawd 后会自动安装。想立刻生效可点"重启安装"。',
+            timeout: 0,
+            actions: [
+              { label: '重启安装', primary: true, onClick: () => { if (typeof bridge.quitAndInstall === 'function') bridge.quitAndInstall(); } },
+              { label: '稍后', onClick: () => { updateToast = null; } },
+            ],
+          });
+        }
+      } else if (status === 'none') {
+        if (updateToast) { updateToast.update({ kind: 'ok', icon: '✔', title: '已是最新版本', detail: '', timeout: 3000, actions: [] }); updateToast = null; }
+      } else if (status === 'error') {
+        if (updateToast) { updateToast.update({ kind: 'err', icon: '✖', title: '更新检查失败', detail: detail || '', timeout: 5000, actions: [] }); updateToast = null; }
+      }
     });
   }
   $('btnCheckUpdate').onclick = () => {
     if (bridge && typeof bridge.checkForUpdates === 'function') {
       setUpdateLine('正在检查更新…', '');
+      if (!updateToast) updateToast = toast({ kind: 'warn', icon: '⟳', title: '正在检查更新…', timeout: 0 });
+      else updateToastFor('checking');
       bridge.checkForUpdates();
     } else {
       setUpdateLine('浏览器访问模式无更新通道，请在桌面安装版中使用', 'warn');
+      toast({ kind: 'warn', icon: 'ℹ', title: '浏览器访问模式无更新通道', detail: '自动更新只在桌面安装版里可用。', timeout: 4000 });
     }
   };
 

@@ -2,44 +2,66 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.85.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.86.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
 
 ---
 
-## 🖥️ Clawd Desktop（桌面端，v0.61.0 新增）
+## 🖥️ Clawd Desktop（桌面端）
 
 DSH 式桌面客户端，**双击即用**：
 
 | 形态 | 获取 |
 |------|------|
-| NSIS 安装程序（带自动更新） | [GitHub Release](https://github.com/lza6/claw-code-tingfeng/releases/tag/v0.61.0) → `Clawd Desktop Setup 0.1.0.exe` |
-| Portable 免安装 | 同 Release → `ClawdDesktop-Portable-0.1.0.exe` |
+| NSIS 安装程序（带自动更新） | GitHub Release → `Clawd Desktop Setup <version>.exe` |
+| Portable 免安装 | 同 Release → `ClawdDesktop-Portable-<version>.exe` |
 | 开发模式 | `cd desktop && npm run dev` |
+| 签名构建 | `pwsh -File scripts/build_desktop_signed.ps1 -SelfSigned`（验证签名管线）/ `-Pfx <证书> -Password <口令>`（正式） |
 
-- **DSH 设计规范 UI**：三阶深灰 + 品牌蓝，侧栏工作台、插件市场（毛玻璃弹窗）、工具调用实时折叠行
-- **架构**：Electron 壳（窗口/托盘/单实例/崩溃自愈）→ spawn Python Host（`clawd serve`）→ WS 同端口托管 Web UI；壳内不造 IPC
-- **插件市场**：`.clawd/plugins/*/pyproject.toml` 的插件会真实出现在市场（Host 只发现 manifest 不执行代码）；
-  内置能力包（逆向工具集/安全工具目录/MCP 桥接/推理模式）一并展示；支持搜索与状态标注
-- **设置面板**：实时显示版本 / Python / 工作目录 / API Key 状态（**不回显密钥**），
-  可改 provider / model / base_url 与 RAG、原生 function-calling 开关；保存写入 `.clawd/ui_settings.json`，
-  同时写入运行期配置（引擎立即生效，provider/model/base_url 需重启 Host）
-- **版本与更新**：侧栏显示真实版本（单一来源 `pyproject.toml`，桌面壳 `package.json` 与之同步）；
-  「检查更新」经 preload IPC 桥把状态回传 UI（检查中 / 下载中 / 已最新 / 就绪 / 出错 / 不支持）
-- **自动更新**：仅安装版支持（portable 版明确提示不支持）。更新源默认是占位地址，
-  必须用环境变量 `CLAWD_UPDATE_URL`（或改 `desktop/package.json` 的 `build.publish`）指向真实发布源，
-  否则 UI 会明确告知"更新源未配置"，不静默失败
-- **首次启动**：图形化引导配置 LLM API（OpenAI 兼容），配置存本机 userData
-- 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）与 `docs/RELEASE_UPDATES.md`（发布/更新）
+**工作台（照参考客户端结构实现，后端用我们自己的）**
+- **项目侧栏**：列出项目、点击切换（当前高亮）、`✕` 从列表移除（**不删文件**）；
+  存 `<数据目录>/projects.json`。新会话的工作目录 = 当前项目。
+  `＋` 添加项目：原生文件夹选择器（纯网页环境降级为粘贴路径）或从 URL `git clone --depth 1`。
+- **会话按项目分组**：历史会话按 `workdir` 归组，组标题是项目名、右侧显示条数，
+  未关联项目的会话沉到最下面；会话 metadata 同时记 persona / model / provider。
+- **模型选择器**：composer 左侧「模型 ⌄」——搜索、按 provider 分组的模型列表、
+  5 档推理强度（低/中/高/极高/最大 → temperature 0.9→0.0）、快速模式（`max_tokens ≤ 1024`）。
+- **上下文面板**：实时显示已用 token / 窗口上限 / 占比条与分段明细。
+- **用量统计**：KPI（请求数/输入输出 token/成本/缓存命中率）+ 按小时柱状图 + 按模型/调用方汇总 + 最近请求表。
+  调用方维度区分 `cli` / `desktop`，成本按 provider 单价估算。
+- **工具调用折叠**：连续工具调用合成一行「运行 N 命令 和 编辑 M 文件」，点开逐条看参数与结果；
+  每轮显示「工作了 32m 3s」「思考了 7s」。
+- **消息渲染**：完整 Markdown（标题/列表/表格/引用/代码块/行内码）+ 内联图片（本地 `/api/file?path=` 与 http(s)）；
+  图片可直接粘贴上传（存 `<数据目录>/uploads`）。
+- **多 provider**：设置页可配置多个 OpenAI 兼容 provider（id/名称/模型/base_url/密钥来源），
+  选一个设为默认；密钥只显示掩码（`sk-ab…1234`）或环境变量名，**永不回显明文**。
+- **更新提示走右下角 toast**：单条贯穿 检查中 → 下载中 → 已就绪，就绪时给「重启安装 / 稍后」；
+  侧栏那行文字只做就地状态显示，不抢正文。
 
-> **桌面端 E2E**（真实浏览器 + 真实 Electron + 真实更新源，非桩）：
-> - `cd desktop && node ui_settings_e2e.mjs` — 浏览器驱动 UI，17 项（设置/市场/版本/搜索）
-> - `node electron_bridge_e2e.mjs` — 真实 Electron 壳，10 项（preload 桥/版本一致性/各面板）
-> - `node update_feed_e2e.mjs` — 真实 electron-updater 拉本地 feed，4 项（feed 请求/版本识别/状态上报/URL 覆盖）
->
-> 更新链路已验证到「请求 feed → 识别新版本 → 开始下载」；**静默安装**需要真实发布环境与已签名安装包，见 `docs/RELEASE_UPDATES.md`。
+**架构**
+- Electron 壳（窗口/托盘/单实例/崩溃自愈，**无原生菜单栏**，快捷键走 `before-input-event`）
+  → spawn Python Host（`clawd serve`）→ WS 同端口托管 Web UI；壳内不造业务 IPC，只做外壳能力
+- **数据目录分离**：桌面端数据放 `app.getPath('userData')/data`（`CLAWD_DATA_DIR` 注入），
+  与安装目录解耦 → **升级/重装不丢配置、用量、会话**；启动时一次性迁移旧 `.clawd`
+- **存储选型**：高频聚合（用量）走 SQLite；低频、可手改的配置（`providers.json` / `projects.json`）走 JSON，
+  原子替换（写临时文件 + `os.replace`）
+- **插件市场**：`.clawd/plugins/*/pyproject.toml` 的插件会真实出现在市场（Host 只发现 manifest 不执行代码）
+- **自动更新**：仅安装版支持（portable 版明确提示不支持）。更新源必须用环境变量 `CLAWD_UPDATE_URL`
+  （或改 `desktop/package.json` 的 `build.publish`）指向真实发布源，否则 UI 明确告知"更新源未配置"，不静默失败
+- 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）、`docs/RELEASE_UPDATES.md`（发布/更新）、`docs/adr/`（决策记录）
+
+> **桌面端 E2E**（真实浏览器 + 真实 Electron + 真实安装包，非桩）：
+> - `node ui_console_e2e.mjs` — 浏览器驱动装好的 Host，**27 项**（滚动/Markdown+图片/会话分组/toast/
+>   工具折叠/上下文/用量/provider/项目/模型选择器）
+> - `node ui_stream_persona_e2e.mjs` — 真流式 + 角色库 + 无顶栏
+> - `node ui_settings_e2e.mjs`（18 项）、`node electron_bridge_e2e.mjs`（10 项）、
+>   `node update_feed_e2e.mjs`（4 项）
+> - 装机全链路：`%TEMP%\clawd-install-e2e.ps1` —— 静默安装 → 27 项浏览器断言 → 重启后
+>   provider 与会话接口仍在 → 卸载 → 残留清理
+> - 静态防回归：`tests/test_electron_main_static.py`（7 条：electron 符号必须解构导入、
+>   同一函数内不得先用后声明、无默认菜单、preload 不透 Node 能力）
 
 ## ⚡ 超级智能体能力（v0.61.0 新增）
 
@@ -409,19 +431,19 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **本轮按目录回归全绿**：agent+cli+eval+mcp+backends **1403 passed / 0 failed**（931s）；backends+core+mcp+eval+cli 1500 passed（上一轮） | `py -3.10 -m pytest tests/ -q` |
-| 快速层（不含 slow） | 本轮分目录跑：backends+core+mcp+eval+cli **1500 passed / 78s**、agent+workflow **1208 passed / 554s** | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5280 / 0 errors**（2026-10-30 v0.84.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
-| 契约测试 | 39 passed | `pytest tests/contracts -q`（历史值，本轮含在全量内） |
+| 测试用例 | **5295 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.86.0 实测，392.71s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5295 passed / 0 failed / 6 分 33 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5325 / 0 errors**（2026-10-30 v0.86.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **495**（2026-10-30 v0.84.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **497**（2026-10-30 v0.86.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
-| 静默吞异常 | **159**（AST 口径，门禁 ≤159），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 159` |
+| 静默吞异常 | **158**（AST 口径，门禁 ≤158），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 158` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 上一轮实跑（退出码 0）；v0.76.5 未跑：真实 LLM 端点属付费红线 |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 

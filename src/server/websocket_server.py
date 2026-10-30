@@ -443,6 +443,54 @@ class ClawdWebSocketServer:
                 body,
             )
 
+        # API 端点：项目列表
+        if path == '/api/projects':
+            from ..core import projects_store
+
+            try:
+                payload = {
+                    'projects': projects_store.list_projects(),
+                    'active': projects_store.active_project(),
+                }
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'), ('Connection', 'close')]),
+                body,
+            )
+
+        # API 端点：模型清单
+        if path == '/api/models':
+            try:
+                from ..core import providers_store
+
+                models: list[dict[str, Any]] = []
+                seen: set[str] = set()
+                for item in providers_store.list_providers():
+                    if item.get('model') and item['model'] not in seen:
+                        seen.add(item['model'])
+                        models.append({'id': item['model'],
+                                       'label': item['name'] + ' · ' + item['model'],
+                                       'source': 'provider', 'provider': item['id']})
+                body = json.dumps({'models': models, 'count': len(models)}, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else 'Internal Server Error',
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'), ('Connection', 'close')]),
+                body,
+            )
+
         # API 端点：上下文用量（"这一轮上下文都被谁占了"）
         if path == '/api/context':
             import os as _os
@@ -494,9 +542,11 @@ class ClawdWebSocketServer:
         # API 端点：会话列表（侧栏"工作区"里那些历史会话）
         if path == '/api/sessions':
             from ..core import session_bridge
+            from ..core.data_dir import data_path
 
             try:
-                views = session_bridge.list_all(Path.cwd() / '.clawd' / 'sessions')
+                sessions_dir = data_path('sessions')
+                views = session_bridge.list_all(sessions_dir)
                 items = [
                     {
                         'id': v.session_id,
@@ -505,8 +555,11 @@ class ClawdWebSocketServer:
                         'updated_at': v.updated_at,
                         'turns': v.turn_count,
                         'messages': len(v.messages),
+                        'workdir': str((v.metadata or {}).get('workdir') or ''),
+                        'provider': v.provider or '',
+                        'model': v.model or '',
                     }
-                    for v in views[:50]
+                    for v in views[:80]
                 ]
                 body = json.dumps({'sessions': items, 'count': len(items)}, ensure_ascii=False).encode('utf-8')
                 status = 200
@@ -534,8 +587,10 @@ class ClawdWebSocketServer:
             if not sid:
                 return _WsResponse(400, 'Bad Request', _H([('Content-Type', 'text/plain; charset=utf-8'),
                                                           ('Content-Length', '4'), ('Connection', 'close')]), b'need')
+            from ..core.data_dir import data_path as _dp
+
             try:
-                view = session_bridge.load(sid, Path.cwd() / '.clawd' / 'sessions')
+                view = session_bridge.load(sid, _dp('sessions'))
                 payload = {
                     'id': view.session_id,
                     'title': view.title,

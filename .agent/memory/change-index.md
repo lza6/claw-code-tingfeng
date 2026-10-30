@@ -1,5 +1,31 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.86.0 桌面端收口（会话分组 / toast / 两个启动级 bug）
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/core/session_bridge.py | `persist_agent_session(..., workdir=)` → metadata.workdir（侧栏分组依据） |
+| 修改 | src/agent/engine.py | 落盘时传 `workdir=self.workdir` |
+| 修改 | src/server/websocket_server.py | `/api/sessions`、`/api/session` 由 `cwd/.clawd/sessions` 改 `data_path('sessions')`；列表带 workdir/model/provider |
+| 修改 | desktop/web/app.js | 会话按项目分组渲染；右下角 toast（`window.__clawdToast`）；更新状态接 toast；删除"设置占位"过期注释 |
+| 修改 | desktop/web/index.html | `#toastHost` 容器 + `.toast*` / `.session-group*` 样式 |
+| 修改 | desktop/electron/main.js | 删 `registerIpcHandlers` 内重复解构（TDZ 启动崩溃）；新增 `clawd:quit-and-install` |
+| 修改 | desktop/electron/preload.js | 暴露 `quitAndInstall()` |
+| 修改 | desktop/ui_console_e2e.mjs | 20→24 项，扩到 27 项（分组数/ workdir 字段 / toast 位置） |
+| 新增 | tests/server/test_sessions_api.py | 4 条真 HTTP：数据目录跟随、workdir 字段、详情、404 |
+| 新增 | tests/test_electron_main_static.py | 7 条静态检查（含 TDZ 先用后声明，反向验证过） |
+| 修改 | tests/core/test_session_persist_structure.py | +3 条 workdir metadata |
+| 修改 | CHANGELOG.md / workflow_status.md / .agent/memory/change-index.md | 记录 |
+| 修改 | scripts/prepare_host_bundle.py | 依赖闭包改为空格分隔+分批；dist-info 随包复制；顶层 DLL 全量；禁止复制 .pth；[5/5] 真实 import 自检 + 缺依赖自动补齐 + 打包后清脏数据 |
+| 修改 | docs/MAINTENANCE.md | 新增 3.5 桌面端接口 SOP；发布检查单补"桌面端出包三步" |
+| 修改 | docs/getting-started.md | 4.6 改为 JSON 存储与数据目录表；新增 4.7 项目/会话分组/更新提示 |
+| 新增 | docs/adr/0022-desktop-data-dir-and-storage.md | 数据目录分离 + JSON vs SQLite 选型决策 |
+| 新增 | scripts/diag_desktop_start.ps1 | 装机启动排错（抓 stderr / shell.log / 数据目录 / 端口文件） |
+| 新增 | scripts/diag_restart.ps1 | 装机重启排错（装→启动→杀→再启动并逐秒观察，分清产品问题 vs E2E 脚本问题） |
+| 修改 | desktop/electron/main.js | 加 uncaughtException/unhandledRejection 落盘 + 启动流程 try/catch（闪退留痕） |
+| 修改 | tests/core/test_packaging_contract.py | +6 条打包契约（pip 参数/自检/dist-info/禁 .pth/DLL/自动补齐） |
+| 修改 | %TEMP%/clawd-install-e2e.ps1 | 控制台 E2E 输出扩到 40 行；新增 STEP2f（重启后 /api/sessions + workdir 字段，带重试） |
+| 修改 | README.md | 桌面章节重写（工作台能力/架构/存储/E2E 清单）；指标改实测值 |
+
 ## 2026-10-27 超级智能体增强
 | 类型 | 路径 | 说明 |
 |------|------|------|

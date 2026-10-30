@@ -39,6 +39,25 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .session-item:hover{background:var(--hover)}
 .session-item.active{background:var(--hover);color:var(--label-primary)}
 .session-item .time{margin-left:auto;font-size:11px;color:var(--label-tertiary)}
+.session-group{display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--label-tertiary)}
+.session-group-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-group-count{margin-left:auto;font-weight:500;opacity:.7}
+.session-group:first-child{padding-top:4px}
+.toast-host{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:900;max-width:340px}
+.toast{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:var(--radius-l);background:rgba(42,42,42,.96);border:1px solid var(--border-l2);box-shadow:0 8px 24px rgba(0,0,0,.45);color:var(--label-primary);font-size:12.5px;animation:toast-in .18s ease-out;backdrop-filter:blur(10px)}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.toast.out{opacity:0;transform:translateY(6px);transition:opacity .16s,transform .16s}
+.toast .t-ico{flex:0 0 auto;font-size:13px;line-height:1.35}
+.toast .t-body{flex:1 1 auto;min-width:0}
+.toast .t-title{font-weight:600}
+.toast .t-detail{margin-top:3px;color:var(--label-secondary);word-break:break-word}
+.toast .t-act{margin-top:7px;display:flex;gap:6px}
+.toast .t-btn{padding:4px 10px;border-radius:var(--radius-s);border:1px solid var(--border-l2);background:var(--bg-layer-3);color:var(--label-primary);font-size:12px;cursor:pointer}
+.toast .t-btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.toast .t-close{flex:0 0 auto;background:transparent;border:0;color:var(--label-tertiary);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.toast.ok{border-color:rgba(74,222,128,.5)}
+.toast.warn{border-color:rgba(255,176,32,.5)}
+.toast.err{border-color:rgba(255,128,128,.55)}
 .sidebar-footer{border-top:1px solid var(--border-l1);padding-top:10px;display:flex;flex-direction:column;gap:2px}
 .side-entry{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-c);color:var(--label-secondary);font-size:13px;width:100%;text-align:left}
 .side-entry:hover{background:var(--hover);color:var(--label-primary)}
@@ -136,6 +155,52 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .prov-item button:hover{background:var(--hover);color:var(--label-primary)}
 .prov-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .prov-form .full{grid-column:1/-1}
+
+/* 项目列表 / 添加项目 / 模型选择器 */
+.gh-add{width:20px;height:20px;border-radius:5px;color:var(--label-tertiary);font-size:14px;line-height:1}
+.gh-add:hover{background:var(--hover);color:var(--label-primary)}
+.project-list{display:flex;flex-direction:column;gap:2px;margin-bottom:6px;max-height:34vh;overflow-y:auto}
+.project-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-c);color:var(--label-secondary);cursor:pointer;font-size:13px}
+.project-item:hover{background:var(--hover)}
+.project-item.active{background:var(--hover);color:var(--label-primary)}
+.project-item .p-ico{width:16px;text-align:center}
+.project-item .p-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-item .p-del{color:var(--label-tertiary);font-size:11px;opacity:0}
+.project-item:hover .p-del{opacity:1}
+.sb-elapsed{font-size:11px;color:var(--label-tertiary);margin-left:8px}
+
+.proj-row{display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:13px;color:var(--label-secondary)}
+.proj-row select{height:30px}
+.proj-option{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:1px solid var(--border-l2);border-radius:var(--radius-c);background:var(--bg-layer-3);text-align:left;margin-bottom:10px}
+.proj-option:hover{border-color:var(--brand)}
+.po-ico{font-size:18px}
+.po-text{display:flex;flex-direction:column;gap:2px}
+.po-text small{color:var(--label-tertiary);font-size:11.5px}
+.po-arrow{margin-left:auto;color:var(--label-tertiary)}
+.proj-manual,.proj-clone{display:flex;gap:8px;margin-bottom:10px}
+.proj-manual input,.proj-clone input{flex:1}
+.proj-sub{font-size:12px;color:var(--label-tertiary);margin:8px 0 8px}
+
+.model-btn{display:flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:var(--radius-s);border:1px solid var(--border-l2);background:var(--bg-layer-3);color:var(--label-secondary);font-size:12px;max-width:190px}
+.model-btn:hover{border-color:var(--brand);color:var(--label-primary)}
+.model-btn #modelBtnLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-search{width:100%;height:32px}
+.model-list{max-height:260px;overflow-y:auto;padding:4px 8px}
+.model-item{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:var(--radius-m);cursor:pointer}
+.model-item:hover{background:var(--hover)}
+.model-item.active{background:var(--hover);outline:1px solid var(--border-l2)}
+.model-item .m-id{font-size:13px;color:var(--label-primary)}
+.model-item .m-sub{font-size:11px;color:var(--label-tertiary)}
+.model-foot{border-top:1px solid var(--border-l1);padding:10px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.mf-row{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--label-secondary)}
+.mf-effort{margin-left:auto;display:flex;gap:2px}
+.mf-effort button{padding:3px 9px;border-radius:5px;font-size:12px;color:var(--label-tertiary)}
+.mf-effort button.active{background:var(--bg-layer-3);color:var(--label-primary)}
+.mf-row .toggle{margin-left:auto;width:38px;height:20px;border-radius:10px;background:var(--bg-layer-3);border:1px solid var(--border-l2);position:relative}
+.mf-row .toggle span{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--label-tertiary);transition:left .15s}
+.mf-row .toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand)}
+.mf-row .toggle[aria-pressed="true"] span{left:20px;background:#fff}
+.mf-actions{display:flex;justify-content:flex-end}
 
 /* 上下文用量 */
 .ctx-btn{width:28px;height:26px;border-radius:50%;border:1px solid var(--border-l2);background:var(--bg-layer-3);color:var(--label-secondary);font-size:13px;display:flex;align-items:center;justify-content:center}
@@ -277,7 +342,12 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
       <div class="badge">DESKTOP</div>
     </div>
     <button class="new-chat" id="newChat">＋ 新会话</button>
-    <div class="group-head"><span>工作区</span><span style="font-size:11px">本地</span></div>
+    <div class="group-head">
+      <span>项目</span>
+      <button class="gh-add" id="btnAddProject" title="添加项目">＋</button>
+    </div>
+    <div class="project-list" id="projectList"></div>
+    <div class="group-head"><span>会话</span><span style="font-size:11px" id="sessionScope">当前项目</span></div>
     <div class="session-list" id="sessionList"></div>
     <div class="sidebar-footer">
       <button class="side-entry" id="btnMarket"><span class="ico">◉</span> 插件市场</button>
@@ -295,6 +365,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
   <main class="main">
     <div class="sessionbar">
       <span class="sb-title" id="sessionTitle">新会话</span>
+      <span class="sb-elapsed" id="sessionElapsed"></span>
       <div class="sb-right">
         <button class="sb-btn" id="btnTrace" title="查看原始事件轨迹">轨迹</button>
         <div class="conn" id="conn"><span class="dot"></span><span id="connText">未连接</span></div>
@@ -309,6 +380,9 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
         <div class="attach-bar" id="attachBar"></div>
         <textarea id="input" rows="1" placeholder="给智能体发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
         <div class="composer-row">
+          <button class="model-btn" id="btnModel" title="模型 / 推理强度">
+            <span id="modelBtnLabel">模型</span><span class="mb-chev">⌄</span>
+          </button>
           <button class="ctx-btn" id="btnContext" title="上下文用量">◎</button>
           <select class="persona-select" id="persona" title="角色（系统提示词模板）">
             <option value="">默认角色</option>
@@ -339,6 +413,63 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
       <input class="market-search" id="marketSearch" placeholder="搜索插件…">
     </div>
     <div class="market-body"><div class="market-grid" id="marketGrid"></div></div>
+  </div>
+</div>
+
+<!-- 添加项目弹窗 -->
+<div class="overlay" id="projectOverlay">
+  <div class="market-panel" style="max-width:520px;height:auto">
+    <div class="market-head" style="display:flex;align-items:flex-start">
+      <div style="flex:1">
+        <h1>添加项目</h1>
+        <p>一个项目 = 一个文件夹；选中后新会话就在该目录里干活</p>
+      </div>
+      <button class="market-close" id="projectClose">✕</button>
+    </div>
+    <div style="padding:8px 22px 20px">
+      <div class="proj-row">
+        <span class="proj-row-label">主机</span>
+        <select id="projHost"><option>Local Windows</option></select>
+      </div>
+      <button class="proj-option" id="projBrowse">
+        <span class="po-ico">📁</span>
+        <span class="po-text"><strong>浏览文件夹</strong><small>本地项目、Git 仓库或包含多个仓库的文件夹</small></span>
+        <span class="po-arrow">↗</span>
+      </button>
+      <div class="proj-manual">
+        <input id="projPathInput" placeholder="也可以直接粘贴路径，如 D:\code\my-repo">
+        <button class="sbtn primary" id="projPathSave">添加</button>
+      </div>
+      <div class="proj-sub">其他添加方式</div>
+      <div class="proj-clone">
+        <input id="projCloneUrl" placeholder="从 URL 克隆（https://github.com/owner/repo.git）">
+        <button class="sbtn" id="projCloneBtn">克隆并添加</button>
+      </div>
+      <div class="snote" id="projNote"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 模型选择器 -->
+<div class="overlay" id="modelOverlay">
+  <div class="market-panel" style="max-width:420px;height:auto">
+    <div style="padding:12px 16px 6px">
+      <input id="modelSearch" class="model-search" placeholder="搜索模型…">
+    </div>
+    <div class="model-list" id="modelList"></div>
+    <div class="model-foot">
+      <div class="mf-row"><span>推理强度</span>
+        <div class="mf-effort" id="modelEffort">
+          <button data-effort="低">低</button><button data-effort="中">中</button>
+          <button data-effort="高">高</button><button data-effort="极高">极高</button>
+          <button data-effort="最大" class="active">最大</button>
+        </div>
+      </div>
+      <div class="mf-row"><span>快速模式</span>
+        <button class="toggle" id="modelFast" aria-pressed="false"><span></span></button>
+      </div>
+      <div class="mf-actions"><button class="sbtn" id="modelClose">关闭</button></div>
+    </div>
   </div>
 </div>
 
@@ -459,5 +590,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
 </div>
 
 <script src="app.js"></script>
+  <!-- 右下角 toast 通知（更新提示等非阻塞信息走这里，不占正文） -->
+  <div class="toast-host" id="toastHost"></div>
 </body>
 </html>

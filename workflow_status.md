@@ -1,6 +1,19 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.62.0 Agent 评测 harness（W8 闭环）+ 覆盖率 60.33% + 9 个真实 P1 缺陷修复**（2026-10-28）：收集 4575/0 errors · 执行 4491 passed/0 failed · 静默异常 156 · ruff src 319 · E2E 5/5 · 压测 0 错误率 · 桌面端阶段 1-5 COMPLETE
+> 状态: **v0.86.0 桌面客户端收口**（2026-10-30）：数据目录分离 + 会话按项目分组 + 更新提示走右下角 toast + 修三个启动级 bug（TDZ / ipcMain 解构 / 打包缺 annotated_doc）；收集 **5325/0 errors** · 全量非 slow **5295 passed/0 failed**（6m33s）· 静默吞异常 **158** · 可达 **497** · `verify_audit_p1` **28/28** · `check_doc_drift` 全一致 · 控制台 UI E2E **27 项** · Electron 静态检查 **7 条**
+
+## 下一轮待办（用户已拍板）
+- **真多模态视觉输入**（用户批准做）：改造点已勘察 ——
+  ①`LLMMessage.content` 放宽为 `str | list[dict]`（`src/llm/config.py`）；
+  ②`AgentLoopConfig` 加 `images: list[str]`（本地绝对路径），`build_initial_messages`
+  把它们拼成 `[{"type":"image_url","image_url":{"url":"data:..."}}]` 内容块；
+  ③`engine.run/run_stream(images=...)` 透传到 loop config；
+  ④`handlers._handle_run` 不再只把路径塞进 goal，而是传 `images=`；
+  ⑤provider 不支持视觉时（`BadRequestError`/`unsupported`）**自动回退**成"路径告知 + 如实说看不到"；
+  ⑥单图上限收紧到 2MB（base64 膨胀会吃 token）。
+  验收：单测覆盖 blocks 构造/回退路径；真实调用需一个支持视觉的模型（当前 `step-5-preview` 未知，
+  若无则标注"待验证"并保留回退路径）。
+- 结构化日志目录改走 `data_path('logs')`（见 known-issues P3-0）。
 
 ## 桌面端进度（DSH 模式 + Electron）
 | 阶段 | 内容 | 状态 |
@@ -29,6 +42,9 @@
 | A8 | 硬指标不回归 | done — ruff All passed；collect 0 errors；IMPORT-FAIL=0 |
 
 ## 验证日志
+- 2026-10-30（v0.86.0 终验 · 装机 E2E 第 11 轮全绿）: 静默安装 → STEP2 启动（HTTP 200）→ STEP2b 真实 LLM 对话 → STEP2c 真流式+角色库+无顶栏 → STEP2d **27 项全绿 + 图片附件落盘 1** → STEP2e 重启后 provider 仍在 → STEP2f 重启后 `/api/sessions` 200（3 条会话、条目带 `workdir`）→ STEP3 残留进程 0 → STEP4 静默卸载 → STEP5 清理、注册表残留 0；数据目录实测含 `providers.json`/`projects.json`/`sessions/*.json`/`uploads/`（数据目录分离生效）。前 10 轮共修掉 5 个"只有装到机器上才暴露"的缺陷 + 3 处 E2E 自身假阴性（探针目录、userData 名字、脚本自杀 taskkill）
+- 2026-10-30（v0.86.0 收口·打包五连）: 装机验证连带修 —— ①依赖闭包用逗号拼 pip 参数导致闭包永远为空（缺 annotated_doc）②元数据不可靠（anyio 无 Requires-Dist → 缺 exceptiongroup）③只拷包目录不拷 dist-info（anthropic 读自身版本 → PackageNotFoundError）④手写 DLL 清单漏 python3.dll（C 扩展 DLL load failed）⑤图片附件路径用 relative_to(workdir) 抛错被吞（goal 里没有附件路径 → 模型说看不到图）；bundle 增加 [5/5] 真实 import 自检 + 缺什么自动补齐（最多 30 轮）+ 打包后清脏数据；白名单纳入延迟 import 的 celery/redis/GitPython/otel/LSP（+27MB）
+- 2026-10-30（v0.86.0 收口）: 桌面端 **10 个真实缺陷/缺口**闭环 —— ①数据目录分离（`CLAWD_DATA_DIR` 唯一入口 + 旧数据一次性迁移，修"重启后配置/用量/会话全丢"）②provider 改 JSON 可手改不丢 ③工具调用折叠成组（"运行 N 命令 和 编辑 M 文件"）④上下文面板 ⑤会话按项目分组（`workdir` 写入会话 metadata）⑥`/api/sessions`+`/api/session` 硬编码 `cwd/.clawd` 改走数据目录（**侧栏永远空着的根因**）⑦更新提示改右下角 toast + `quitAndInstall` 桥 ⑧三个启动级 bug：Electron 主进程 TDZ（函数内重复解构 `ipcMain`）；打包缺 `annotated_doc`（依赖闭包用逗号拼 pip 参数 → 闭包永远为空）；打包缺 `exceptiongroup`/`python3.dll`/dist-info（元数据不可靠 + 手写 DLL 清单漏项）→ bundle 加 [5/5] 真实 import 自检 + 缺什么自动补齐⑨世界模型索引排除 site-packages（11606→635）⑩签名构建管线（`-SelfSigned` 验证通过，Status=UnknownError 属自签名预期）；新增 `tests/server/test_sessions_api.py`（4 项真 HTTP）+ `tests/test_electron_main_static.py`（7 项静态检查，含"先用后声明"反向验证有效）+ 会话 workdir 3 项
 - 2026-10-28（v0.62.0）: 新增 src/eval 评测 harness（replay 零成本 / live 双闸 / 五类确定性断言 / 基线回归），33 用例，`clawd eval smoke.json` 3/3 exit 0；接线 --dimension 假开关（5 用例）；全量 4627 passed/0 failed；IMPORT 607/607；收集 4655/0 errors
 - 2026-10-28（v0.61.3）: 覆盖率 54.87%→**60.33%**（+883 用例，5 个并行攻坚代理）；修复 **8 个真实 P1 缺陷**（notification payload 缺 3 字段致 20/38 事件崩、ISO 时间戳、watch set 序列化、pipeline 两个不存在的 ErrorCode、pipeline artifacts 不回写、chat 永退 1、config 单向开关）；全量 4491 passed/0 failed
 - 2026-10-28（v0.61.2）: 死码删除 P1+P2 落地（47 文件/10,685 行零引用孤岛，保守跳过 core.security 等 4 组争议项）；独立审查 1 轮 Required×2+Suggestion×4 全部修复；ralplan skip 语义就地内联恢复（7 锁定测试 + 原实现 5 用例等价性 diff，顺带修原 None.strip 潜在 bug）；快速回归 3692/0；E2E 5/5；可达 455 不变
@@ -308,3 +324,20 @@
 - [x] 安装 E2E 新增 STEP2e：重启应用后 `/api/providers` 仍有配置（直接验证用户头号投诉）。
 - 测试：`tests/core/test_data_dir_and_providers_json.py` 13 条（含跨进程重启读取）；
       core+server+cli 1459 passed；console E2E 21 项全绿；ruff 全过。
+
+## 2026-10-30 v0.86.0 —— 客户端照抄参考项目（项目/添加项目/模型选择器/计时）
+
+- [x] 侧栏「项目」：列表 + 点击切换（active 高亮）+ ✕ 移除（不删文件）；存 `<数据目录>/projects.json`；
+      **新会话工作目录 = 当前项目**（run 带 workdir → 引擎 create(workdir=...)）。
+- [x] 「添加项目」对话框：主机下拉 / 浏览文件夹（Electron 原生 pickFolder，网页降级为粘贴路径）/
+      从 URL 克隆（Host 真跑 `git clone --depth 1` 到 `<数据目录>/clones/<name>` 并自动加入）。
+- [x] 模型选择器：搜索 + 模型列表（含来源）+ 推理强度 5 档 + 快速模式开关；
+      run 带 model/reasoning_effort/fast_mode（推理强度→temperature 0.9→0.0，快速模式 max_tokens ≤1024）。
+- [x] 会话栏「工作了 Ns / Nm Ns」计时（每轮开始/结束）。
+- 验证：控制台 E2E **24 项全绿**；`tests/core/test_projects_store.py` 7 条；core+server+cli 1465 passed；
+      走查截图 29-add-project / 30-model-picker / 26-tool-fold / 28-context-panel。
+- 未做（下一步）：会话按项目分组、更新提示 toast 化、任务/自动化面板（参考项目专属功能，需另定）。
+
+- [x] 修启动级 bug：0.86.0 首个安装包**打不开**（main.js 用 ipcMain 但没解构导入 →
+      registerIpcHandlers 抛错 → 主进程在开窗前挂掉）。已补导入，并新增
+      `tests/test_electron_main_static.py`（6 条）静态守住"electron 符号必须都导入 / 无默认菜单 / preload 不透 Node"。

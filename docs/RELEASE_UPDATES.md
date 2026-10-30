@@ -10,15 +10,24 @@
 ## 构建步骤
 
 ```powershell
-# 1. 准备 host bundle（内嵌 Python + 精简依赖 + 源码，约 1-3 分钟）
+# 1. 准备 host bundle（内嵌 Python + 精简依赖 + 源码，约 3-6 分钟）
+#    必须看到 [5/5] 自检全过（用打包后的解释器真实 import + `-m src --help`）
+#    缺依赖会自动从 venv 补齐，补不齐会中断 —— 这一步不过就别打包
 venv/Scripts/python.exe scripts/prepare_host_bundle.py
 
-# 2. 打包（NSIS + portable 双产物）
-cd desktop
-npm run dist
+# 2. 打包（NSIS + portable 双产物；建议用签名脚本，本地验证用 -SelfSigned）
+pwsh -NoProfile -File scripts/build_desktop_signed.ps1 -SelfSigned
 ```
 
 产物在 `desktop/dist/`。
+
+> **为什么第 1 步的自检不能跳过**：bundle 里少一个包或一个 DLL，源码、单测、
+> `node --check`、静态检查**全是绿的**，只有装到机器上双击才发现。本项目一天内踩过三次：
+> `annotated_doc`（typer 的间接依赖没进白名单）、`exceptiongroup`（venv 里 anyio 的 METADATA
+> 没有 Requires-Dist）、`python3.dll`（手写 DLL 清单漏项导致 C 扩展加载失败）。
+>
+> **出包后必须做的终验**：`pwsh -File %TEMP%\clawd-install-e2e.ps1` ——
+> 静默安装 → 27 项浏览器断言 → 重启后 provider 仍在 → 卸载 → 残留清理（STEP5 会先留证）。
 
 ## 自动更新机制（仅 NSIS 安装版）
 

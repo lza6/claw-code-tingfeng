@@ -149,6 +149,12 @@ class MessageRouter:
             'auth': self._handle_auth,
             'run': self._handle_run,
             'personas': self._handle_personas,
+            'projects_list': self._handle_projects_list,
+            'projects_add': self._handle_projects_add,
+            'projects_remove': self._handle_projects_remove,
+            'projects_set_active': self._handle_projects_set_active,
+            'projects_clone': self._handle_projects_clone,
+            'models_list': self._handle_models_list,
             'providers_list': self._handle_providers_list,
             'providers_save': self._handle_providers_save,
             'providers_delete': self._handle_providers_delete,
@@ -268,9 +274,34 @@ class MessageRouter:
             )
 
         stream = message.get('stream', False)
+        chosen_model = str(message.get('model') or '').strip()
+        reasoning_effort = str(message.get('reasoning_effort') or '').strip()
+        fast_mode = bool(message.get('fast_mode'))
         llm_config_from_msg: LLMConfig | None = message.get('llm_config')  # type: ignore[assignment]
 
         # 没显式传 config 时，用用户在设置里选的"默认 provider"——否则多 provider 只是好看的表格
+        if chosen_model:
+            from dataclasses import replace as _dc_replace
+
+            base_cfg = llm_config_from_msg
+            if base_cfg is None:
+                from ..llm.config import LLMConfig as _LLMConfig
+
+                base_cfg = _LLMConfig.from_env()
+            temp_map = {'低': 0.9, '中': 0.7, '高': 0.4, '极高': 0.2, '最大': 0.0}
+            overrides: dict[str, Any] = {'model': chosen_model}
+            if reasoning_effort in temp_map:
+                overrides['temperature'] = temp_map[reasoning_effort]
+            if fast_mode:
+                overrides['max_tokens'] = min(int(getattr(base_cfg, 'max_tokens', 4096) or 4096), 1024)
+            try:
+                llm_config_from_msg = _dc_replace(base_cfg, **overrides)
+            except TypeError:
+                llm_config_from_msg = base_cfg
+            self.logger.info(
+                f"本轮模型={chosen_model} 推理强度={reasoning_effort or '默认'} 快速模式={fast_mode}"
+            )
+
         if llm_config_from_msg is None:
             from ..core import providers_store
 
@@ -290,7 +321,15 @@ class MessageRouter:
             except Exception as exc:  # noqa: BLE001 — provider 配置有问题不能挡住对话
                 self.logger.warning(f"默认 provider 不可用，回退全局配置: {exc}")
 
-        engine = engine_factory.create(llm_config=llm_config_from_msg)
+        # 项目：消息里带 workdir 就用它（客户端选中的项目），否则用 Host 默认
+        run_workdir = message.get('workdir')
+        try:
+            engine = engine_factory.create(
+                llm_config=llm_config_from_msg,
+                workdir=Path(str(run_workdir)) if run_workdir else None,
+            )
+        except TypeError:
+            engine = engine_factory.create(llm_config=llm_config_from_msg)
 
         # 角色（personas/*.md）：用户不用自己写提示词，选一个即可
         persona_name = str(message.get('persona') or '').strip()
@@ -362,15 +401,18 @@ class MessageRouter:
                     digest = hashlib.sha256(raw).hexdigest()[:12]
                     target = upload_dir / f"img-{digest}.{ext}"
                     target.write_bytes(raw)
-                    attachments.append(str(target.relative_to(self._workdir())).replace(chr(92), '/'))
+                    # **写绝对路径**：上传目录在数据目录（userData/data/uploads），
+                    # 与工作目录不在同一棵树里，`relative_to(workdir)` 会抛 ValueError
+                    # 把附件整条吞掉 —— 模型于是完全不知道有图（真实发现：
+                    # 落了盘但 goal 里没路径，用户以为"图片没传上去"）。
+                    attachments.append(str(target))
                 except Exception as exc:  # noqa: BLE001 — 坏图片不能挡住消息
                     self.logger.warning(f"附件解析失败（已忽略）: {exc}")
             if attachments:
                 note = (
-                    "\n\n[随消息附图 " + str(len(attachments)) + " 张，已保存到工作区: "
+                    "\n\n[随消息附图 " + str(len(attachments)) + " 张，已保存到本机: "
                     + ", ".join(attachments)
-                    + "。若你的模型不支持视觉输入，请直接说明看不到图片，不要猜内容；"
-                    "需要时可用 FileReadTool 读取该路径。]"
+                    + "。若你的模型不支持视觉输入，请直接说明看不到图片，不要猜内容。]"
                 )
                 goal = goal + note
 
@@ -484,6 +526,138 @@ class MessageRouter:
                 'E_RUN_FAILED',
                 f'任务执行失败: {exc}',
             )
+
+    # ------------------------------------------------------------------
+    # 项目（工作区）
+    # ------------------------------------------------------------------
+    async def _handle_projects_list(self, ws, message, engine_factory=None):
+        from ..core import projects_store
+
+        try:
+            items = projects_store.list_projects()
+            active = projects_store.active_project()
+        except Exception as exc:  # noqa: BLE001
+            return build_error(message.get('id'), 'E_PROJECTS_FAILED', f'读取项目失败: {exc}')
+        return build_response(message.get('id'), {'projects': items, 'count': len(items), 'active': active})
+
+    async def _handle_projects_add(self, ws, message, engine_factory=None):
+        from ..core import projects_store
+
+        path = str(message.get('path') or '').strip()
+        name = str(message.get('name') or '').strip()
+        if not path:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 path')
+        try:
+            project = projects_store.add_project(path, name)
+        except ValueError as exc:
+            return build_error(message.get('id'), 'E_PROJECT_INVALID', str(exc))
+        return build_response(message.get('id'), {'project': project})
+
+    async def _handle_projects_remove(self, ws, message, engine_factory=None):
+        from ..core import projects_store
+
+        project_id = str(message.get('project_id') or message.get('id_value') or '').strip()
+        if not project_id:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 project_id')
+        return build_response(message.get('id'), {'removed': projects_store.remove_project(project_id)})
+
+    async def _handle_projects_set_active(self, ws, message, engine_factory=None):
+        from ..core import projects_store
+
+        project_id = str(message.get('project_id') or message.get('id_value') or '').strip()
+        if not project_id:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 project_id')
+        if not projects_store.set_active(project_id):
+            return build_error(message.get('id'), 'E_PROJECT_NOT_FOUND', f'项目不存在: {project_id}')
+        return build_response(message.get('id'), {'active': projects_store.active_project()})
+
+    async def _handle_projects_clone(self, ws, message, engine_factory=None):
+        """从 URL 克隆仓库并加入项目列表（真实调用 git clone）"""
+        from ..core import data_dir as data_dir_mod
+        from ..core import projects_store
+
+        url = str(message.get('url') or '').strip()
+        if not url:
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '缺少 url')
+        if not (url.startswith('http://') or url.startswith('https://') or url.startswith('git@')):
+            return build_error(message.get('id'), 'E_INVALID_MESSAGE', '只支持 http(s):// 或 git@ 的仓库地址')
+
+        name = url.rstrip('/').split('/')[-1]
+        if name.endswith('.git'):
+            name = name[:-4]
+        name = name or 'repo'
+        target_root = data_dir_mod.data_path('clones', create_dir=True)
+        target = target_root / name
+
+        import asyncio
+        import subprocess
+
+        def _clone() -> tuple[int, str]:
+            try:
+                proc = subprocess.run(
+                    ['git', 'clone', '--depth', '1', url, str(target)],
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=600,
+                )
+                return proc.returncode, (proc.stderr or proc.stdout or '').strip()[:600]
+            except (OSError, subprocess.SubprocessError) as exc:
+                return 1, f'{type(exc).__name__}: {exc}'
+
+        code, detail = await asyncio.get_running_loop().run_in_executor(None, _clone)
+        if code != 0:
+            return build_error(message.get('id'), 'E_CLONE_FAILED', f'git clone 失败: {detail}')
+
+        try:
+            project = projects_store.add_project(str(target), name)
+        except ValueError as exc:
+            return build_error(message.get('id'), 'E_PROJECT_INVALID', str(exc))
+        return build_response(message.get('id'), {'project': project, 'detail': detail})
+
+    # ------------------------------------------------------------------
+    # 模型清单（客户端模型选择器）
+    # ------------------------------------------------------------------
+    async def _handle_models_list(self, ws, message, engine_factory=None):
+        from ..core import providers_store
+
+        models: list[dict[str, Any]] = []
+        try:
+            from ..core.config.models import get_settings
+
+            settings = get_settings()
+            default_model = str(getattr(settings, 'llm_model', '') or '')
+            if default_model:
+                models.append({
+                    'id': default_model,
+                    'label': default_model,
+                    'source': 'global',
+                    'provider': str(getattr(settings, 'llm_provider', '') or ''),
+                })
+        except Exception as exc:  # noqa: BLE001 — 设置读不到只是少一个模型来源
+            self.logger.debug(f'模型列表：全局设置来源不可用: {exc}')
+
+        try:
+            for item in providers_store.list_providers():
+                if item.get('model'):
+                    models.append({
+                        'id': item['model'],
+                        'label': item['name'] + ' · ' + item['model'],
+                        'source': 'provider',
+                        'provider': item['id'],
+                    })
+        except Exception as exc:  # noqa: BLE001 — provider 列表坏了不影响内置模型
+            self.logger.debug(f'模型列表：provider 来源不可用: {exc}')
+
+        seen: set[str] = set()
+        unique: list[dict[str, Any]] = []
+        for item in models:
+            if item['id'] in seen:
+                continue
+            seen.add(item['id'])
+            unique.append(item)
+        return build_response(message.get('id'), {
+            'models': unique,
+            'count': len(unique),
+            'reasoning_efforts': ['低', '中', '高', '极高', '最大'],
+        })
 
     async def _handle_personas(
         self,
@@ -859,8 +1033,8 @@ class MessageRouter:
             from .. import __version__
 
             version = __version__
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — 包元数据缺失时回落到 'unknown'
+            self.logger.debug(f'读取 __version__ 失败，回落 unknown: {exc}')
 
         def _flag(name: str, default: str) -> bool:
             return os.environ.get(name, default).lower() in ('1', 'true', 'yes')

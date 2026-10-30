@@ -42,6 +42,7 @@ class EngineFactory(EngineFactoryProtocol):
     def create(
         self,
         llm_config: LLMConfig | None = None,
+        workdir: Path | None = None,
     ) -> AgentEngine:
         """创建一个新的 AgentEngine 实例。
 
@@ -54,7 +55,7 @@ class EngineFactory(EngineFactoryProtocol):
         effective_config = llm_config or self.default_llm_config
 
         engine_args: dict[str, Any] = {
-            'workdir': self.workdir,
+            'workdir': Path(workdir) if workdir else self.workdir,
             'max_iterations': self.max_iterations,
             'enable_cost_tracking': self.enable_cost_tracking,
             'enable_events': self.enable_events,

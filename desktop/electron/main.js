@@ -9,7 +9,7 @@
  *
  * 硬规则: 壳内不造 IPC bridge、不做业务逻辑——一切能力来自 Host。
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -30,6 +30,20 @@ const LOG_FILE = IS_DEV
 function slog(msg) {
   try { fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${msg}\n`); } catch (_) {}
 }
+
+// ---------- 崩溃留痕（真实事故：重启后进程以 exit 1 静默退出，什么都没留下） ----------
+// Node 15+ 默认把 unhandledRejection 当致命错误 → 主进程直接退出，用户只看到"闪退"。
+// 这里至少把栈写进 shell.log，并把致命错误弹给用户看，而不是无声消失。
+process.on('uncaughtException', (err) => {
+  slog(`[crash] uncaughtException: ${(err && err.stack) || err}`);
+  try {
+    const { dialog } = require('electron');
+    dialog.showErrorBox('Clawd 启动出错', `${(err && err.message) || err}\n\n日志: ${LOG_FILE}`);
+  } catch (_) { /* 弹窗失败也要保证日志已写 */ }
+});
+process.on('unhandledRejection', (reason) => {
+  slog(`[crash] unhandledRejection: ${(reason && reason.stack) || reason}`);
+});
 
 let mainWindow = null;
 let tray = null;
@@ -490,8 +504,32 @@ function checkForUpdates(manual) {
 
 // 渲染进程（设置面板/版本栏）通过 preload 桥发起的调用
 function registerIpcHandlers() {
-  const { ipcMain, app } = require('electron');
+  // 添加项目：原生文件夹选择器（渲染端拿不到绝对路径，必须走主进程）
+  ipcMain.handle('clawd:pick-folder', async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog(mainWindow || undefined, {
+      title: '选择项目文件夹',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) return '';
+    return result.filePaths[0];
+  });
+
+  // 注意：不要在这里再 `const { ipcMain, app } = require('electron')` ——
+  // 函数内 const 会形成 TDZ，导致上方 ipcMain.handle(...) 抛
+  // "Cannot access 'ipcMain' before initialization"，整个主进程在开窗前就挂掉（真实事故）。
   ipcMain.on('clawd:check-updates', () => checkForUpdates(true));
+  // 更新就绪后"立即重启安装"（此前只有 autoUpdater 内部自动调用，用户点不到）
+  ipcMain.handle('clawd:quit-and-install', () => {
+    try {
+      if (!autoUpdater) return { ok: false, reason: 'updater-unavailable' };
+      setImmediate(() => { try { autoUpdater.quitAndInstall(); } catch (err) { console.error('[updater] quitAndInstall 失败:', err); } });
+      return { ok: true };
+    } catch (err) {
+      console.error('[updater] quit-and-install 处理失败:', err);
+      return { ok: false, reason: String(err && err.message ? err.message : err) };
+    }
+  });
   ipcMain.on('clawd:app-info', (event) => {
     event.returnValue = {
       version: app.getVersion(),
@@ -509,6 +547,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showMainWindow);
 
   app.whenReady().then(async () => {
+    try {
     // 去掉 Electron 默认的原生菜单栏（File/Edit/View/Window/Help）——
     // 这是个聊天式应用，顶部那排 2003 年风格的菜单既不现代也没人用（用户明确反馈）。
     // 必要的快捷键在 createWindow() 里用 before-input-event 本地补齐（不占系统全局热键）。
@@ -534,6 +573,17 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     createWindow();
     initUpdater();
+    } catch (err) {
+      // 任何启动期异常都必须留痕 + 让用户看见，而不是主进程静默退出
+      // （真实事故：重启应用后 exit 1，shell.log 一行都没有，只能靠猜）
+      slog(`[crash] 启动流程失败: ${(err && err.stack) || err}`);
+      try {
+        const { dialog } = require('electron');
+        dialog.showErrorBox('Clawd 启动失败', `${(err && err.message) || err}\n\n日志: ${LOG_FILE}`);
+      } catch (_) { /* 弹窗失败不影响退出 */ }
+      quitting = true;
+      app.quit();
+    }
   });
 
   // 关窗=最小化到托盘（DSH/聊天类软件惯例），托盘退出才真退

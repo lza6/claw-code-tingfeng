@@ -250,6 +250,7 @@ def persist_agent_session(
     total_cost: float = 0.0,
     persona: str = "",
     directory: Path | str | None = None,
+    workdir: str = "",
 ) -> SessionView:
     """把一次 Agent 运行写入会话存储（供 `clawd session list` 看到真实数据）
 
@@ -289,7 +290,10 @@ def persist_agent_session(
         model=model,
         provider=provider,
         fmt="engine",
-        metadata={"persona": persona} if persona else {},
+        metadata={
+            **({"persona": persona} if persona else {}),
+            **({"workdir": workdir} if workdir else {}),
+        },
     )
     save(view, directory)
     return view

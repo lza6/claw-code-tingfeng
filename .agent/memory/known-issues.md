@@ -1,6 +1,30 @@
 # 已知问题与风险
 
+## 已解决（2026-10-30，留档防复现）
+- **打包版 Host 起不来（`ModuleNotFoundError: annotated_doc`）**：`prepare_host_bundle.py` 的
+  依赖闭包用 `pip show` 查传递依赖，但把包名以**逗号**拼成单个参数（`pip show a,b,c`），
+  pip 只当"一个不存在的包" → 闭包永远为空，白名单只剩直接 import + 人工补的名字。
+  typer 0.27 的间接依赖 `annotated-doc` 因此缺失，装到机器上表现为**双击没反应**（窗口标题 'Error'、
+  端口文件不生成、userData 里连日志都没有）。修：空格分隔 + 分批（40/批）+ 增加 [5/5] 自检
+  （用打包后的解释器跑 `import typer,rich,click` 与 `-m src --help`，失败直接中断打包）。
+  教训：**打包产物必须在打包脚本内自检**，静态检查/单测全绿不代表 bundle 能用。
+
+## P2（下轮优先）
+- ~~装机 E2E 的 STEP2f 未通过（重启后 app2 exit 1）~~ **是 E2E 脚本自己的 bug，不是产品问题**：
+  STEP2e 段末尾多了一句 `taskkill /PID $app2.Id /T /F`（本意是收尾，实际把刚重启起来的实例杀了），
+  紧接着 STEP2f 检查「重启后应用是否存活」→ 永远 False、exit code 1。
+  定位过程：①`diag_restart.ps1`（装→启动→杀→再启动）存活 120s、`/api/providers` 200；
+  ②`diag_restart_after_e2e.ps1`（先跑完 27 项 Playwright 再重启）存活 60s；
+  ③E2E 里加「等端口循环逐轮查存活」后抓到「端口就绪耗时 2s、app2 存活=True」，
+  死亡点锁在 STEP2e 末尾那两行 → 读脚本即见。
+  修复：删掉该 taskkill；STEP3 关闭时补上对 app2 的关闭（此前只关第一个实例，
+  「残留进程数=0」是假象、卸载会留文件）。
+  教训：E2E 报「进程自己退了」时，先通读脚本里所有 `taskkill`/`Stop-Process`，再怀疑产品。
 ## P3（不阻塞交付）
+0. **结构化日志目录仍走 `WORK_DIR`/cwd**（`src/main.py:96`）：桌面端会写进
+   `resources/host/.clawd/logs` —— 升级覆盖会丢、安装目录可能只读。应改 `data_path('logs')`
+   （数据目录唯一入口，见 ADR 0022）。仅影响排障日志，不影响功能。
+
 1. js-reverse-skill 上游未声明 LICENSE — 商用分发前确认（skills/reverse/js-reverse/LICENSE-WARNING.md）
 2. 17 个存量测试失败需环境治理: 安装 redis 包（5 个）+ Windows bash/echo 依赖（12 个）
 3. reason 的 LLM 直调 litellm.completion，未走 clawd provider 路由/降级体系

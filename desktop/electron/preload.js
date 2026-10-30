@@ -7,6 +7,8 @@
  *   - onUpdateStatus(cb)  订阅更新状态
  *   - checkForUpdates()   手动触发检查
  *   - appInfo()           读取版本/平台（UI 版本栏）
+ *   - pickFolder()        原生目录选择
+ *   - quitAndInstall()    更新就绪后立即重启安装
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -21,5 +23,11 @@ contextBridge.exposeInMainWorld('clawdDesktop', {
   },
   appInfo() {
     return ipcRenderer.sendSync('clawd:app-info');
+  },
+  pickFolder() {
+    return ipcRenderer.invoke('clawd:pick-folder');
+  },
+  quitAndInstall() {
+    return ipcRenderer.invoke('clawd:quit-and-install');
   },
 });

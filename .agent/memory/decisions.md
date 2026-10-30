@@ -1,5 +1,14 @@
 # Decisions
 
+## D-xx 桌面端 bundle 以「真实 import 自检」为唯一验收
+- 决策：`prepare_host_bundle.py` 的 [5/5] 用**打包后的解释器**真实 import + `-m src --help`；
+  缺依赖时从 venv 自动补齐并重试（≤30 轮），补不齐就中断打包。
+- 理由：`pip show`/METADATA 不可靠（anyio 无 Requires-Dist）、手写 DLL 清单会漏（python3.dll）、
+  只拷目录会丢 dist-info；这些错误在源码、单测、`node --check`、静态检查里**全绿**，
+  只有装到机器上才炸（一天内炸了三次）。
+- 代价：打包多花 1-3 分钟；白名单里带上了延迟 import 的功能依赖（+27MB）。
+- 重新考虑：如果改用 PyInstaller/Nuitka 之类整体冻结方案，这条自检仍需保留（作为 post-build 冒烟）。
+
 ## D-01 原生工具调用默认关闭
 - 决策：`CLAWD_NATIVE_TOOLS=1` 才启用；默认走文本 `<tool>` 协议。
 - 理由：流式路径无法可靠收集 tool_calls；默认关闭保持既有行为。
