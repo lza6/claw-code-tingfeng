@@ -127,7 +127,7 @@ jobs:
       - name: Run Bandit security scan
         run: |
           bandit -r src/ -f json -o bandit-report.json \
-            --exit-code 0 \
+            --exit-zero \
             --severity-level medium \
             --confidence-level medium
 
