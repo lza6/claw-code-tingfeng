@@ -7,6 +7,34 @@
 
 ---
 
+## [v0.88.8] (2026-10-30) — X-7 收口：6 个命令接入 `--json` 契约 + 压测验收
+
+**接入 `--json` 的命令（全部走 `CommandResult`，字段稳定、退出码一致）**
+
+| 命令 | JSON 结构 |
+|---|---|
+| `session list` | `{ok, code, sessions[], count}` |
+| `session show` | `{ok, code, session_id, title, status, ..., chain, roles}`（默认改为人读摘要） |
+| `role list` | `{ok, code, personas[], count}` |
+| `doctor` | `{ok, code, ready, checks[{section,level,text}], count, failed}` |
+| `catalog list` | `{ok, code, agents[], skills[], count}`（尊重 `--skills`/`--agents`） |
+| `catalog show` | `{ok, code, kind, name, category, status, core?, canonical}`；未找到 → `ok=false` |
+
+**顺带修的两处**
+- **启动提示污染 stdout**（v0.88.7）：`--json | jq` 原本必崩，已把 4 处启动期提示改到 stderr
+- **诊断密钥不回显**（v0.88.7）：只报 `KEY=已设置（不回显）`
+
+**验证（真实运行）**
+- 全量非 slow：见 v0.88.7 的 5372 passed / 0 failed；本轮新增 catalog 测试随全量复跑
+- **压测（本地 Host，200 并发 × 10 轮）**：成功 200/200，请求 2000，墙钟 0.77s，
+  **QPS 2583**，P50 10.7ms / P95 15.9ms / **P99 16.3ms**，**错误率 0.0%** → `STRESS: PASS`
+- **真实端点 E2E（`scripts/e2e_smoke.py`）5/5 通过**（读配置 / 应用可导入 / 真实对话 /
+  function calling / reasoning_content）
+- 基线 17 项：版本三处一致 0.88.8 · 收集 5399/0 errors · ruff 硬指标 ok · 静默 155 ·
+  可达 501 · 完全不可达 26 · import_sweep ok(0) · 覆盖率 65.54%（门槛 60）
+
+---
+
 ## [v0.88.7] (2026-10-30) — X-7 第二批：doctor --json + stdout 纯净
 
 **1. `clawd doctor --json`（重构为"先收集再渲染"，单一来源）**
