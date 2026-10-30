@@ -202,6 +202,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]  # allow assert in tests
+# Ghidra 脚本在 Ghidra 宿主进程里执行：currentProgram/monitor/getFunctionAt 等
+# 由宿主注入，静态分析必然 F821。不是缺陷，不修代码（改成 import 反而跑不了）。
+"skills/reverse/ghidra-re/scripts/*" = ["F821"]
+"skills/reverse/ghidra-scripts/*" = ["F821"]
 "src/reference_data/*" = ["E501"]  # auto-generated data
 "src/cli/textual_dashboard.py" = ["E741"]  # HSL color math (l = lightness)
 "src/utils/rich_colors.py" = ["E741"]  # HSL color math (l = lightness)
