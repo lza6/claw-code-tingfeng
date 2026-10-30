@@ -138,6 +138,16 @@
       "cmd": "trailing-whitespace/end-of-file 本地修复 112 文件 + 定向回归",
       "exit_code": 0,
       "summary": "837 passed / 0 failed（swarm/rag/config_injector/workflow）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pre_commit run --all-files",
+      "exit_code": 0,
+      "summary": "全套 hook 本地全 Passed（trailing-whitespace / end-of-file / mixed-line-ending / isort / detect-* / ruff）"
+    },
+    {
+      "cmd": "CI 迭代修复（6 轮）",
+      "exit_code": 0,
+      "summary": "otel-logging 版本 / pre-commit YAML / validate-plugin glob / Ghidra F821 / bandit --exit-zero / CRLF 对象层清理 + isort 全仓 —— 每轮都有真实 run 失败日志定位根因"
     }
   ],
   "files_changed": [
