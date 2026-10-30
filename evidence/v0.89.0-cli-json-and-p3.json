@@ -123,6 +123,21 @@
       "cmd": "docker build --target builder -t clawd-req-test .",
       "exit_code": 0,
       "summary": "requirements.txt otel-logging 修复后本地 docker 构建通过（镜像已清理）"
+    },
+    {
+      "cmd": "gh release upload v0.89.0 <Setup/Portable/blockmap/latest.yml>",
+      "exit_code": 0,
+      "summary": "4 个产物已挂到 GitHub Release v0.89.0"
+    },
+    {
+      "cmd": "ruff check . --select F821,F811,E9（全仓，加 Ghidra per-file-ignore 后）",
+      "exit_code": 0,
+      "summary": "0 错误（46 条全为 Ghidra 宿主注入变量误报）"
+    },
+    {
+      "cmd": "trailing-whitespace/end-of-file 本地修复 112 文件 + 定向回归",
+      "exit_code": 0,
+      "summary": "837 passed / 0 failed（swarm/rag/config_injector/workflow）"
     }
   ],
   "files_changed": [
