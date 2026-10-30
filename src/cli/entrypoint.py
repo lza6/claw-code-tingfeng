@@ -827,8 +827,13 @@ def session_list(
 def session_show(
     session_id: str = typer.Argument(..., help="会话 ID"),
     sessions_dir: Path | None = typer.Option(None, "--dir"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
 ):
-    """查看单个会话详情（含分叉链）"""
+    """查看单个会话详情（含分叉链）
+
+    默认人读（标题/状态/分叉链/消息摘要）；`--json` 输出完整结构（契约 `{ok, code, ...}`）。
+    此前这里**无条件打印 JSON** —— 人看很费劲，也没法只取一个字段。
+    """
     from ..core.session_bridge import chain, load
 
     try:
@@ -843,7 +848,25 @@ def session_show(
         {"role": m.get("role"), "chars": len(str(m.get("content") or ""))}
         for m in sess.messages
     ]
-    console.print_json(data=payload)
+    if json_out:
+        from .command_result import CommandResult, emit
+
+        raise typer.Exit(emit(CommandResult(ok=True, data=payload), as_json=True))
+
+    console.print(f"[bold]{payload['session_id']}[/bold]  {payload.get('title') or '(无标题)'}")
+    console.print(
+        f"[dim]状态 {payload.get('status')} · {payload.get('turn_count', 0)} 轮 · "
+        f"tokens {payload.get('input_tokens', 0)}/{payload.get('output_tokens', 0)} · "
+        f"${payload.get('total_cost', 0.0):.4f} · 消息 {payload.get('messages', 0)} 条[/dim]"
+    )
+    if payload.get("chain"):
+        console.print("分叉链: " + " → ".join(payload["chain"]))
+    for msg in sess.messages[:50]:
+        who = msg.get("role")
+        text = str(msg.get("content") or "").replace(chr(10), " ")[:120]
+        console.print(f"  [cyan]{who}[/cyan]: {text}")
+    if len(sess.messages) > 50:
+        console.print(f"[dim]… 还有 {len(sess.messages) - 50} 条（用 --json 看全部）[/dim]")
 
 
 @session_app.command("fork")

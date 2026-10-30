@@ -58,7 +58,7 @@ class TestSessionList:
 class TestSessionShow:
     def test_show_details_and_chain(self, sdir: Path):
         invoke("fork", "root", "child", "--dir", str(sdir))
-        result = invoke("show", "child", "--dir", str(sdir))
+        result = invoke("show", "child", "--dir", str(sdir), "--json")
 
         assert result.exit_code == 0
         import json as _json
@@ -68,7 +68,7 @@ class TestSessionShow:
         assert data["messages"] == 2
 
     def test_missing_session_exits_one(self, sdir: Path):
-        result = invoke("show", "ghost", "--dir", str(sdir))
+        result = invoke("show", "ghost", "--dir", str(sdir), "--json")
         assert result.exit_code == 1
         assert "读取失败" in result.output
 
@@ -81,7 +81,7 @@ class TestSessionFork:
         assert "已分叉" in result.output
 
         import json as _json
-        shown = _json.loads(invoke("show", "child", "--dir", str(sdir)).output)
+        shown = _json.loads(invoke("show", "child", "--dir", str(sdir), "--json").output)
         assert shown["title"] == "实验分支"
         assert shown["parent_session_id"] == "root"
 
@@ -99,7 +99,7 @@ class TestSessionTitle:
         assert "标题已更新" in result.output
 
         import json as _json
-        shown = _json.loads(invoke("show", "root", "--dir", str(sdir)).output)
+        shown = _json.loads(invoke("show", "root", "--dir", str(sdir), "--json").output)
         assert shown["title"] == "登录接口改造"
 
     def test_title_missing_session(self, sdir: Path):
