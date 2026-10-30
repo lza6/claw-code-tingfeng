@@ -154,7 +154,8 @@
   // Host 会把"随消息附图 N 张…"这类**给模型看的**说明拼进 goal 落盘；
   // 那是提示词，不是用户说的话 —— 气泡里必须剥掉（真实观感问题）。
   function stripAttachmentNote(text) {
-    const NOTE_RE = new RegExp(String.fromCharCode(10) + '*\\[随消息附图[\\s\\S]*?\\]\\s*$');
+    // 会话标题里的 goal 会被截断到 60 字（可能没有收尾的 `]`），所以不要求闭合括号
+    const NOTE_RE = new RegExp('\\n*\\[' + '随消息附图' + '[\\s\\S]*$');
     return String(text || '').replace(NOTE_RE, '').trim();
   }
 

@@ -63,6 +63,9 @@ aside{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .stopped-note{margin:6px 0 10px;font-size:12px;color:var(--label-tertiary);text-align:center}
 /* 用量表格头不换行（"输出"曾被挤成两行） */
 .usage-table th,#usageRows th,#usageChart+table th{white-space:nowrap}
+/* 会话行：时间不能被悬停出现的按钮挤成竖排 */
+.session-item .time{white-space:nowrap;flex:0 0 auto}
+.session-item>span:not(.time):not(.session-tools){flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 会话搜索框 + 悬停操作按钮 */
 .session-search{flex:0 0 auto;margin:0 10px 6px;height:28px;padding:0 8px;border-radius:var(--radius-s);border:1px solid var(--border-l1);background:var(--bg-layer-1);color:var(--label-primary);font-size:12px}
 .session-search:focus{outline:none;border-color:var(--brand)}
