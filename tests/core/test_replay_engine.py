@@ -3,20 +3,21 @@
 Covers basic event recording, flushing, loading, and summary generation.
 """
 
-import os
 import json
+import os
 import shutil
 from pathlib import Path
 
 import pytest
 
 from src.core.replay_engine import (
-    ReplayEngine,
     EventType,
+    ReplayEngine,
     get_replay_engine,
-    record_event,
     get_session_summary,
+    record_event,
 )
+
 
 @pytest.fixture(scope="function")
 def temp_state_dir(tmp_path):

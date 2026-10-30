@@ -2,9 +2,10 @@
 Additional tests to reach 700+ test milestone.
 Focus on edge cases and utility functions.
 """
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestUtilityFunctions:

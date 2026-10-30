@@ -1,15 +1,16 @@
 """Tests for notification types."""
 
 import pytest
+
 from src.notification.types import (
-    NotificationEvent,
-    VerbosityLevel,
-    NotificationPlatform,
     DiscordNotificationConfig,
-    TelegramNotificationConfig,
-    SlackNotificationConfig,
     FullNotificationConfig,
     FullNotificationPayload,
+    NotificationEvent,
+    NotificationPlatform,
+    SlackNotificationConfig,
+    TelegramNotificationConfig,
+    VerbosityLevel,
 )
 
 

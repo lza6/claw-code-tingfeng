@@ -12,10 +12,7 @@
 from __future__ import annotations
 
 import re
-
 from pathlib import Path
-
-
 
 from src.agent.swarm.critic_agent import CriticAgent
 from src.agent.swarm.roles import ROLE_DESCRIPTIONS, ROLE_SYSTEM_PROMPTS, AgentRole

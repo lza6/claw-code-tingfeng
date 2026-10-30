@@ -22,6 +22,7 @@ from src.core.settings import get_settings
 def check_env() -> tuple[str, str, str]:
     """读取并校验 LLM 配置"""
     import os
+
     from dotenv import load_dotenv
 
     load_dotenv()

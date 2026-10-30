@@ -7,6 +7,8 @@
 - run_cmd: 命令执行工具（从 Aider run_cmd.py 移植）
 """
 
+# isort: skip_file  —— 本文件的 import 顺序是**循环导入破环**的一部分（见下方注释），
+# 不能被 isort 重排（CI 的 isort hook 曾把 get_logger 提前绑定挤到后面 → 全仓 import 崩）。
 from __future__ import annotations
 
 import json

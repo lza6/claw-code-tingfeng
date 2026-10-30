@@ -18,12 +18,12 @@ from src.core.compact import (
     COMPACT_CONTINUATION_PREAMBLE,
     COMPACT_DIRECT_RESUME_INSTRUCTION,
     COMPACT_RECENT_MESSAGES_NOTE,
-    ContentBlock,
-    ConversationMessage,
-    Session,
     CompactionConfig,
     CompactionResult,
+    ContentBlock,
+    ConversationMessage,
     MessageRole,
+    Session,
     _collapse_blank_lines,
     _collect_key_files,
     _collect_recent_requests,
@@ -46,7 +46,6 @@ from src.core.compact import (
     format_compact_summary,
     should_compact,
 )
-
 
 # ====================================================================
 # Token 估算测试

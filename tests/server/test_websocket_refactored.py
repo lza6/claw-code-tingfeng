@@ -1,8 +1,11 @@
-import pytest
 import asyncio
 import json
+
+import pytest
+
+from src.core.events import EventType, get_event_bus
 from src.server.websocket_server import ClawdWebSocketServer
-from src.core.events import get_event_bus, EventType
+
 
 @pytest.mark.asyncio
 async def test_websocket_server_lifecycle():

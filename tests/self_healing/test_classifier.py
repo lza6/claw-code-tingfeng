@@ -1,5 +1,6 @@
 """Tests for self_healing classifier"""
 import pytest
+
 from src.self_healing.classifier import ErrorClassifier
 from src.self_healing.models import ErrorCategory, HealingStrategyType
 

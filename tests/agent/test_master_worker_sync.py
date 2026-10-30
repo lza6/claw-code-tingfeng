@@ -2,20 +2,21 @@
 Tests for Master-Worker status synchronization
 """
 
-import pytest
 import asyncio
-import os
-from pathlib import Path
-import tempfile
-import shutil
 import json
+import os
+import shutil
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.agent.swarm.message_bus import AgentMessage, MessageType
-from src.agent.swarm.persistent_message_bus import PersistentMessageBus
-from src.agent.swarm.orchestrator import OrchestratorAgent
+import pytest
+
 from src.agent.swarm.engine import SwarmEngine
 from src.agent.swarm.integrator import AtomicIntegrator
+from src.agent.swarm.message_bus import AgentMessage, MessageType
+from src.agent.swarm.orchestrator import OrchestratorAgent
+from src.agent.swarm.persistent_message_bus import PersistentMessageBus
 from src.agent.swarm.task_registry import TaskStatus
 
 

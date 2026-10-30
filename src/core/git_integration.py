@@ -23,11 +23,9 @@ from typing import Any
 from .git.commit import (
     create_commit,
     generate_commit_message,
-    undo_commit,
 )
-from .git.commit import (
-    is_commit_pushed as check_pushed,
-)
+from .git.commit import is_commit_pushed as check_pushed
+from .git.commit import undo_commit
 from .git.diff import get_diff, get_diff_since_commit
 from .git.ignore import is_file_ignored, is_path_within_subtree, load_ignore_spec
 from .git.types import CommitInfo, DiffResult

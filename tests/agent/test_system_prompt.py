@@ -1,6 +1,7 @@
 """System Prompt 测试 - 覆盖 src/agent/_system_prompt.py"""
 
 import pytest
+
 from src.agent._system_prompt import build_system_prompt
 
 

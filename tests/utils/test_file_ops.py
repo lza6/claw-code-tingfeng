@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from src.utils.file_ops import (
     get_file_info,
     is_binary,

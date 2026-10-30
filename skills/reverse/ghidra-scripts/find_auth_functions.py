@@ -7,7 +7,6 @@ Looks for password checks, strcmp calls, credential validation
 """
 
 from ghidra.program.model.symbol import SourceType
-
 from ghidra.util.task import TaskMonitor
 
 # Nested/headless invocations can have no monitor; use the active one if supplied.

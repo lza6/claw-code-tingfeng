@@ -115,8 +115,8 @@ class TestAgentRegistryStability:
         """辅助函数应保持稳定"""
         from src.agent.definitions import (
             get_agent,
-            get_agents_by_category,
             get_agent_names,
+            get_agents_by_category,
         )
 
         assert callable(get_agent)
@@ -125,7 +125,7 @@ class TestAgentRegistryStability:
 
     def test_get_agent_returns_correct_type(self):
         """get_agent 函数应返回正确的类型"""
-        from src.agent.definitions import get_agent, AgentDefinition
+        from src.agent.definitions import AgentDefinition, get_agent
 
         result = get_agent("explore")
         assert result is None or isinstance(result, AgentDefinition)

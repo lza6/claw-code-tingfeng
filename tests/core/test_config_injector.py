@@ -4,22 +4,23 @@
 测试 src/core/config_injector.py 的所有功能
 """
 
-import pytest
-import os
 import json
+import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.core.config_injector import (
+    ConfigChangeEvent,
     ConfigInjector,
     ConfigValue,
-    ConfigChangeEvent,
+    get_config,
     get_config_injector,
+    get_full_config,
     reset_config_injector,
     set_config,
-    get_config,
-    get_full_config,
 )
 
 

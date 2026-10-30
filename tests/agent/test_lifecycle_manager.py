@@ -1,8 +1,11 @@
-import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.agent._lifecycle_manager import LifecycleManager
 from src.core.events import EventType
+
 
 @pytest.mark.asyncio
 async def test_lifecycle_manager_shutdown():

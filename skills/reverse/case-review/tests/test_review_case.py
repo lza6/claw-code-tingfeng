@@ -4,7 +4,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "review_case.py"
 SPEC = importlib.util.spec_from_file_location("review_case", SCRIPT_PATH)
 REVIEW_CASE = importlib.util.module_from_spec(SPEC)

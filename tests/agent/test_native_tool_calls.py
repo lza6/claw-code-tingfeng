@@ -11,9 +11,8 @@ import pytest
 
 from src.agent.engine import AgentEngine
 from src.agent.engine_loop import AgentLoopConfig, _run_agent_loop
-from src.llm.config import LLMResponse
+from src.llm.config import LLMMessage, LLMResponse
 from src.llm.providers.openai import _extract_native_tool_calls, _serialize_messages
-from src.llm.config import LLMMessage
 from src.tools_runtime.base import BaseTool, ToolResult
 
 

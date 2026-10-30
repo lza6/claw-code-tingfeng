@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
+
 from src.tools_runtime.bash_tool import BashTool
+
 
 def test_bash_tool_bypass():
     # Normal mode

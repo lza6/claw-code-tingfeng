@@ -1,15 +1,18 @@
-import os
-import time
 import asyncio
-import tempfile
+import os
 import shutil
+import tempfile
+import time
 from pathlib import Path
+
 import pytest
+
+from src.rag.repo_map import RepoMap
 from src.rag.scanner import UnifiedScanner
+from src.rag.symbol_extractor import SymbolExtractor
 from src.rag.trigram_index import TrigramIndex
 from src.rag.word_index import WordIndex
-from src.rag.symbol_extractor import SymbolExtractor
-from src.rag.repo_map import RepoMap
+
 
 def create_mock_project(root_dir: Path, num_files: int = 1000):
     """创建一个包含大量文件的模拟项目"""

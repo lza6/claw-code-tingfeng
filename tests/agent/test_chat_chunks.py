@@ -1,5 +1,7 @@
 import pytest
+
 from src.agent.chat_chunks import ChatChunks
+
 
 def test_chat_chunks_basic_operations():
     chunks = ChatChunks()

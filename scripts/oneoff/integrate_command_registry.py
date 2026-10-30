@@ -11,6 +11,7 @@ ClawGod 整合 - REPL 快速集成脚本
 import re
 from pathlib import Path
 
+
 def backup_file(file_path: Path) -> Path:
     """创建文件备份"""
     backup_path = file_path.with_suffix('.py.bak')

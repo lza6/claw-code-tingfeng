@@ -1,8 +1,11 @@
-import pytest
 import json
-from unittest.mock import MagicMock, AsyncMock, patch
-from src.agent.swarm.orchestrator import OrchestratorAgent, TaskDAG, TaskDecomposition
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from src.agent.swarm.message_bus import MessageBus
+from src.agent.swarm.orchestrator import OrchestratorAgent, TaskDAG, TaskDecomposition
+
 
 @pytest.fixture
 def mock_message_bus():

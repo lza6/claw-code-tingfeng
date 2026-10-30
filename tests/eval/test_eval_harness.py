@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest
@@ -22,7 +21,6 @@ from src.eval import (
     save_baseline,
 )
 from src.eval.runner import EvalConfigError
-
 
 # ==========================================================================
 # 数据集加载与校验

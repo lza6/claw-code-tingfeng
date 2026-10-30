@@ -1,11 +1,12 @@
 """Structured output tests - 覆盖 _parse_json_response、schema 验证等"""
 import pytest
+
+from src.llm import LLMResponse
 from src.llm.structured_output import (
-    StructuredOutputMixin,
     JsonSchema,
+    StructuredOutputMixin,
     StructuredResponse,
 )
-from src.llm import LLMResponse
 
 
 class ExtractorTestMixin(StructuredOutputMixin):

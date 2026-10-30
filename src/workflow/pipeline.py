@@ -604,8 +604,8 @@ def create_team_exec_stage(
             try:
                 from .team_persistence import (
                     TeamMemberState,
-                    add_team_message,
                     add_team_member,
+                    add_team_message,
                     read_team_state,
                     update_member_status,
                     write_team_state,

@@ -245,6 +245,7 @@ class TestPluginsApi:
 
     def test_api_returns_json(self, tmp_path, web_dir):
         import urllib.request
+
         from src.server import create_server
 
         async def scenario():
@@ -271,8 +272,8 @@ class TestPluginsApi:
         assert "插件市场" not in names  # 自身不在列表
 
     def test_api_with_plugin_manager(self, tmp_path, web_dir):
-        import urllib.request
         import shutil as _shutil
+        import urllib.request
 
         from src.plugins import PluginManager
         from src.server import create_server

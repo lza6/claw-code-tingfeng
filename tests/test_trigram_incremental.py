@@ -1,7 +1,10 @@
-import pytest
 import os
 from pathlib import Path
+
+import pytest
+
 from src.rag.trigram_index import TrigramIndex
+
 
 def test_incremental_update(tmp_path):
     # Arrange

@@ -1,15 +1,16 @@
 """验证器测试 - 覆盖 src/workflow/verifier.py"""
 
 import pytest
+
 from src.workflow.verifier import (
-    TaskSize,
-    EvidenceType,
     Confidence,
+    EvidenceType,
+    TaskSize,
     VerificationEvidence,
     VerificationResult,
     determine_task_size,
-    get_verification_instructions,
     get_fix_loop_instructions,
+    get_verification_instructions,
 )
 
 

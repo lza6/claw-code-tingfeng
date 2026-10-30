@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest
@@ -24,6 +23,7 @@ from src.eval import (
     run_dataset,
 )
 from src.eval.baseline import load_baseline_strict
+
 SMOKE_DATASET = Path(__file__).resolve().parents[2] / "src" / "eval" / "datasets" / "smoke.json"
 
 

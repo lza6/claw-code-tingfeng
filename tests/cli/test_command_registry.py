@@ -1,7 +1,8 @@
 """Tests for CLI Command Registry."""
 
 import pytest
-from src.cli.command_registry import CommandRegistry, CommandHandler
+
+from src.cli.command_registry import CommandHandler, CommandRegistry
 
 
 class TestCommandHandler:

@@ -3,20 +3,19 @@
 import pytest
 
 from src.utils.string_utils import (
-    escape_toml_string,
-    unescape_toml_string,
-    parse_toml_string_value,
-    quote_shell_arg,
-    quote_powershell_arg,
-    sanitize_session_token,
-    build_tmux_session_name,
     build_detached_session_name,
-    build_shell_command,
     build_detached_windows_bootstrap_script,
-    truncate_string,
+    build_shell_command,
+    build_tmux_session_name,
+    escape_toml_string,
     matches_glob,
+    parse_toml_string_value,
+    quote_powershell_arg,
+    quote_shell_arg,
+    sanitize_session_token,
+    truncate_string,
+    unescape_toml_string,
 )
-
 
 # ---------------------------------------------------------------------------
 # TOML String Escaping

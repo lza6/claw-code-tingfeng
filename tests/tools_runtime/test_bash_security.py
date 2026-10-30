@@ -1,5 +1,7 @@
 import pytest
+
 from src.tools_runtime.bash_security import is_shell_command_read_only
+
 
 @pytest.mark.parametrize("command, expected", [
     ("ls", True),

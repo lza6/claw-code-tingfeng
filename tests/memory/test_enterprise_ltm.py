@@ -1,10 +1,13 @@
-import pytest
 import asyncio
 import os
 from pathlib import Path
+
+import pytest
+
+from src.core.project_context import ProjectContext
 from src.memory.enterprise_ltm import EnterpriseLTM, ImplementationPattern, PatternType
 from src.rag.vector_store.local import LocalVectorStore
-from src.core.project_context import ProjectContext
+
 
 @pytest.fixture
 def temp_project(tmp_path):

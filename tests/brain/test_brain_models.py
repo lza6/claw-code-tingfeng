@@ -1,11 +1,12 @@
 """Brain 模型测试 - 覆盖 src/brain/models.py"""
 
 import pytest
+
 from src.brain.models import (
-    OptimizationAdvice,
     BrainRule,
-    EntropyReport,
     ConfigPatchResult,
+    EntropyReport,
+    OptimizationAdvice,
 )
 
 

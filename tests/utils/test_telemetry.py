@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.telemetry import Telemetry, TelemetryEvent, VERSION
+from src.utils.telemetry import VERSION, Telemetry, TelemetryEvent
 
 
 class TestTelemetryEvent:

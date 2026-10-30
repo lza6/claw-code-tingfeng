@@ -1,7 +1,9 @@
 import asyncio
 import json
 from pathlib import Path
+
 from src.brain.world_model import RepositoryWorldModel
+
 
 async def main():
     root = Path('.').absolute()

@@ -2,15 +2,17 @@
 Evidence Gating Tests - 记忆演进中的证据门控
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from src.memory.evolution import (
-    MemoryEvolver,
-    MemoryProposal,
-    MemoryEvidence,
-    MemoryKind,
     MemoryEntry,
-    VerificationLevel
+    MemoryEvidence,
+    MemoryEvolver,
+    MemoryKind,
+    MemoryProposal,
+    VerificationLevel,
 )
 
 

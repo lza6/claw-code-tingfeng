@@ -33,8 +33,7 @@ from .prompt_guidance_contract import (
     GuidanceSurfaceContract,
     validate_contract,
 )
-from .session import (
-    # Mode 管理
+from .session import (  # Mode 管理
     EXCLUSIVE_MODES,
     SessionContext,
     SessionManager,

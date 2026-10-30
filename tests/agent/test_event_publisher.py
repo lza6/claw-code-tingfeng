@@ -1,8 +1,9 @@
 """EventPublisher 测试 - 事件发布器"""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, call
+
+import pytest
 
 from src.agent._event_publisher import EventPublisher
 from src.core.events import EventBus

@@ -18,8 +18,8 @@ import pytest
 
 from src.agent.swarm.auditor import (
     AuditFinding,
-    AuditReport,
     AuditorAgent,
+    AuditReport,
 )
 from src.agent.swarm.message_bus import AgentMessage, MessageBus, MessageType
 

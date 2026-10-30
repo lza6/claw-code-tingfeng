@@ -1,6 +1,7 @@
 """敏感词检测测试 - 覆盖 src/utils/sensitive_word.py"""
 
 import pytest
+
 from src.utils.sensitive_word import (
     AhoCorasickAutomaton,
     SensitiveWordCache,

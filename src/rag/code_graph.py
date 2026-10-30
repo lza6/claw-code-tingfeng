@@ -181,7 +181,6 @@ class CodeGraph:
         因此：非主线程直接用线程池；进程池异常时回退线程池；再失败则串行。
         """
         import threading
-
         from concurrent.futures import ThreadPoolExecutor
 
         def _collect(futures) -> None:
@@ -292,6 +291,7 @@ class CodeGraph:
     async def build_async(self, pattern: str = "**/*.py"):
         """异步构建接口"""
         import asyncio
+
         # 使用更高效的 glob
         loop = asyncio.get_event_loop()
         files = await loop.run_in_executor(None, lambda: [

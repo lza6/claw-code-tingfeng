@@ -1,7 +1,10 @@
 """Unit tests for src/utils/path_security.py."""
-import pytest
 from pathlib import Path
-from src.utils.path_security import validate_path, is_sensitive_file
+
+import pytest
+
+from src.utils.path_security import is_sensitive_file, validate_path
+
 
 def test_sensitive_file_detection():
     assert is_sensitive_file(".env") is True

@@ -27,6 +27,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from src.core import budget_guard as bg
 from src.core.budget_guard import (
     BudgetConfig,

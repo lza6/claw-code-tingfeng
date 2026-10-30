@@ -22,10 +22,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from textual.css.query import NoMatches
+
 import src.cli.textual_dashboard as textual_dashboard_module
 from src.cli.textual_dashboard import DashboardApp, start_textual_tui
 from src.core.events import Event, EventBus, EventType
-from textual.css.query import NoMatches
 
 # ====================================================================
 # 测试脚手架

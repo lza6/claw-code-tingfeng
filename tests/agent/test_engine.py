@@ -1,9 +1,10 @@
 """Tests for Agent Engine core functionality."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.agent.engine import AgentEngine, build_system_prompt
 from src.llm import LLMConfig

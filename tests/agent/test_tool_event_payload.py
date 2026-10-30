@@ -13,9 +13,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.agent.engine_loop import AgentLoopConfig, _run_agent_loop
 from src.llm.config import LLMResponse

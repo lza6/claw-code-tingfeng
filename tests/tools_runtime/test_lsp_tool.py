@@ -6,7 +6,6 @@ import json
 import subprocess
 import sys
 import time
-
 from pathlib import Path
 
 import pytest
@@ -14,7 +13,6 @@ import pytest
 from src.lsp import LSPClient, LSPUnavailable, available_servers, language_for, which_server
 from src.tools_runtime import lsp_tool as lsp_tool_mod
 from src.tools_runtime.lsp_tool import LSPTool, shutdown_clients
-
 
 PYLSP_AVAILABLE = which_server("pylsp") is not None
 

@@ -1,18 +1,19 @@
 """Tests for workflow models."""
 
 import pytest
+
 from src.workflow.models import (
     Dimension,
     DimensionSource,
     DispatchableSlice,
+    TechDebtPriority,
+    TechDebtRecord,
+    VersionBumpType,
     WorkflowPhase,
     WorkflowPhaseCategory,
-    WorkflowStatus,
-    VersionBumpType,
-    TechDebtPriority,
-    WorkflowTask,
     WorkflowResult,
-    TechDebtRecord,
+    WorkflowStatus,
+    WorkflowTask,
 )
 
 

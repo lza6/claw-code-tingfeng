@@ -187,7 +187,7 @@ class TestOutputCompressor:
         assert "strategy" in result
 
     def test_load_rules_from_file(self):
-        from src.core.output_compressor import OutputCompressor, FilterRule
+        from src.core.output_compressor import FilterRule, OutputCompressor
         compressor = OutputCompressor()
 
         # Use existing filter files
@@ -225,7 +225,7 @@ class TestOutputCompressor:
         assert "PASSED" not in result or output.count("PASSED") <= result.count("PASSED")
 
     def test_match_rule_returns_default(self):
-        from src.core.output_compressor import OutputCompressor, DEFAULT_FILTER, FilterStrategy
+        from src.core.output_compressor import DEFAULT_FILTER, FilterStrategy, OutputCompressor
         compressor = OutputCompressor()
         rule = compressor.match_rule("some_obscure_command")
         # Should return default truncate for unknown commands

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
 from src.agent.keyword_registry import is_deep_interview_input_blocked
 from src.runtime.engine import DispatchDeliveredEvent, DispatchFailedEvent, NotFoundError
 from src.workflow.mode_state import (

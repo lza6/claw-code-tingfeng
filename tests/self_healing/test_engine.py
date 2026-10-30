@@ -1,8 +1,10 @@
 """Tests for self_healing engine"""
-import pytest
 import asyncio
 from pathlib import Path
-from src.self_healing.engine import SelfHealingEngine, SelfHealingConfig
+
+import pytest
+
+from src.self_healing.engine import SelfHealingConfig, SelfHealingEngine
 from src.self_healing.models import ErrorCategory, HealingStrategyType, VerificationLevel
 
 

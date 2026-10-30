@@ -1,7 +1,9 @@
 """Tests for FeatureFlagManager"""
-import pytest
 from pathlib import Path
-from src.utils.features import FeatureFlagManager, DEFAULT_FEATURES
+
+import pytest
+
+from src.utils.features import DEFAULT_FEATURES, FeatureFlagManager
 
 
 @pytest.fixture

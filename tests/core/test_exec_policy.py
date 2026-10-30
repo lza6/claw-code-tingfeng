@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest
 
 from src.agent.tool_manager import ToolManager
 from src.core.approval_mode import ApprovalMode
+from src.core.exceptions import ToolApprovalDeniedError
 from src.core.exec_policy import (
     BUILTIN_RULES,
     Decision,
@@ -18,10 +18,8 @@ from src.core.exec_policy import (
     default_policy_path,
     split_command,
 )
-from src.core.exceptions import ToolApprovalDeniedError
 from src.core.permissions import Effect, PermissionEngine, PermissionRequest
 from src.tools_runtime.bash_tool import BashTool
-
 
 # ==========================================================================
 # 命令拆分

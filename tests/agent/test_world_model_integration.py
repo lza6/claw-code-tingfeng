@@ -1,11 +1,14 @@
 """Integration tests for WorldModel prefetching in Agent Engine"""
-import pytest
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
-from src.agent.engine_loop import _run_agent_loop, AgentLoopConfig
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.agent.engine_loop import AgentLoopConfig, _run_agent_loop
 from src.llm import LLMMessage, LLMResponse
 from src.tools_runtime.base import ToolResult
+
 
 @pytest.mark.asyncio
 async def test_world_model_prefetch_integration():

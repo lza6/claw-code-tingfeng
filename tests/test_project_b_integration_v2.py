@@ -1,8 +1,10 @@
 import sys
 from pathlib import Path
-from src.rag.symbol_extractor import SymbolExtractor
+
 from src.rag.scope_detector import ScopeDetector
+from src.rag.symbol_extractor import SymbolExtractor
 from src.tools_runtime.grep_tool import GrepTool
+
 
 def test_symbol_extractor():
     print("Testing SymbolExtractor...")

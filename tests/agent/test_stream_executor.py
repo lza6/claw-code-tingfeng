@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.agent._stream_executor import StreamExecutor
 from src.llm import LLMResponse
-
 
 # ====================================================================
 # Fixtures

@@ -16,38 +16,22 @@ logger = logging.getLogger("core.persistence.run_state")
 _DURABLE_SURFACES_AVAILABLE = False
 try:
     from src.core.durable.surface_manager import SurfaceManager
-    from src.core.durable.surfaces.assurance_plan import (
-        AssurancePlan as DurableAssurancePlan,
-    )
-    from src.core.durable.surfaces.assurance_plan import (
-        AssuranceScenario,
-    )
+    from src.core.durable.surfaces.assurance_plan import AssurancePlan as DurableAssurancePlan
+    from src.core.durable.surfaces.assurance_plan import AssuranceScenario
     from src.core.durable.surfaces.coordination_state import (
         CoordinationState,
         SessionInfo,
         SessionState,
     )
-    from src.core.durable.surfaces.evidence_log import (
-        EvidenceEntry as DurableEvidenceEntry,
-    )
-    from src.core.durable.surfaces.evidence_log import (
-        EvidenceLog as DurableEvidenceLog,
-    )
-    from src.core.durable.surfaces.evidence_log import (
-        EvidenceType,
-    )
+    from src.core.durable.surfaces.evidence_log import EvidenceEntry as DurableEvidenceEntry
+    from src.core.durable.surfaces.evidence_log import EvidenceLog as DurableEvidenceLog
+    from src.core.durable.surfaces.evidence_log import EvidenceType
     from src.core.durable.surfaces.objective_contract import (
         ObjectiveContract as DurableObjectiveContract,
     )
-    from src.core.durable.surfaces.obligation_model import (
-        Obligation as DurableObligation,
-    )
-    from src.core.durable.surfaces.obligation_model import (
-        ObligationModel as DurableObligationModel,
-    )
-    from src.core.durable.surfaces.obligation_model import (
-        ObligationStatus,
-    )
+    from src.core.durable.surfaces.obligation_model import Obligation as DurableObligation
+    from src.core.durable.surfaces.obligation_model import ObligationModel as DurableObligationModel
+    from src.core.durable.surfaces.obligation_model import ObligationStatus
     from src.core.durable.surfaces.status_summary import (
         RunPhase,
         StatusSummary,

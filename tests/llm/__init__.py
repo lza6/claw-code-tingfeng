@@ -1,9 +1,11 @@
 """Tests for LLM cache module"""
 import time
-import pytest
 from pathlib import Path
-from src.llm.cache import LLMCache, CacheEntry, CacheStats, get_global_cache, reset_global_cache
+
+import pytest
+
 from src.llm import LLMMessage, LLMResponse
+from src.llm.cache import CacheEntry, CacheStats, LLMCache, get_global_cache, reset_global_cache
 
 
 @pytest.fixture

@@ -1,7 +1,10 @@
-import pytest
 from pathlib import Path
-from src.agent.swarm.self_fission.analyzer import SemanticCodeAnalyzer, AnalysisResult
+
+import pytest
+
+from src.agent.swarm.self_fission.analyzer import AnalysisResult, SemanticCodeAnalyzer
 from src.agent.swarm.self_fission.detectors.base import SemanticFeature
+
 
 class TestAnalysisResult:
     def test_result_properties(self):

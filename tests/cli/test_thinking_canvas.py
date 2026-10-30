@@ -14,26 +14,25 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.cli.tui.thinking_canvas import (
-    RAGCitation,
-    ExecutionStep,
-    StepState,
-    _conf_color_icon,
-    _heat_bar,
-    _render_sparkline,
-    _step_type_color,
-    _state_color,
-    _weight_color_hex,
-    ThinkingCanvasRich,
-    STEP_ICONS,
-    STATE_ICONS,
     CONF_RANGES,
-    VBAR,
     HLINE,
     LJUNCT,
     LJUNCT_EXT,
+    STATE_ICONS,
+    STEP_ICONS,
+    VBAR,
     VBAR_SEP,
+    ExecutionStep,
+    RAGCitation,
+    StepState,
+    ThinkingCanvasRich,
+    _conf_color_icon,
+    _heat_bar,
+    _render_sparkline,
+    _state_color,
+    _step_type_color,
+    _weight_color_hex,
 )
-
 
 # ====================================================================
 # 常量测试

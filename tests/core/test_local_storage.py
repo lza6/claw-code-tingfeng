@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 from src.core import providers_store, usage_store
 

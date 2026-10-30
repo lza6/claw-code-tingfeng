@@ -18,28 +18,27 @@ from unittest.mock import patch
 import pytest
 
 from src.agent.keyword_registry import (
-    KeywordTrigger,
-    KEYWORD_TRIGGER_DEFINITIONS,
-    KEYWORDS_REQUIRING_INTENT,
     EXECUTION_GATE_KEYWORDS,
     GATE_BYPASS_PREFIXES,
+    KEYWORD_TRIGGER_DEFINITIONS,
+    KEYWORDS_REQUIRING_INTENT,
     WELL_SPECIFIED_SIGNALS,
+    KeywordTrigger,
+    apply_ralplan_gate,
     detect_keywords,
     detect_primary_keyword,
-    has_intent_context_for_keyword,
-    is_underspecified_for_execution,
-    apply_ralplan_gate,
-    record_skill_activation,
-    get_skill_active_state,
-    get_trigger_by_keyword,
     get_all_keywords,
-    get_task_size_class,
-    has_explore_intent,
     get_deep_interview_lock_state,
+    get_skill_active_state,
+    get_task_size_class,
+    get_trigger_by_keyword,
+    has_explore_intent,
+    has_intent_context_for_keyword,
     is_deep_interview_input_blocked,
+    is_underspecified_for_execution,
+    record_skill_activation,
     release_deep_interview_on_cancel,
 )
-
 
 # ==================== 触发器注册表测试 ====================
 

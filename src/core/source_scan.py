@@ -13,7 +13,6 @@ site-packages），于是后台索引把事件循环与 CPU 占满，UI 打开�
 from __future__ import annotations
 
 import logging
-
 from dataclasses import dataclass
 from pathlib import Path
 

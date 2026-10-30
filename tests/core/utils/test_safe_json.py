@@ -1,13 +1,15 @@
 """Tests for safe_json utilities."""
 
 import json
+
 import pytest
+
 from src.core.utils.safe_json import (
-    safe_json_parse,
+    SafeJSONEncoder,
     safe_json_dump,
     safe_json_loads,
+    safe_json_parse,
     safe_json_parse_with_type,
-    SafeJSONEncoder,
 )
 
 
@@ -82,6 +84,7 @@ def test_safe_json_parse_with_type_invalid():
 def test_safe_json_parse_with_datetime():
     """Test parsing datetime-like objects."""
     from datetime import datetime
+
     from src.core.utils.safe_json import SafeJSONEncoder
 
     data = {"timestamp": datetime(2024, 1, 1, 12, 0, 0)}

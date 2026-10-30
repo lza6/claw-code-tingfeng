@@ -2,19 +2,28 @@
 Integration tests for durable surfaces system
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
-from src.core.durable.surface_manager import SurfaceManager, SurfaceError, SurfaceValidationError
+import pytest
+
+from src.core.durable.surface_manager import SurfaceError, SurfaceManager, SurfaceValidationError
+from src.core.durable.surfaces.assurance_plan import (
+    AssurancePlan,
+    AssuranceScenario,
+    VerificationMethod,
+)
+from src.core.durable.surfaces.coordination_state import (
+    CoordinationState,
+    SessionInfo,
+    SessionState,
+)
+from src.core.durable.surfaces.evidence_log import EvidenceEntry, EvidenceLog, EvidenceType
 from src.core.durable.surfaces.objective_contract import ObjectiveContract
-from src.core.durable.surfaces.obligation_model import ObligationModel, Obligation, ObligationStatus
-from src.core.durable.surfaces.assurance_plan import AssurancePlan, AssuranceScenario, VerificationMethod
-from src.core.durable.surfaces.evidence_log import EvidenceLog, EvidenceEntry, EvidenceType
-from src.core.durable.surfaces.coordination_state import CoordinationState, SessionInfo, SessionState
-from src.core.durable.surfaces.status_summary import StatusSummary, RunPhase
+from src.core.durable.surfaces.obligation_model import Obligation, ObligationModel, ObligationStatus
+from src.core.durable.surfaces.status_summary import RunPhase, StatusSummary
 
 
 @pytest.fixture

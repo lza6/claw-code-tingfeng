@@ -13,12 +13,10 @@
 from __future__ import annotations
 
 import os
-
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
-
 
 #: 权限结论的中文名（对外一律中文，避免用户看不懂 allow/deny/ask）
 EFFECT_LABELS: dict[str, str] = {

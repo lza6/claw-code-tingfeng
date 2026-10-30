@@ -41,9 +41,7 @@ from ..screens.omni_glow_widgets import (
     MirrorPane,
     RiskIndicator,
 )
-from ..screens.omni_glow_widgets import (
-    ThinkingTree as ThinkingTreeWidget,
-)
+from ..screens.omni_glow_widgets import ThinkingTree as ThinkingTreeWidget
 
 # 从 dashboard 模块导入组件
 from .dashboard import (

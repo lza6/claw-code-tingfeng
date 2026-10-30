@@ -1,8 +1,11 @@
-import pytest
-import numpy as np
 import os
-from src.rag.vector_store.faiss_store import FaissStore, HAS_FAISS
+
+import numpy as np
+import pytest
+
 from src.rag.vector_store.base import VectorDocument
+from src.rag.vector_store.faiss_store import HAS_FAISS, FaissStore
+
 
 @pytest.mark.skipif(not HAS_FAISS, reason="faiss not installed")
 @pytest.mark.asyncio

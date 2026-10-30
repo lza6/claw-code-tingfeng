@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.core.patch_engine import PatchEngine, PatchDefinition, PatchResult
+from src.core.patch_engine import PatchDefinition, PatchEngine, PatchResult
 
 
 class TestPatchDefinition:

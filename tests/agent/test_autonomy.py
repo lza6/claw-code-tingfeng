@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest
@@ -21,7 +20,6 @@ from src.core.approval_mode import ApprovalMode
 from src.core.exceptions import ToolApprovalDeniedError
 from src.core.permissions import Effect, PermissionRequest
 from src.tools_runtime.file_edit_tool import FileEditTool
-
 
 runner = CliRunner()
 

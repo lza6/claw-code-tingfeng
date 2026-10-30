@@ -6,20 +6,20 @@
 import os
 import subprocess
 import sys
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.utils.platform import (
-    SpawnErrorKind,
+    PlatformCommandExecutor,
     PlatformCommandSpec,
     ProbedPlatformCommand,
+    SpawnErrorKind,
+    build_platform_command_spec,
     classify_spawn_error,
     resolve_command_path_for_platform,
-    build_platform_command_spec,
     spawn_platform_command_sync,
-    PlatformCommandExecutor,
 )
-
 
 # ---------------------------------------------------------------------------
 # classify_spawn_error

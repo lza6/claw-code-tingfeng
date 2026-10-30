@@ -5,13 +5,11 @@ from __future__ import annotations
 import json
 import sys
 import time
-
 from pathlib import Path
 
 import pytest
 
 from src.backends.codex import CodexBackend, CodexBackendError, parse_events
-
 
 # ==========================================================================
 # 事件解析

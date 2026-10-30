@@ -8,18 +8,20 @@
 目标覆盖率：80%+
 """
 
-import pytest
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
 from src.core.state.authority import (
     AuthorityLease,
-    LeaseInfo,
     LeaseAcquisitionFailed,
     LeaseAlreadyHeldError,
+    LeaseContext,
+    LeaseInfo,
     LeaseNotHeldError,
     UnauthorizedRenewalError,
-    LeaseContext,
 )
 from src.core.state.command_event import AuthoritySnapshot
 

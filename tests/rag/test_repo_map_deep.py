@@ -23,6 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from src.rag import repo_map as repo_map_module
 from src.rag.repo_map import CodeStructure, RepoMap
 from src.rag.repo_map import get_repo_map as get_global_repo_map

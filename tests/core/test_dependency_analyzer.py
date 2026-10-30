@@ -14,8 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from src.core.dependency_analyzer import DepGraph, DependencyAnalyzer
-
+from src.core.dependency_analyzer import DependencyAnalyzer, DepGraph
 
 # ====================================================================
 # DepGraph 测试

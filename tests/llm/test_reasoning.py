@@ -6,14 +6,14 @@ import pytest
 from src.llm.reasoning import (
     REASONING_TAG,
     REASONING_TAG_ALIASES,
+    extract_reasoning_content,
+    format_reasoning_content,
+    get_reasoning_stats,
+    has_reasoning_content,
+    normalize_reasoning_tags,
     remove_reasoning_content,
     replace_reasoning_tags,
-    format_reasoning_content,
-    extract_reasoning_content,
-    has_reasoning_content,
     split_reasoning_and_answer,
-    normalize_reasoning_tags,
-    get_reasoning_stats,
 )
 
 

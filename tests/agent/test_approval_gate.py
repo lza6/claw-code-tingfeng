@@ -30,6 +30,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from src.agent.tool_manager import ToolManager, classify_tool
 from src.core.approval_mode import ApprovalMode
 from src.core.exceptions import ErrorCode, ToolApprovalDeniedError, ToolExecutionError

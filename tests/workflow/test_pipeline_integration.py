@@ -16,20 +16,19 @@ from typing import Any, Callable, List, Optional
 import pytest
 
 from src.workflow.pipeline_orchestrator import (
-    PipelineOrchestrator,
+    MODES_MODE_NAME,
     PipelineConfig,
+    PipelineModeStateExtension,
+    PipelineOrchestrator,
     PipelineStage,
     StageResult,
     StageStatus,
-    validate_pipeline_config,
+    cancel_pipeline,
     create_autopilot_pipeline_config,
     read_pipeline_state,
-    cancel_pipeline,
-    PipelineModeStateExtension,
-    MODES_MODE_NAME,
+    validate_pipeline_config,
 )
 from src.workflow.types import StageContext
-
 
 # ============================================================================
 # Test fixtures

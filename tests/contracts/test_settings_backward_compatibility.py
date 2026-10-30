@@ -47,8 +47,9 @@ class TestSettingsBackwardCompatibility:
 
     def test_settings_support_env_override(self):
         """配置应支持环境变量覆盖"""
-        from src.core.settings import AgentSettings
         import os
+
+        from src.core.settings import AgentSettings
 
         # 保存原始值
         original = os.environ.get('CLAWD_LLM_MODEL')
@@ -70,8 +71,9 @@ class TestSettingsBackwardCompatibility:
 
     def test_settings_type_annotations_stable(self):
         """配置字段的类型注解应保持稳定"""
-        from src.core.settings import AgentSettings
         from typing import get_type_hints
+
+        from src.core.settings import AgentSettings
 
         hints = get_type_hints(AgentSettings)
 

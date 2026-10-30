@@ -7,7 +7,7 @@
 - 命令路由和错误处理
 """
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -291,8 +291,8 @@ class TestMainEntry:
     @patch('src.cli_handlers.get_command_handler')
     def test_main_handles_clawd_error(self, mock_get_handler, capsys):
         """Main handles ClawdError with structured message."""
-        from src.main import main
         from src.core.exceptions import ClawdError, ErrorCode
+        from src.main import main
 
         mock_handler = Mock()
         mock_handler.side_effect = ClawdError(
@@ -351,6 +351,7 @@ class TestMainEntry:
     def test_main_registers_shutdown_hook(self, mock_shutdown):
         """Main registers shutdown hook via atexit."""
         import atexit
+
         from src.main import main
 
         # This test verifies atexit registration happens

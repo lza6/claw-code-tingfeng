@@ -16,7 +16,6 @@ from src.tools_runtime.edit_parser import (
     validate_edit_blocks,
 )
 
-
 # ==================== find_original_update_blocks ====================
 
 class TestFindOriginalUpdateBlocks:

@@ -1,8 +1,11 @@
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from src.workflow.healable_executor import HealableExecutor
-from src.workflow.models import WorkflowTask, WorkflowStatus, WorkflowPhase
+from src.workflow.models import WorkflowPhase, WorkflowStatus, WorkflowTask
+
 
 @pytest.mark.asyncio
 @pytest.mark.slow  # 2026-10-23 实测 35.12s

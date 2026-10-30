@@ -15,7 +15,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 MERMAID_EXTS = {".mmd", ".mermaid"}
 GRAPHVIZ_EXTS = {".dot", ".gv"}
 PLANTUML_EXTS = {".puml", ".plantuml"}

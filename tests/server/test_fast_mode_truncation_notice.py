@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 import pytest
+
 from src.core.events import EventBus, EventType
 from src.llm import LLMConfig
 from src.server.auth import AuthManager

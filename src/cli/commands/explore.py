@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import ClassVar
 
 import typer
-
 from rich.console import Console
 from rich.panel import Panel
 

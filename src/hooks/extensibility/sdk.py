@@ -14,7 +14,6 @@ Hook SDK - 钩子插件 SDK
 
 import json
 import sys
-
 from pathlib import Path
 from typing import Any
 

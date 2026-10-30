@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
 from src.agent.tool_executor import (
     _DEFAULT_EXECUTOR_MAX_WORKERS,
     _EXECUTOR_MAX_WORKERS_ENV,

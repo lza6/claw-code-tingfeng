@@ -23,6 +23,7 @@ import json
 import sqlite3
 
 import pytest
+
 from src.core.project_context import ProjectContext
 from src.memory.context_window import ContextWindowManager
 from src.memory.manager import MemoryManager

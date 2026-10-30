@@ -8,26 +8,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.workflow.models import (
-    WorkflowPhase,
-    WorkflowPhaseCategory,
-    WorkflowStatus,
-    WorkflowTask,
-    WorkflowResult,
-    TechDebtPriority,
-    TechDebtRecord,
-    VersionBumpType,
-    VersionInfo,
-)
-from src.workflow.code_scanner import CodeIssue, FileInfo, CodeScanner
+from src.workflow.code_scanner import CodeIssue, CodeScanner, FileInfo
 from src.workflow.error_classifier import (
+    BUILTIN_ERROR_PATTERNS,
     ErrorCategory,
     ErrorClassification,
     ErrorClassifier,
     ErrorPattern,
-    BUILTIN_ERROR_PATTERNS,
 )
-
+from src.workflow.models import (
+    TechDebtPriority,
+    TechDebtRecord,
+    VersionBumpType,
+    VersionInfo,
+    WorkflowPhase,
+    WorkflowPhaseCategory,
+    WorkflowResult,
+    WorkflowStatus,
+    WorkflowTask,
+)
 
 # ====================================================================
 # models 测试
@@ -632,6 +631,7 @@ class TestWorkflowEngineBasic:
 
     def test_split_tasks(self):
         from src.workflow.engine import WorkflowEngine
+
         # 任务少于 3 个时应拆分
         tasks = [
             WorkflowTask(task_id="fix-001", phase=WorkflowPhase.EXECUTE,

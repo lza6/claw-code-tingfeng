@@ -1,10 +1,18 @@
 """Regression tests for SelfHealingEngine"""
-import pytest
 import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.self_healing.engine import SelfHealingEngine, SelfHealingConfig
-from src.self_healing.models import ErrorCategory, HealingStrategyType, VerificationLevel, HealingResult
+
+import pytest
+
+from src.self_healing.engine import SelfHealingConfig, SelfHealingEngine
+from src.self_healing.models import (
+    ErrorCategory,
+    HealingResult,
+    HealingStrategyType,
+    VerificationLevel,
+)
+
 
 class TestSelfHealingRegression:
     @pytest.fixture

@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import signal
-import time
 import sys
-from unittest.mock import MagicMock, patch, AsyncMock
+import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.agent._lifecycle import LifecycleMixin, reset_signal_handlers
-from src.core.events import EventBus, Event, EventType
+from src.core.events import Event, EventBus, EventType
 
 
 class MockLifecycleEngine(LifecycleMixin):

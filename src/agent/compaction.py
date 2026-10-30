@@ -17,7 +17,6 @@ Codex 的做法（`codex-rs/core/src/compact.rs` + `templates/compact/prompt.md`
 from __future__ import annotations
 
 import re
-
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Sequence
 

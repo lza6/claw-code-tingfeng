@@ -9,16 +9,15 @@ import pytest
 from src.agent.engine_loop import (
     AgentLoopConfig,
     _add_step,
-    _extract_code_changes,
     _execute_single_tool,
     _execute_tools_parallel_safe,
+    _extract_code_changes,
     _is_missing_info_error,
     _run_agent_loop,
 )
 from src.core.exceptions import LLMProviderError, ToolExecutionError
 from src.llm import LLMMessage, LLMResponse
 from src.tools_runtime.base import ToolResult
-
 
 # ====================================================================
 # AgentLoopConfig 测试

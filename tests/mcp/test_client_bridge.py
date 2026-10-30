@@ -13,7 +13,6 @@ from src.mcp.client import (
 from src.mcp.tool_bridge import MCPExternalTool, bridge_all, bridge_server_tools
 from src.tools_runtime.tool_interface import ToolRegistry, execute_tool
 
-
 # ============ 配置解析 ============
 
 class TestMCPClientConfig:

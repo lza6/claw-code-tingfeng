@@ -36,7 +36,6 @@ from src.core.config.generator import (
     setup_cli_commands,
 )
 
-
 # ==========================================================================
 # 夹具：最小可用的项目目录
 # ==========================================================================
@@ -341,9 +340,8 @@ class TestGenerateToolSignatures:
 
     def test_real_registry_can_be_injected(self, project):
         """用仓库里真实的 ToolRegistry 注入，签名能真出来（打通而非只看桩）"""
-        from src.tools_runtime.registry import ToolRegistry
-
         from src.tools_runtime.file_read_tool import FileReadTool
+        from src.tools_runtime.registry import ToolRegistry
 
         registry = ToolRegistry()
         registry.register(FileReadTool())

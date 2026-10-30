@@ -1,17 +1,18 @@
 """Tests for CLI HUD display components."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.cli.hud import (
     HudContext,
-    _render_model,
-    _render_iteration,
-    _render_tokens,
     _render_cost,
+    _render_git,
+    _render_iteration,
+    _render_model,
+    _render_tokens,
     _render_turns,
     _render_workflow,
-    _render_git,
     render_hud,
 )
 

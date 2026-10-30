@@ -18,6 +18,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from textual.app import App
+
 import src.cli.dashboard.thinking as thinking_module
 from src.cli.dashboard.thinking import (
     ExecutionTree,
@@ -26,7 +28,6 @@ from src.cli.dashboard.thinking import (
     ThinkingCanvas,
 )
 from src.cli.dashboard_widgets.models import ReasoningStep
-from textual.app import App
 
 # ====================================================================
 # 测试脚手架

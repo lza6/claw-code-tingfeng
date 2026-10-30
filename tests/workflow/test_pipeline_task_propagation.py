@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from src.workflow.pipeline import PipelineOrchestrator, PipelineModeState
+from src.workflow.pipeline import PipelineModeState, PipelineOrchestrator
 from src.workflow.types import PipelineStage, StageContext, StageResult, StageStatus
 
 

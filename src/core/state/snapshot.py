@@ -83,7 +83,11 @@ class SystemSnapshot:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SystemSnapshot:
         # 延迟导入避免循环依赖
-        from src.core.state.command_event import AuthoritySnapshot, BacklogSnapshot, ReadinessSnapshot
+        from src.core.state.command_event import (
+            AuthoritySnapshot,
+            BacklogSnapshot,
+            ReadinessSnapshot,
+        )
         return cls(
             schema_version=data.get("schema_version", 1),
             authority=AuthoritySnapshot.from_dict(data.get("authority", {})),

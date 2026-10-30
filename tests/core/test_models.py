@@ -1,13 +1,14 @@
 """Core models 模块单元测试"""
 import pytest
+
 from src.core.models import (
-    Subsystem,
-    PortingModule,
-    PermissionDenial,
-    UsageSummary,
-    PortingBacklog,
-    PortingTask,
     CommandResult,
+    PermissionDenial,
+    PortingBacklog,
+    PortingModule,
+    PortingTask,
+    Subsystem,
+    UsageSummary,
 )
 
 

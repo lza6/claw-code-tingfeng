@@ -3,11 +3,12 @@
 Unit tests for modules ported from Aider.
 """
 import pytest
-from src.core import important_files, args_parser
-from src.llm import exception_handler, message_handler, model_manager
-from src.utils import diff_utils, file_patterns, urls, image_utils, deprecated_args
-from src.rag import tree_sitter_syntax
+
 from src.cli import spinner
+from src.core import args_parser, important_files
+from src.llm import exception_handler, message_handler, model_manager
+from src.rag import tree_sitter_syntax
+from src.utils import deprecated_args, diff_utils, file_patterns, image_utils, urls
 
 
 class TestImportantFiles:

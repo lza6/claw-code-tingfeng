@@ -5,10 +5,11 @@
 分析两个项目的可整合内容，生成详细的整合建议。
 """
 
-import os
 import json
-from pathlib import Path
+import os
 from collections import defaultdict
+from pathlib import Path
+
 
 def analyze_project_structure(project_path: Path, project_name: str) -> dict:
     """分析项目结构"""

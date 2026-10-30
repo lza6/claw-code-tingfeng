@@ -1,9 +1,10 @@
 """Chunk Enrichment 测试"""
 
 import pytest
+
 from src.rag.chunk_enrichment import (
-    ChunkEnrichmentConfig,
     RETURN_SEPARATOR,
+    ChunkEnrichmentConfig,
 )
 
 

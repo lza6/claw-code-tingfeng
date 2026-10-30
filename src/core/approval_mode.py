@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-
 #: 各审批模式的中文名与解释（对外一律用中文，避免用户看不懂英文枚举）
 APPROVAL_MODE_INFO: dict[str, dict[str, str]] = {
     "plan": {

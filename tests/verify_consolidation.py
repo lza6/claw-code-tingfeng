@@ -1,17 +1,18 @@
-import sys
-import os
 import asyncio
+import os
+import sys
 import unittest
 from pathlib import Path
 
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.utils.retry import retry_with_backoff
-from src.utils.file_ops import atomic_write
-from src.utils.cache import LruCache
-from src.core.settings import get_settings, ApprovalMode
 from src.core.output_compressor import OutputCompressor
+from src.core.settings import ApprovalMode, get_settings
+from src.utils.cache import LruCache
+from src.utils.file_ops import atomic_write
+from src.utils.retry import retry_with_backoff
+
 
 class TestConsolidation(unittest.TestCase):
     def test_cache(self):

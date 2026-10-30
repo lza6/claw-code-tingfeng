@@ -1,7 +1,10 @@
 """RepoMap 单元测试 — 验证代码地图生成与层次化渲染"""
-import pytest
 from pathlib import Path
-from src.rag.repo_map import RepoMap, CodeStructure
+
+import pytest
+
+from src.rag.repo_map import CodeStructure, RepoMap
+
 
 def test_code_structure_to_map_entry_depth_1():
     """测试深度 1 的极简渲染 (仅符号名)"""

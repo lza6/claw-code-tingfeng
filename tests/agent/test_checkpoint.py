@@ -1,9 +1,17 @@
-import pytest
-import os
-import json
 import gzip
+import json
+import os
 from pathlib import Path
-from src.agent.checkpoint import save_checkpoint, load_checkpoint, list_checkpoints, cleanup_old_checkpoints
+
+import pytest
+
+from src.agent.checkpoint import (
+    cleanup_old_checkpoints,
+    list_checkpoints,
+    load_checkpoint,
+    save_checkpoint,
+)
+
 
 def test_save_load_checkpoint_json(tmp_path):
     path = tmp_path / "checkpoint_test.json"

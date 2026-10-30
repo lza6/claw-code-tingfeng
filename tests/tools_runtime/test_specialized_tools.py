@@ -1,10 +1,11 @@
 """专业工具测试 - 覆盖 src/tools_runtime/specialized_tools.py"""
 
 import pytest
+
 from src.tools_runtime.specialized_tools import (
+    Any,
     DocGenTool,
     SQLAuditTool,
-    Any,
 )
 
 

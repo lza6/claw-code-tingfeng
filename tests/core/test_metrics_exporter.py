@@ -1,10 +1,11 @@
 """测试 MetricsCollector — 确保指标采集线程安全和导出功能"""
 import threading
+
 import pytest
 
 from src.core.metrics_exporter import (
-    MetricsCollector,
     MetricPoint,
+    MetricsCollector,
     get_metrics_collector,
     reset_metrics_collector,
 )

@@ -62,6 +62,7 @@ class HealableExecutor:
             try:
                 # 汲取 GoalX: 使用更具描述性的分支名
                 import re
+
                 # 去除特殊字符并截断，保持分支名整洁
                 safe_title = re.sub(r'[^a-zA-Z0-9_-]', '-', task.title[:40]).strip('-').lower()
                 branch_name = f"fix/{task.task_id}/{safe_title or 'untitled'}"

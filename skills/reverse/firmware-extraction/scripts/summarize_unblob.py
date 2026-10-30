@@ -2,11 +2,11 @@
 """Summarize unblob task reports without executing tools or reading extracted files."""
 
 import argparse
-from collections import Counter
 import json
 import math
-from pathlib import Path
 import sys
+from collections import Counter
+from pathlib import Path
 
 
 def clipped(value):

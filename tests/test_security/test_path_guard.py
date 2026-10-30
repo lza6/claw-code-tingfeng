@@ -1,13 +1,15 @@
 """路径沙箱安全测试 - 移植自 oh-my-codex-main 路径验证"""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.core.security.path_guard import (
-    validate_path_sandbox,
-    validate_repo_paths,
-    PathValidationResult,
     HARNESS_ROOT_ENV,
     MAX_SYMLINK_DEPTH,
+    PathValidationResult,
+    validate_path_sandbox,
+    validate_repo_paths,
 )
 
 

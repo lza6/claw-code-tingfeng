@@ -7,20 +7,21 @@ Phase 2 Integration Tests - Durable Surfaces 集成到现有系统
 3. WorkflowEngine + Durable Surfaces 集成
 """
 
-import pytest
 import asyncio
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
+import pytest
 
 from src.core.persistence.run_state import (
-    RunStateManager,
     _DURABLE_SURFACES_AVAILABLE,
+    RunStateManager,
 )
 from src.workflow.models import (
-    WorkflowTask,
     WorkflowPhase,
     WorkflowStatus,
+    WorkflowTask,
 )
 
 

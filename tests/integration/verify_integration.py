@@ -26,8 +26,9 @@ def test_notification_events() -> bool:
 def test_worktree_manager() -> bool:
     """Verify WorktreeManager can be instantiated"""
     try:
-        from src.agent.swarm.worktree_manager import WorktreeManager
         import tempfile
+
+        from src.agent.swarm.worktree_manager import WorktreeManager
 
         with tempfile.TemporaryDirectory() as tmp:
             mgr = WorktreeManager(base_dir=tmp)
@@ -53,7 +54,7 @@ def test_mode_config() -> bool:
 def test_team_exec_stage() -> bool:
     """Verify TeamExecStage class can be imported"""
     try:
-        from src.workflow.stages.team_exec_stage import TeamExecStage, TeamExecConfig
+        from src.workflow.stages.team_exec_stage import TeamExecConfig, TeamExecStage
         config = TeamExecConfig(worker_count=2)
         stage = TeamExecStage(config)
         print(f"[OK] TeamExecStage: name={stage.name}")

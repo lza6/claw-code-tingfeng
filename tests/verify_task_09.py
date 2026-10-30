@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 from pathlib import Path
 
 # 添加当前目录到路径
@@ -7,6 +7,7 @@ sys.path.append(os.getcwd())
 
 from src.agent.engine import AgentEngine
 from src.llm import LLMConfig, LLMProviderType
+
 
 def test_engine_init():
     config = LLMConfig(provider=LLMProviderType.OPENAI, model="gpt-4o")

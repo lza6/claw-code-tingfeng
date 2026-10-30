@@ -1,19 +1,20 @@
 """线程池工具测试 - 覆盖 src/utils/threadpool_utils.py"""
 
-import pytest
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
 from src.utils.threadpool_utils import (
+    FunctionCall,
     ThreadSafeDict,
     ThreadSafeSet,
-    FunctionCall,
-    run_functions_tuples_in_parallel,
-    run_functions_in_parallel,
-    run_async_sync_no_cancel,
-    run_multiple_in_background,
     parallel_yield,
+    run_async_sync_no_cancel,
+    run_functions_in_parallel,
+    run_functions_tuples_in_parallel,
+    run_multiple_in_background,
 )
 
 

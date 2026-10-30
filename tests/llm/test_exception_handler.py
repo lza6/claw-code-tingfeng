@@ -1,6 +1,8 @@
 """LLM Exception Handler 模块单元测试"""
 import pytest
+
 from src.llm.exception_handler import (
+    EXCEPTIONS,
     ExceptionInfo,
     LiteLLMExceptions,
     format_error_message,
@@ -8,7 +10,6 @@ from src.llm.exception_handler import (
     get_exception_handler,
     get_exception_info,
     is_retryable_error,
-    EXCEPTIONS,
 )
 
 

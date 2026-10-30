@@ -10,7 +10,6 @@ Server 类，不需要起 MCP 进程、不需要端口/token 握手。MCP 只留
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest

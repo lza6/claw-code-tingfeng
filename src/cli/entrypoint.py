@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import sys
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -225,7 +225,7 @@ def role_list(
 
     from rich.table import Table
 
-    from ..agent.personas import search_dirs, personas_report
+    from ..agent.personas import personas_report, search_dirs
 
     items = personas_report()
     if as_json:
@@ -1571,10 +1571,10 @@ def codex_run(
     说明: 需要先安装 Codex CLI —— `npm i -g @openai/codex`。
     本命令只做协议适配与进程管控，agent 循环/沙箱/工具由 Codex 自己负责。
     """
+    import os as _os
+
     from ..backends import CodexBackend
     from ..backends.codex import CodexBackendError
-
-    import os as _os
 
     mcp_servers: dict = {}
     if with_clawd_tools:

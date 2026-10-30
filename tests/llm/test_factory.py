@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from src.llm.factory import (
     LlmProviderNames,
     _build_model_kwargs,

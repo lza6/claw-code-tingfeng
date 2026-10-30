@@ -1,7 +1,10 @@
 """Protocol Converter 专项测试 — 验证跨模型协议转换准确性"""
-import pytest
 import json
+
+import pytest
+
 from src.llm.protocol_converter import ProtocolConverter
+
 
 def test_openai_to_claude_basic():
     """测试基础文本消息转换"""

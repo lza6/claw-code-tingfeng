@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sys
-
 from pathlib import Path
 
 import pytest
 
+from src.backends import registry
 from src.backends.base import (
     BackendResult,
     BackendUnavailable,
@@ -15,8 +15,6 @@ from src.backends.base import (
     CliEngineProfile,
     resolve_binary,
 )
-from src.backends import registry
-
 
 # ==========================================================================
 # 结果语义

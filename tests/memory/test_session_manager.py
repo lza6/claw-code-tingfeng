@@ -1,19 +1,22 @@
 """SessionManager 单元测试 — 验证会话管理、持久化与加载"""
-import pytest
-import os
 import json
+import os
 import shutil
 from pathlib import Path
+
+import pytest
+
 from src.memory.session_manager import (
-    SessionManager,
-    Session,
-    SessionStatus,
-    Message,
     FileSessionStorage,
+    Message,
+    Session,
+    SessionManager,
+    SessionStatus,
     create_session,
     get_session,
-    save_session
+    save_session,
 )
+
 
 @pytest.fixture
 def temp_session_dir(tmp_path):

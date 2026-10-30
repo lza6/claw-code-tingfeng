@@ -104,7 +104,12 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         import time
 
         # 复用 base.py 的缓存
-        from .base import _CLIENT_CACHE_MAX_SIZE, _CLIENT_CACHE_TTL, _client_cache, _client_cache_lock
+        from .base import (
+            _CLIENT_CACHE_MAX_SIZE,
+            _CLIENT_CACHE_TTL,
+            _client_cache,
+            _client_cache_lock,
+        )
 
         cache_key = self._get_cache_key()
         now = time.time()

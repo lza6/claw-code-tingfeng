@@ -3,19 +3,21 @@
 import os
 import subprocess
 import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.core.utils.platform_command import (
-    SpawnErrorKind,
     PlatformCommandSpec,
-    classify_spawn_error,
-    resolve_command_path_for_platform,
+    SpawnErrorKind,
     build_platform_command_spec,
-    spawn_platform_command_sync,
-    probe_platform_command,
-    which,
+    classify_spawn_error,
     is_command_available,
+    probe_platform_command,
+    resolve_command_path_for_platform,
+    spawn_platform_command_sync,
+    which,
 )
 
 

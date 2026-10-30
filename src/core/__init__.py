@@ -60,35 +60,17 @@ from .exceptions import (
 )
 from .git_integration import CommitInfo, DiffResult, GitManager, get_git_manager
 from .history import HistoryEvent, HistoryLog
-from .hook_registry import (
-    HookContext as HookContext,
-)
-from .hook_registry import (
-    HookExecutionResult as HookExecutionResult,
-)
 
 # 新增：Onyx 风格的 Hook 注册表系统（补充而非替换）
-from .hook_registry import (
-    HookPoint as HookPoint,
-)
-from .hook_registry import (
-    HookPointSpec as HookPointSpec,
-)
-from .hook_registry import (
-    HookResult as HookResult,
-)
-from .hook_registry import (
-    execute_hook as execute_hook,
-)
-from .hook_registry import (
-    hook as hook,
-)
-from .hook_registry import (
-    register_hook as register_hook,
-)
-from .hook_registry import (
-    validate_registry as validate_registry,
-)
+from .hook_registry import HookContext as HookContext
+from .hook_registry import HookExecutionResult as HookExecutionResult
+from .hook_registry import HookPoint as HookPoint
+from .hook_registry import HookPointSpec as HookPointSpec
+from .hook_registry import HookResult as HookResult
+from .hook_registry import execute_hook as execute_hook
+from .hook_registry import hook as hook
+from .hook_registry import register_hook as register_hook
+from .hook_registry import validate_registry as validate_registry
 from .hooks import (
     CompositeHookRunner,
     ConfigHookRunner,
@@ -143,9 +125,9 @@ from .telemetry.output_compressor import (
     FilterStrategy,
     OutputCompressor,
 )
+from .telemetry.token_tracker import TokenUsage  # 这里原先是 from .usage import TokenUsage
 from .telemetry.token_tracker import (
     TokenTracker,
-    TokenUsage,  # 这里原先是 from .usage import TokenUsage
     TrackingRecord,
 )
 from .transcript import TranscriptStore

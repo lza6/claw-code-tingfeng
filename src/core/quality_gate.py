@@ -20,8 +20,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from src.utils.logger import get_logger
 from rich.console import Console
+
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 console = Console()

@@ -22,11 +22,9 @@ from .code_edit import (
     apply_edit,
     create_coder,
     perfect_replace,
-    try_dotdotdots,
 )
-from .code_edit import (
-    replace_most_similar_chunk as code_replace_most_similar_chunk,
-)
+from .code_edit import replace_most_similar_chunk as code_replace_most_similar_chunk
+from .code_edit import try_dotdotdots
 from .dependency_tool import DependencyTool
 
 # Edit Format Switcher (from Aider)
@@ -53,13 +51,13 @@ from .path_utils import BINARY_EXTENSIONS, TEXT_EXTENSIONS, resolve_path
 from .recency_tools import HotFilesTool
 from .registry import ToolRegistry
 from .scrape_tool import Scraper, ScrapeTool, detect_urls
-from .skill_tool import SkillTool
 from .search_replace import (
     RelativeIndenter,
     SearchResult,
     flexible_search_and_replace,
     search_and_replace,
 )
+from .skill_tool import SkillTool
 from .udiff_parser import (
     SearchTextNotUnique,
     apply_hunks,

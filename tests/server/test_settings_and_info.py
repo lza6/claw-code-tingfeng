@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ import pytest_asyncio
 
 from src.server.auth import AuthManager
 from src.server.handlers import MessageRouter
-
 
 # ==========================================================================
 # 设置读写（WS 协议）

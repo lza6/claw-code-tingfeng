@@ -2,16 +2,17 @@
 Phase 3 & 4 Integration Tests - Worktree 增强与运行时监控
 """
 
-import pytest
 import asyncio
 import os
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
+import pytest
 
 from src.core.git.worktree import WorktreeManager
 from src.core.runtime.host import RuntimeHost
-from src.core.runtime.lease import RuntimeLease, LeaseMonitor
+from src.core.runtime.lease import LeaseMonitor, RuntimeLease
 
 
 @pytest.fixture
@@ -125,8 +126,8 @@ class TestSwarmPhase4Integration:
     @pytest.mark.asyncio
     async def test_swarm_runtime_integration(self, temp_repo):
         """测试 SwarmEngine 自动管理 RuntimeHost 和 CoordinationState"""
-        from src.agent.swarm.engine import SwarmEngine
         from src.agent.swarm.config import SwarmConfig
+        from src.agent.swarm.engine import SwarmEngine
         from src.agent.swarm.message_bus import AgentMessage, MessageType
 
         config = SwarmConfig(

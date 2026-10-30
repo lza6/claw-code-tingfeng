@@ -1,20 +1,22 @@
 """Cache 模块单元测试"""
 import sys
 import time
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from src.core.cache import (
+    BaseCache,
     CacheBackend,
     CacheConfig,
-    BaseCache,
+    CacheManager,
     MemoryCache,
     RedisCache,
-    CacheManager,
-    get_cache,
+    cache_delete,
     cache_get,
     cache_set,
-    cache_delete,
     cached,
+    get_cache,
 )
 
 

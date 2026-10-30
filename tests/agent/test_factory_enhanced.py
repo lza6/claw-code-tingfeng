@@ -1,8 +1,11 @@
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.agent.factory import create_agent_engine
 from src.llm import LLMProviderType
+
 
 def test_create_agent_engine_default():
     """测试默认参数创建引擎"""

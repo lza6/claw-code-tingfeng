@@ -371,8 +371,8 @@ class ClawdWebSocketServer:
 
                 self.logger.error(f"静态托管处理失败: {path} — {type(exc).__name__}: {exc}")
                 self.logger.error(traceback.format_exc())
-                from websockets.http11 import Response as _WsResponse
                 from websockets.datastructures import Headers as _H
+                from websockets.http11 import Response as _WsResponse
 
                 return _WsResponse(
                     500, 'Internal Server Error',
@@ -527,8 +527,8 @@ class ClawdWebSocketServer:
             import os as _os
 
             try:
-                from ..core import usage_store
                 from ..agent.skill_loader import discover_skills
+                from ..core import usage_store
 
                 window = int(_os.environ.get('CLAWD_CONTEXT_WINDOW', '200000'))
                 recent = usage_store.recent(1, Path.cwd())

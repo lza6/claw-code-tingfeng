@@ -9,10 +9,10 @@ from .command_event import (
     BacklogSnapshot,
     ReadinessSnapshot,
 )
+from .persistence import StateManager
 
 # 从子模块导出其余状态类
 from .snapshot import ReplaySnapshot, SystemSnapshot
-from .persistence import StateManager
 
 __all__ = [
     "AuthoritySnapshot",

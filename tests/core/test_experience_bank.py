@@ -1,12 +1,13 @@
 """Tests for Unified Experience Bank"""
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from src.core.experience_bank import (
     ExperienceBank,
-    ExperienceRecord,
     ExperienceEmbedder,
+    ExperienceRecord,
     _tokenize,
 )
 

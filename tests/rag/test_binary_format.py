@@ -1,10 +1,11 @@
 """Binary Format 测试"""
 
 import pytest
+
 from src.rag.binary_format import (
-    POSTINGS_MAGIC,
-    LOOKUP_MAGIC,
     FORMAT_VERSION,
+    LOOKUP_MAGIC,
+    POSTINGS_MAGIC,
 )
 
 

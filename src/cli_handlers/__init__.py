@@ -25,8 +25,8 @@ COMMAND_REGISTRY: dict[str, CommandHandler] = {
 
 def _handle_reason_wrapper(args: argparse.Namespace) -> "CommandResult":
     """reason 命令包装：reason_handler 的 cmd_reason 输出文本，转 CommandResult"""
-    import io
     import contextlib
+    import io
 
     from .reason_handler import cmd_reason
 

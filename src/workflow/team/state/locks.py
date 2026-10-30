@@ -11,8 +11,8 @@
 from __future__ import annotations
 
 import json
-import time
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 from collections.abc import Callable, Generator

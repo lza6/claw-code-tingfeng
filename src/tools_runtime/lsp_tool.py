@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 import json
 import threading
-
 from pathlib import Path
 from typing import Any
 

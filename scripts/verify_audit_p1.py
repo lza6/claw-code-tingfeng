@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-
 from pathlib import Path
 
 # 证据里含中文/符号，Windows 控制台默认 GBK 会在 print 时直接抛

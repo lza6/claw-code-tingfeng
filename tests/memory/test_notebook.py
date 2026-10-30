@@ -15,7 +15,6 @@ from src.agent.compaction import (
 from src.memory.notebook import Notebook, format_page_preview, normalize_topic
 from src.tools_runtime.notebook_tool import NotebookTool
 
-
 # ==========================================================================
 # Pi handoff 准入判断
 # ==========================================================================

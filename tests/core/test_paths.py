@@ -5,29 +5,29 @@
 """
 
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from src.core.paths import (
-    get_codex_home,
-    get_codex_config_path,
-    get_user_skills_dir,
-    get_project_skills_dir,
-    get_codex_agents_dir,
-    get_project_codex_agents_dir,
-    get_omx_state_dir,
-    get_omx_project_memory_path,
-    get_omx_notepad_path,
-    get_omx_plans_dir,
-    get_omx_logs_dir,
-    get_project_root,
-    list_installed_skill_directories,
     InstalledSkillDirectory,
     SkillRootOverlapReport,
     detect_legacy_skill_overlap,
+    get_codex_agents_dir,
+    get_codex_config_path,
+    get_codex_home,
+    get_omx_logs_dir,
+    get_omx_notepad_path,
+    get_omx_plans_dir,
+    get_omx_project_memory_path,
+    get_omx_state_dir,
+    get_project_codex_agents_dir,
+    get_project_root,
+    get_project_skills_dir,
+    get_user_skills_dir,
+    list_installed_skill_directories,
 )
-
 
 # ---------------------------------------------------------------------------
 # Environment-based resolution
@@ -240,6 +240,7 @@ def test_get_package_root_from_pyproject(tmp_path):
     with patch('src.core.paths.__file__', str(pkg / 'core' / 'paths.py')):
         # 由于 get_package_root 基于 __file__ 向上查找
         from src.core import paths as paths_module
+
         # 临时替换 os.path.dirname 行为
         original_abspath = os.path.abspath
         try:

@@ -122,6 +122,7 @@ class SwarmEngine:
         self.worktree_manager = WorktreeManager(self.workdir)
         # [汲取 GoalX] 增加预算守卫
         from ...core.budget_guard import BudgetGuard, parse_budget_string
+
         # 尝试从配置或环境变量获取预算字符串
         budget_str = getattr(self.config, 'budget', None) or os.environ.get('CLAWD_BUDGET')
         self.budget_guard = BudgetGuard(parse_budget_string(budget_str))
@@ -134,6 +135,7 @@ class SwarmEngine:
         if self.config.enable_runtime_host:
             from ...core.resource_monitor import ResourceMonitor
             from ...core.runtime.host import RuntimeHost
+
             # 自动生成 session_id (如果是重连模式，可能需要传入)
             session_id = f"swarm-{int(time.time())}"
             self.runtime_host = RuntimeHost(
@@ -298,6 +300,7 @@ class SwarmEngine:
             else:
                 self._progress('orchestrator', '从持久化状态恢复任务分解')
                 from .orchestrator import TaskDAG, TaskDecomposition
+
                 # 从 registry 重建 decomposition
                 tasks_data = []
                 for t in self.task_registry.get_all_tasks():

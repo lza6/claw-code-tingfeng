@@ -45,7 +45,6 @@ from src.agent.swarm.quality_gate import GateResult
 from src.agent.swarm.task_registry import TaskStatus
 from src.memory.enterprise_ltm import PatternType
 
-
 # ==========================================================================
 # 手写 fake 协作者
 # ==========================================================================

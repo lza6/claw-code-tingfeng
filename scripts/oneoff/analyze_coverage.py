@@ -4,6 +4,7 @@
 import json
 from pathlib import Path
 
+
 def analyze_coverage():
     """Parse coverage status.json and identify low-coverage modules."""
 

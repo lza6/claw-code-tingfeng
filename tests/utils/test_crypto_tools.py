@@ -1,11 +1,12 @@
 """加密工具测试 - 覆盖 src/utils/crypto_tools.py"""
 
 import pytest
+
 from src.utils.crypto_tools import (
     _derive_fernet_key,
-    get_fernet,
-    encrypt,
     decrypt,
+    encrypt,
+    get_fernet,
 )
 
 

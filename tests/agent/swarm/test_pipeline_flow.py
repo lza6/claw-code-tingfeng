@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from src.agent.swarm import pipeline as pipeline_mod
 from src.agent.swarm.config import SwarmConfig
 from src.agent.swarm.pipeline import SwarmPipeline

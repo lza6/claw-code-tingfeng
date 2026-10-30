@@ -1,26 +1,26 @@
 """Tests for src/core/catalog.py"""
 
-import os
 import json
-import pytest
+import os
 from datetime import datetime
 from pathlib import Path
 
-from src.core.catalog import (
-    SkillManifest,
-    AgentManifest,
-    CatalogManifest,
-    generate_catalog_manifest,
-    _parse_skill_markdown,
-    CatalogError,
-    ManifestValidationError,
-    validate_catalog_manifest,
-    list_skill_names,
-    get_skill_info,
-    get_catalog_counts,
-    to_public_catalog_contract,
-)
+import pytest
 
+from src.core.catalog import (
+    AgentManifest,
+    CatalogError,
+    CatalogManifest,
+    ManifestValidationError,
+    SkillManifest,
+    _parse_skill_markdown,
+    generate_catalog_manifest,
+    get_catalog_counts,
+    get_skill_info,
+    list_skill_names,
+    to_public_catalog_contract,
+    validate_catalog_manifest,
+)
 
 # ---------------------------------------------------------------------------
 # SKILL.md Parsing

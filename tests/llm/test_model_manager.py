@@ -1,18 +1,20 @@
 """Model Manager 模块单元测试"""
 import json
-import pytest
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.llm.model_manager import (
-    ModelInfo,
-    ModelConfig,
-    ModelManager,
+    ANTHROPIC_MODELS,
+    CACHE_TTL,
     MODEL_ALIASES,
     OPENAI_MODELS,
-    ANTHROPIC_MODELS,
+    ModelConfig,
+    ModelInfo,
+    ModelManager,
     get_model_manager,
-    CACHE_TTL,
 )
 
 
@@ -251,6 +253,7 @@ class TestModelManagerCache:
     def test_update_cache_success(self, tmp_path):
         """更新缓存成功"""
         import sys
+
         # 创建 mock requests 模块
         mock_requests = MagicMock()
         mock_response = MagicMock()
@@ -267,6 +270,7 @@ class TestModelManagerCache:
     def test_update_cache_failure(self, tmp_path):
         """更新缓存失败不报错"""
         import sys
+
         # 创建 mock requests 模块并抛出异常
         mock_requests = MagicMock()
         mock_requests.get.side_effect = Exception("Network error")

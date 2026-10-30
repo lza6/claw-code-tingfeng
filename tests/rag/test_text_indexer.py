@@ -1,14 +1,16 @@
 """Tests for RAG TextIndexer core functionality."""
 
-import pytest
-from unittest.mock import MagicMock, patch
-from pathlib import Path
-import tempfile
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from src.rag.text_indexer import TextIndexer
-from src.rag.models import Document, Chunk, SearchResult
+import pytest
+
 from src.rag.indexer_utils import _get_stop_words_cached
+from src.rag.models import Chunk, Document, SearchResult
+from src.rag.text_indexer import TextIndexer
+
 
 class TestStopWords:
     """Test stop words functionality."""

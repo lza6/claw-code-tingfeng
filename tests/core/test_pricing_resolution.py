@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import pytest
+
 from src.core.cost_estimator.cost_estimator import (
     DEFAULT_PRICING,
     MODEL_PRICING,

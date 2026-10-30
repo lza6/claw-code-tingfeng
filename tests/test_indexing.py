@@ -1,7 +1,10 @@
 """Unit tests for src/core/indexing.py."""
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.core.indexing import TrigramIndex, WordIndex, build_index
+
 
 def test_trigram_encoding():
     idx = TrigramIndex()

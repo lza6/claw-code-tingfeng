@@ -20,6 +20,7 @@ sys.path.append(str(Path.cwd()))
 from src.workflow.engine import WorkflowEngine
 from src.workflow.models import WorkflowIntent
 
+
 async def test_integrated_workflow():
     logging.basicConfig(level=logging.INFO)
     workdir = Path.cwd()

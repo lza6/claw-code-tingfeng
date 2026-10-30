@@ -3,24 +3,24 @@
 补充针对 spawn_platform_command_sync 和集成场景的测试。
 """
 
+import errno
 import os
 import subprocess
 import sys
-import errno
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.utils.platform import (
-    SpawnErrorKind,
+    PlatformCommandExecutor,
     PlatformCommandSpec,
     ProbedPlatformCommand,
-    _resolve_windows_command_path,
+    SpawnErrorKind,
     _resolve_posix_command_path,
+    _resolve_windows_command_path,
     build_platform_command_spec,
     spawn_platform_command_sync,
-    PlatformCommandExecutor,
 )
-
 
 # ---------------------------------------------------------------------------
 # Windows command resolution

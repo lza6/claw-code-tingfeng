@@ -23,9 +23,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import time
-from typing import Any
 from collections import OrderedDict
 from pathlib import Path
+from typing import Any
 
 from ..utils import get_logger
 
@@ -379,6 +379,7 @@ class RepoMap:
             if language == "python":
                 # 简单的正则解析
                 import re
+
                 # 类
                 classes = re.findall(r'^class\s+(\w+)', content, re.MULTILINE)
                 # 函数

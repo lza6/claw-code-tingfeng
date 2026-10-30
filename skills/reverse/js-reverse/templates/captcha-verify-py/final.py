@@ -28,9 +28,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import time
-import random
 
 # ============================================================
 # 依赖（由用户从 templates 复制到 result/src/ 后填充）
@@ -43,14 +43,12 @@ except ImportError:
 
 # 真实平台协议适配器：必须由本 case 根据 trace/抓包实现。
 try:
-    from src.adapter import (
-        load_challenge as adapter_load_challenge,
-        resolve_assets as adapter_resolve_assets,
-        prepare_answer as adapter_prepare_answer,
-        build_verify_request as adapter_build_verify_request,
-        parse_verify_response as adapter_parse_verify_response,
-        consume_credential as adapter_consume_credential,
-    )
+    from src.adapter import build_verify_request as adapter_build_verify_request
+    from src.adapter import consume_credential as adapter_consume_credential
+    from src.adapter import load_challenge as adapter_load_challenge
+    from src.adapter import parse_verify_response as adapter_parse_verify_response
+    from src.adapter import prepare_answer as adapter_prepare_answer
+    from src.adapter import resolve_assets as adapter_resolve_assets
 except ImportError:
     adapter_load_challenge = adapter_resolve_assets = adapter_prepare_answer = None
     adapter_build_verify_request = adapter_parse_verify_response = adapter_consume_credential = None

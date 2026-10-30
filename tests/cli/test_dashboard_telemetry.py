@@ -18,10 +18,11 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-from src.cli.dashboard_widgets.telemetry import AnimatedProgressBar, TelemetryPanel
 from textual.app import App
 from textual.css.query import NoMatches
 from textual.widgets import Label
+
+from src.cli.dashboard_widgets.telemetry import AnimatedProgressBar, TelemetryPanel
 
 # ====================================================================
 # 测试脚手架

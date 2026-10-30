@@ -1,13 +1,14 @@
 import json
+import os
+import sys
 import time
 from pathlib import Path
-import sys
-import os
 
 # Ensure src is in path
 sys.path.append(os.getcwd())
 
 from src.core.experience_bank import ExperienceBank
+
 
 def inject_mock_errors():
     bank = ExperienceBank(storage_path=Path(".clawd/experience.json"))

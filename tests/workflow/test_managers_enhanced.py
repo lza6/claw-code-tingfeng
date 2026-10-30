@@ -1,9 +1,12 @@
-import pytest
 import re
 from pathlib import Path
-from src.workflow.version_manager import VersionManager
+
+import pytest
+
 from src.workflow.hotfix_manager import HotfixManager
 from src.workflow.models import TechDebtPriority
+from src.workflow.version_manager import VersionManager
+
 
 def test_version_manager_changelog_enhancement(tmp_path):
     pyproject = tmp_path / "pyproject.toml"

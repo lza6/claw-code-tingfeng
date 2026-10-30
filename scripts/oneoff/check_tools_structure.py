@@ -6,6 +6,7 @@
 import os
 from pathlib import Path
 
+
 def check_tools_structure():
     """检查工具文件的组织结构"""
     project_root = Path(__file__).parent

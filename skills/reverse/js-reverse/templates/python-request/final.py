@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 # ============================================================
 # 签名生成：用户自行实现（参考 cases/ 同类案例），需导出 generate_sign + build_params
 try:
-    from src.signer import generate_sign, build_params
+    from src.signer import build_params, generate_sign
 except ImportError:
     generate_sign = None
     build_params = None
@@ -54,7 +54,7 @@ except ImportError:
 
 # 请求客户端：从 templates/python-request/client.py 复制到 result/src/request/client.py
 try:
-    from src.request.client import create_request_session, CookieJar
+    from src.request.client import CookieJar, create_request_session
 except ImportError:
     create_request_session = None
     CookieJar = None

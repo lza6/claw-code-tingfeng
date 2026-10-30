@@ -1,8 +1,11 @@
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from src.agent.engine import AgentEngine
 from src.llm import LLMConfig, LLMProviderType
+
 
 @pytest.mark.asyncio
 async def test_agent_engine_run_integration():

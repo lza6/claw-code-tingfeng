@@ -1,15 +1,17 @@
 """Basic tests for notification system."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from src.notification.dispatcher import dispatch_notifications
 from src.notification.types import (
+    DispatchResult,
     FullNotificationConfig,
     FullNotificationPayload,
     NotificationEvent,
     NotificationResult,
-    DispatchResult,
 )
-from src.notification.dispatcher import dispatch_notifications
 
 
 @pytest.mark.asyncio

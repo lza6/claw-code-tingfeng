@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from src.agent.engine_events import EventPublisher
 from src.core.events import EventBus
+
 
 def test_event_publisher_all_events():
     mock_bus = MagicMock(spec=EventBus)

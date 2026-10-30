@@ -1,12 +1,14 @@
 """命令白名单安全测试 - 移植自 oh-my-codex-main 安全模型"""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.core.security.allowlist import (
-    validate_command,
-    CommandValidationResult,
     ALLOWED_COMMANDS,
     SHELL_INJECTION_OPERATORS,
+    CommandValidationResult,
+    validate_command,
 )
 
 

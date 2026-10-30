@@ -1,7 +1,10 @@
 """Meta-Self-Correction 专项测试 — 验证高级 AST 审计能力"""
-import pytest
 import asyncio
+
+import pytest
+
 from src.self_healing.meta_self_correction import MetaSelfCorrection
+
 
 @pytest.mark.asyncio
 async def test_meta_audit_ast_engine():

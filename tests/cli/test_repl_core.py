@@ -1,15 +1,16 @@
 """Tests for CLI REPL core interaction logic."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from io import StringIO
 import sys
+from io import StringIO
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.cli.repl import (
-    _print,
+    BUILTIN_COMMANDS,
     _handle_help,
     _handle_version,
-    BUILTIN_COMMANDS,
+    _print,
 )
 
 

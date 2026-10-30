@@ -1,6 +1,7 @@
 """Engine Proxies 测试 - 覆盖 src/agent/_engine_proxies.py"""
 
 import pytest
+
 from src.agent._engine_proxies import (
     setup_event_proxies,
     setup_lifecycle_proxies,

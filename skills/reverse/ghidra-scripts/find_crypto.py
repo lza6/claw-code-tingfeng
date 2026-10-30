@@ -7,14 +7,14 @@ Searches for crypto constants, S-boxes, key schedules
 """
 
 from ghidra.program.model.symbol import SourceType
-
 from ghidra.util.task import TaskMonitor
 
 # Nested/headless invocations can have no monitor; use the active one if supplied.
 monitor = monitor or getControls().getMonitor() or TaskMonitor.DUMMY
 
-from jarray import array
 import struct
+
+from jarray import array
 
 # AES S-box (first 16 bytes)
 AES_SBOX = [

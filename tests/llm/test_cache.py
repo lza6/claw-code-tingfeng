@@ -1,9 +1,11 @@
 """LLM Cache 模块单元测试"""
-import time
-import pytest
 import threading
+import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.llm.cache import (
     CacheEntry,
     CacheStats,

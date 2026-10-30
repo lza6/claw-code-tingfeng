@@ -1,10 +1,11 @@
 """ChatSummary 扩展测试"""
 
 import pytest
+
 from src.memory.chat_summary import (
     ChatSummary,
-    compress_messages,
     SummaryResult,
+    compress_messages,
 )
 
 

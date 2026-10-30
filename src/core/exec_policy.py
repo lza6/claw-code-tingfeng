@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import json
 import shlex
-
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Sequence
-
 
 #: 命令策略结论的中文名
 DECISION_LABELS: dict[str, str] = {

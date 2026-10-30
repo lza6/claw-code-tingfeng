@@ -1,9 +1,10 @@
 """服务器处理器测试 - 覆盖 src/server/handlers.py"""
 
 import pytest
+
 from src.server.handlers import (
-    build_response,
     build_error,
+    build_response,
 )
 
 

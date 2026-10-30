@@ -95,6 +95,7 @@ class DependencyTool(BaseTool):
             dependents = []
 
             import os
+
             # Optimization: limit grep search if possible, but here we do full scan for accuracy
             for root, _, files in os.walk(self.root_dir):
                 for file in files:

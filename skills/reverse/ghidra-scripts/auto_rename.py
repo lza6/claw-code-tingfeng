@@ -3,7 +3,6 @@
 # auto_rename.py - Candidate naming from strings and direct calls
 
 from ghidra.program.model.symbol import SourceType
-
 from ghidra.util.task import TaskMonitor
 
 # Nested/headless invocations can have no monitor; use the active one if supplied.

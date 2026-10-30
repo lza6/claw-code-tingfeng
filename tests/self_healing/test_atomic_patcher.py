@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from src.core.patch.atomic_patcher import AtomicPatcher
 from src.core.patch.models import AtomicChange, PatchOperation
 

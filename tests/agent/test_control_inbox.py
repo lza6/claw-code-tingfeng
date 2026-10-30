@@ -2,16 +2,17 @@
 Integration tests for control inbox system
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
+import pytest
 
 from src.agent.swarm.control.inbox import (
+    ControlSystem,
     Inbox,
     Message,
     MessagePriority,
-    ControlSystem,
 )
 
 

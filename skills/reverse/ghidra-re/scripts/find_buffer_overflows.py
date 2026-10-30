@@ -7,7 +7,6 @@ Focuses on dangerous functions and unbounded operations
 """
 
 from ghidra.program.model.listing import CodeUnit
-
 from ghidra.util.task import TaskMonitor
 
 # Nested/headless invocations can have no monitor; use the active one if supplied.

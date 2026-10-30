@@ -175,6 +175,12 @@ show_missing = true
 # 按文件排序输出
 sort = "Cover"
 
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = ["src/utils/__init__.py", "src/rag/text_indexer.py"]
+skip_glob = ["**/site-packages/*"]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 120

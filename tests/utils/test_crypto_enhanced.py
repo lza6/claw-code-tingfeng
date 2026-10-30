@@ -4,22 +4,21 @@ from __future__ import annotations
 import pytest
 
 from src.utils.crypto_enhanced import (
-    generate_fernet_key,
-    encrypt_data,
     decrypt_data,
-    sha256_hash,
-    md5_hash,
-    hash_api_key,
-    verify_api_key,
-    generate_secure_random,
+    encrypt_data,
     generate_api_key,
-    generate_order_id,
-    generate_invitation_code,
     generate_cache_key,
+    generate_fernet_key,
+    generate_invitation_code,
+    generate_order_id,
+    generate_secure_random,
+    hash_api_key,
     hash_password,
+    md5_hash,
+    sha256_hash,
+    verify_api_key,
     verify_password,
 )
-
 
 # ====================================================================
 # Fernet 加密测试

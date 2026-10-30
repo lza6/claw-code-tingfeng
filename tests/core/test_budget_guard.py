@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import time
 from unittest.mock import Mock
 
 import pytest
-
-import time
 
 from src.core.budget_guard import BudgetConfig, BudgetGuard
 from src.core.events import EventType

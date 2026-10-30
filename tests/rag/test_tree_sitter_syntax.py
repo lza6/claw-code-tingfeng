@@ -1,5 +1,7 @@
 import pytest
-from src.rag.tree_sitter_syntax import parse_code, extract_code_blocks, SyntaxTree
+
+from src.rag.tree_sitter_syntax import SyntaxTree, extract_code_blocks, parse_code
+
 
 def test_extract_code_blocks_python():
     code = """
