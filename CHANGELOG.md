@@ -7,6 +7,39 @@
 
 ---
 
+## [v0.88.6] (2026-10-30) — 死码清理（1804 行）：删"确定死"的，保留参考快照与真实能力
+
+按《死代码判定-2026-10-28》的方法复核当前 33 个"完全不可达"模块（5904 行），删掉确定死的部分。
+**关键判断：绝大多数"包不可达"其实是包的 `__init__.py` 没被直接 import**（调用方都直接 import 子模块），
+删目录会误删活代码（例如 `core/security/allowlist.py` 就在一个"不可达"的包里），所以只删单文件死码。
+
+**删除（1804 行，`git rm` 7 个文件）**
+| 文件 | 行数 | 依据 |
+|---|---:|---|
+| `src/core/hook_registry/async_executor.py` | 606 | 旧的 hook 执行器；活的实现在 `hook_registry/registry.py`（`execute_hook`）。全仓库仅 `scripts/deadcode_inventory.py` 的注释提到名字 |
+| `src/workflow/team/state/tasks.py` | 252 | 与 `team_persistence`（v0.88.5 已接线）语义重叠的第二套团队状态实现，零生产调用方 |
+| `src/workflow/team/state/mailbox.py` | 265 | 同上 |
+| `src/workflow/team/state/dispatch.py` | 199 | 同上 |
+| `src/workflow/team/state/dispatch_lock.py` | 149 | 同上 |
+| `src/workflow/team/state/approvals.py` | 177 | 同上 |
+| `src/workflow/team/state/monitor.py` | 156 | 同上 |
+
+`team/state/__init__.py` 同步重写：只导出 `locks.py` 的 8 个符号（真实的跨进程文件锁，
+有独立测试 `test_team_state_locks.py`），并写明"团队状态以 `team_persistence` 为单入口"。
+
+**保留（有明确理由，不删）**
+- `src/hooks/*` 15 个模块：ADR 0019 明确"上游参考快照，不接线"
+- `src/agent/modes/*`（674 行）、`src/agent/mailbox.py`（250 行）：未接线但属真实能力，删=砍功能
+- `src/workflow/stages/{precontext_intake,ralph_verify}_stage.py`：未接线的 stage 实现，与已接线的 stage 同构
+- 各包的 `__init__.py`（`core/security`、`security`、`core/utils`、`workflow/stages`）：
+  它们"不可达"只是因为没人直接 import 包本身；**目录里的子模块是活的**
+
+**验证**
+- 可达性复核：模块 610→603，生产可达 **500 → 500（未下降）**，完全不可达 33→**26**、5904→**4058** 行
+- `pytest tests/workflow` 483 passed · `ruff F821/F811/E9` All passed · `import_sweep` DEP-MISSING 0
+
+---
+
 ## [v0.88.5] (2026-10-30) — 团队状态接线（270 行代码首次真跑）+ 定价接 litellm + 依赖锁
 
 按《下一步改进指南》逐条对账后剩下的 4 项，全部处理：

@@ -1,7 +1,7 @@
 {
-  "total": 156,
+  "total": 155,
   "note": "静默吞异常趋势基线：只允许下降，不允许上升（policy.md §1）",
-  "generated_at": "2026-10-30T21:55:04",
+  "generated_at": "2026-10-30T23:46:22",
   "by_file": {
     "src/__init__.py": 1,
     "src/agent/_lifecycle.py": 2,
@@ -102,7 +102,6 @@
     "src/workflow/review_discoverer.py": 3,
     "src/workflow/session_history_search.py": 2,
     "src/workflow/stages/ralplan.py": 1,
-    "src/workflow/team/state/dispatch_lock.py": 1,
     "src/workflow/team/state/locks.py": 1,
     "src/workflow/team_persistence.py": 1
   }
