@@ -143,8 +143,8 @@ $app1.Refresh()
 Check 'STEP2 应用进程存活' (-not $app1.HasExited)
 
 if ($info) {
-    $home = Invoke-Api $info '/'
-    Check 'STEP2 GET / 返回 200' ($home.status -eq 200) "status=$($home.status)"
+    $homeResp = Invoke-Api $info '/'
+    Check 'STEP2 GET / 返回 200' ($homeResp.status -eq 200) "status=$($homeResp.status)"
 
     $apiInfo = Invoke-Api $info '/api/info'
     Check 'STEP2 /api/info 200' ($apiInfo.status -eq 200) "status=$($apiInfo.status)"

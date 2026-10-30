@@ -54,8 +54,20 @@ jobs:
 
       - name: Check all commands have valid frontmatter
         run: |
+          # 目录可能不存在（本仓库 .claude/commands/ 未入库）—— 此时没有东西可验，直接通过，
+          # 而不是让 glob 原样传给 head 报错退出（此工作流因此从引入起一直红）。
+          if [ ! -d .claude/commands ]; then
+            echo "No .claude/commands directory; nothing to validate"
+            exit 0
+          fi
+          shopt -s nullglob
+          files=(.claude/commands/*.md)
+          if [ \${#files[@]} -eq 0 ]; then
+            echo "No command files; nothing to validate"
+            exit 0
+          fi
           errors=0
-          for file in .claude/commands/*.md; do
+          for file in "\${files[@]}"; do
             cmd_name=$(basename "$file" .md)
             if ! head -5 "$file" | grep -q "^description:"; then
               echo "ERROR: $cmd_name missing 'description' in frontmatter"
