@@ -4,14 +4,14 @@
 MCP 配置生成、features 片段、Codex config.toml 合并（dry-run / 写盘 /
 用户配置优先 / 既有 TOML 损坏）、报告生成、CLI 命令与注册。
 
-三处 `xfail(strict=True)` 记录本轮发现的真实缺陷（未修改 `src/`）：
+原先这里用三处 `xfail(strict=True)` 记录真实缺陷（**v0.88.4 已全部修复**，断言改为正向）：
 
-1. `generate_tool_signatures()` 导入 `src.tools_runtime.tool_manager`，该模块不存在
-   → 函数必然抛 `ModuleNotFoundError`（`:252`）；
-2. `config_generate_command()` 调用 `logger.setLevel(...)`，而 `get_logger()` 返回的
-   `ClawdLogger` 没有该方法 → `clawd config-generate` 100% 崩溃（`:377`）；
-3. frontmatter 写 `categories: []` 时 `[][0]` 抛 `IndexError`，被 `discover_skills`
-   吞掉后该技能**静默消失**（`:183`）。
+1. `generate_tool_signatures()` 曾 import 不存在的 `src.tools_runtime.tool_manager`
+   → 调用必崩。现改为**调用方注入 tools**（core 不 import 上层）；
+2. `config_generate_command()` 曾调 `logger.setLevel(...)`，而 `ClawdLogger` 没这个方法
+   → `clawd config generate` 100% 崩溃。现 `ClawdLogger` 已补 `setLevel()`；
+3. frontmatter 写 `categories: []` 时 `[][0]` 抛 `IndexError` 被吞 → 技能**静默消失**。
+   现由 `_first_category()` 处理空列表。
 """
 
 from __future__ import annotations
@@ -185,14 +185,6 @@ class TestDiscoverSkills:
         assert first == second
         assert first == sorted(first)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "缺陷 src/core/config/generator.py:183：frontmatter 里写 `categories: []` 时"
-            "`frontmatter.get('categories', [''])[0]` 抛 IndexError，被 discover_skills 吞掉，"
-            "该技能静默消失（用户只会看到技能数变少）"
-        ),
-    )
     def test_empty_categories_list_still_discovers_skill(self, project):
         _write_skill(
             project, "gamma", "---\nname: gamma\ndescription: d\ncategories: []\n---\n"
@@ -307,7 +299,9 @@ class TestGenerateOmxFeatures:
 
 
 class TestGenerateToolSignatures:
-    def test_uses_registry_and_skips_tools_whose_signature_raises(self, project, monkeypatch):
+    """工具清单由调用方注入（core 不 import `tools_runtime`，见 core 边界治理）"""
+
+    def test_uses_injected_tools_and_skips_broken_ones(self, project):
         class GoodTool:
             @staticmethod
             def get_signature():
@@ -318,33 +312,48 @@ class TestGenerateToolSignatures:
             def get_signature():
                 raise RuntimeError("cannot introspect")
 
-        fake_module = type(sys)("src.tools_runtime.tool_manager")
-        fake_module.TOOL_REGISTRY = {"good": GoodTool, "broken": BrokenTool}
-        monkeypatch.setitem(sys.modules, "src.tools_runtime.tool_manager", fake_module)
-
-        signatures = _generator(project).generate_tool_signatures()
+        signatures = _generator(project).generate_tool_signatures(
+            {"good": GoodTool, "broken": BrokenTool}
+        )
 
         assert signatures == [{"name": "good", "parameters": {}}], (
             "单个工具签名失败不得中断整个收集过程"
         )
 
-    def test_empty_registry_returns_empty_list(self, project, monkeypatch):
-        fake_module = type(sys)("src.tools_runtime.tool_manager")
-        fake_module.TOOL_REGISTRY = {}
-        monkeypatch.setitem(sys.modules, "src.tools_runtime.tool_manager", fake_module)
+    def test_accepts_iterable_of_tools(self, project):
+        class T:
+            @staticmethod
+            def get_signature():
+                return {"name": "t", "parameters": {}}
 
+        assert _generator(project).generate_tool_signatures([T]) == [
+            {"name": "t", "parameters": {}}
+        ]
+
+    def test_empty_injection_returns_empty_list(self, project):
+        assert _generator(project).generate_tool_signatures({}) == []
+        assert _generator(project).generate_tool_signatures([]) == []
+
+    def test_without_injection_returns_empty_instead_of_crashing(self, project):
+        """不注入时返回 [] —— 以前是"偷偷依赖不存在的模块"直接 ModuleNotFoundError"""
         assert _generator(project).generate_tool_signatures() == []
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "缺陷 src/core/config/generator.py:252：`from src.tools_runtime.tool_manager import "
-            "TOOL_REGISTRY` —— 该模块在全仓库都不存在（登记表实为 src/tools_runtime/registry.py），"
-            "因此 generate_tool_signatures() 必然抛 ModuleNotFoundError"
-        ),
-    )
-    def test_signatures_available_in_real_repository(self, project):
-        _generator(project).generate_tool_signatures()
+    def test_real_registry_can_be_injected(self, project):
+        """用仓库里真实的 ToolRegistry 注入，签名能真出来（打通而非只看桩）"""
+        from src.tools_runtime.registry import ToolRegistry
+
+        from src.tools_runtime.file_read_tool import FileReadTool
+
+        registry = ToolRegistry()
+        registry.register(FileReadTool())
+
+        sigs = _generator(project).generate_tool_signatures(registry._tools)
+
+        assert sigs, "真实注册表应有工具签名"
+        first = sigs[0]
+        assert first["name"] == "FileReadTool", first
+        assert "file_path" in first["parameters"]["properties"], first
+        assert first["parameters"]["properties"]["file_path"]["type"] == "string", first
 
 
 # ==========================================================================
@@ -514,15 +523,8 @@ class TestConfigGenerateCommand:
 
         assert test_logger.level == std_logging.DEBUG
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "缺陷 src/core/config/generator.py:377-379：`logger.setLevel(...)`，而 "
-            "`src/utils/logger.get_logger()` 返回的 ClawdLogger 没有 setLevel 方法 → "
-            "`clawd config-generate`（src/cli/entrypoint.py:425 调用）必然 AttributeError"
-        ),
-    )
     def test_command_runs_with_real_logger(self, project, monkeypatch):
+        """真 logger（ClawdLogger）下命令能跑通 —— v0.88.4 给它补了 setLevel()"""
         monkeypatch.chdir(project)
 
         config_generate_command(dry_run=True)

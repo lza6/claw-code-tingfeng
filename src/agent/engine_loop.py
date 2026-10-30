@@ -105,6 +105,44 @@ class AgentLoopConfig:
     prior_messages: list[LLMMessage] | None = None
     #: 挂机自主决策引擎（None = 有人盯，行为不变）
     autonomy: object | None = None
+    #: 带图请求失败后是否已降级为纯文本（只降一次）
+    _vision_degraded: bool = False
+
+def _content_has_image(content: object) -> bool:
+    """这条消息的 content 里有没有图像内容块（多模态）"""
+    if not isinstance(content, (list, tuple)):
+        return False
+    return any(isinstance(b, dict) and b.get("type") == "image_url" for b in content)
+
+
+def _has_image_blocks(messages: list[LLMMessage]) -> bool:
+    return any(_content_has_image(getattr(m, "content", None)) for m in messages)
+
+
+def _strip_image_blocks(messages: list[LLMMessage]) -> list[LLMMessage]:
+    """把带图的 content 块降级成纯文本 + 一句说明
+
+    用途：端点/模型不支持 `image_url` 时**自动回退**。真实表现是端点在请求体里
+    看到 image_url 就直接断连（APIConnectionError），而不是返回 400 ——
+    不降级的话用户只会看到"Connection error"，整轮任务失败。
+    """
+    out: list[LLMMessage] = []
+    for m in messages:
+        content = getattr(m, "content", None)
+        if _content_has_image(content):
+            texts = [str(b.get("text") or "") for b in content
+                     if isinstance(b, dict) and b.get("type") == "text"]
+            texts.append("[附带的图片无法作为图像输入发送（当前模型不支持），请直接说明看不到图片，不要猜内容。]")
+            out.append(LLMMessage(
+                role=m.role, content=chr(10).join(t for t in texts if t),
+                tool_calls=getattr(m, "tool_calls", None),
+                tool_call_id=getattr(m, "tool_call_id", None),
+                name=getattr(m, "name", None),
+            ))
+        else:
+            out.append(m)
+    return out
+
 
 def build_initial_messages(config: AgentLoopConfig, user_content: str) -> list[LLMMessage]:
     """构造初始消息序列
@@ -318,6 +356,19 @@ async def _run_agent_loop(
                         config._perf_metrics['llm_retry_count'] += 1
                 raise
             except Exception as e:
+                # 带图请求失败 → 自动降级成纯文本重试一次（只降一次，避免打转）。
+                # 真实场景：端点看到 image_url 就断连（APIConnectionError），
+                # 直接抛错的话用户只看到"Connection error"，整轮报废。
+                if _has_image_blocks(config.messages) and not getattr(config, '_vision_degraded', False):
+                    config._vision_degraded = True
+                    config.messages = _strip_image_blocks(config.messages)
+                    warn(
+                        f"带图请求失败（{type(e).__name__}），已自动降级为纯文本重试；"
+                        "如需看图请换一个支持视觉的模型"
+                    )
+                    if config.publish_token_and_cost:
+                        pass  # 保持回调引用（降级不额外计费）
+                    continue
                 raise LLMProviderError(
                     message=f'LLM {"流式" if config.is_stream else ""}调用失败: {e}',
                     details={'model': config._llm_config.model if config._llm_config else 'unknown'},

@@ -1,5 +1,23 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.88.4 core 边界清零 + 视觉链路实测
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 新增 | src/core/patch/fuzzy_matcher.py | 从 tools_runtime 下沉（纯 stdlib）；原处保留 re-export |
+| 新增 | src/core/workflow_status.py | `WorkflowStatus` 下沉（run_state 运行时要用）；workflow/models.py re-export |
+| 修改 | src/core/security/allowlist.py | 删死引用 `bash_constants.READ_ONLY_GIT_SUBCOMMANDS`，清单提升为 core 内唯一来源（+6 子命令） |
+| 修改 | src/core/args_parser.py | 删死引用 `code_edit.EDIT_FORMAT_REGISTRY`，内联清单即权威 |
+| 修改 | src/core/config/generator.py | `generate_tool_signatures(tools=)` 注入式 + `_tool_signature()`（支持 `parameter_schemas`）+ `_first_category()` |
+| 修改 | src/core/persistence/run_state.py | 只依赖 `core.workflow_status`；合同/义务模型注解改 `Any` |
+| 修改 | src/utils/logger.py | `ClawdLogger.setLevel()` / `getEffectiveLevel()`（修 `clawd config generate` 100% 崩溃） |
+| 修改 | src/agent/message_truncator.py | `_content_text()`：多模态内容块归一化（原来把 list 喂 tiktoken → TypeError） |
+| 修改 | src/agent/engine_loop.py | `_has_image_blocks` / `_strip_image_blocks` + 带图失败**自动降级重试一次** |
+| 修改 | scripts/core_surface_allow.json | 存量清零（5 → 0） |
+| 新增 | tests/agent/test_vision_fallback.py | 7 条（检测/剥离/保持 role/无图不动/口径一致） |
+| 修改 | tests/core/test_config_generator.py | 3 处 `xfail(strict)` 转正向断言 + 5 条注入式用例 |
+| 新增 | scripts/probe_vision_endpoint.py | 直连对比：纯文本 vs `image_url`（判定端点是否真支持视觉） |
+| 新增 | desktop/vision_probe.mjs | 真实 UI 传图端到端探针（输出 `screenshots/vision-probe.json`） |
+
 ## 2026-10-30 v0.88.3 结构化日志跟随数据目录
 | 类型 | 路径 | 说明 |
 |------|------|------|

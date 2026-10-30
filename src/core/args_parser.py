@@ -37,14 +37,10 @@ class EditFormatChoices:
     @staticmethod
     def get_choices() -> list[str]:
         """获取所有支持的编辑格式"""
-        # 尝试从 code_edit 模块获取
-        try:
-            from src.tools_runtime.code_edit import EDIT_FORMAT_REGISTRY
-            return sorted(EDIT_FORMAT_REGISTRY.keys())
-        except ImportError:
-            pass
-
-        # 回退到默认列表
+        # 编辑格式清单**就是这里的常量**：此前先试
+        # `from src.tools_runtime.code_edit import EDIT_FORMAT_REGISTRY`（该名字全仓库不存在，
+        # 死引用 + core 越界 import），实际永远走下面这份列表。删掉无效分支，
+        # 让 core 只依赖自己（要加格式，改这里 + 对应的 edit-format 实现）。
         return [
             "editblock",
             "editblock-fenced",

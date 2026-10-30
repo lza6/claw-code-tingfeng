@@ -81,7 +81,7 @@ class AtomicPatcher:
         """内部辅助函数：在行列表上应用单个变更"""
         try:
             if change.op == PatchOperation.SEARCH_REPLACE:
-                from ...tools_runtime.code_edit.fuzzy_matcher import replace_most_similar_chunk
+                from .fuzzy_matcher import replace_most_similar_chunk
                 content = "".join(lines)
                 if "=======" in change.content:
                     parts = change.content.split("=======")
@@ -349,7 +349,7 @@ class AtomicPatcher:
 
             # 处理 SEARCH_REPLACE 块 (借鉴 Aider)
             if change.op == PatchOperation.SEARCH_REPLACE:
-                from ...tools_runtime.code_edit.fuzzy_matcher import replace_most_similar_chunk
+                from .fuzzy_matcher import replace_most_similar_chunk
 
                 # 预处理：content 可能包含 SEARCH 和 REPLACE 的分界线
                 # 这里假设 change.content 包含 SEARCH 块，change.old_content (如果有) 是 REPLACE 块

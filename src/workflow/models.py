@@ -30,12 +30,9 @@ class WorkflowPhaseCategory(str, Enum):
     DISCOVER_OPTIMIZE = "discover.optimize"
 
 
-class WorkflowStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+# WorkflowStatus 已下沉到 core（core/persistence 要用它，而 core 不能 import 上层）——
+# 这里 re-export 保持既有 `from src.workflow.models import WorkflowStatus` 不变。
+from ..core.workflow_status import WorkflowStatus  # noqa: F401  (re-export)
 
 
 class WorkflowIntent(str, Enum):

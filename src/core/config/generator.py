@@ -27,6 +27,28 @@ logger = get_logger(__name__)
 
 # ==================== 数据结构 ====================
 
+def _first_category(frontmatter: dict[str, Any]) -> str:
+    """取技能的 category（容忍 `categories: []` / `categories: a, b` 等写法）
+
+    真实缺陷：原来是 `frontmatter.get("category") or frontmatter.get("categories", [""])[0]`
+    —— YAML 写 `categories: []` 时 get 返回**空列表**（不是默认值），`[][0]` 抛 IndexError，
+    被 `discover_skills` 的 except 吞掉 → 该技能**静默消失**，用户完全不知道。
+    """
+    cat = frontmatter.get("category")
+    if cat:
+        return str(cat).strip()
+    cats = frontmatter.get("categories")
+    if isinstance(cats, (list, tuple)):
+        for item in cats:
+            text = str(item).strip()
+            if text:
+                return text
+        return ""
+    if isinstance(cats, str):
+        return cats.strip()
+    return ""
+
+
 @dataclass
 class SkillDefinition:
     """技能定义"""
@@ -109,6 +131,50 @@ DEFAULT_MCP_SERVERS = {
 
 # ==================== 配置生成器 ====================
 
+_JSON_TYPE_BY_PARAM = {
+    "str": "string", "int": "integer", "float": "number", "bool": "boolean",
+    "list": "array", "dict": "object",
+}
+
+
+def _tool_signature(tool: Any) -> dict[str, Any] | None:
+    """把工具对象转成 LLM function-calling 的签名
+
+    优先用工具自带的 `get_signature()`；没有就用通用的
+    `name` / `description` / `parameters`（`ParameterSchema` 列表）组装 ——
+    仓库里绝大多数工具的形态是后者（例如 `FileReadTool`），
+    只认 `get_signature()` 会让"真实工具"一个都产不出签名（实测）。
+    """
+    getter = getattr(tool, "get_signature", None)
+    if callable(getter):
+        sig = getter()
+        if sig:
+            return sig
+    name = str(getattr(tool, "name", "") or "")
+    if not name:
+        return None
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    # 真实形态是 `parameter_schemas`（tuple[ParameterSchema, ...]），
+    # `parameters` 只是个别工具的自定义名 —— 两个都认
+    raw_params = getattr(tool, "parameters", None) or getattr(tool, "parameter_schemas", None) or []
+    for param in raw_params:
+        pname = str(getattr(param, "name", "") or "")
+        if not pname:
+            continue
+        properties[pname] = {
+            "type": _JSON_TYPE_BY_PARAM.get(str(getattr(param, "param_type", "str") or "str"), "string"),
+            "description": str(getattr(param, "description", "") or ""),
+        }
+        if getattr(param, "required", False):
+            required.append(pname)
+    return {
+        "name": name,
+        "description": str(getattr(tool, "description", "") or ""),
+        "parameters": {"type": "object", "properties": properties, "required": required},
+    }
+
+
 class ConfigGenerator:
     """动态配置生成器
 
@@ -186,7 +252,7 @@ class ConfigGenerator:
             name=frontmatter.get("name", skill_dir.name),
             description=frontmatter.get("description", ""),
             intent=frontmatter.get("intent"),
-            category=frontmatter.get("category") or frontmatter.get("categories", [""])[0],
+            category=_first_category(frontmatter),
             tags=frontmatter.get("tags", []),
             filepath=skill_md,
         )
@@ -250,19 +316,28 @@ class ConfigGenerator:
             ),
         }
 
-    def generate_tool_signatures(self) -> list[dict[str, Any]]:
-        """生成工具签名列表 (用于 LLM function calling)"""
-        # 这里应该扫描 tools_runtime/ 下的所有 Tool 类
-        # 返回它们的 JSON Schema
-        # 简化版本: 返回已知工具的签名
-        from src.tools_runtime.tool_manager import TOOL_REGISTRY
+    def generate_tool_signatures(self, tools: Any | None = None) -> list[dict[str, Any]]:
+        """生成工具签名列表 (用于 LLM function calling)
 
-        signatures = []
-        for tool_name, tool_class in TOOL_REGISTRY.items():
+        `tools` 由**调用方注入**（`dict[name, Tool]` 或 Tool 实例的可迭代）。
+        工具清单是上层概念，core 不该 import `tools_runtime`（core 边界治理，
+        见 `scripts/core_surface.py`）；不传就返回空列表，而不是偷偷依赖一个不存在的模块。
+
+        真实缺陷：原实现 `from src.tools_runtime.tool_manager import TOOL_REGISTRY` ——
+        该模块全仓库都不存在（注册表实为 `src/tools_runtime/registry.py` 的 `ToolRegistry` 类），
+        所以这个方法只要被调用就必然抛 ModuleNotFoundError（测试里 xfail 记着）。
+        """
+        if tools is None:
+            return []
+        items = list(tools.values()) if isinstance(tools, dict) else list(tools)
+        signatures: list[dict[str, Any]] = []
+        for tool in items:
             try:
-                signatures.append(tool_class.get_signature())
-            except Exception:
-                pass
+                sig = _tool_signature(tool)
+                if sig:
+                    signatures.append(sig)
+            except Exception as exc:  # noqa: BLE001 — 单个工具自省失败不能中断整体
+                logger.debug(f"工具签名收集失败（已跳过）: {exc}")
         return signatures
 
     def merge_into_codex_config(

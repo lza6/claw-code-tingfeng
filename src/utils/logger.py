@@ -79,6 +79,19 @@ class ClawdLogger:
     def error(self, msg: str, **props):
         self.logger.error(msg, extra={"props": props}, exc_info=True)
 
+    def setLevel(self, level: str | int) -> None:
+        """设置日志级别（`clawd config generate -v` 之类需要）
+
+        此前没有这个方法，而 `core/config/generator.py` 直接调 `logger.setLevel(...)`
+        → `clawd config generate` 100% 抛 AttributeError（真实缺陷，测试里 xfail 记着）。
+        """
+        if isinstance(level, str):
+            level = getattr(logging, level.upper(), logging.INFO)
+        self.logger.setLevel(level)
+
+    def getEffectiveLevel(self) -> int:
+        return self.logger.getEffectiveLevel()
+
 # Global helper functions for backward compatibility
 def get_logger(name: str) -> ClawdLogger:
     return ClawdLogger(name)

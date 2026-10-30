@@ -18,6 +18,16 @@ from dataclasses import dataclass
 
 # ========== 白名单定义 ==========
 
+#: git 只读子命令白名单（`git <subcmd>` 只读、不改仓库）
+#: **唯一来源就在这里**：此前 validate 里 `from src.tools_runtime.bash_constants import
+#: READ_ONLY_GIT_SUBCOMMANDS`，但那个模块从来没有这个常量（死引用，靠 except 内联兜底），
+#: 既让 core 越界 import 上层，又把权威清单藏在一个永不执行的分支里。
+_READ_ONLY_GIT_SUBCOMMANDS: frozenset[str] = frozenset({
+    'blame', 'branch', 'cat-file', 'diff', 'grep', 'log',
+    'ls-files', 'remote', 'rev-parse', 'show', 'status', 'describe',
+    'shortlog', 'reflog', 'whatchanged', 'show-ref', 'for-each-ref', 'name-rev',
+})
+
 # 增强白名单 - 基于项目A的READ_ONLY_ROOT_COMMANDS (24个命令) + 项目B的安全强化
 # 升级策略：从"黑名单逐项检查"改为"白名单基础 + 细粒度参数拦截 + Shell注入防护"
 # 来源：混合自 Project A (bash_security.py) 和 Project B (omx-explore)
@@ -209,14 +219,11 @@ def validate_command(command: str, args: list[str]) -> CommandValidationResult:
 
         if sub_idx < len(args):
             subcmd = args[sub_idx].lower()
-            # 获取只读子命令白名单
-            try:
-                from src.tools_runtime.bash_constants import READ_ONLY_GIT_SUBCOMMANDS
-            except ImportError:
-                READ_ONLY_GIT_SUBCOMMANDS = {
-                    'blame', 'branch', 'cat-file', 'diff', 'grep', 'log',
-                    'ls-files', 'remote', 'rev-parse', 'show', 'status', 'describe',
-                }
+            # 只读子命令白名单：**唯一来源就在 core 里**。
+            # 此前这里 `from src.tools_runtime.bash_constants import READ_ONLY_GIT_SUBCOMMANDS`，
+            # 但该模块从来没有这个常量（死引用，靠 except 内联兜底）——
+            # 既让 core 越界 import 上层，又把权威清单藏在一个永不执行的分支里。
+            READ_ONLY_GIT_SUBCOMMANDS = _READ_ONLY_GIT_SUBCOMMANDS
             if subcmd not in READ_ONLY_GIT_SUBCOMMANDS:
                 return CommandValidationResult(
                     is_valid=False,

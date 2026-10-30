@@ -1,7 +1,7 @@
 {
   "name": "clawd-desktop",
   "private": true,
-  "version": "0.88.3",
+  "version": "0.88.4",
   "description": "Clawd Desktop — Electron 桌面壳（窗口/托盘/spawn Host/自动更新），壳内不造 IPC，Web UI 由 Python Host 托管",
   "main": "electron/main.js",
   "scripts": {

@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from ...workflow.models import ObjectiveContract, ObligationModel, WorkflowStatus
+from ..workflow_status import WorkflowStatus
 
 logger = logging.getLogger("core.persistence.run_state")
 
@@ -113,7 +113,7 @@ class RunStateManager:
         else:
             self._surface_manager = None
 
-    def save_contract(self, contract: ObjectiveContract) -> None:
+    def save_contract(self, contract: Any) -> None:
         """保存目标合同 (借鉴 GoalX SaveObjectiveContract)"""
         data = self._to_dict(contract)
         self._write_atomic(self.contract_file, data)
@@ -122,7 +122,7 @@ class RunStateManager:
         """加载目标合同"""
         return self._load_json(self.contract_file)
 
-    def save_obligations(self, model: ObligationModel) -> None:
+    def save_obligations(self, model: Any) -> None:
         """保存义务模型 (借鉴 GoalX SaveObligationModel)"""
         data = self._to_dict(model)
         data["updated_at"] = datetime.utcnow().isoformat()

@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.88.3 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.88.4 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -38,9 +38,12 @@ DSH 式桌面客户端，**双击即用**：
   每轮显示「工作了 32m 3s」「思考了 7s」。
 - **消息渲染**：完整 Markdown（标题/列表/表格/引用/代码块/行内码）+ 内联图片（本地 `/api/file?path=` 与 http(s)）；
   图片可直接粘贴上传（存 `<数据目录>/uploads`）。
-- **图片能"看"了**（v0.87.0）：模型支持视觉时（`gpt-4o`/`claude-3|4`/`gemini`/`qwen-vl`/`glm-4v`…），
-  图片以 `image_url` 内容块随消息发送，模型直接读图回答；不支持视觉的模型则老实告知"看不到图"
-  （路径仍写给它，绝不让它猜）。`CLAWD_VISION=1/0` 可强制开/关。
+- **图片能"看"了**（v0.87.0，v0.88.4 实测校准）：模型支持视觉时（`gpt-4o`/`claude-3|4`/`gemini`/
+  `qwen-vl`/`glm-4v`…），图片以 `image_url` 内容块随消息发送，模型直接读图回答；
+  不支持视觉的模型老实告知"看不到图"（路径仍写给它，绝不让它猜）。`CLAWD_VISION=1/0` 可强制开/关。
+  带图请求被端点拒绝时（有些端点直接断连而不是返回 400）会**自动降级为纯文本重试一次**，
+  不会把整轮任务打挂。实测：当前 `step-5-preview` 端点不支持图像输入（纯文本 PONG 正常，
+  带 `image_url` 立刻断连），链路与回退均已验证。
 - **多 provider**：设置页可配置多个 OpenAI 兼容 provider（id/名称/模型/base_url/密钥来源），
   选一个设为默认；密钥只显示掩码（`sk-ab…1234`）或环境变量名，**永不回显明文**。
 - **更新提示走右下角 toast**：单条贯穿 检查中 → 下载中 → 已就绪，就绪时给「重启安装 / 稍后」；
@@ -437,19 +440,19 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5335 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.88.3 实测，369.55s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5335 passed / 0 failed / 6 分 9 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5365 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5347 passed / 9 skipped / 9 xfailed / 0 failed**（2026-10-30 v0.88.4 实测，430.50s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5347 passed / 0 failed / 7 分 10 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5374 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **498**（2026-10-30 v0.88.1 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **500**（2026-10-30 v0.88.1 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
-| 静默吞异常 | **158**（AST 口径，门禁 ≤158），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 158` |
+| 静默吞异常 | **156**（AST 口径，门禁 ≤156），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 156` |
 | 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 上一轮实跑（退出码 0）；v0.76.5 未跑：真实 LLM 端点属付费红线 |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 

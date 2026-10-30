@@ -1,10 +1,4 @@
 {
-  "_comment": "src/core 向上层 import 的已知存量（2026-10-30 基线）。新增一条都必须先在这里登记并写明原因；目标是逐步清零，不是永久豁免。",
-  "allowed": [
-    {"file": "src/core/args_parser.py", "import": "src.tools_runtime.code_edit", "reason": "CLI 参数解析里直接构造补丁引擎参数；待把 patch 选项下沉到 core/patch"},
-    {"file": "src/core/config/generator.py", "import": "src.tools_runtime.tool_manager", "reason": "生成配置时要枚举工具签名；待把工具清单接口下沉为 core 协议"},
-    {"file": "src/core/patch/atomic_patcher.py", "import": "...tools_runtime.code_edit.fuzzy_matcher", "reason": "模糊匹配器目前在 tools_runtime，原子补丁要用；待迁移到 core/patch"},
-    {"file": "src/core/persistence/run_state.py", "import": "...workflow.models", "reason": "RunState 直接复用 WorkflowTask 模型；待抽 core 侧的 TaskProtocol"},
-    {"file": "src/core/security/allowlist.py", "import": "src.tools_runtime.bash_constants", "reason": "命令白名单要读 bash 常量表；待把常量表移入 core"}
-  ]
+  "_comment": "src/core 向上层 import 的已知存量。**2026-10-30 v0.88.4 已清零**：5 处全部处理完（2 处下沉到 core，3 处是死引用被删除/改成注入式）。新增一条都必须先在这里登记并写明原因；目标是保持 0，不是永久豁免。",
+  "allowed": []
 }

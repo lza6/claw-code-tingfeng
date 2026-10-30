@@ -1,10 +1,14 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.88.3 客户端收口**（2026-10-30）：数据持久化 → 多模态 → 观感 → 会话管理 → UI 细节 → 日志跟随数据目录；控制台 UI E2E **32 项** · 收集 **5365** · 门禁全绿
+> 状态: **v0.88.4 core 边界清零 + 视觉链路实测**（2026-10-30）：core 5 处越界全部处理（3 处是死引用）+ 修 3 个调用即崩的缺陷 + 带图失败自动降级；覆盖率 **65.54%**（门槛 60）· 全量 5340+ passed · core_surface 存量 **0**
 
 ## 下一轮待办（已闭环 / 待外部条件）
-- ~~真多模态视觉输入~~ **v0.87.0 已落地**（`image_url` 内容块 + 能力判定 + 诚实回退，19 条测试）。
-  仍待：**真实视觉对话**需要一个支持视觉的模型（当前 `step-5-preview` 无视觉证据）
+- ~~真多模态视觉输入~~ **v0.87.0 落地 + v0.88.4 实测定性**（26 条测试）：
+  强试（`CLAWD_VISION=1`）打出两个真 bug 并修好 —— ①`message_truncator.count_tokens()` 把
+  内容块列表喂 tiktoken 直接 TypeError（整轮失败）；②该端点拒绝 `image_url` 的方式是**断连**
+  而非 400，现已**自动降级为纯文本重试一次**（用户看到"看不到这张图片"而不是 Connection error）。
+  实测结论：当前 `step-5-preview` 端点**不支持图像输入**（纯文本 PONG／带图断连，有直连对比脚本
+  `scripts/probe_vision_endpoint.py`）。换一个真支持视觉的模型即可真看图，代码路径已通
 - ~~结构化日志目录走 `data_path`~~ **v0.88.3 已修**（`resolve_log_dir()` + 6 条测试）
 - **core 边界 5 处存量越界**（`scripts/core_surface_allow.json`）需要单独一轮设计，不顺手改：
   1. `core/patch/atomic_patcher.py` → `tools_runtime.code_edit.fuzzy_matcher`（纯函数，可下沉到 core/patch）

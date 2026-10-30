@@ -38,6 +38,32 @@ class MessageTruncator:
         if llm_provider:
             self._summarizer = ChatSummarizer(llm_provider)
 
+    #: 一张图片按固定 token 估算（各家算法不同，取常见值 85，够用于"要不要截断"的判断）
+    IMAGE_TOKEN_ESTIMATE = 85
+
+    def _content_text(self, content: object) -> str:
+        """把消息 content 归一化成字符串
+
+        多模态消息的 content 是内容块列表（`[{"type":"text",...},
+        {"type":"image_url",...}]`），直接喂 tiktoken 会抛
+        `TypeError: a bytes-like object is required, not 'list'`（真实踩到：
+        CLAWD_VISION=1 传图时整轮任务直接失败）。这里只取文本部分，图片单独估算。
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, (list, tuple)):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, str):
+                    parts.append(block)
+                elif isinstance(block, dict):
+                    if block.get("type") == "text":
+                        parts.append(str(block.get("text") or ""))
+                    elif block.get("type") == "image_url":
+                        parts.append(" " * (self.IMAGE_TOKEN_ESTIMATE * 4))  # 近似占位
+            return chr(10).join(parts)
+        return str(content or "")
+
     def count_tokens(self, messages: list[LLMMessage]) -> int:
         """计算消息列表的 token 数量
 
@@ -50,9 +76,9 @@ class MessageTruncator:
         否则回退到字符计数（1 token ≈ 4 字符）。
         """
         if self._encoding:
-            return sum(len(self._encoding.encode(m.content)) for m in messages)
+            return sum(len(self._encoding.encode(self._content_text(m.content))) for m in messages)
         # 回退：字符计数（粗略估算 1 token ≈ 4 字符）
-        return sum(len(m.content) for m in messages) // 4
+        return sum(len(self._content_text(m.content)) for m in messages) // 4
 
     async def truncate_messages(self, messages: list[LLMMessage]) -> list[LLMMessage]:
         """截断消息列表，防止上下文过长

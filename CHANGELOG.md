@@ -7,6 +7,53 @@
 
 ---
 
+## [v0.88.4] (2026-10-30) — core 边界清零（5 处）+ 修 3 个"调用即崩"的缺陷
+
+**core 层不再 import 任何上层模块**（`scripts/core_surface_allow.json` 已清空，门禁从"允许 5 条存量"变成"0 条"）。
+5 处的处理分两类 —— 查证后发现**其中 3 处指向的模块/名字全仓库都不存在**，是靠 `except ImportError` 的内联兜底活着的死引用：
+
+| 位置 | 原依赖 | 真相 | 处理 |
+|---|---|---|---|
+| `core/patch/atomic_patcher.py` | `tools_runtime.code_edit.fuzzy_matcher` | 真实存在（344 行纯 stdlib） | **下沉**到 `core/patch/fuzzy_matcher.py`，原处改 re-export |
+| `core/security/allowlist.py` | `tools_runtime.bash_constants.READ_ONLY_GIT_SUBCOMMANDS` | **该常量不存在** | 清单提升为 core 内唯一来源（并补齐 6 个只读子命令） |
+| `core/args_parser.py` | `tools_runtime.code_edit.EDIT_FORMAT_REGISTRY` | **该名字不存在** | 删死引用，内联清单即为权威 |
+| `core/config/generator.py` | `tools_runtime.tool_manager.TOOL_REGISTRY` | **该模块不存在**（注册表实为 `registry.ToolRegistry`） | 改成**调用方注入 tools** |
+| `core/persistence/run_state.py` | `workflow.models` 的 3 个类 | 真实存在 | `WorkflowStatus` 下沉到 `core/workflow_status.py`；合同/义务模型只做序列化 → 注解改 `Any` |
+
+**顺带修掉同一文件里 3 个"调用即崩"的真实缺陷**（此前用 `xfail(strict=True)` 诚实记着，现已转正向断言）：
+1. `clawd config generate` **100% 崩溃** —— 它调 `logger.setLevel(...)`，而 `ClawdLogger` 没有该方法
+   → 给 `ClawdLogger` 补 `setLevel()` / `getEffectiveLevel()`；
+2. `generate_tool_signatures()` **必然 ModuleNotFoundError** → 改注入式，且新增 `_tool_signature()`
+   支持真实工具形态（`name` / `description` / `parameter_schemas`，实测 `FileReadTool` 能产出
+   `file_path`/`offset`/`limit` 的 JSON Schema）；
+3. frontmatter 写 `categories: []` 时 `[][0]` 抛 IndexError 被 `except` 吞 → **技能静默消失**
+   → 新增 `_first_category()` 容错（空列表/字符串/逗号分隔都认）。
+
+**过程中的一个教训**（已写进 `core/workflow_status.py` 的注释）：本想放 `core/models/workflow_status.py`，
+但 `core/models.py` **已经是一个模块**，建同名目录把模块遮蔽了 → `from .models import PermissionDenial`
+直接 ImportError。同名"模块 vs 包"冲突会静默劫持整个包，落地前必须先 `ls`。
+
+**顺带把「真视觉对话」这件事做了实测定性，并修了它暴露的两个 bug**
+
+用现有端点强试（`CLAWD_VISION=1` + 传图），一路打出两个真实缺陷：
+
+1. **多模态消息直接崩**：`message_truncator.count_tokens()` 拿 `content` 直接喂 tiktoken，
+   而带图消息的 `content` 是内容块列表 → `TypeError: a bytes-like object is required, not 'list'`，
+   整轮任务失败。修：新增 `_content_text()` 归一化（图片块按 85 token 占位）。
+2. **端点拒绝的方式是断连**：`scripts/probe_vision_endpoint.py` 直连对比 —— 纯文本 `PONG` 正常，
+   带 `image_url` 立刻 `APIConnectionError`。所以"模型不支持视觉"在这里不是 400。
+   修：`_run_agent_loop` 里带图请求失败时**自动降级为纯文本重试一次**
+   （`_strip_image_blocks()` 去掉图片块并追加"无法作为图像输入发送，别猜内容"），
+   用户看到的是模型如实说"看不到这张图片"，而不是 `LLM 流式调用失败: Connection error.`
+
+实测结论（有证据）：**当前 `step-5-preview` 端点不支持图像输入**；多模态代码路径、能力判定、
+诚实回退、失败降级全部可用，换一个真支持视觉的模型即可真看图。
+
+**验证**：`core_surface.py` PASS（存量 0）· 定向回归 `tests/core+workflow` 1451 passed ·
+`tests/core+security+cli` 1448 passed · `tests/core/test_config_generator.py` 44 passed。
+
+---
+
 ## [v0.88.3] (2026-10-30) — 结构化日志跟随数据目录（不再写进安装目录）
 
 `src/main.py` 里日志目录写死 `WORK_DIR/.clawd/logs`，而桌面端的 cwd 是 `resources/host` ——
