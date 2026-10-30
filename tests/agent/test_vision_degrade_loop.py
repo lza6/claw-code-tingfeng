@@ -96,6 +96,28 @@ class TestLoopLevelDegrade:
 
         assert len(provider.seen) == 1, "没有图片时不应触发降级重试"
 
+    def test_degrade_does_not_consume_iteration_budget(self, png: Path):
+        """降级重试是**轮内**的，不能吃掉迭代额度（R6）
+
+        修前：降级走外层 `continue`，`max_iterations=1` 时循环直接结束，
+        用户拿不到任何回答，只看到"达到最大迭代次数"—— 降级等于没生效。
+        修后：同一轮内原地重试，仍然能得到第二次（纯文本）调用的回答。
+        """
+        provider = _FlakyProvider()
+        config = _config(provider, [str(png)], max_iterations=1)
+
+        result = _run_with_timeout(config)
+
+        assert len(provider.seen) == 2, "降级重试必须在同一轮内发生"
+        session = result["session"]
+        assert "看到的是一张图片" in (session.final_result or ""), (
+            f"同一轮内降级重试成功后必须拿到回答，实际: {session.final_result!r}"
+        )
+        # 模型侧只看到一条 assistant 回答：降级重试没有重复追加消息
+        assistant = [m for m in result["messages"] if getattr(m, "role", "") == "assistant"]
+        assert len(assistant) == 1, f"降级重试后只应有一条 assistant 消息，实际 {len(assistant)} 条"
+        assert "看到的是一张图片" in str(assistant[0].content)
+
 
 def _run_with_timeout(config: AgentLoopConfig):
     import asyncio

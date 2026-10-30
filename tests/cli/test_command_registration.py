@@ -54,7 +54,9 @@ class TestAgentCommandsRegister:
         """
         mod = importlib.import_module("src.cli.commands.agent_commands")
         cmd = next(c for c in mod.app.registered_commands if (c.name or "") == "keywords")
-        cmd.callback()
+        # 显式传 json_out=False：直接调 callback 时默认值是 OptionInfo 对象（真值为 True），
+        # 会误走进 `--json` 分支（v0.89.0 起该命令支持 --json），这里测的是人读渲染。
+        cmd.callback(json_out=False)
 
         out = capsys.readouterr().out
         # 注册表里的关键词必须真的渲染出来

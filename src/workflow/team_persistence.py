@@ -109,8 +109,13 @@ def _team_state_root() -> Path:
         return TEAM_STATE_DIR
 
 
-def _get_team_state_path(cwd: str = ".", session_id: str | None = None) -> Path:
-    """获取团队状态文件路径"""
+def _get_team_state_path(session_id: str | None = None) -> Path:
+    """获取团队状态文件路径
+
+    没有 `cwd` 参数：落盘位置**只**由数据目录（`_team_state_root()`）+ `session_id` 决定。
+    以前这里有个 `cwd: str = "."` 的形参，函数体从头到尾没用过它 —— 参数被接受但被忽略，
+    读代码的人会以为"传 cwd 能改变落盘位置"，实际传什么都不影响。
+    """
     base = _team_state_root()
     root = base / session_id if session_id else base
     root.mkdir(parents=True, exist_ok=True)
@@ -139,9 +144,11 @@ def _ensure_team_state(path: Path) -> TeamStateData:
 
 
 def read_team_state(cwd: str = ".", session_id: str | None = None) -> TeamStateData:
-    """读取团队状态"""
-    path = _get_team_state_path(cwd, session_id)
-    return _ensure_team_state(path)
+    """读取团队状态
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
+    return _ensure_team_state(_get_team_state_path(session_id))
 
 
 def write_team_state(
@@ -149,8 +156,11 @@ def write_team_state(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """写入团队状态"""
-    path = _get_team_state_path(cwd, session_id)
+    """写入团队状态
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
+    path = _get_team_state_path(session_id)
     try:
         locked_atomic_write_json(path, state.to_dict())
         return True
@@ -159,17 +169,16 @@ def write_team_state(
 
 
 def _mutate_team_state(
-    cwd: str,
     session_id: str | None,
     mutator: Callable[[TeamStateData], bool],
 ) -> bool:
     """在文件锁内执行 read -> mutate -> write，避免并发丢更新。"""
-    path = _get_team_state_path(cwd, session_id)
+    path = _get_team_state_path(session_id)
     with file_lock(path):
         state = _ensure_team_state(path)
         if not mutator(state):
             return False
-        return write_team_state(state, cwd, session_id)
+        return write_team_state(state, session_id=session_id)
 
 
 def add_team_member(
@@ -177,7 +186,10 @@ def add_team_member(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """添加团队成员（读改写加锁）"""
+    """添加团队成员（读改写加锁）
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
     member_dict = {
         "id": member.id,
         "name": member.name,
@@ -196,7 +208,7 @@ def add_team_member(
         state.members.append(member_dict)
         return True
 
-    return _mutate_team_state(cwd, session_id, _mutate)
+    return _mutate_team_state(session_id, _mutate)
 
 
 def remove_team_member(
@@ -204,12 +216,15 @@ def remove_team_member(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """移除团队成员（读改写加锁）"""
+    """移除团队成员（读改写加锁）
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
     def _mutate(state: TeamStateData) -> bool:
         state.members = [m for m in state.members if m.get("id") != member_id]
         return True
 
-    return _mutate_team_state(cwd, session_id, _mutate)
+    return _mutate_team_state(session_id, _mutate)
 
 
 def update_member_status(
@@ -219,7 +234,10 @@ def update_member_status(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """更新成员状态（读改写加锁）"""
+    """更新成员状态（读改写加锁）
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
     def _mutate(state: TeamStateData) -> bool:
         for member in state.members:
             if member.get("id") == member_id:
@@ -230,7 +248,7 @@ def update_member_status(
                 return True
         return False
 
-    return _mutate_team_state(cwd, session_id, _mutate)
+    return _mutate_team_state(session_id, _mutate)
 
 
 def add_team_message(
@@ -240,7 +258,10 @@ def add_team_message(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> bool:
-    """添加团队消息（读改写加锁）"""
+    """添加团队消息（读改写加锁）
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
     def _mutate(state: TeamStateData) -> bool:
         message = {
             "id": f"msg-{len(state.messages) + 1}",
@@ -254,7 +275,7 @@ def add_team_message(
         state.messages = state.messages[-1000:]
         return True
 
-    return _mutate_team_state(cwd, session_id, _mutate)
+    return _mutate_team_state(session_id, _mutate)
 
 
 def get_team_messages(
@@ -263,7 +284,10 @@ def get_team_messages(
     cwd: str = ".",
     session_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """获取团队消息"""
+    """获取团队消息
+
+    `cwd` **仅为兼容保留**：状态目录走 `data_path('state')`，传什么都不影响落盘位置。
+    """
     state = read_team_state(cwd, session_id)
     messages = state.messages
     if member_id:

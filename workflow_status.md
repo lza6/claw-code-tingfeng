@@ -1,6 +1,6 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.88.8 客户端+台账全收口**（2026-10-30）：P1 6/6 · P2 9/10（仅签名需 CA）· M1~M5 全接线 · 死码 1804 行 · CLI --json 契约 6 命令；全量 5389 passed/0 failed · 收集 5415 · 静默 155 · 可达 501 · 覆盖率 66.15% · 压测 QPS 2583/P99 16.3ms/错误率 0% · 真实端点 E2E 5/5
+> 状态: **v0.89.0 CLI --json 全覆盖 + R6 + P3 清账**（2026-10-31）：查询类命令 --json 16 个（契约 {ok,code,...}，stdout 纯净）· R6 视觉降级改轮内重试不占迭代 · P3 五项全落（工具签名接线/只读清单单一来源/死参数 cwd/截断告知/缓存写价）· 全量非 slow 5440 passed/0 failed · 收集 5464 · 静默 155 · 可达 503 · 覆盖率 66.27% · 真实 E2E e2e_smoke 5/5 + e2e_production 8/8 · 装机 E2E 入库 scripts/e2e_desktop_install.ps1
 
 ## 下一轮待办（已闭环 / 待外部条件）
 > 《下一步改进指南》对账结果（v0.88.5）：**P1 6/6 · P2 9/10 · 批次 M1~M5/G1~G4 已接线**，
@@ -68,6 +68,7 @@
 - 2026-10-28: venv 补装 pathspec/celery/otel 全家桶（requirements 已声明）；clawdignore 测试失败根因=pathspec 缺失，非代码 bug → 快速回归 3685/0
 - 2026-10-28: NR-3 修复（mime 白名单 18 后缀+白名单外 403）+5 测试；NR-1 确认 v0.61.0 已修（历史 0 污染）；doctor 0 FAIL
 - 2026-10-28: 压测（本地 WS Host，scripts/stress_host.py）：100 并发×10 轮 QPS 3839 P95 14.4ms 错误率 0%；300 并发×5 轮 QPS 1265 P95 10.8ms 错误率 0%，均 PASS
+- 2026-10-31 (v0.89.0): 压测复跑（scripts/stress_host.py）：200 并发×10 轮 QPS 2514 P50 11.1/P95 15.4/P99 15.6ms 错误率 0%；300 并发×5 轮 QPS 1355 P99 15.2ms 错误率 0%，均 PASS
 - 2026-10-28: E2E 冒烟 5/5 PASS exit 0；死码判定报告产出（127→66 删/6 留/55 拍板）
 - 2026-10-27: 新增测试 156 passed（mcp/reasoning/security/reverse_tools/engine装配/reason CLI/契约39）
 - 2026-10-27: reason CLI 实跑 E2E：reflexion --json / reflexion 人读 / plan-execute 三种调用 exit 0

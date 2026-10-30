@@ -17,7 +17,7 @@
 > ```bash
 > venv/Scripts/python.exe scripts/e2e_smoke.py                  # 真实端点 E2E，退出码 0 才算通过
 > py -3.10 -m pytest tests/contracts/ -q                         # 公共 API 契约
-> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 5007 / 5.1s）
+> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 5464 / 3.3s，v0.89.0）
 > venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
 > py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
 > venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降

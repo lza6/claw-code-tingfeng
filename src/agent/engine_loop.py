@@ -282,96 +282,106 @@ async def _run_agent_loop(
 
             # --- LLM call ---------------------------------------------------
             full_content = ''
-            try:
-                _llm_start = time.monotonic()
+            # 同一轮内最多两次尝试：带图请求失败 → 剥掉图片**原地重试**。
+            # 此前降级走外层 `continue`，会白白吃掉一次迭代额度：max_iterations=1
+            # 或最后一轮带图失败时降级等于没生效（整轮以"达到最大迭代次数"结束，
+            # 用户永远看不到"已降级为纯文本"那句说明）。
+            vision_retry_used = False
+            while True:
+                try:
+                    _llm_start = time.monotonic()
 
-                if config.is_stream and hasattr(config.llm_provider, 'chat_stream'):
-                    thinking_text = ''
-                    async for chunk in config.llm_provider.chat_stream(messages=config.messages):
-                        # 真实 provider（openai 兼容 + 推理模型）会 yield ("thinking", text) 元组：
-                        # 直接 `full_content += chunk` 会 TypeError（"can only concatenate str"），
-                        # 而这条路径只在真流式下走到 —— 所以之前"流式"从未真正跑通过。
-                        if isinstance(chunk, tuple):
-                            kind = str(chunk[0]).lower() if chunk else ''
-                            text = str(chunk[1]) if len(chunk) > 1 else ''
-                            if kind == 'thinking':
-                                thinking_text += text  # 推理内容单独累积，不混进正文
-                                continue
-                            chunk = text
-                        full_content += chunk
-                        if config.on_chunk:
-                            config.on_chunk(chunk)
-                    _llm_latency = time.monotonic() - _llm_start
-                    # 流式模式精确 token 计数
-                    if config._count_tokens:
-                        output_tokens = config._count_tokens([LLMMessage(role='assistant', content=full_content)])
-                        input_tokens = config._count_tokens(config.messages)
+                    if config.is_stream and hasattr(config.llm_provider, 'chat_stream'):
+                        thinking_text = ''
+                        async for chunk in config.llm_provider.chat_stream(messages=config.messages):
+                            # 真实 provider（openai 兼容 + 推理模型）会 yield ("thinking", text) 元组：
+                            # 直接 `full_content += chunk` 会 TypeError（"can only concatenate str"），
+                            # 而这条路径只在真流式下走到 —— 所以之前"流式"从未真正跑通过。
+                            if isinstance(chunk, tuple):
+                                kind = str(chunk[0]).lower() if chunk else ''
+                                text = str(chunk[1]) if len(chunk) > 1 else ''
+                                if kind == 'thinking':
+                                    thinking_text += text  # 推理内容单独累积，不混进正文
+                                    continue
+                                chunk = text
+                            full_content += chunk
+                            if config.on_chunk:
+                                config.on_chunk(chunk)
+                        _llm_latency = time.monotonic() - _llm_start
+                        # 流式模式精确 token 计数
+                        if config._count_tokens:
+                            output_tokens = config._count_tokens([LLMMessage(role='assistant', content=full_content)])
+                            input_tokens = config._count_tokens(config.messages)
+                        else:
+                            output_tokens = 0
+                            input_tokens = 0
+                        response = LLMResponse(
+                            content=full_content,
+                            model=config._llm_config.model if config._llm_config else 'unknown',
+                            usage={
+                                'total_tokens': input_tokens + output_tokens,
+                                'prompt_tokens': input_tokens,
+                                'completion_tokens': output_tokens,
+                            },
+                        )
                     else:
-                        output_tokens = 0
-                        input_tokens = 0
-                    response = LLMResponse(
-                        content=full_content,
-                        model=config._llm_config.model if config._llm_config else 'unknown',
-                        usage={
-                            'total_tokens': input_tokens + output_tokens,
-                            'prompt_tokens': input_tokens,
-                            'completion_tokens': output_tokens,
-                        },
-                    )
-                else:
-                    # 非流式模式
-                    tool_kwargs: dict[str, Any] = {}
-                    if config.tool_schemas:
-                        tool_kwargs = {'tools': config.tool_schemas, 'tool_choice': 'auto'}
-                    response = await config.llm_provider.chat(messages=config.messages, **tool_kwargs)
-                    _llm_latency = time.monotonic() - _llm_start
-                    full_content = response.content
+                        # 非流式模式
+                        tool_kwargs: dict[str, Any] = {}
+                        if config.tool_schemas:
+                            tool_kwargs = {'tools': config.tool_schemas, 'tool_choice': 'auto'}
+                        response = await config.llm_provider.chat(messages=config.messages, **tool_kwargs)
+                        _llm_latency = time.monotonic() - _llm_start
+                        full_content = response.content
 
-                if config._metrics_lock:
-                    async with config._metrics_lock:
-                        config._perf_metrics['llm_call_count'] += 1
-                        config._perf_metrics['llm_total_latency'] += _llm_latency
+                    if config._metrics_lock:
+                        async with config._metrics_lock:
+                            config._perf_metrics['llm_call_count'] += 1
+                            config._perf_metrics['llm_total_latency'] += _llm_latency
 
-                # MetricsCollector 记录
-                if config._metrics_collector is not None:
-                    llm_tokens = response.usage.get('total_tokens', 0) if response.usage else 0
-                    llm_input = response.usage.get('prompt_tokens', 0) if response.usage else 0
-                    llm_output = response.usage.get('completion_tokens', 0) if response.usage else 0
-                    llm_cost = 0.0
-                    if config.enable_cost_tracking and config._cost_estimator:
-                        llm_cost = config._cost_estimator.get_total_cost()
-                    config._metrics_collector.record_llm_call(
-                        latency=_llm_latency,
-                        total_tokens=llm_tokens,
-                        input_tokens=llm_input,
-                        output_tokens=llm_output,
-                        model=config._llm_config.model if config._llm_config else 'unknown',
-                        success=True,
-                        cost=llm_cost,
-                    )
+                    # MetricsCollector 记录
+                    if config._metrics_collector is not None:
+                        llm_tokens = response.usage.get('total_tokens', 0) if response.usage else 0
+                        llm_input = response.usage.get('prompt_tokens', 0) if response.usage else 0
+                        llm_output = response.usage.get('completion_tokens', 0) if response.usage else 0
+                        llm_cost = 0.0
+                        if config.enable_cost_tracking and config._cost_estimator:
+                            llm_cost = config._cost_estimator.get_total_cost()
+                        config._metrics_collector.record_llm_call(
+                            latency=_llm_latency,
+                            total_tokens=llm_tokens,
+                            input_tokens=llm_input,
+                            output_tokens=llm_output,
+                            model=config._llm_config.model if config._llm_config else 'unknown',
+                            success=True,
+                            cost=llm_cost,
+                        )
 
-            except LLMProviderError as e:
-                if config._metrics_lock and ('重试' in str(e) or 'retry' in str(e).lower()):
-                    async with config._metrics_lock:
-                        config._perf_metrics['llm_retry_count'] += 1
-                raise
-            except Exception as e:
-                # 带图请求失败 → 自动降级成纯文本重试一次（只降一次，避免打转）。
-                # 真实场景：端点看到 image_url 就断连（APIConnectionError），
-                # 直接抛错的话用户只看到"Connection error"，整轮报废。
-                if _has_image_blocks(config.messages) and not getattr(config, '_vision_degraded', False):
-                    config._vision_degraded = True
-                    config.messages = _strip_image_blocks(config.messages)
-                    # 带上 str(e)：降级后若二次也失败，第一因（401/context 超限/断连）不能丢
-                    warn(
-                        f"带图请求失败（{type(e).__name__}: {e}），已自动降级为纯文本重试；"
-                        "如需看图请换一个支持视觉的模型"
-                    )
-                    continue
-                raise LLMProviderError(
-                    message=f'LLM {"流式" if config.is_stream else ""}调用失败: {e}',
-                    details={'model': config._llm_config.model if config._llm_config else 'unknown'},
-                ) from e
+                    break
+                except LLMProviderError as e:
+                    if config._metrics_lock and ('重试' in str(e) or 'retry' in str(e).lower()):
+                        async with config._metrics_lock:
+                            config._perf_metrics['llm_retry_count'] += 1
+                    raise
+                except Exception as e:
+                    # 带图请求失败 → 自动降级成纯文本重试一次（只降一次，避免打转）。
+                    # 真实场景：端点看到 image_url 就断连（APIConnectionError），
+                    # 直接抛错的话用户只看到"Connection error"，整轮报废。
+                    # 本轮内只降级一次：vision_retry_used 是轮内状态，不再用跨轮标记判断。
+                    if _has_image_blocks(config.messages) and not vision_retry_used:
+                        vision_retry_used = True
+                        config._vision_degraded = True
+                        config.messages = _strip_image_blocks(config.messages)
+                        # 原地重试：下面的 continue 指向内层 while，不消耗外层迭代额度。
+                        # 带上 str(e)：降级后若二次也失败，第一因（401/context 超限/断连）不能丢
+                        warn(
+                            f"带图请求失败（{type(e).__name__}: {e}），已自动降级为纯文本重试；"
+                            "如需看图请换一个支持视觉的模型"
+                        )
+                        continue
+                    raise LLMProviderError(
+                        message=f'LLM {"流式" if config.is_stream else ""}调用失败: {e}',
+                        details={'model': config._llm_config.model if config._llm_config else 'unknown'},
+                    ) from e
 
             # Cost tracking
             config.session.total_tokens += response.usage.get('total_tokens', 0)

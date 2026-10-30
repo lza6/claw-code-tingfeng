@@ -35,6 +35,28 @@ def _no_initialize(monkeypatch):
     monkeypatch.setattr(entrypoint, "initialize", lambda: None)
 
 
+@pytest.fixture
+def healthy_doctor(monkeypatch):
+    """把 doctor 的体检结果钉成"全绿"，让退出码不随宿主机环境漂移。
+
+    为什么必须这么做（实测过的假红）：`doctor` 的退出码取 `collect_doctor_report()["ready"]`，
+    而 `_no_initialize` 挡住了 `.env` 加载 —— 于是本文件单独跑时进程里没有 API Key，
+    doctor 判 fail 返回 1，测试就红了；整套一起跑时别的模块先把 `.env` 读进 os.environ，
+    同样的断言又变绿。**同一段测试两种结果**，属于测试自身的环境依赖（不是被测代码的缺陷）。
+    这里只替换"外部体检"这一层，测的仍然是"分发是否正确"。
+    """
+    from src.cli import repl_commands
+
+    report = {
+        "ready": True,
+        "count": 1,
+        "failed": 0,
+        "checks": [{"section": "env", "level": "pass", "text": "stub"}],
+    }
+    monkeypatch.setattr(repl_commands, "collect_doctor_report", lambda: dict(report))
+    return report
+
+
 def invoke(*args: str):
     return runner.invoke(entrypoint.app, list(args))
 
@@ -67,7 +89,7 @@ class TestCallback:
         # 不传 --version 时 callback 收到 None，不得退出
         entrypoint.version_callback(None)
 
-    def test_initialize_runs_for_every_command(self, monkeypatch):
+    def test_initialize_runs_for_every_command(self, monkeypatch, healthy_doctor):
         calls: list[int] = []
         monkeypatch.setattr(entrypoint, "initialize", lambda: calls.append(1))
 
@@ -342,7 +364,7 @@ class TestServerCommand:
 
 
 class TestSimpleDelegations:
-    def test_doctor_calls_handler(self, monkeypatch):
+    def test_doctor_calls_handler(self, monkeypatch, healthy_doctor):
         calls: list[int] = []
         monkeypatch.setattr(
             "src.cli.repl_commands._handle_doctor", lambda: calls.append(1)
@@ -444,7 +466,13 @@ class TestSimpleDelegations:
 
         invoke_ok("explore", "分析架构", "--depth", "4", "--format", "json")
 
-        assert captured == {"goal": "分析架构", "depth": 4, "output_format": "json"}
+        assert captured == {
+            "goal": "分析架构",
+            "depth": 4,
+            "output_format": "json",
+            # v0.89.0：explore 也接入了 --json 契约（as_json 由开关透传）
+            "as_json": False,
+        }
 
     def test_explore_defaults(self, monkeypatch):
         captured: dict[str, Any] = {}

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import re
 import sys
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -20,9 +19,18 @@ from typing import Any
 import toml
 import typer
 
+from src.utils.file_ops import atomic_write_json
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+#: 工具签名落盘文件名：写在**目标配置目录**（与 config.toml 同级），不进 config.toml
+TOOL_SIGNATURES_FILE = "tool_signatures.json"
+
+#: dry-run 时签名"写不出去"，改为放进返回 dict 的这个独立键。
+#: 取一个不会与 codex config 既有键（features / mcp_servers / notify …）撞名的名字，
+#: 且**永远不写入 config.toml**（写盘前就把它剔掉），避免污染用户配置。
+TOOL_SIGNATURES_PREVIEW_KEY = "__tool_signatures__"
 
 
 # ==================== 数据结构 ====================
@@ -344,16 +352,22 @@ class ConfigGenerator:
         self,
         codex_config_path: Path | None = None,
         dry_run: bool = False,
+        tool_signatures: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """合并生成的内容到现有 Codex config.toml
 
         Args:
             codex_config_path: Codex config.toml 路径 (默认 ~/.claude/config.toml)
             dry_run: 只返回合并后的配置，不写入文件
+            tool_signatures: 上层注入的工具签名（见 `generate_tool_signatures`）。
+                非 dry-run 时落到 `tool_signatures.json`（与 config.toml 同目录）；
+                dry-run 时不写盘，改放进返回 dict 的 `TOOL_SIGNATURES_PREVIEW_KEY`。
 
         Returns:
             合并后的完整配置字典
         """
+        signatures = list(tool_signatures or [])
+
         # 1. 读取现有配置 (如果存在)
         if codex_config_path is None:
             codex_config_path = self.claude_config_dir / "config.toml"
@@ -396,9 +410,21 @@ class ConfigGenerator:
             codex_config_path.write_text(toml_str, encoding="utf-8")
             logger.info(f"Merged config written to {codex_config_path}")
 
+        # 6.5 工具签名：**只**落到独立的 tool_signatures.json，绝不混进 config.toml
+        # （config.toml 是 codex 的配置文件，加非 codex 的键会污染它）。
+        # 原子写用项目既有的 `atomic_write_json`（同目录 tmp + os.replace）。
+        if signatures and not dry_run:
+            signatures_path = codex_config_path.parent / TOOL_SIGNATURES_FILE
+            atomic_write_json(signatures_path, signatures)
+            logger.info(f"Wrote {len(signatures)} tool signatures to {signatures_path}")
+
         # 7. 生成配置报告
-        report = self._generate_report(skills, merged, dry_run)
+        report = self._generate_report(skills, merged, dry_run, tool_signatures=signatures)
         logger.info(f"Config generation complete:\n{report}")
+
+        if signatures and dry_run:
+            # dry-run 不写盘，但签名不能就此丢掉：调用方（CLI 预览 / 测试）要从返回值里拿到
+            merged[TOOL_SIGNATURES_PREVIEW_KEY] = signatures
 
         return merged
 
@@ -407,6 +433,7 @@ class ConfigGenerator:
         skills: list[SkillDefinition],
         config: dict[str, Any],
         dry_run: bool,
+        tool_signatures: list[dict[str, Any]] | None = None,
     ) -> str:
         """生成配置报告"""
         lines = [
@@ -423,6 +450,8 @@ class ConfigGenerator:
         lines.extend([
             "",
             f"MCP 服务器: {len(config.get('mcp_servers', {}))} 个",
+            # 0 个也要如实写出来：以前这里没有这行，签名能力等于不存在（无调用方）
+            f"工具签名: {len(tool_signatures or [])} 个",
             "",
             "功能开关:",
             *(f"  - {k}: {v}" for k, v in config.get("features", {}).items()),
@@ -444,13 +473,18 @@ def config_generate_command(
     config_path: Path | None = None,
     dry_run: bool = False,
     verbose: bool = False,
-) -> None:
+    tools: Any | None = None,
+) -> dict[str, Any]:
     """CLI 命令: clawd config generate
 
     用法:
         clawd config generate                    # 生成并写入默认路径
         clawd config generate --path ~/.claude/config.toml
         clawd config generate --dry-run          # 预览合并结果
+
+    `tools`: 真实工具清单（`dict[name, Tool]` 或 Tool 可迭代），由 **CLI 层注入**。
+    core 不能 import `tools_runtime`（`scripts/core_surface.py` 是硬门禁），
+    所以工具清单只能由上往下传；不传就是 0 个签名，报告里如实写 0，不假造。
     """
     generator = ConfigGenerator(project_root=Path.cwd())
 
@@ -460,14 +494,33 @@ def config_generate_command(
         logger.setLevel("INFO")
 
     try:
+        signatures = generator.generate_tool_signatures(tools)
         config = generator.merge_into_codex_config(
             codex_config_path=config_path,
             dry_run=dry_run,
+            tool_signatures=signatures,
         )
 
         if dry_run:
+            # 签名不是 codex config 的键，预览时单独列，别混进 toml 里装作是配置项
+            preview = {
+                k: v for k, v in config.items() if k != TOOL_SIGNATURES_PREVIEW_KEY
+            }
             print("\n[预览模式] 合并后的配置:")
-            print(toml.dumps(config))
+            print(toml.dumps(preview))
+            print(f"[预览模式] 工具签名: {len(signatures)} 个（dry-run 不落盘）")
+            for sig in signatures:
+                print(f"  - {sig.get('name', '?')}")
+        elif signatures:
+            # 走 stderr：`config --json` 时 stdout 必须只有 JSON（`--json | jq` 不能崩）
+            print(f"工具签名已写入: {len(signatures)} 个 → {TOOL_SIGNATURES_FILE}", file=sys.stderr)
+        else:
+            print(
+                "工具签名: 0 个（CLI 层未注入工具清单，本次不写 tool_signatures.json）",
+                file=sys.stderr,
+            )
+
+        return config
     except Exception as e:
         logger.error(f"Config generation failed: {e}")
         raise
@@ -507,6 +560,8 @@ def setup_cli_commands(app: typer.Typer) -> None:
 
 
 __all__ = [
+    "TOOL_SIGNATURES_FILE",
+    "TOOL_SIGNATURES_PREVIEW_KEY",
     "ConfigGenerator",
     "MCPConfig",
     "SkillDefinition",

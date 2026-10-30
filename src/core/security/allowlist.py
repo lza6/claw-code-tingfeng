@@ -19,14 +19,20 @@ from dataclasses import dataclass
 # ========== 白名单定义 ==========
 
 #: git 只读子命令白名单（`git <subcmd>` 只读、不改仓库）
-#: **唯一来源就在这里**：此前 validate 里 `from src.tools_runtime.bash_constants import
-#: READ_ONLY_GIT_SUBCOMMANDS`，但那个模块从来没有这个常量（死引用，靠 except 内联兜底），
-#: 既让 core 越界 import 上层，又把权威清单藏在一个永不执行的分支里。
-_READ_ONLY_GIT_SUBCOMMANDS: frozenset[str] = frozenset({
+#: **唯一来源就在这里**（公开名 `READ_ONLY_GIT_SUBCOMMANDS`）：此前 validate 里
+#: `from src.tools_runtime.bash_constants import READ_ONLY_GIT_SUBCOMMANDS`，但那个模块
+#: 从来没有这个常量（死引用，靠 except 内联兜底）；同时 `src/tools_runtime/bash_security.py`
+#: 又自己写了一份 12 项的副本 —— 两份清单不一致（少了 shortlog / show-ref / reflog 等），
+#: 结果同一条 `git show-ref` 在两套校验里结论相反。现在统一由本模块导出，
+#: tools_runtime 侧改为 import（tools_runtime → core 是允许方向）。
+READ_ONLY_GIT_SUBCOMMANDS: frozenset[str] = frozenset({
     'blame', 'branch', 'cat-file', 'diff', 'grep', 'log',
     'ls-files', 'remote', 'rev-parse', 'show', 'status', 'describe',
     'shortlog', 'reflog', 'whatchanged', 'show-ref', 'for-each-ref', 'name-rev',
 })
+
+#: 兼容旧内部引用名（本模块内部原先用的是私有名，改名时不能把内部用法改挂）
+_READ_ONLY_GIT_SUBCOMMANDS = READ_ONLY_GIT_SUBCOMMANDS
 
 # 增强白名单 - 基于项目A的READ_ONLY_ROOT_COMMANDS (24个命令) + 项目B的安全强化
 # 升级策略：从"黑名单逐项检查"改为"白名单基础 + 细粒度参数拦截 + Shell注入防护"

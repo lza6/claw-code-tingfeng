@@ -938,6 +938,9 @@
         AGENT_TOOL_EXEC_STARTED: ['⚙', null],  // 标签动态生成
         AGENT_TOOL_EXEC_COMPLETED: ['✓', null],
         AGENT_TOKEN_USAGE: ['$', 'Token 统计'],
+        // 运行时被改（如"快速模式把输出上限压到 1024，回答可能被截断"）：
+        // 这类事件必须让人看懂原因，否则用户只能看到"回答怎么这么短"。
+        SYSTEM_CONFIG_CHANGED: ['⚙', '配置变更'],
       };
       if (raw === 'AGENT_STREAM_STARTED') { beginStream(); return; }
       if (raw === 'AGENT_STREAM_DELTA') { appendStream(d.text || ''); return; }
@@ -970,6 +973,9 @@
         // 同一次 run 可能双发（handlers + engine_events），去重
         if ($chat.querySelector('.tool-row')) return;
         label = fixedLabel;
+      } else if (raw === 'SYSTEM_CONFIG_CHANGED') {
+        // 直接用后端给的中文 notice，别让人对着 JSON 猜
+        label = d.notice || fixedLabel;
       } else {
         label = fixedLabel || JSON.stringify(d).slice(0, 120);
       }

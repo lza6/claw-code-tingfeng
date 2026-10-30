@@ -1,5 +1,21 @@
 # 已知问题与风险
 
+## 已解决（2026-10-31，留档防复现）
+- **`--json` 输出被日志污染**：`setup_logging()` 把控制台 handler 接到 `sys.stdout`，
+  于是任何在命令执行途中记日志的命令（如 `config --generate` 记 "Discovered 63 skills"）
+  都会让 `clawd <cmd> --json | jq` 解析失败。修：`src/utils/logger.py` 新增
+  `_wants_machine_output()`，argv 里有 `--json` 时 handler 走 **stderr**。
+  教训：机器可读输出是**整条进程**的约束，不是"最后 print 一下"就能保证的。
+- **测试依赖宿主机环境（假红）**：`tests/cli/test_entrypoint_commands.py` 的两条 doctor 用例
+  用 `invoke_ok("doctor")`，而 doctor 的退出码取 `collect_doctor_report()["ready"]`；
+  该文件本来就用 autouse fixture 屏蔽了 `.env` 加载 → 进程里没有 API Key → doctor 判 fail → 退出码 1。
+  单独跑必红、整套跑会被别的模块偷偷加载的 `.env` 掩盖（同一段代码两种结果）。
+  修：新增 `healthy_doctor` fixture 注入体检结果，测"分发"而不测"宿主机"。
+  教训：断言里出现"环境决定的值"时，先问"换台机器还成立吗"。
+- **直接调 `cmd.callback()` 会被默认值骗**：Typer 注册后 `callback()` 不传参时，
+  `json_out` 收到的是 `OptionInfo` 对象（真值为 True），于是走进了 `--json` 分支。
+  修：`tests/cli/test_command_registration.py` 显式传 `json_out=False`。
+
 ## 已解决（2026-10-30，留档防复现）
 - **commit message 变乱码**：用 `python -c "print(...)" > file.txt` 在 Windows 下生成的文件是 GBK，
   `git commit -F` 按 UTF-8 读 → 提交信息乱码（本轮真实踩到，已推送后才发现）。

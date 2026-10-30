@@ -16,6 +16,7 @@ MCP 配置生成、features 片段、Codex config.toml 合并（dry-run / 写盘
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -581,3 +582,87 @@ class TestSetupCliCommands:
         assert result.exit_code == 0
         assert "[预览模式]" in result.stdout
         assert not (project / ".clawd" / "AGENTS.md").exists()
+
+
+# ==========================================================================
+# P3-1：工具签名必须有**生产**调用方（CLI 注入 → 落盘 / dry-run 只回传）
+#
+# 此前 `generate_tool_signatures()` 实现正确、也有测试，但除测试外零调用方 ——
+# 等于"能力存在但从不运行"。现在由 CLI 层注入真实工具清单：
+# 非 dry-run 落 tool_signatures.json，dry-run 放回返回 dict 的独立键。
+# ==========================================================================
+
+
+class _FakeTool:
+    """最小工具桩：走 `_tool_signature` 的通用分支（name + parameter_schemas）"""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.description = f"{name} 描述"
+        self.parameter_schemas: tuple = ()
+
+
+class TestToolSignaturesHaveProductionCaller:
+    def test_signatures_land_in_tool_signatures_json(self, project):
+        gen = _generator(project)
+        sigs = gen.generate_tool_signatures([_FakeTool("BashTool"), _FakeTool("FileReadTool")])
+
+        gen.merge_into_codex_config(tool_signatures=sigs)
+
+        path = project / "claude" / "tool_signatures.json"
+        assert path.is_file(), "非 dry-run 应把签名写进目标配置目录"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert [s["name"] for s in data] == ["BashTool", "FileReadTool"], data
+
+        # config.toml 是 codex 的配置，签名绝不能混进去（污染用户配置）
+        cfg = toml.load(project / "claude" / "config.toml")
+        assert gen_mod.TOOL_SIGNATURES_PREVIEW_KEY not in cfg, cfg.keys()
+        assert "tool_signatures" not in cfg, cfg.keys()
+
+    def test_dry_run_keeps_signatures_in_returned_dict_only(self, project):
+        gen = _generator(project)
+        sigs = gen.generate_tool_signatures([_FakeTool("GlobTool")])
+
+        merged = gen.merge_into_codex_config(dry_run=True, tool_signatures=sigs)
+
+        assert not (project / "claude" / "tool_signatures.json").exists(), "dry-run 不许落盘"
+        assert not (project / "claude" / "config.toml").exists()
+        preview = merged[gen_mod.TOOL_SIGNATURES_PREVIEW_KEY]
+        assert [s["name"] for s in preview] == ["GlobTool"], preview
+
+    def test_report_counts_signatures(self, project):
+        gen = _generator(project)
+
+        assert "工具签名: 2 个" in gen._generate_report(
+            [], {}, True, tool_signatures=[{"name": "a"}, {"name": "b"}]
+        ), "报告必须写出签名数量"
+        assert "工具签名: 0 个" in gen._generate_report([], {}, True)
+
+    def test_command_without_tools_reports_zero_and_writes_no_file(
+        self, project, monkeypatch, capsys
+    ):
+        """不注入工具清单时：配置照常生成，但签名如实报 0，不写空文件、不假造"""
+        monkeypatch.chdir(project)
+        config_path = project / "claude" / "config.toml"
+
+        config = config_generate_command(config_path=config_path, tools=None)
+
+        assert config_path.is_file(), "配置本身仍应正常写出"
+        assert not (project / "claude" / "tool_signatures.json").exists()
+        assert gen_mod.TOOL_SIGNATURES_PREVIEW_KEY not in config
+        # 状态行走 stderr（stdout 留给 `--json`），但必须如实说 0
+        captured = capsys.readouterr()
+        assert "工具签名: 0 个" in captured.err, captured.err
+        assert captured.out == "", "stdout 必须干净（--json | jq 依赖它）"
+
+    def test_command_with_tools_writes_signature_file(self, project, monkeypatch):
+        monkeypatch.chdir(project)
+        config_path = project / "claude" / "config.toml"
+
+        config = config_generate_command(config_path=config_path, tools=[_FakeTool("BashTool")])
+
+        data = json.loads(
+            (project / "claude" / "tool_signatures.json").read_text(encoding="utf-8")
+        )
+        assert [s["name"] for s in data] == ["BashTool"], data
+        assert gen_mod.TOOL_SIGNATURES_PREVIEW_KEY not in config

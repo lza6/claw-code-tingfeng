@@ -84,6 +84,29 @@ py -3.10 -m ruff check src/ --select F821,F811               # 静态缺陷数
 
 ---
 
+## 3.4 给命令加 `--json`（脚本/CI 契约）
+
+统一走 `src/cli/command_result.py` 的 `CommandResult` + `emit()`，**不要自己 `print(json.dumps(...))`**。
+
+| 要求 | 原因 |
+|:---|:---|
+| 输出形如 `{ok, code, ...业务字段}` | 脚本要能稳定解析；裸数组/裸对象每次改都要猜结构 |
+| `raise typer.Exit(emit(result, json_out))` | **退出码必须等于 JSON 里的 `code`**，否则 CI 判断失真 |
+| 错误也输出合法 JSON（`ok=false` + `code>=1`） | `--json \| jq` 不能因为一句中文报错就崩 |
+| 人读文本走 `human` 字段，不进 stdout 的 JSON | 混在一起就无法解析 |
+| 中间日志一律 `stderr`（`print(..., file=sys.stderr)` 或 logger） | 保持 `stdout` 只有一行 JSON |
+| 不做的事要**写进 data**（如 `budget_ignored: true`） | 只在人读里提示 = 机器侧永远不知道 |
+
+自查一条命令是否合规：
+
+```bash
+venv/Scripts/python.exe -m src <cmd> --json 2>/dev/null | venv/Scripts/python.exe -c "import sys,json;d=json.loads(sys.stdin.read().strip().splitlines()[-1]);print(d['ok'],d['code'])"
+```
+
+契约测试在 `tests/cli/test_command_result.py`（地基）与 `tests/cli/test_json_contract_queries.py`（查询类全覆盖）。
+
+---
+
 ## 3.5 新增一个桌面端接口（WS handler 或 HTTP 端点）
 
 桌面端 UI 的所有数据都来自这两类接缝，加功能基本都落在这里。
@@ -164,6 +187,15 @@ python -m pip install -e . --no-deps --no-build-isolation
 python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 ```
 
+**还要删仓库根目录的 `clawd_code.egg-info/`**（v0.89.0 实测再踩一次）：
+从仓库根跑测试时，`clawd_code.egg-info/PKG-INFO` 会**盖过** venv 里新装的
+`clawd_code-<ver>.dist-info`，`importlib.metadata.version('clawd-code')` 返回旧版本，
+`tests/core/test_version_consistency.py::test_installed_metadata_matches_pyproject` 直接红。
+
+```bash
+rm -rf clawd_code.egg-info     # 已在 .gitignore（构建产物，删了不影响源码）
+```
+
 ---
 
 ## 6. 发布前检查单
@@ -171,13 +203,18 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 
 ```text
 [ ] pytest tests/ -q                    → 0 failed
-[ ] pytest tests/contracts -q           → 全绿
-[ ] ruff --select F821,F811             → All checks passed
-[ ] python scripts/import_sweep.py      → IMPORT-FAIL = 0
-[ ] python scripts/reachability.py      → 生产可达数未下降
+[ ] pytest tests/contracts/ -q          → 全绿
+[ ] ruff check src/ tests/ --select F821,F811,E9 → All checks passed
+[ ] python scripts/import_sweep.py --strict-exit → IMPORT-FAIL = 0
+[ ] python scripts/reachability.py --min-reachable <上轮值> → 生产可达数未下降
+[ ] python scripts/check_silent_except.py --fail-over 155 → 未回升
 [ ] python scripts/coverage_gap.py       → 只给「生产可达」模块补测试，不给死代码刷覆盖率
 [ ] python scripts/e2e_smoke.py         → 退出码 0（改动涉及 LLM/工具/配置时）
 [ ] python scripts/e2e_production.py    → 8/8（改动涉及生产路径时）
+[ ] python scripts/verify_audit_p1.py   → 28/28
+[ ] python scripts/check_mcp_startup.py → 4/4
+[ ] python scripts/core_surface.py      → core 未 import 上层
+[ ] python scripts/check_doc_drift.py   → README 数字与现跑一致
 [ ] 版本号三处一致（pyproject / src.__version__ / README）
 [ ] CHANGELOG.md、workflow_status.md 已同步
 [ ] 提交信息用约定式格式，不含密钥
@@ -188,8 +225,14 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 ```text
 [ ] python scripts/prepare_host_bundle.py   → [5/5] 自检全过（含 CLI --help）
 [ ] pwsh -File scripts/build_desktop_signed.ps1 [-SelfSigned|-Pfx ...] → DONE
-[ ] pwsh -File %TEMP%\clawd-install-e2e.ps1  → STEP2/2c/2d/2e/2f 全 PASS，STEP5 残留 0
+[ ] pwsh -File scripts/e2e_desktop_install.ps1 → 退出码 0（装→真跑→重启→卸载→残留）
 ```
+
+`scripts/e2e_desktop_install.ps1` 是 v0.89.0 起**入库的装机 E2E**（以前是会话里手打的一次性脚本，
+每次都要重新拼，并重复踩过同样的坑）。它覆盖：静默安装 → 版本/内嵌 host/prompts 校验 →
+预置 `.env` → 启应用 → `/ /api/info /api/providers /api/usage /api/sessions` → 破坏性端点无 token 必须 403 →
+真浏览器 UI E2E（`desktop/ui_console_e2e.mjs`）→ 重启后配置与会话仍在 → 无残留进程 → 静默卸载 → 注册表残留 0。
+`-SkipUi` 只验 Host；`-KeepInstalled` 跑完不卸载（调试用）。
 
 打包自检为什么不能省：bundle 里少一个包/一个 DLL，源码、单测、`node --check`、静态检查**全是绿的**，
 只有装到别人机器上双击才发现（本项目一天内踩了三次：`annotated_doc`、`exceptiongroup`、

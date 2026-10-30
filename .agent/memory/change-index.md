@@ -1,5 +1,29 @@
 # 变更索引（change-index）
 
+## 2026-10-31 v0.89.0 查询类命令 --json 全覆盖 + R6 + P3 五项
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/cli/entrypoint.py | `explore/pipeline/ralplan/quality-gate/config(+/generate/+reset)/permissions/autonomy list·log/role show/eval` 全部接入 `CommandResult` 契约；`--budget` 不生效写进 data（`budget_ignored`）|
+| 修改 | src/cli/commands/agent_commands.py | `agent list/show/keywords/intent` 加 `--json`；`--format json` 与 `--json` 合并为同一契约（原裸数组废弃）|
+| 修改 | src/cli/commands/explore.py | `explore_command(..., as_json=)` 返回结构化 payload，人读渲染与机器读共用一份数据 |
+| 修改 | src/utils/logger.py | `--json` 时控制台日志改道 **stderr**（此前日志走 stdout，`\| jq` 必崩）；新增 `_wants_machine_output()` |
+| 修改 | src/agent/engine_loop.py | R6：带图失败降级改为**轮内原地重试**（内层 while），不再消耗 `max_iterations` 额度 |
+| 修改 | src/core/config/generator.py | `generate_tool_signatures` 接上生产调用方：CLI 注入真实工具 → `tool_signatures.json`（原子写）|
+| 修改 | src/cli/entrypoint.py | 新增 `_config_generate_tool_pool()`（CLI 层注入工具，core 不越界 import）|
+| 修改 | src/core/security/allowlist.py | 导出公开名 `READ_ONLY_GIT_SUBCOMMANDS`（18 项，唯一来源）|
+| 修改 | src/tools_runtime/bash_security.py | 删掉自己那份 12 项副本，改为 import core 的同一对象 |
+| 修改 | src/workflow/team_persistence.py | `_get_team_state_path()` 删死参数 `cwd`；公开 API 保留 cwd 并在 docstring 标注"仅兼容" |
+| 修改 | src/server/handlers.py | fast_mode 压 `max_tokens` 时发布 `SYSTEM_CONFIG_CHANGED` 告警 + `FAST_MODE_MAX_TOKENS` 常量 |
+| 修改 | src/server/ws/manager.py | 广播白名单纳入 `SYSTEM_CONFIG_CHANGED`（前端 trace 可见）|
+| 修改 | src/core/cost_estimator/cost_estimator.py | litellm 兜底价补 `cache_creation_input_token_cost` → `cache_write_price`（原恒 0，长期低估成本）|
+| 新增 | tests/cli/test_json_contract_queries.py | 27 条：12 个命令的契约 + stdout 纯净度 + `config --generate` 真落盘 |
+| 新增 | tests/server/test_fast_mode_truncation_notice.py | 截断必告知 / 未截断不打扰 |
+| 新增 | tests/tools_runtime/test_git_allowlist_single_source.py | 两套判定对同一命令结论一致 |
+| 新增 | scripts/e2e_desktop_install.ps1 | 装机 E2E 入库（装→真跑→重启→卸载→残留），退出码=失败项数 |
+| 修改 | tests/cli/test_entrypoint_commands.py | doctor 两条用例改为注入体检结果（原来依赖宿主机有无 API Key，单独跑必红）|
+| 修改 | tests/cli/test_command_registration.py | 直接调 callback 时显式传 `json_out=False`（默认值是 OptionInfo，真值为 True）|
+
+
 ## 2026-10-30 v0.88.4 core 边界清零 + 视觉链路实测
 | 类型 | 路径 | 说明 |
 |------|------|------|

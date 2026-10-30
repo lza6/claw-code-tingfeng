@@ -1,0 +1,160 @@
+{
+  "task_id": "v0.89.0-cli-json-full-coverage",
+  "status": "DONE",
+  "timestamp": "2026-10-31T02:55:00+08:00",
+  "scope": "X-7 查询类命令 --json 全覆盖 + R6 视觉降级轮内重试 + P3 五项 + 装机E2E入库 + 文档门禁同步",
+  "commands_executed": [
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ -q -m 'not slow' --cov=src",
+      "exit_code": 0,
+      "summary": "5440 passed / 7 skipped / 8 xfailed / 0 failed（375.04s）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ --collect-only -q",
+      "exit_code": 0,
+      "summary": "5464 collected / 0 errors / 3.28s"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/contracts -q",
+      "exit_code": 0,
+      "summary": "39 passed"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m ruff check src/ tests/ --select F821,F811,E9（改动文件逐一）",
+      "exit_code": 0,
+      "summary": "All checks passed"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/import_sweep.py --strict-exit",
+      "exit_code": 0,
+      "summary": "IMPORT-FAIL 0 / DEP-MISSING 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/reachability.py --min-reachable 443",
+      "exit_code": 0,
+      "summary": "可达 503（基线 501，未降）；完全不可达 25 / 4058 行"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_silent_except.py --fail-over 155",
+      "exit_code": 0,
+      "summary": "静默吞异常 155，未回升"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/verify_audit_p1.py",
+      "exit_code": 1,
+      "summary": "28 项 27 过 1 失败：P2-4 文档数字漂移（5415→5464 / 501→503）；**已修**（README/CLAUDE.md/workflow_status 同步），复跑 check_doc_drift 全一致 exit 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_mcp_startup.py",
+      "exit_code": 0,
+      "summary": "4/4 MCP server spawn + 握手通过"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/scan_fake_success.py",
+      "exit_code": 0,
+      "summary": "命中 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/core_surface.py",
+      "exit_code": 0,
+      "summary": "core 未 import 上层，PASS"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_doc_drift.py",
+      "exit_code": 0,
+      "summary": "README 收集数/静默/可达 全一致（数字已更新）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/e2e_smoke.py",
+      "exit_code": 0,
+      "summary": "5/5 PASS（真实端点：PONG / get_weather / reasoning 391）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/e2e_production.py",
+      "exit_code": 0,
+      "summary": "8/8 PASS（真实生产路径：chat/chat_stream/<think>/解析器/失败路径）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m src <cmd> --json × 12 个命令",
+      "exit_code": 0,
+      "summary": "全部输出合法 JSON 且 stdout 无日志污染（日志已改道 stderr）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m src config --generate --json --path <tmp>",
+      "exit_code": 0,
+      "summary": "config.toml + tool_signatures.json 真实落盘（6 个签名）"
+    },
+    {
+      "cmd": "node --check desktop/web/app.js",
+      "exit_code": 0,
+      "summary": "前端事件标签语法 OK"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 200 --rounds 10",
+      "exit_code": 0,
+      "summary": "200/200 成功 · QPS 2514 · P50 11.1 / P95 15.4 / P99 15.6ms · 错误率 0%"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 300 --rounds 5",
+      "exit_code": 0,
+      "summary": "300/300 成功 · QPS 1355 · P99 15.2ms · 错误率 0%"
+    }
+  ],
+  "files_changed": [
+    "src/cli/entrypoint.py",
+    "src/cli/commands/agent_commands.py",
+    "src/cli/commands/explore.py",
+    "src/utils/logger.py",
+    "src/agent/engine_loop.py",
+    "src/core/config/generator.py",
+    "src/core/security/allowlist.py",
+    "src/tools_runtime/bash_security.py",
+    "src/workflow/team_persistence.py",
+    "src/server/handlers.py",
+    "src/server/ws/manager.py",
+    "src/core/cost_estimator/cost_estimator.py",
+    "desktop/web/app.js",
+    "scripts/e2e_desktop_install.ps1（新增）",
+    "tests/cli/test_json_contract_queries.py（新增 27 条）",
+    "tests/server/test_fast_mode_truncation_notice.py（新增）",
+    "tests/tools_runtime/test_git_allowlist_single_source.py（新增）",
+    "tests/agent/test_vision_degrade_loop.py",
+    "tests/cli/test_entrypoint_commands.py",
+    "tests/cli/test_command_registration.py",
+    "tests/core/test_config_generator.py",
+    "tests/core/test_pricing_resolution.py",
+    "tests/workflow/test_team_state_wiring.py",
+    "README.md",
+    "CLAUDE.md",
+    "docs/MAINTENANCE.md",
+    "workflow_status.md",
+    ".agent/memory/change-index.md",
+    ".agent/memory/known-issues.md",
+    "pyproject.toml / desktop/package.json（0.88.10 → 0.89.0）"
+  ],
+  "coverage_summary": {
+    "percent": 66.27,
+    "covered_lines": 38699,
+    "total_statements": 58394,
+    "gate": "fail_under=60"
+  },
+  "seams_touched": [
+    "CLI(Typer)×12命令",
+    "EventBus(SYSTEM_CONFIG_CHANGED→WS广播→前端标签)",
+    "cost_estimator↔litellm",
+    "core.security↔tools_runtime",
+    "logger(stdout/stderr路由)"
+  ],
+  "mock_scenarios_covered": [
+    "fast_mode 截断/未截断",
+    "pipeline/railplan/explore 假编排器",
+    "quality-gate 假报告",
+    "vision loop 降级（flaky provider）"
+  ],
+  "browser_validation": "本轮未跑桌面 UI E2E（装机链路改为入库脚本，待 Critic 复验后统一执行装机 E2E）",
+  "limitations": [
+    "正式代码签名仍需 CA 证书（自签名管线此前已验，Status=UnknownError 属预期）",
+    "真实视觉对话仍需支持 image_url 的端点（scripts/probe_vision_endpoint.py 可复现）",
+    "装机 E2E（e2e_desktop_install.ps1）本轮只静态审查 + 语法校验，未真装（将在独立审查通过后跑）"
+  ]
+}

@@ -253,22 +253,56 @@ def role_list(
 
 
 @role_app.command("show")
-def role_show(name: str = typer.Argument(..., help="角色名（见 clawd role list）")):
+def role_show(
+    name: str = typer.Argument(..., help="角色名（见 clawd role list）"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
+):
     """打印某个角色的完整系统提示词（可审计，不藏东西）"""
     from ..agent.personas import build_system_prefix, load_persona
 
     try:
         persona = load_persona(name)
     except KeyError as e:
+        if json_out:
+            from .command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=False,
+                    data={"error": str(e), "name": name},
+                    human=str(e),
+                ),
+                as_json=True,
+            ))
         console.print(f"[bold red]{e}[/bold red]")
         raise typer.Exit(code=1)
+
+    prompt = build_system_prefix(persona)
+    if json_out:
+        from .command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(
+                ok=True,
+                data={
+                    "name": persona.name,
+                    "title": persona.title,
+                    "category": persona.category,
+                    "description": persona.description,
+                    "source": str(persona.source) if persona.source else None,
+                    "system_prompt": prompt,
+                },
+            ),
+            as_json=True,
+        ))
+
     console.print(f"[bold]{persona.title}[/bold] [dim]({persona.name} · {persona.category})[/dim]")
     if persona.description:
         console.print(f"[dim]{persona.description}[/dim]")
     if persona.source:
         console.print(f"[dim]来源: {persona.source}[/dim]")
     console.print("")
-    console.print(build_system_prefix(persona))
+    console.print(prompt)
     raise typer.Exit(code=0)
 
 
@@ -504,14 +538,16 @@ def explore(
     depth: int = typer.Option(2, "--depth", "-d", help="探索深度"),
     format: str = typer.Option("markdown", "--format", "-f", help="输出格式: markdown, tree, json"),
     readonly: bool = typer.Option(True, "--readonly/--no-readonly", help="只读模式"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     只读探索模式 - 分析代码库而不修改
     """
     from ..cli.commands.explore import explore_command
 
-    console.print(Panel(f"探索模式: {goal}", title="Explore Mode", border_style="cyan"))
-    explore_command(goal=goal, depth=depth, output_format=format)
+    if not json_out:
+        console.print(Panel(f"探索模式: {goal}", title="Explore Mode", border_style="cyan"))
+    explore_command(goal=goal, depth=depth, output_format=format, as_json=json_out)
 
 @app.command(name="pipeline")
 def pipeline(
@@ -519,6 +555,7 @@ def pipeline(
     no_team: bool = typer.Option(False, "--no-team", help="跳过团队执行阶段 (直接使用Workflow)"),
     no_ralph: bool = typer.Option(False, "--no-ralph", help="跳过Ralph验证阶段"),
     budget: str | None = typer.Option(None, "--budget", "-b", help="预算限制 (如 1h, 10usd)"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     执行完整流水线: RALPLAN(共识规划) → TEAM(并行执行) → RALPH(验证循环)
@@ -540,7 +577,7 @@ def pipeline(
         create_autopilot_pipeline_config,
     )
 
-    if budget:
+    if budget and not json_out:
         # 不静默忽略：pipeline 编排器目前没有预算参数，
         # 预算只在 `clawd run`（WorkflowEngine）生效。
         console.print(
@@ -558,7 +595,24 @@ def pipeline(
     config = create_autopilot_pipeline_config(task=goal, stages=stages, cwd=cwd)
 
     async def _run() -> int:
+        from .command_result import CommandResult, emit
+
         result = await PipelineOrchestrator(config, cwd=cwd).run()
+
+        stage_status = {name: sr.status.value for name, sr in result.stage_results.items()}
+        data = {
+            "goal": goal,
+            "status": result.status,
+            "duration_ms": result.duration_ms,
+            "failed_stage": result.failed_stage,
+            "error": result.error,
+            "stages": stage_status,
+            # 预算参数当前确实不生效 —— 机器读也要知道，不能只在人读里提示
+            "budget_ignored": bool(budget),
+        }
+        ok = result.status == "completed"
+        if json_out:
+            return emit(CommandResult(ok=ok, data=data), as_json=True)
 
         console.print("\n[bold green]流水线执行报告[/bold green]")
         console.print(f"目标: {goal}")
@@ -568,7 +622,7 @@ def pipeline(
             console.print(f"[red]失败阶段: {result.failed_stage}[/red] {result.error or ''}")
         for name, sr in result.stage_results.items():
             console.print(f"  - {name}: {sr.status.value}")
-        return 0 if result.status == "completed" else 1
+        return 0 if ok else 1
 
     raise typer.Exit(asyncio.run(_run()))
 
@@ -577,6 +631,7 @@ def ralplan_cli(
     goal: str = typer.Argument(..., help="需要共识规划的目标"),
     rounds: int = typer.Option(3, "--rounds", "-r", help="最大答辩轮次"),
     min_confidence: float = typer.Option(0.8, "--min-confidence", help="最低信心阈值"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     运行 RALPLAN 共识规划 (Planner-Architect-Critic 三角)
@@ -594,7 +649,34 @@ def ralplan_cli(
     )
 
     async def _run():
+        from .command_result import CommandResult, emit
+
         plan = await engine.run(goal)
+
+        if json_out:
+            data = {
+                "goal": plan.goal,
+                "objective": plan.objective,
+                "confidence": plan.confidence,
+                "validator": plan.validator,
+                "tasks": plan.tasks,
+                "risks": plan.risks,
+                "mitigations": plan.mitigations,
+                "chosen_option": (
+                    {
+                        "name": plan.chosen_option.name,
+                        "description": plan.chosen_option.description,
+                        "pros": plan.chosen_option.pros,
+                        "cons": plan.chosen_option.cons,
+                        "cost_estimate": plan.chosen_option.cost_estimate,
+                    }
+                    if plan.chosen_option
+                    else None
+                ),
+                "confidence_met": plan.confidence >= min_confidence,
+                "plan_path": ".clawd/plan/consensus.json",
+            }
+            return emit(CommandResult(ok=True, data=data), as_json=True)
 
         console.print("\n[bold green]共识计划达成[/bold green]")
         console.print(f"目标: {plan.goal}")
@@ -609,13 +691,15 @@ def ralplan_cli(
             console.print(f"理由: 优点 {len(plan.chosen_option.pros)} 项, 缺点 {len(plan.chosen_option.cons)} 项")
 
         console.print("\n计划已保存至: .clawd/plan/consensus.json")
+        return 0
 
-    asyncio.run(_run())
+    raise typer.Exit(asyncio.run(_run()))
 
 @app.command(name="quality-gate")
 def quality_gate(
     level: str = typer.Option("task", "--level", "-l", help="质量门级别: commit, task, phase, release"),
     strict: bool = typer.Option(False, "--strict", help="严格模式: 警告也阻断"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     运行质量门检查 (lint, typecheck, tests, security)
@@ -628,6 +712,35 @@ def quality_gate(
     gate = QualityGate(Path.cwd(), level=gate_level, strict=strict)
 
     report = gate.run()
+
+    if json_out:
+        from .command_result import CommandResult, emit
+
+        checks = [
+            {
+                "name": c.check.name,
+                "level": c.check.level.value,
+                "result": c.result.value,
+                "duration_ms": c.duration_ms,
+                "description": c.check.description,
+                # 输出只在失败时给尾部摘要，避免 JSON 被整段 lint 日志淹没
+                "output_tail": (c.output or "").strip().splitlines()[-20:] if c.result.value != "pass" else [],
+            }
+            for c in report.checks
+        ]
+        payload = {
+            "level": report.level.value,
+            "strict": strict,
+            "overall": report.overall.value,
+            "summary": report.summary,
+            "checks": checks,
+            "failed": sum(1 for c in report.checks if c.result.value == "fail"),
+        }
+        raise typer.Exit(emit(
+            CommandResult(ok=report.overall.value != "fail", data=payload),
+            as_json=True,
+        ))
+
     console.print(report.summary)
 
     if gate.overall.value == "fail":
@@ -654,6 +767,43 @@ def hud_start(
         console.print("[yellow]HUD live 模式暂未完全集成，使用简化输出[/yellow]")
         console.print("提示: 集成后将在后台显示持续状态")
 
+def _config_generate_tool_pool() -> list:
+    """给 `clawd config --generate` 收集**真实**工具清单。
+
+    为什么放在 CLI 层而不是 generator 里：`src/core/` 不允许 import 上层
+    （`scripts/core_surface.py` 是硬门禁），工具清单只能由上往下注入。
+    这里构造的就是 `AgentEngine` 启动时那套基础工具（同一个类、同一份参数来源），
+    而不是另造一份"看起来像工具"的假对象 —— 签名要能真被 LLM function calling 用。
+
+    拿不到就返回空列表并留下 warning：报告里会如实写"工具签名: 0 个"，
+    不写空文件、不假造签名。
+    """
+    try:
+        from ..tools_runtime import (
+            BashTool,
+            FileEditTool,
+            FileReadTool,
+            GlobTool,
+            GrepTool,
+            SkillTool,
+        )
+
+        workdir = Path.cwd()
+        # HotFilesTool 需要 RecencyTracker 实例（引擎里才装配），这里没有 →
+        # 不硬凑一个，宁可少一项也不造假。
+        return [
+            BashTool(workdir=workdir),
+            FileReadTool(base_path=workdir),
+            FileEditTool(base_path=workdir),
+            GlobTool(base_path=workdir),
+            GrepTool(base_path=workdir),
+            SkillTool(workdir=workdir),
+        ]
+    except Exception as exc:  # noqa: BLE001 — 工具装配失败不能挡住配置生成
+        logger.warning(f"收集工具清单失败，本次工具签名为 0 个: {exc}")
+        return []
+
+
 @app.command(name="config")
 def config(
     web: bool = typer.Option(False, "--web", help="启动可视化 Web 配置界面"),
@@ -661,6 +811,7 @@ def config(
     report: bool = typer.Option(True, "--report/--no-report", help="显示配置优先级链报告（--no-report 关闭）"),
     generate: bool = typer.Option(False, "--generate", "-g", help="生成Clawd Code扩展配置"),
     generate_path: Path | None = typer.Option(None, "--path", "-p", help="配置输出路径"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     管理配置、API Key 和系统设置
@@ -669,22 +820,82 @@ def config(
         clawd config generate   - 动态生成并合并Clawd Code配置到Codex
     """
     if web:
+        if json_out:
+            # Web 界面是交互式长驻进程，没有"结果"可输出成 JSON；如实拒绝，不假装成功
+            from .command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=False,
+                    data={"error": "--json 不支持与 --web 组合（Web 配置界面是交互式进程）"},
+                    human="--json 不支持与 --web 组合",
+                    exit_code=2,
+                ),
+                as_json=True,
+            ))
         from ..cli.web_config import start_web_config
         start_web_config()
     elif reset:
         from ..core.config.injector import get_config_injector
         get_config_injector().clear_runtime_overrides()
+        if json_out:
+            from .command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(ok=True, data={"action": "reset", "scope": "runtime_overrides"}),
+                as_json=True,
+            ))
         console.print("[bold green]运行时覆盖配置已重置。[/bold green]")
     elif generate:
-        from ..core.config.generator import config_generate_command
-        config_generate_command(
+        from ..core.config.generator import (
+            TOOL_SIGNATURES_FILE,
+            ConfigGenerator,
+            config_generate_command,
+        )
+        merged = config_generate_command(
             config_path=generate_path,
             dry_run=False,
-            verbose=True,
+            verbose=not json_out,
+            tools=_config_generate_tool_pool(),
         )
+        if json_out:
+            from .command_result import CommandResult, emit
+
+            # 默认目标路径与 generator 内部一致（同一处推导，不另写一份常量）
+            target = (
+                str(generate_path)
+                if generate_path
+                else str(ConfigGenerator(project_root=Path.cwd()).claude_config_dir / "config.toml")
+            )
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=True,
+                    data={
+                        "action": "generate",
+                        "target": target,
+                        "keys": sorted(str(k) for k in (merged or {})),
+                        "tool_signatures_file": TOOL_SIGNATURES_FILE,
+                    },
+                ),
+                as_json=True,
+            ))
     elif report:
         from ..core.config.runtime import get_config_priority_report
-        console.print(get_config_priority_report())
+        report_text = get_config_priority_report()
+        if json_out:
+            from .command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=True,
+                    data={
+                        "report": report_text,
+                        "lines": [ln for ln in report_text.splitlines() if ln.strip()],
+                    },
+                ),
+                as_json=True,
+            ))
+        console.print(report_text)
         console.print("\n[yellow]提示: 使用 `clawd config --web` 可启动可视化中文配置界面[/yellow]")
 
 
@@ -1014,20 +1225,44 @@ def autonomy_revoke(
 @autonomy_app.command("list")
 def autonomy_list(
     workdir: Path | None = typer.Option(None, "--dir"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """查看当前预先放行的命令"""
     import json
 
+    from .command_result import CommandResult, emit
+
     path = _autonomy_dir(workdir) / "allow.json"
     if not path.is_file():
+        if json_out:
+            raise typer.Exit(emit(
+                CommandResult(ok=True, data={"commands": [], "count": 0}),
+                as_json=True,
+            ))
         console.print("[yellow]暂无预先放行[/yellow]")
         return
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        if json_out:
+            # 契约里错误也必须是合法 JSON（否则 `--json | jq` 直接崩）
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=False,
+                    data={"error": "allow.json 损坏", "path": str(path)},
+                    human="allow.json 损坏",
+                ),
+                as_json=True,
+            ))
         console.print("[red]allow.json 损坏[/red]")
         raise typer.Exit(code=1)
-    for cmd in data.get("commands") or []:
+    commands = list(data.get("commands") or [])
+    if json_out:
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={"commands": commands, "count": len(commands)}),
+            as_json=True,
+        ))
+    for cmd in commands:
         console.print(f"- {cmd}")
 
 
@@ -1059,15 +1294,47 @@ def autonomy_resume(
 def autonomy_log(
     tail: int = typer.Option(10, "--tail", "-n", help="显示最近多少条"),
     workdir: Path | None = typer.Option(None, "--dir"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """查看挂机的自主决策审计（每条都带中文理由）"""
     import json
 
+    from .command_result import CommandResult, emit
+
     path = _autonomy_dir(workdir) / "decisions.jsonl"
     if not path.is_file():
+        if json_out:
+            raise typer.Exit(emit(
+                CommandResult(ok=True, data={"entries": [], "count": 0}),
+                as_json=True,
+            ))
         console.print("[yellow]暂无审计记录[/yellow]")
         return
     lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+    if json_out:
+        entries: list[dict] = []
+        skipped = 0
+        for raw in lines[-tail:]:
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError:
+                skipped += 1  # 半行/损坏行不能静默丢掉，条数要如实报出来
+                continue
+            entries.append(entry if isinstance(entry, dict) else {"value": entry})
+        raise typer.Exit(emit(
+            CommandResult(
+                ok=True,
+                data={
+                    "entries": entries,
+                    "count": len(entries),
+                    "total_lines": len(lines),
+                    "skipped_lines": skipped,
+                },
+            ),
+            as_json=True,
+        ))
+
     for raw in lines[-tail:]:
         try:
             entry = json.loads(raw)
@@ -1141,6 +1408,7 @@ def collaborate_run(
 @app.command(name="permissions")
 def permissions_explain(
     rules: bool = typer.Option(False, "--rules", help="额外列出命令策略规则明细"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     权限与挂机的中文说明：审批模式 / 挂机级别 / 拒绝结论 / 受保护路径
@@ -1153,8 +1421,46 @@ def permissions_explain(
     from ..core.exec_policy import ExecPolicy
     from ..core.permissions import Effect, protected_reason
 
+    protected_samples = (
+        (".git/config", "版本控制目录内（会破坏可回滚性）"),
+        ("server.pem", "证书文件"),
+        ("id_rsa", "私钥文件"),
+        (".clawd_host_port", "含运行时令牌"),
+    )
+    approval_text = describe_approval_modes()
+
+    if json_out:
+        from .command_result import CommandResult, emit
+
+        payload: dict[str, object] = {
+            "approval_modes_text": approval_text,
+            "autonomy_levels": [
+                {"value": lv.value, "label": lv.label} for lv in AutonomyLevel
+            ],
+            "effects": [{"value": e.value, "label": e.label} for e in Effect],
+            "exec_decisions": [
+                {"value": d.value, "label": d.label} for d in ExecDecision
+            ],
+            "protected_paths": [
+                {"sample": sample, "reason": protected_reason(sample) or desc}
+                for sample, desc in protected_samples
+            ],
+        }
+        if rules:
+            policy = ExecPolicy()
+            payload["rules"] = [
+                {
+                    "prefix": " ".join(rule.prefix),
+                    "decision": rule.decision.value,
+                    "decision_label": rule.decision.label,
+                    "justification": rule.justification or "",
+                }
+                for rule in policy.rules
+            ]
+        raise typer.Exit(emit(CommandResult(ok=True, data=payload), as_json=True))
+
     console.print("[bold]一、审批模式（人盯着的时候用）[/bold]")
-    for line in describe_approval_modes().splitlines()[1:]:
+    for line in approval_text.splitlines()[1:]:
         console.print(line)
 
     console.print(chr(10) + "[bold]二、挂机级别（让 Agent 自己跑完时用）[/bold]")
@@ -1170,12 +1476,7 @@ def permissions_explain(
         console.print(f"- {decision.label}（{decision.value}）")
 
     console.print(chr(10) + "[bold]五、无论如何都不许工具改动的路径[/bold]")
-    for sample, desc in (
-        (".git/config", "版本控制目录内（会破坏可回滚性）"),
-        ("server.pem", "证书文件"),
-        ("id_rsa", "私钥文件"),
-        (".clawd_host_port", "含运行时令牌"),
-    ):
+    for sample, desc in protected_samples:
         reason = protected_reason(sample)
         console.print(f"- {sample}：{reason or desc}")
 
@@ -1472,12 +1773,16 @@ def eval_dataset(
         False, "--live", help="真实调用 agent（需 CLAWD_EVAL_ALLOW_PAID=1，会产生费用）"
     ),
     tolerance: float = typer.Option(0.0, "--tolerance", help="pass_rate 允许的下降幅度"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """
     运行 agent 评测数据集（默认 replay 模式，零成本、确定性）
 
     默认使用数据集里录制的输出做确定性断言（exact/contains/regex/tool_sequence），
     适合放进 CI 做 agent 行为回归。真实调用需显式 --live + 环境变量双闸。
+
+    退出码（两种输出模式一致）：0=通过 · 1=有用例失败/基线回归 · 2=配置或基线不可用
+    · 3=一条都没判定（无法给结论）
     """
     from ..eval import (
         compare_with_baseline,
@@ -1488,25 +1793,55 @@ def eval_dataset(
     )
     from ..eval.runner import EvalConfigError
 
+    def _finish(ok: bool, code: int, data: dict, human: str) -> None:
+        """统一收尾：`--json` 出契约、否则出人读正文；退出码两边一致"""
+        if json_out:
+            from .command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(ok=ok, data=data, human=human, exit_code=code),
+                as_json=True,
+            ))
+        if human:
+            console.print(human)
+        raise typer.Exit(code=code)
+
     try:
         cases = load_dataset(dataset)
     except EvalConfigError as e:
-        console.print(f"[bold red]数据集非法:[/bold red] {e}")
-        raise typer.Exit(code=1)
+        _finish(False, 1, {"error": f"数据集非法: {e}", "dataset": str(dataset)},
+                f"[bold red]数据集非法:[/bold red] {e}")
 
     try:
         report = run_dataset(
             cases, live=live, dataset_name=str(dataset)
         )
     except EvalConfigError as e:
-        console.print(f"[bold red]无法执行:[/bold red] {e}")
-        raise typer.Exit(code=2)
+        _finish(False, 2, {"error": f"无法执行: {e}", "dataset": str(dataset)},
+                f"[bold red]无法执行:[/bold red] {e}")
 
-    console.print(f"[bold]{report.summary_line()}[/bold]")
-    for outcome in report.failures:
-        console.print(f"  [red]FAIL[/red] {outcome.case_id}: {outcome.detail}")
-    for outcome in report.unknowns:
-        console.print(f"  [yellow]UNKNOWN[/yellow] {outcome.case_id}: {outcome.detail}")
+    data: dict = {
+        "dataset": str(dataset),
+        "mode": report.mode,
+        "total": report.total,
+        "passed": report.passed,
+        "failed": report.failed,
+        "unknown": report.unknown,
+        "determined": report.determined,
+        "pass_rate": report.pass_rate,
+        "summary": report.summary_line(),
+        "failures": [{"case_id": o.case_id, "detail": o.detail} for o in report.failures],
+        "unknowns": [{"case_id": o.case_id, "detail": o.detail} for o in report.unknowns],
+        "baseline_problems": [],
+        "baseline_written": None,
+    }
+
+    if not json_out:
+        console.print(f"[bold]{report.summary_line()}[/bold]")
+        for outcome in report.failures:
+            console.print(f"  [red]FAIL[/red] {outcome.case_id}: {outcome.detail}")
+        for outcome in report.unknowns:
+            console.print(f"  [yellow]UNKNOWN[/yellow] {outcome.case_id}: {outcome.detail}")
 
     exit_code = 0
 
@@ -1516,21 +1851,28 @@ def eval_dataset(
     if baseline is not None:
         if not Path(baseline).is_file() and save:
             # 首次建立基线：--save 与 --baseline 同时给出时允许文件还不存在
-            console.print(f"[yellow]基线尚不存在（{baseline}），本轮结果将作为初始基线写入[/yellow]")
+            data["baseline_first_run"] = True
+            if not json_out:
+                console.print(f"[yellow]基线尚不存在（{baseline}），本轮结果将作为初始基线写入[/yellow]")
         else:
             try:
                 baseline_data = load_baseline_strict(baseline)
             except (FileNotFoundError, ValueError) as e:
-                console.print(f"[bold red]基线不可用:[/bold red] {e}")
-                console.print("  （不能在没有基线的情况下宣称「无回归」）")
-                raise typer.Exit(code=2)
+                _finish(
+                    False,
+                    2,
+                    {**data, "error": f"基线不可用: {e}", "baseline": str(baseline)},
+                    f"[bold red]基线不可用:[/bold red] {e}\n  （不能在没有基线的情况下宣称「无回归」）",
+                )
             problems = compare_with_baseline(report, baseline_data, tolerance=tolerance)
+            data["baseline_problems"] = list(problems)
             if problems:
-                console.print("[bold red]基线回归:[/bold red]")
-                for problem in problems:
-                    console.print(f"  - {problem}")
                 exit_code = 1
-            else:
+                if not json_out:
+                    console.print("[bold red]基线回归:[/bold red]")
+                    for problem in problems:
+                        console.print(f"  - {problem}")
+            elif not json_out:
                 console.print("[green]基线比对通过（无回归）[/green]")
 
     if save:
@@ -1538,21 +1880,24 @@ def eval_dataset(
         try:
             written = save_baseline(report, target)
         except OSError as e:
-            console.print(f"[bold red]基线写入失败:[/bold red] {e}")
-            raise typer.Exit(code=2)
-        console.print(f"[green]基线已写入:[/green] {written}")
+            _finish(False, 2, {**data, "error": f"基线写入失败: {e}"},
+                    f"[bold red]基线写入失败:[/bold red] {e}")
+        data["baseline_written"] = str(written)
+        if not json_out:
+            console.print(f"[green]基线已写入:[/green] {written}")
 
     # 全都没判定 → 无法给出结论，用独立退出码（3）与"失败"(1) 区分开
     if report.determined == 0 and report.total:
-        console.print(
-            "[bold yellow]没有一条用例被真正判定[/bold yellow]："
-            "请补 recorded 数据或改用 --live。"
+        _finish(
+            False,
+            3,
+            {**data, "error": "没有一条用例被真正判定（请补 recorded 数据或改用 --live）"},
+            "[bold yellow]没有一条用例被真正判定[/bold yellow]：请补 recorded 数据或改用 --live。",
         )
-        raise typer.Exit(code=3)
 
     if report.failed:
         exit_code = exit_code or 1
-    raise typer.Exit(code=exit_code)
+    _finish(exit_code == 0, exit_code, data, "")
 
 
 def main():

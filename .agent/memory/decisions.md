@@ -1,5 +1,24 @@
 # Decisions
 
+## D-28 `--json` 契约只给"查询类"命令，交互式/长驻命令明确不给
+- 决策：`explore/pipeline/ralplan/quality-gate/config/permissions/agent/autonomy/role show/eval`
+  等查询类命令统一走 `CommandResult` 契约；`chat/run/serve/collaborate/workflow */session fork|title|resume`
+  **故意不提供** `--json`（README 里写明）。
+- 理由：交互式或长驻进程没有"一次性结果"可序列化；硬造一个等于假契约。
+- 代价：`workflow ralplan`（commands/ 下那份）与顶层 `ralplan` 并存，只有顶层有 `--json`。
+
+## D-29 机器可读模式 = 整条进程的约束（日志改道 stderr）
+- 决策：`src/utils/logger.py` 的控制台 handler 在 argv 含 `--json` 时走 **stderr**。
+- 理由：stdout 必须只有一行 JSON，`| jq` 才能活；日志是命令执行途中随时会出现的
+  （`config --generate` 记 "Discovered 63 skills"），只约束最后 print 挡不住。
+- 代价：`--json` 下人在终端看到的是混着 stderr 的日志（顺序可能交错），但不影响脚本消费。
+
+## D-30 视觉降级在**轮内**重试，不消耗 max_iterations
+- 决策：带图请求失败 → 剥图**原地重试一次**（engine_loop 内层 while），不再用外层 `continue`。
+- 理由：max_iterations=1 或最后一轮带图失败时，降级等于没生效（R6，用户拿不到任何回答）。
+- 代价：单轮最多 2 次 LLM 调用（带图失败 + 纯文本重试），比原实现多一次，但换来"一定能答"。
+
+
 ## D-xx 桌面端 bundle 以「真实 import 自检」为唯一验收
 - 决策：`prepare_host_bundle.py` 的 [5/5] 用**打包后的解释器**真实 import + `-m src --help`；
   缺依赖时从 venv 自动补齐并重试（≤30 轮），补不齐就中断打包。

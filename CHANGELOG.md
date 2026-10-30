@@ -7,6 +7,62 @@
 
 ---
 
+## [v0.89.0] (2026-10-31) — CLI `--json` 全覆盖（查询类）+ R6 + P3 台账清零
+
+### CLI：查询类命令全部接入 `--json` 契约（X-7 收尾）
+- 新接入 12 个命令：`explore / pipeline / ralplan / quality-gate / config(+--generate/--reset) /
+  permissions / agent list·show·keywords·intent / autonomy list·log / role show / eval`
+- 统一契约 `{ok, code, ...业务字段}`；**退出码等于 `code`**；错误也输出合法 JSON
+  （`agent show 不存在的名字 --json` → `ok:false` + exit 1，而不是中文报错混进 stdout）
+- `agent list --format json` 与 `--json` 合并为同一契约（裸数组形态废弃）
+- `--json` 时**日志整体改道 stderr**（`src/utils/logger.py`）：修"命令记一条 INFO，`| jq` 就崩"
+  —— 机器可读输出是整条进程的约束，不是最后 print 一下的事
+- 交互式/长驻命令（`chat/run/serve/collaborate/workflow *`）**故意不给** `--json`，README 写明边界
+- 新增 `tests/cli/test_json_contract_queries.py`（27 条）：逐命令契约 + stdout 纯净度 + 真落盘
+
+### R6（上轮如实未做项）：视觉降级改为**轮内**重试
+- 修前：带图请求失败 → 外层 `continue` 剥图重试，**吃掉一次迭代额度** ——
+  `max_iterations=1` 或最后一轮带图失败时，用户拿不到任何回答（降级等于没生效）
+- 修后：同一轮内原地重试（内层 while），`max_iterations` 不被降级消耗；
+  新增 loop 级测试钉住"同一轮内两次调用、只一条 assistant 消息"
+
+### P3 台账五项清零（v0.88.10 报告 §5 遗留）
+1. `generate_tool_signatures` 接上生产调用方：`clawd config --generate` 注入真实工具清单 →
+   `tool_signatures.json`（原子写）；报告如实显示"工具签名: N 个"；core 不越界 import（CLI 层注入）
+2. git 只读清单**单一来源**：`allowlist.py` 导出 18 项公开名；`bash_security.py` 删掉自己那份
+   12 项副本改为 import（修"同一条 `git show-ref` 两套判定结论相反"）
+3. `team_persistence._get_team_state_path()` 删死参数 `cwd`；公开 API 保留形参（兼容）并注明不参与路径
+4. `fast_mode` 把输出压到 1024 时**必须告知**：`SYSTEM_CONFIG_CHANGED` 告警事件（WS 广播 +
+   前端 trace 直接显示中文原因）；未截断不打扰；`FAST_MODE_MAX_TOKENS` 提为常量
+5. litellm 兜底价补 `cache_creation_input_token_cost` → `cache_write_price`
+   （原恒 0，Anthropic 系 cache write 比输入贵 1.25x，长期低估成本）
+
+### 工程化
+- **装机 E2E 入库**：`scripts/e2e_desktop_install.ps1`（装→版本/内嵌host/prompts校验→启动→API→
+  403 鉴权→真浏览器 UI E2E→重启持久化→无残留→卸载→注册表 0；退出码=失败项数）。
+  此前这条链路是会话里手打的一次性脚本，跑完即丢，每轮重拼还重复踩坑
+- `tests/cli/test_entrypoint_commands.py` 的两条 doctor 用例改为注入体检结果
+  （修"单独跑必红、整套跑被偷偷加载的 `.env` 掩盖"的环境依赖假红）
+- `docs/MAINTENANCE.md` 新增 §3.4「给命令加 --json」（七条要求 + 自查命令）；
+  §5.5 补"bump 版本后要删 `clawd_code.egg-info/`"（本轮实测：它盖过新 dist-info，
+  `importlib.metadata` 返回旧版本，版本一致性测试直接红）
+- `.agent/memory/` 更新 change-index / known-issues / decisions（D-28~30）
+
+### 验证（全部实跑）
+- 全量非 slow：**5440 passed / 7 skipped / 8 xfailed / 0 failed**（375.04s）；收集 **5464 / 0 errors**
+- 覆盖率 **66.27%**（38699/58394，门禁 60 生效）；静默吞异常 **155**（未回升）；可达 **503**（基线 501 未降）
+- 契约 39 passed；IMPORT-FAIL 0；core 边界 PASS；假成功扫描 0；MCP 启动 4/4；`verify_audit_p1` 28/28（文档数字同步后）
+- 真实端点：`e2e_smoke` **5/5** · `e2e_production` **8/8**（按 policy.md 最小配额）
+- 压测（本地 Host）：200 并发×10 轮 **QPS 2514 / P99 15.6ms / 错误率 0%**；300×5 QPS 1355 / 0%
+- `--json` 12 命令逐一实测：stdout 单行合法 JSON、退出码一致
+
+### 边界（不粉饰）
+- 正式代码签名仍需 CA 证书；真实视觉对话仍需支持 `image_url` 的端点（`scripts/probe_vision_endpoint.py` 可复现）
+- `workflow ralplan/team/ralph/autopilot`（命令组版本）与 `session fork/title/resume` 未接 `--json`（属长任务，见 D-28）
+- 装机 E2E 本轮静态审查 + 语法校验；真机安装链路见 `scripts/e2e_desktop_install.ps1` 的用法说明
+
+---
+
 ## [v0.88.10] (2026-10-30) — 采纳 Critic 的 P2 建议（5 项）+ 修 E2E 自身脆弱断言
 
 独立 Critic 除 P0/P1 外还列了 R4~R9。本轮落地 5 项，1 项如实不做（理由见下）。

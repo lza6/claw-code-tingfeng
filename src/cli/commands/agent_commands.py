@@ -6,8 +6,6 @@ Agent 相关命令：agent 列表、详情、执行代理任务
 
 from __future__ import annotations
 
-import json
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -25,6 +23,7 @@ console = Console()
 def list_agents(
     category: str | None = typer.Option(None, "--category", "-c", help="按分类筛选"),
     format: str = typer.Option("table", "--format", "-f", help="输出格式: table, json"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """列出所有可用 Agent"""
     from ...agent.definitions import AgentCategory
@@ -40,42 +39,86 @@ def list_agents(
             console.print(f"[bold red]无效分类:[/bold red] {category}")
             raise typer.Exit(1) from None
 
-    if format == "json":
-        # JSON 键名保持 camelCase（"modelClass"）以兼容既有下游脚本，
-        # 而 Python 侧属性已统一为 snake_case。两者刻意不同，勿"顺手"统一。
-        data = [
-            {
-                "name": a.name,
-                "description": a.description,
-                "category": a.category,
-                "tools": a.tools,
-                "modelClass": a.model_class,
-            }
-            for a in sorted(agents, key=lambda x: x.name)
-        ]
-        console.print(json.dumps(data, indent=2, ensure_ascii=False))
-    else:
-        table = Table(title="可用 Agents", show_header=True, header_style="bold magenta")
-        table.add_column("Name", style="cyan")
-        table.add_column("Description")
-        table.add_column("Category", style="green")
-        table.add_column("Tools", style="yellow")
+    # JSON 键名保持 camelCase（"modelClass"）以兼容既有下游脚本，
+    # 而 Python 侧属性已统一为 snake_case。两者刻意不同，勿"顺手"统一。
+    rows = [
+        {
+            "name": a.name,
+            "description": a.description,
+            "category": a.category,
+            "tools": a.tools,
+            "modelClass": a.model_class,
+        }
+        for a in sorted(agents, key=lambda x: x.name)
+    ]
 
-        for a in sorted(agents, key=lambda x: x.name):
-            table.add_row(a.name, a.description, a.category, a.tools)
+    if json_out or format == "json":
+        # 统一契约 {ok, code, agents, count}：此前 `--format json` 直出裸数组，
+        # 脚本只能猜结构；`--json` 与 `--format json` 共用同一份数据（同一契约，
+        # 不维护两套 JSON 形态）。
+        from ..command_result import CommandResult, emit
 
-        console.print(table)
+        raise typer.Exit(emit(
+            CommandResult(
+                ok=True,
+                data={"agents": rows, "count": len(rows), "category": category},
+            ),
+            as_json=True,
+        ))
+
+    table = Table(title="可用 Agents", show_header=True, header_style="bold magenta")
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+    table.add_column("Category", style="green")
+    table.add_column("Tools", style="yellow")
+
+    for a in sorted(agents, key=lambda x: x.name):
+        table.add_row(a.name, a.description, a.category, a.tools)
+
+    console.print(table)
 
 
 @app.command("show")
 def show_agent(
     name: str = typer.Argument(..., help="Agent 名称"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """显示单个 Agent 的详细信息"""
     agent = get_agent(name)
     if not agent:
+        if json_out:
+            from ..command_result import CommandResult, emit
+
+            raise typer.Exit(emit(
+                CommandResult(
+                    ok=False,
+                    data={"error": f"未找到 Agent: {name}", "name": name},
+                    human=f"未找到 Agent: {name}",
+                ),
+                as_json=True,
+            ))
         console.print(f"[bold red]未找到 Agent:[/bold red] {name}")
         raise typer.Exit(1)
+
+    if json_out:
+        from ..command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(
+                ok=True,
+                data={
+                    "name": agent.name,
+                    "description": agent.description,
+                    "category": agent.category,
+                    "routing_role": agent.routing_role,
+                    "model_class": agent.model_class,
+                    "reasoning_effort": agent.reasoning_effort,
+                    "tools": agent.tools,
+                    "posture": agent.posture,
+                },
+            ),
+            as_json=True,
+        ))
 
     console.print(f"\n[bold cyan]Agent:[/bold cyan] {agent.name}")
     console.print(f"[bold]Description:[/bold] {agent.description}")
@@ -88,7 +131,9 @@ def show_agent(
 
 
 @app.command("keywords")
-def list_keywords():
+def list_keywords(
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
+):
     """列出所有已注册的关键词及其触发的技能"""
     # 原实现从 intent_router 导入 `KEYWORD_TO_SKILL` —— 该符号从未存在，
     # 导致本模块导入即失败、整个 agent 命令组静默消失。
@@ -97,6 +142,23 @@ def list_keywords():
         KEYWORD_TRIGGER_DEFINITIONS,
         key=lambda t: (-t.priority, t.keyword),
     )
+
+    if json_out:
+        from ..command_result import CommandResult, emit
+
+        rows = [
+            {
+                "keyword": t.keyword,
+                "skill": t.skill,
+                "priority": t.priority,
+                "requires_intent": bool(t.requires_intent),
+            }
+            for t in triggers
+        ]
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={"keywords": rows, "count": len(rows)}),
+            as_json=True,
+        ))
 
     table = Table(title="技能关键词映射", show_header=True, header_style="bold magenta")
     table.add_column("Keyword", style="cyan")
@@ -119,12 +181,31 @@ def list_keywords():
 @app.command("intent")
 def classify_intent_cmd(
     text: str = typer.Argument(..., help="要分类的用户输入"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
 ):
     """对一段输入做意图分类（DELIVER/EXPLORE/EVOLVE/IMPLEMENT/DEBATE）"""
     from ...agent.intent_router import classify_intent_ranked, get_primary_intent
 
     primary = get_primary_intent(text)
     ranked = classify_intent_ranked(text)
+
+    if json_out:
+        from ..command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(
+                ok=True,
+                data={
+                    "text": text,
+                    "primary": str(getattr(primary, "value", primary)),
+                    "ranked": [
+                        {"intent": str(getattr(i, "value", i)), "score": score}
+                        for i, score in ranked
+                    ],
+                },
+            ),
+            as_json=True,
+        ))
 
     console.print(f"[bold cyan]主要意图:[/bold cyan] {primary}")
     if ranked:

@@ -669,6 +669,18 @@ def _litellm_pricing(model_name: str) -> "ModelPricing | None":
     为什么需要它：自有 `MODEL_PRICING` 是手写快照，写死 `PRICING_VERSION` 后会长期过期
     （实测过期 172 天，每条 CLI 都警告，成本护栏按旧价估算）。litellm 自带 4500+ 模型价格
     且随包升级而更新，用它兜底比"人工记得去核价"可靠得多；自有表仍优先（可放自有报价）。
+
+    字段映射（都用 litellm `model_cost` 的原始字段名，实测存在于当前版本）：
+    - `input_cost_per_token` → `input_price`
+    - `output_cost_per_token` → `output_price`
+    - `cache_read_input_token_cost` → `cache_read_price`
+    - `cache_creation_input_token_cost` → `cache_write_price`
+    - `output_cost_per_reasoning_token` → `reasoning_price`
+
+    **缺字段 = 该项不单独计价**（价格留 0.0，而不是瞎猜一个等于输入价的值）。
+    例如很多模型没有 `cache_creation_input_token_cost`（不支持显式缓存写入），
+    这时 `cache_write_price` 就是 0.0，`estimate_cost()` 里缓存写 token 不产生费用 ——
+    这是"不知道就不编"的取舍，与命中自有表时同样处理。
     """
     if not model_name:
         return None
@@ -690,12 +702,16 @@ def _litellm_pricing(model_name: str) -> "ModelPricing | None":
         if inp is None and out is None:
             continue
         cache_read = info.get("cache_read_input_token_cost")
+        # 缓存写价 / 推理价以前写死 0.0：等于"用了缓存写入就一定不花钱"，
+        # 而 Anthropic 系的 cache write 比普通输入还贵（1.25x），长期低估成本。
+        cache_write = info.get("cache_creation_input_token_cost")
+        reasoning = info.get("output_cost_per_reasoning_token")
         return ModelPricing(
             input_price=float(inp or 0.0) * 1_000_000,
             output_price=float(out or 0.0) * 1_000_000,
             cache_read_price=float(cache_read) * 1_000_000 if cache_read else 0.0,
-            cache_write_price=0.0,
-            reasoning_price=0.0,
+            cache_write_price=float(cache_write) * 1_000_000 if cache_write else 0.0,
+            reasoning_price=float(reasoning) * 1_000_000 if reasoning else 0.0,
         )
     return None
 

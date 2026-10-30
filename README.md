@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.88.10 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.89.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -126,6 +126,27 @@ clawd chat --role concise        # 用指定角色开聊；桌面端在输入框
 > `clawd review` 的裁决是确定性解析出来的（不是让模型自己说"通过"），
 > 角色模板来自 `prompts/agents/*.md`（已随 wheel 与桌面安装包一起发布）；
 > `.env` / `*.pem` / `id_rsa` 等密钥类文件**不会**发给模型。
+
+**脚本/CI 消费输出（`--json` 契约，v0.89.0 覆盖全部查询类命令）**：
+```bash
+clawd agent list --json        # 30 个 agent 的机器可读清单
+clawd catalog list --json      # 技能/Agent 清单
+clawd permissions --json       # 审批模式 / 挂机级别 / 命令策略 / 受保护路径
+clawd config --json            # 配置优先级链
+clawd explore "<目标>" --json  # 只读探索结果（findings 是纯文本字段）
+clawd pipeline "<目标>" --json # 三阶段流水线的状态/耗时/各阶段结果
+clawd ralplan "<目标>" --json  # 共识计划（confidence/tasks/risks/方案）
+clawd quality-gate --json      # 质量门：overall + 逐项结果（失败项只带尾部 20 行）
+clawd eval <数据集> --json      # 评测汇总（pass_rate/failures/unknowns/基线回归）
+clawd autonomy list|log --json # 挂机预授权与决策审计
+clawd doctor --json            # 环境体检
+```
+
+> 统一契约 `{ok, code, ...业务字段}`，**退出码等于 `code`**；错误也输出合法 JSON
+> （`ok=false` + `code>=1`），所以 `clawd <cmd> --json | jq` 任何时候都不会崩。
+> 输出要求见 `docs/MAINTENANCE.md` §3.4。**只读/长任务/变更类命令**（`chat`/`run`/`serve`/
+> `collaborate`/`workflow *`/`session fork|title|resume`）**故意不提供** `--json`：
+> 它们是交互式或长驻进程，没有"一次性结果"可序列化。
 
 ## 🧩 多引擎整合（v0.64.0 新增）
 
@@ -440,20 +461,20 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5389 passed / 9 skipped / 8 xfailed / 0 failed**（2026-10-30 v0.88.10 实测，443.07s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5389 passed / 0 failed / 7 分 23 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5415 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5440 passed / 7 skipped / 8 xfailed / 0 failed**（2026-10-31 v0.89.0 实测，375.04s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5440 passed / 0 failed / 6 分 15 秒**（同一命令，v0.89.0 实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5464 / 0 errors**（2026-10-31 v0.89.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
-| 覆盖率 | **66.15%**（2026-10-30 v0.88.8 实测，38499/58196 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
+| 覆盖率 | **66.27%**（2026-10-31 v0.89.0 实测，38699/58394 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **501**（2026-10-30 v0.88.1 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **503**（2026-10-31 v0.89.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
 | 静默吞异常 | **155**（AST 口径，门禁 ≤155），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 155` |
-| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | 上一轮实跑（退出码 0）；v0.76.5 未跑：真实 LLM 端点属付费红线 |
+| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | v0.89.0 实跑（退出码 0；真实端点按 policy.md 最小配额） |
 | 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
 
 > 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。

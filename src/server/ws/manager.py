@@ -47,6 +47,9 @@ class WSManager:
             EventType.AGENT_TASK_STARTED,
             EventType.AGENT_TASK_COMPLETED,
             EventType.AGENT_TASK_ERROR,
+            # 运行时配置被改（如快速模式把 max_tokens 压到 1024 → 回答被截断）：
+            # 属于「用户必须知道，否则只能看到现象猜原因」的告知类事件，故纳入广播。
+            EventType.SYSTEM_CONFIG_CHANGED,
         }
         # 其余事件类型统一按 step 推送（工具调用/LLM 轮次等）
         try:

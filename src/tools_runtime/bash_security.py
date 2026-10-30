@@ -11,6 +11,11 @@ import shutil
 import sys
 from pathlib import Path
 
+# 「git 只读子命令」只认一个来源：src/core/security/allowlist.py。
+# 这里原先自己写了一份 12 项的副本，与 core 的 18 项不一致（缺 shortlog /
+# show-ref / reflog / for-each-ref …）→ 同一条命令在 bash_security 判"可执行"、
+# 在 core 的 validate 判"不允许"。对外名字保持不变，调用方无需改动。
+from ..core.security.allowlist import READ_ONLY_GIT_SUBCOMMANDS
 from .bash_constants import (
     _WINDOWS_BUILTIN_COMMANDS,
     _WINDOWS_DANGEROUS_CHARS,
@@ -62,10 +67,8 @@ READ_ONLY_ROOT_COMMANDS = {
     'stat', 'tail', 'tree', 'uniq', 'wc', 'which', 'where', 'whoami',
 }
 
-READ_ONLY_GIT_SUBCOMMANDS = {
-    'blame', 'branch', 'cat-file', 'diff', 'grep', 'log', 'ls-files',
-    'remote', 'rev-parse', 'show', 'status', 'describe',
-}
+# 注意：`READ_ONLY_GIT_SUBCOMMANDS` 这个公开名字由上面那行 import 提供，
+# 这里**故意不再赋值一份**（复制就是两份清单会再次漂移的根因）。
 
 BLOCKED_GIT_REMOTE_ACTIONS = {'add', 'remove', 'rename', 'set-url', 'prune', 'update'}
 BLOCKED_GIT_BRANCH_FLAGS = {'-d', '-D', '--delete', '--move', '-m'}

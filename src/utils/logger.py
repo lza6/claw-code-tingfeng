@@ -149,6 +149,18 @@ def _make_utf8_stream_handler(stream) -> logging.StreamHandler:
         return logging.StreamHandler(stream)
 
 
+def _wants_machine_output(argv: list[str] | None = None) -> bool:
+    """本次进程是否要求"纯机器可读输出"（CLI 传了 `--json`）
+
+    为什么日志要避开 stdout：`clawd <cmd> --json | jq` 的前提是 **stdout 只有一行 JSON**。
+    日志默认打 stdout，只要命令内部记一条 INFO（例如 `config --generate` 会记
+    "Discovered 63 skills"），管道里就多出几行字，`jq` 直接报解析错。
+    因此 `--json` 模式下把控制台日志整体改道 stderr —— 人仍然看得见，脚本不受污染。
+    """
+    args = sys.argv if argv is None else argv
+    return "--json" in args
+
+
 def setup_logging(level: int = logging.INFO, log_file: str | None = None):
     """Initialize structured logging."""
     root_logger = logging.getLogger()
@@ -158,7 +170,9 @@ def setup_logging(level: int = logging.INFO, log_file: str | None = None):
         root_logger.removeHandler(handler)
 
     # Console Handler (Human-readable, UTF-8 safe)
-    console = _make_utf8_stream_handler(sys.stdout)
+    # `--json` 模式改道 stderr：保证 stdout 只有 JSON（见 `_wants_machine_output`）。
+    console_stream = sys.stderr if _wants_machine_output() else sys.stdout
+    console = _make_utf8_stream_handler(console_stream)
     console.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
     root_logger.addHandler(console)
 

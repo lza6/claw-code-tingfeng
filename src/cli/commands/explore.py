@@ -226,9 +226,16 @@ def explore_command(
     goal: str,
     depth: int = 2,
     output_format: str = "markdown",
-) -> None:
-    """CLI 命令: clawd explore <goal>"""
+    as_json: bool = False,
+) -> dict:
+    """CLI 命令: clawd explore <goal>
+
+    返回探索结果字典（`{goal, format, findings}`）：`--json` 与终端渲染共用同一份数据，
+    不再"边跑边打印"，脚本才能消费（X-7 契约 `{ok, code, ...}`）。
+    """
     import asyncio
+
+    from ..command_result import CommandResult, emit
 
     config = ExploreConfig(
         goal=goal,
@@ -238,12 +245,19 @@ def explore_command(
 
     mode = ExploreMode(Path.cwd(), config)
 
-    async def _run():
+    async def _run() -> dict:
         result = await mode.run()
-        console.print("\n[bold green]探索完成![/bold green]")
-        console.print(Panel(result.findings, title="探索结果"))
+        return {"goal": goal, "format": output_format, "findings": result.findings or ""}
 
-    asyncio.run(_run())
+    payload = asyncio.run(_run())
+
+    if as_json:
+        emit(CommandResult(ok=True, data=payload), as_json=True)
+        return payload
+
+    console.print("\n[bold green]探索完成![/bold green]")
+    console.print(Panel(payload["findings"], title="探索结果"))
+    return payload
 
 
 def setup_explore_command(app: typer.Typer) -> None:
@@ -258,9 +272,10 @@ def setup_explore_command(app: typer.Typer) -> None:
             "markdown", "--format", "-f",
             help="输出格式: markdown, tree, json"
         ),
+        json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
     ):
         """只读探索模式 - 分析代码库而不修改"""
-        explore_command(goal=goal, depth=depth, output_format=format)
+        explore_command(goal=goal, depth=depth, output_format=format, as_json=json_out)
 
 
 __all__ = [

@@ -101,3 +101,56 @@ class TestTeamStatePersisted:
 
         assert (tmp_path / "data" / "state" / "team-state.json").is_file()
         assert not (work / ".clawd" / "state").exists(), "不应再往 cwd 的 .clawd 里写"
+
+
+class TestCwdIsNotAPathInput:
+    """P3 项 3：`cwd` 曾是死参数（函数体从不使用，传什么都不影响落盘位置）
+
+    以前 `_get_team_state_path(cwd=".", session_id=None)` 收下 cwd 就扔了 ——
+    读代码的人会以为"传 cwd 能改落盘目录"，实际不能（本项目已知陷阱表里
+    「参数被接受但被忽略」的实例）。修法：内部函数删掉 cwd，公开函数保留形参
+    纯为兼容，并在 docstring 里写明它不参与路径计算。
+    """
+
+    def test_different_cwd_writes_to_the_same_state_file(self, isolated_state):
+        from src.workflow import team_persistence as tp
+
+        cwd_a = isolated_state / "proj-a"
+        cwd_b = isolated_state / "proj-b"
+        cwd_a.mkdir()
+        cwd_b.mkdir()
+
+        state = tp.TeamStateData(team_id="t1", task="同一个团队")
+        assert tp.write_team_state(state, cwd=str(cwd_a)) is True
+        assert tp.write_team_state(state, cwd=str(cwd_b)) is True
+
+        expected = _state_file(isolated_state)
+        assert expected.is_file(), f"状态应落在数据目录: {expected}"
+        # 传不同 cwd 不得在各自 cwd 下另开一份
+        assert not (cwd_a / ".clawd" / "state").exists()
+        assert not (cwd_b / ".clawd" / "state").exists()
+
+    def test_private_path_helper_has_no_cwd_parameter(self):
+        import inspect
+
+        from src.workflow.team_persistence import _get_team_state_path
+
+        params = list(inspect.signature(_get_team_state_path).parameters)
+        assert params == ["session_id"], f"私有路径函数不该再收 cwd: {params}"
+
+    def test_public_api_keeps_cwd_but_documents_it_as_compat_only(self):
+        import inspect
+
+        from src.workflow import team_persistence as tp
+
+        for fn in (
+            tp.read_team_state,
+            tp.write_team_state,
+            tp.add_team_member,
+            tp.remove_team_member,
+            tp.update_member_status,
+            tp.add_team_message,
+            tp.get_team_messages,
+        ):
+            assert "cwd" in inspect.signature(fn).parameters, f"{fn.__name__} 丢了 cwd（破坏兼容）"
+            assert "仅为兼容保留" in (fn.__doc__ or ""), f"{fn.__name__} 没写明 cwd 不参与落盘路径"

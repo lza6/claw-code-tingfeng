@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from .auth import AuthManager
 
 
+#: 快速模式下允许的输出上限。压到这么小必然可能截断，所以**压了就一定告知用户**
+#: （见 `_handle_run`：以前只改 max_tokens、一句话不说，用户只看到回答变短）。
+FAST_MODE_MAX_TOKENS = 1024
+
+
 # ------------------------------------------------------------------
 # 响应构建工具
 # ------------------------------------------------------------------
@@ -308,7 +313,29 @@ class MessageRouter:
             if reasoning_effort in temp_map:
                 overrides['temperature'] = temp_map[reasoning_effort]
             if fast_mode:
-                overrides['max_tokens'] = min(int(getattr(base_cfg, 'max_tokens', 4096) or 4096), 1024)
+                requested_max_tokens = int(getattr(base_cfg, 'max_tokens', 4096) or 4096)
+                overrides['max_tokens'] = min(requested_max_tokens, FAST_MODE_MAX_TOKENS)
+                if requested_max_tokens > FAST_MODE_MAX_TOKENS:
+                    # 真的发生了截断才告知，原本就 <= 1024 的不发（否则就是噪声）。
+                    # 事件走既有 EventBus → WS 广播（ws/manager 已订阅 SYSTEM_CONFIG_CHANGED），
+                    # 前端在 trace 里能看到原因，不用猜"为什么回答这么短"。
+                    notice = (
+                        f'快速模式已把输出上限从 {requested_max_tokens} 压到 '
+                        f'{FAST_MODE_MAX_TOKENS}，回答可能被截断；'
+                        '需要完整长回答请关闭快速模式'
+                    )
+                    self.logger.warning(notice)
+                    self.event_bus.publish(Event(
+                        type=EventType.SYSTEM_CONFIG_CHANGED,
+                        data={
+                            'level': 'warning',
+                            'reason': 'fast_mode_output_truncation',
+                            'requested_max_tokens': requested_max_tokens,
+                            'applied_max_tokens': FAST_MODE_MAX_TOKENS,
+                            'notice': notice,
+                        },
+                        source='websocket_server',
+                    ))
             try:
                 llm_config_from_msg = _dc_replace(base_cfg, **overrides)
             except TypeError:
