@@ -21,9 +21,49 @@ def catalog_list(
     skills_only: bool = typer.Option(False, "--skills", "-s", help="只显示技能"),
     agents_only: bool = typer.Option(False, "--agents", "-a", help="只显示 Agent"),
     active_only: bool = typer.Option(False, "--active", help="只显示活跃项"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
 ):
-    """列出技能和 Agent 清单"""
+    """列出技能和 Agent 清单（`--json` 输出结构化清单，便于脚本/CI）"""
     catalog = get_catalog()
+
+    agents_data = [
+        {
+            "name": a.name,
+            "category": a.category,
+            "status": a.status,
+            "canonical": a.canonical or "",
+        }
+        for a in catalog.agents
+        if not active_only or a.status == "active"
+    ]
+    skills_data = [
+        {
+            "name": sk.name,
+            "category": sk.category,
+            "status": sk.status,
+            "core": bool(sk.core),
+            "canonical": sk.canonical or "",
+        }
+        for sk in catalog.skills
+        if not active_only or sk.status == "active"
+    ]
+    if json_out:
+        from ..command_result import CommandResult, emit
+
+        # 尊重 --skills / --agents 过滤（与终端输出保持一致）
+        if skills_only:
+            agents_data = []
+        if agents_only:
+            skills_data = []
+
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={
+                "agents": agents_data,
+                "skills": skills_data,
+                "count": len(agents_data) + len(skills_data),
+            }),
+            as_json=True,
+        ))
 
     if not skills_only:
         table = Table(title="Agent 清单", show_header=True, header_style="bold magenta")
@@ -32,14 +72,12 @@ def catalog_list(
         table.add_column("Status", style="yellow")
         table.add_column("Canonical", style="dim")
 
-        for agent in catalog.agents:
-            if active_only and agent.status != "active":
-                continue
+        for agent in agents_data:
             table.add_row(
-                agent.name,
-                agent.category,
-                agent.status,
-                agent.canonical or "",
+                agent["name"],
+                agent["category"],
+                agent["status"],
+                agent["canonical"],
             )
         console.print(table)
         console.print()
@@ -52,27 +90,42 @@ def catalog_list(
         table.add_column("Core", style="red")
         table.add_column("Canonical", style="dim")
 
-        for skill in catalog.skills:
-            if active_only and skill.status != "active":
-                continue
+        for skill in skills_data:
             table.add_row(
-                skill.name,
-                skill.category,
-                skill.status,
-                "★" if skill.core else "",
-                skill.canonical or "",
+                skill["name"],
+                skill["category"],
+                skill["status"],
+                "★" if skill["core"] else "",
+                skill["canonical"],
             )
         console.print(table)
 
 
 @app.command("show")
-def catalog_show(name: str = typer.Argument(..., help="技能或Agent名称")):
-    """显示单个技能或Agent的详细信息"""
+def catalog_show(
+    name: str = typer.Argument(..., help="技能或Agent名称"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+):
+    """显示单个技能或 Agent 的详细信息（`--json` 输出结构化结构）"""
     catalog = get_catalog()
+
+    def _emit(kind: str, item: dict) -> None:
+        if not json_out:
+            return
+        from ..command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={"kind": kind, **item}),
+            as_json=True,
+        ))
 
     # 先查找技能
     for skill in catalog.skills:
         if skill.name == name:
+            _emit("skill", {
+                "name": skill.name, "category": skill.category, "status": skill.status,
+                "core": bool(skill.core), "canonical": skill.canonical or "",
+            })
             console.print(f"\n[bold cyan]Skill:[/bold cyan] {skill.name}")
             console.print(f"  Category: {skill.category}")
             console.print(f"  Status: {skill.status}")
@@ -83,12 +136,23 @@ def catalog_show(name: str = typer.Argument(..., help="技能或Agent名称")):
     # 再查找 Agent
     for agent in catalog.agents:
         if agent.name == name:
+            _emit("agent", {
+                "name": agent.name, "category": agent.category, "status": agent.status,
+                "canonical": agent.canonical or "",
+            })
             console.print(f"\n[bold cyan]Agent:[/bold cyan] {agent.name}")
             console.print(f"  Category: {agent.category}")
             console.print(f"  Status: {agent.status}")
             console.print(f"  Canonical: {agent.canonical or 'n/a'}")
             return
 
+    if json_out:
+        from ..command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(ok=False, data={"message": f"未找到: {name}"}, human=f"未找到: {name}"),
+            as_json=True,
+        ))
     console.print(f"[bold red]未找到:[/bold red] {name}")
 
 
