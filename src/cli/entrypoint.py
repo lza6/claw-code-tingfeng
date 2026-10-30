@@ -222,7 +222,6 @@ def role_list(
     as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
 ):
     """列出可用角色（来自 <项目>/personas、当前目录/personas、~/.clawd/personas）"""
-    import json as _json
 
     from rich.table import Table
 
@@ -230,8 +229,12 @@ def role_list(
 
     items = personas_report()
     if as_json:
-        typer.echo(_json.dumps(items, ensure_ascii=False))
-        raise typer.Exit(code=0)
+        from .command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={"personas": items, "count": len(items)}),
+            as_json=True,
+        ))
     if not items:
         console.print("[yellow]没有找到任何角色[/yellow]")
         console.print("  查找路径: " + ", ".join(str(d) for d in search_dirs()))
@@ -784,8 +787,13 @@ def session_list(
     # 用桥接层：引擎侧与会话侧两套格式都能读（此前只读一套 → 引擎写的会话看不见）
     rows = [v.to_dict() for v in list_all(sessions_dir)]
     if json_out:
-        console.print_json(data=rows)
-        return
+        # 统一契约：{ok, code, sessions, count}（此前是裸数组，脚本只能猜结构）
+        from .command_result import CommandResult, emit
+
+        raise typer.Exit(emit(
+            CommandResult(ok=True, data={"sessions": rows, "count": len(rows)}),
+            as_json=True,
+        ))
     if not rows:
         console.print("[yellow]暂无已保存会话[/yellow]")
         return

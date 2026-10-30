@@ -46,7 +46,11 @@ class TestSessionList:
         result = invoke("list", "--json", "--dir", str(sdir))
         assert result.exit_code == 0
         import json as _json
-        rows = _json.loads(result.output)
+        payload = _json.loads(result.output)
+        # 统一契约：{ok, code, sessions, count}（v0.88.6 起不再是裸数组）
+        assert payload["ok"] is True and payload["code"] == 0
+        rows = payload["sessions"]
+        assert payload["count"] == len(rows) >= 1
         assert rows[0]["session_id"] == "root"
         assert rows[0]["title"] == "原始会话"
 
