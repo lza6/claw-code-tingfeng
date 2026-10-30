@@ -98,6 +98,31 @@
       "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 300 --rounds 5",
       "exit_code": 0,
       "summary": "300/300 成功 · QPS 1355 · P99 15.2ms · 错误率 0%"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/baseline.py --out .clawd/baseline.json",
+      "exit_code": 0,
+      "summary": "版本三处一致 0.89.0 · ruff hard ok · 静默 155 · 覆盖率 66.27 · 收集 5464/0 · IMPORT 0 · 可达 503"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/prepare_host_bundle.py",
+      "exit_code": 0,
+      "summary": "[5/5] 自检全过（自动补齐 exceptiongroup/fastuuid/attr），bundle 304MB"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/build_desktop_signed.ps1 -SelfSigned",
+      "exit_code": 0,
+      "summary": "Setup 0.89.0 + Portable 0.89.0 构建并自签名（Status=UnknownError 属自签名预期）"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/e2e_desktop_install.ps1（首跑，全量含 UI）",
+      "exit_code": 0,
+      "summary": "32/33 PASS，唯一 FAIL=$home 保留变量 bug（脚本自身）→ 改名后重跑 -SkipUi **0 失败**；STEP2b UI E2E 32/32"
+    },
+    {
+      "cmd": "docker build --target builder -t clawd-req-test .",
+      "exit_code": 0,
+      "summary": "requirements.txt otel-logging 修复后本地 docker 构建通过（镜像已清理）"
     }
   ],
   "files_changed": [
@@ -130,7 +155,11 @@
     "workflow_status.md",
     ".agent/memory/change-index.md",
     ".agent/memory/known-issues.md",
-    "pyproject.toml / desktop/package.json（0.88.10 → 0.89.0）"
+    "pyproject.toml / desktop/package.json（0.88.10 → 0.89.0）",
+    "requirements.txt",
+    ".pre-commit-config.yaml",
+    "scripts/detect_api_keys.py",
+    ".github/workflows/validate-plugin.yml"
   ],
   "coverage_summary": {
     "percent": 66.27,
