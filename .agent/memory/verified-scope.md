@@ -1,5 +1,29 @@
 # 已验证范围（避免重复跑同一验证）
 
+## 2026-10-31 v0.89.0 复核（全部实测）
+
+| 指标 | 实测值 | 命令 |
+|:---|:---|:---|
+| 版本一致性 | 0.89.0 三处一致（pyproject / CLI / dist-info） | `scripts/baseline.py` |
+| 全量回归（not slow） | **5440 passed / 7 skipped / 8 xfailed / 0 failed**（375s） | `pytest tests/ -q -m "not slow"` |
+| 收集 | **5464 / 0 errors** | `pytest --collect-only -q` |
+| 覆盖率 | **66.27%**（38699/58394） | `pytest --cov=src` |
+| ruff 硬指标（全仓） | All passed（含 Ghidra per-file-ignore 后） | `ruff check . --select F821,F811,E9` |
+| 静默吞异常 | 155（门禁 ≤155） | `check_silent_except.py --fail-over 155` |
+| 生产可达 | **503** / 完全不可达 25 | `reachability.py --min-reachable 443` |
+| 导入扫描 | 604/604 OK, FAIL 0 | `import_sweep.py --strict-exit` |
+| 契约 | 39 passed | `pytest tests/contracts -q` |
+| audit 台账 | **28/28** | `verify_audit_p1.py` |
+| MCP 启动 | 4/4 | `check_mcp_startup.py` |
+| 假成功扫描 | 0 命中 | `scan_fake_success.py` |
+| doc 漂移 | 全一致 | `check_doc_drift.py` |
+| 真实 E2E | e2e_smoke **5/5** · e2e_production **8/8** | 真实端点（policy.md 配额内） |
+| 压测 | 200×10 QPS 2514 / P99 15.6ms / 0%；300×5 QPS 1355 / 0% | `stress_host.py` |
+| CLI --json | 12 新命令 stdout 单行合法 JSON、退出码一致 | `-m src <cmd> --json` 逐一 |
+| 装机 E2E | 0 失败（首跑 32/33，$home 保留变量修后全绿） | `e2e_desktop_install.ps1` |
+| docker 构建 | requirements 修复后本地 build 通过 | `docker build --target builder .` |
+
+
 ## 2026-10-27
 | 验证项 | 命令 | 结果 | 时间戳 |
 |--------|------|------|--------|
