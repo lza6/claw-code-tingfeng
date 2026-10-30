@@ -1,10 +1,10 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.88.6 死码清理 + X-7 地基**（2026-10-30）：完全不可达 33→26（5904→4058 行），生产可达 500 未下降；新增 CLI 输出契约 CommandResult + 10 条契约测试；全量 5357 passed/0 failed · 收集 5394 · 静默 155 · core_surface 存量 0
+> 状态: **v0.88.6 死码清理 + X-7 地基**（2026-10-30）：完全不可达 33→26（5904→4058 行），生产可达 501 未下降；新增 CLI 输出契约 CommandResult + 10 条契约测试；全量 5357 passed/0 failed · 收集 5394 · 静默 155 · core_surface 存量 0
 
 ## 下一轮待办（已闭环 / 待外部条件）
 > 《下一步改进指南》对账结果（v0.88.5）：**P1 6/6 · P2 9/10 · 批次 M1~M5/G1~G4 已接线**，
-> 只剩「正式代码签名（需 CA）」与「110 个不可达模块（需单轮 + reachability 复核）」。
+> 只剩「正式代码签名（需 CA）」与「X-7 逐命令接 --json」（地基与 2 个命令已完成，见下）。
 
 - ~~真多模态视觉输入~~ **v0.87.0 落地 + v0.88.4 实测定性**（26 条测试）：
   强试（`CLAWD_VISION=1`）打出两个真 bug 并修好 —— ①`message_truncator.count_tokens()` 把
@@ -20,8 +20,15 @@
 - ~~P2-2 定价表过期 172 天~~ **v0.88.5 已修**（`resolve_pricing()`：自有表 → litellm 内置 → 默认价）
 - ~~P2-6 Python 无锁文件~~ **v0.88.5 已加** `requirements.lock`（149 精确版本）
 - ~~P2-5 更新源占位地址~~ **已确认保持未配置**（UI 明确提示"更新源未配置"，不静默失败）
-- **110 个不可达模块**（33 个完全不可达）：按"发现死码只提示不删"的约定登记，
-  删除需单独一轮 + reachability 复核（当前门禁 ≥443，实测 500）
+- **死码（v0.88.6 已清理一轮）**：完全不可达 33→**26**（5904→4058 行）、可达 501 未下降。
+  删除：`async_executor.py`(606) + `team/state/*` 六模块(1198)。**保留**：`src/hooks/*`（ADR 0019
+  参考快照）、`agent/modes/*` + `agent/mailbox.py`（未接线但属真实能力）、未接线的两个 stage、
+  各包 `__init__.py`（"包不可达"只是没人直接 import 包本身，子模块是活的）
+- **X-7 全命令 `--json`（进行中）**：契约地基 `src/cli/command_result.py` + 10 条契约测试已完成；
+  `session list` / `role list` 已统一。剩余清单：`entrypoint` 35 个命令里 10 个有 `--json`、
+  25 个没有（其中约 13 个查询类真正需要：`show`/`doctor`/`explore`/`pipeline`/`ralplan`/
+  `quality-gate`/`config`/autonomy 的 `list·log·permissions`）。`doctor` 需先把
+  `_handle_doctor()` 从"边查边打印"重构为"先收集再渲染"
 - **正式代码签名**：需 CA 证书（现在是自签名，`Status=UnknownError` 属预期）
 
 ## 桌面端进度（DSH 模式 + Electron）
