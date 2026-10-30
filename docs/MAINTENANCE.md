@@ -212,6 +212,10 @@ python -c "import importlib.metadata as m; print(m.version('clawd-code'))"
 | 安装版停在"首次配置"窗口、Host 不启动 | 正常行为：`userData/.env` 不存在时会先引导填 API。自动化必须先预置 `.env`，否则会卡在这里（装机 E2E 的 STEP1b 就是干这个） |
 | 装机 E2E 报"连不上/落盘 0" | 先怀疑脚本：userData 目录是 `clawd-desktop`（package.json `name`，不是 productName）；探针文件必须写进**当前项目**目录 |
 | 模型说"我没有可用的 FileReadTool" | 不是工具没了（打包版注册 7 个且能执行）：`prepare_host_bundle.py` 的 [5/5] 会真实执行一次 FileReadTool。模型遵从性不记在产品账上 |
+| `from .models import X` 突然 ImportError，但 models.py 明明有 X | 是不是有人新建了**同名目录** `models/`？Python 里包优先于同名模块，整个包会被静默劫持（v0.88.4 真实踩到）。新增子包前先 `ls` 目标目录 |
+| 治理清单里"待迁移"的依赖，改完照样报错 | 先验证**依赖是否真的存在**：`core_surface_allow.json` 曾有 3 条指向全仓库不存在的名字（死引用，靠 `except ImportError` 活着）。不存在的不是迁移对象，是该删的死引用 |
+| 传图后报 `a bytes-like object is required, not 'list'` | 有代码把多模态 `content`（块列表）当字符串用；`message_truncator.count_tokens` 踩过，用 `_content_text()` 归一化 |
+| 传图后报 `APIConnectionError` / `Connection error` 而不是 400 | 有些端点拒绝 `image_url` 的方式是**直接断连**。用 `scripts/probe_vision_endpoint.py` 直连对比（纯文本 vs 带图）确认端点能力；产品侧已实现"带图失败自动降级纯文本重试一次" |
 
 **排查原则（2026-10-30 三次假阴性换来的）**：断言要分层 —— 确定性事实（能 import、能执行、文件落盘、
 接口返回结构）做门禁；依赖模型/外部行为的（"模型是否按预期调工具"）只做信息输出。

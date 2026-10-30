@@ -30,3 +30,31 @@
 
 - 当 core 文件数继续增长到 > 200，或再出现 3 处以上新越界时，应启动真正的拆包（core/config、core/patch、
   core/persistence 各自独立子包，共享的只有 protocols 与 exceptions）。
+
+## 后续（2026-10-30，v0.88.4）：存量已清零
+
+允许清单从 5 条（`args_parser` / `config/generator` / `patch/atomic_patcher` / `persistence/run_state` /
+`security/allowlist`）降到 **0 条**，`core_surface_allow.json` 只剩注释。查证过程有个重要发现：
+**其中 3 处指向的名字/模块全仓库都不存在**（`bash_constants.READ_ONLY_GIT_SUBCOMMANDS`、
+`code_edit.EDIT_FORMAT_REGISTRY`、`tool_manager.TOOL_REGISTRY`），全靠 `except ImportError` 的内联兜底
+活着 —— 也就是说它们既是"越界 import"，又是"死引用"，清单当初把**不存在的依赖**也登记成了"待迁移"。
+
+处理方式（按依赖的**真实性**分流，而不是一律搬迁）：
+
+| 类型 | 处理 | 实例 |
+|:---|:---|:---|
+| 真依赖、纯函数/纯枚举、无上层依赖 | **下沉到 core**，原处 re-export 保持兼容 | `patch/fuzzy_matcher.py`、`workflow_status.py` |
+| 死引用（目标不存在） | **删 import**，把内联兜底提升为唯一来源 | `allowlist` 的只读子命令表、`args_parser` 的编辑格式表 |
+| 死引用 + 上层概念 | **改成调用方注入** | `config/generator.generate_tool_signatures(tools=)` |
+
+顺带修掉同一批文件里 3 个"调用即崩"的缺陷（`clawd config generate` 100% AttributeError、
+`generate_tool_signatures` 必然 ModuleNotFoundError、`categories: []` 让技能静默消失）。
+
+**踩坑记录**：本想放 `core/models/workflow_status.py`，但 `core/models.py` **已经是一个模块** ——
+Python 中同名目录（包）会优先于同名模块，于是整个 `core.models` 被静默劫持
+（`from .models import PermissionDenial` 直接 ImportError）。最终放 `core/workflow_status.py`。
+**新增子包前先 `ls` 目标目录，确认没有同名 .py。**
+
+**经验**：治理清单里的"待迁移"要先验证依赖**是否存在**再动手 —— 不存在的依赖不是"迁移对象"，
+是"该删的死引用"。否则会把死代码从一层搬到另一层，越治越乱。
+
