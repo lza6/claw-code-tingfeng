@@ -459,4 +459,3 @@ class CodeGraph:
             'avg_imports': sum(len(n.imports) for n in self.nodes.values()) / max(len(self.nodes), 1),
             'cache_hits': len(self._resolve_cache)
         }
-

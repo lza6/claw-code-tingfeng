@@ -8,13 +8,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from src.agent.autonomy import (
-    Action,
-    AutonomyBudget,
-    AutonomyEngine,
-    AutonomyLevel,
-    level_from_env,
-)
+from src.agent.autonomy import Action, AutonomyBudget, AutonomyEngine, AutonomyLevel, level_from_env
 from src.agent.tool_manager import ToolManager
 from src.core.approval_mode import ApprovalMode
 from src.core.exceptions import ToolApprovalDeniedError

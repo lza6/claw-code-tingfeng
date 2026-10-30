@@ -6,12 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from src.backends.base import BackendResult
-from src.workflow.collaborate import (
-    VERDICT_APPROVE,
-    VERDICT_NEEDS_FIX,
-    Collaborator,
-    parse_verdict,
-)
+from src.workflow.collaborate import VERDICT_APPROVE, VERDICT_NEEDS_FIX, Collaborator, parse_verdict
 
 runner = CliRunner()
 

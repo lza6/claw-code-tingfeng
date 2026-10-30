@@ -16,11 +16,7 @@ from typing import Any
 
 import pytest
 
-from src.agent.swarm.auditor import (
-    AuditFinding,
-    AuditorAgent,
-    AuditReport,
-)
+from src.agent.swarm.auditor import AuditFinding, AuditorAgent, AuditReport
 from src.agent.swarm.message_bus import AgentMessage, MessageBus, MessageType
 
 

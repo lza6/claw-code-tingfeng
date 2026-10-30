@@ -8,11 +8,7 @@
 
 from __future__ import annotations
 
-from src.agent.engine_loop import (
-    LLMMessage,
-    _has_image_blocks,
-    _strip_image_blocks,
-)
+from src.agent.engine_loop import LLMMessage, _has_image_blocks, _strip_image_blocks
 from src.llm.vision import build_image_blocks
 
 

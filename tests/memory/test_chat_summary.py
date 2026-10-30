@@ -2,11 +2,7 @@
 
 import pytest
 
-from src.memory.chat_summary import (
-    ChatSummary,
-    SummaryResult,
-    compress_messages,
-)
+from src.memory.chat_summary import ChatSummary, SummaryResult, compress_messages
 
 
 class TestChatSummaryExt:

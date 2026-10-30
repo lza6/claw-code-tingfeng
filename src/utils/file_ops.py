@@ -329,4 +329,3 @@ def apply_line_edit(file_path: str | Path, start_line: int, end_line: int, new_c
 
     atomic_write(file_path, final_content)
     return final_content
-

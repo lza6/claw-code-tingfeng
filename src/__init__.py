@@ -24,12 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .core.cost_estimator import CostEstimator
     from .core.events import Event, EventBus, EventType, get_event_bus
     from .core.exceptions import ClawdError, ErrorCode
-    from .core.session_store import (
-        StoredSession,
-        list_sessions,
-        load_session,
-        save_session,
-    )
+    from .core.session_store import StoredSession, list_sessions, load_session, save_session
 
 #: 名字 → (子模块, 属性名)
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {

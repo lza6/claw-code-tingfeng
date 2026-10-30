@@ -35,12 +35,7 @@ from src.workflow.pipeline_orchestrator import (
     StageAdapter,
     create_pipeline,
 )
-from src.workflow.types import (
-    PipelineConfig,
-    StageContext,
-    StageResult,
-    StageStatus,
-)
+from src.workflow.types import PipelineConfig, StageContext, StageResult, StageStatus
 
 
 def _ok(artifacts: dict | None = None, ms: int = 1) -> StageResult:

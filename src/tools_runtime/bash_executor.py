@@ -9,14 +9,8 @@ from typing import Any
 
 from . import bash_constants
 from .base import BaseTool, ParameterSchema, ToolResult
-from .bash_constants import (
-    DANGEROUS_PATTERNS_UNIX,
-    DANGEROUS_PATTERNS_WINDOWS,
-)
-from .bash_security import (
-    _parse_command_to_list,
-    is_shell_command_read_only,
-)
+from .bash_constants import DANGEROUS_PATTERNS_UNIX, DANGEROUS_PATTERNS_WINDOWS
+from .bash_security import _parse_command_to_list, is_shell_command_read_only
 from .sandbox.factory import SandboxFactory
 
 

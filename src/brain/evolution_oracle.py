@@ -18,13 +18,7 @@ from ..core.project_context import ProjectContext
 from .config_patcher import ConfigPatcher, RuntimeConfig
 from .entropy import SemanticEntropyAnalyzer
 from .memory_adapter import MemoryAdapter
-from .models import (
-    BrainRule,
-    EntropyReport,
-    FailureSequence,
-    OptimizationAdvice,
-    SuccessVector,
-)
+from .models import BrainRule, EntropyReport, FailureSequence, OptimizationAdvice, SuccessVector
 from .pattern_extractor import PatternExtractor
 
 

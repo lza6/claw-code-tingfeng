@@ -14,15 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from src.core.persistence.run_state import (
-    _DURABLE_SURFACES_AVAILABLE,
-    RunStateManager,
-)
-from src.workflow.models import (
-    WorkflowPhase,
-    WorkflowStatus,
-    WorkflowTask,
-)
+from src.core.persistence.run_state import _DURABLE_SURFACES_AVAILABLE, RunStateManager
+from src.workflow.models import WorkflowPhase, WorkflowStatus, WorkflowTask
 
 
 @pytest.fixture

@@ -17,11 +17,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
-from ..core.notifications.dispatcher import (
-    Notification,
-    NotificationDispatcher,
-    NotificationLevel,
-)
+from ..core.notifications.dispatcher import Notification, NotificationDispatcher, NotificationLevel
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)

@@ -2,11 +2,7 @@
 
 import pytest
 
-from src.tools_runtime.specialized_tools import (
-    Any,
-    DocGenTool,
-    SQLAuditTool,
-)
+from src.tools_runtime.specialized_tools import Any, DocGenTool, SQLAuditTool
 
 
 class TestDocGenTool:

@@ -20,13 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core.project_context import ProjectContext
-from .models import (
-    BrainRule,
-    EntropyReport,
-    FailureSequence,
-    OptimizationAdvice,
-    SuccessVector,
-)
+from .models import BrainRule, EntropyReport, FailureSequence, OptimizationAdvice, SuccessVector
 
 # 默认路径（向后兼容）
 DEFAULT_DB_DIR = Path('.clawd') / 'brain'

@@ -130,4 +130,3 @@ $invalidBytes = [System.IO.File]::ReadAllBytes($invalidPath)
 Assert-True ($invalidBytes.Length -eq 3 -and $invalidBytes[1] -eq 0x80) 'invalid UTF-8 file remains unchanged'
 
 Write-Host 'OVERALL: ALL PASS' -ForegroundColor Green
-

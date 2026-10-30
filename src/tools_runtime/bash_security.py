@@ -16,10 +16,7 @@ from pathlib import Path
 # show-ref / reflog / for-each-ref …）→ 同一条命令在 bash_security 判"可执行"、
 # 在 core 的 validate 判"不允许"。对外名字保持不变，调用方无需改动。
 from ..core.security.allowlist import READ_ONLY_GIT_SUBCOMMANDS
-from .bash_constants import (
-    _WINDOWS_BUILTIN_COMMANDS,
-    _WINDOWS_DANGEROUS_CHARS,
-)
+from .bash_constants import _WINDOWS_BUILTIN_COMMANDS, _WINDOWS_DANGEROUS_CHARS
 
 
 def _parse_command_to_list(command: str) -> list[str]:

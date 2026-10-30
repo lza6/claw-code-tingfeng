@@ -402,14 +402,7 @@ __all__ = [
 ]
 
 # Also expose them at module level for backwards compatibility
-from .thinking_models import (
-    _STATE_COLORS,
-    _TYPE_COLORS,
-    CONF_RANGES,
-    HLINE,
-    LJUNCT,
-    VBAR,
-)
+from .thinking_models import _STATE_COLORS, _TYPE_COLORS, CONF_RANGES, HLINE, LJUNCT, VBAR
 
 
 def attach_event_bus_listeners(canvas: ThinkingCanvas | ThinkingCanvasRich) -> None:

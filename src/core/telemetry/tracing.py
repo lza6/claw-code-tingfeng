@@ -240,5 +240,3 @@ def trace(name: str, metadata: dict | None = None):
 def record_llm_call(call: LLMCall) -> None:
     """记录 LLM 调用"""
     TracingManager.get_processor().record_llm_call(call)
-
-

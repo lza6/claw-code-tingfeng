@@ -16,20 +16,9 @@ from ..dashboard_widgets import (
     StepTracker,
     TelemetryPanel,
 )
-from .animations import (
-    ParallaxScrollContainer,
-    TypewriterEffect,
-)
-from .panels import (
-    BreathingPanel,
-    StreamingMarkdownView,
-)
-from .thinking import (
-    ExecutionTree,
-    ReasoningChain,
-    ResourceMonitorChart,
-    ThinkingCanvas,
-)
+from .animations import ParallaxScrollContainer, TypewriterEffect
+from .panels import BreathingPanel, StreamingMarkdownView
+from .thinking import ExecutionTree, ReasoningChain, ResourceMonitorChart, ThinkingCanvas
 
 __all__ = [
     # Re-exports from dashboard_widgets

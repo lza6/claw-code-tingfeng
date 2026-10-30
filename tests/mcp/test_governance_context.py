@@ -4,11 +4,7 @@ import json
 import pytest
 
 from src.mcp.client import MCPToolInfo
-from src.mcp.governance import (
-    ServerStatus,
-    ToolGovernor,
-    ToolSignature,
-)
+from src.mcp.governance import ServerStatus, ToolGovernor, ToolSignature
 from src.reasoning.context_engineering import (
     HistoryProcessor,
     ObservationTruncator,

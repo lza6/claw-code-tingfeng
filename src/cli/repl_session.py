@@ -11,12 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..utils.colors import (
-    bold_green,
-    dim,
-    green,
-    status_warn,
-)
+from ..utils.colors import bold_green, dim, green, status_warn
 from .banner import render_banner
 from .command_registry import command_registry
 from .hud import HudContext, render_hud
@@ -349,12 +344,7 @@ from .repl_handlers import (
     _handle_provider_switch,
     _handle_undo,
 )
-from .repl_task import (
-    _print_final_answer,
-    _run_task,
-    _run_task_plain,
-    _run_task_rich,
-)
+from .repl_task import _print_final_answer, _run_task, _run_task_plain, _run_task_rich
 
 ReplSession._run_task = _run_task
 ReplSession._run_task_rich = _run_task_rich

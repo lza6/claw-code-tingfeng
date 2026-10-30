@@ -5,11 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.agent.swarm.message_bus import (
-    AgentMessage,
-    MessageBus,
-    MessageType,
-)
+from src.agent.swarm.message_bus import AgentMessage, MessageBus, MessageType
 
 
 class TestMessageType:

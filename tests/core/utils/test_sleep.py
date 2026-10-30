@@ -5,13 +5,7 @@ import time
 
 import pytest
 
-from src.core.utils.sleep import (
-    Sleeper,
-    sleep,
-    sleep_sync,
-    sleep_until,
-    sleep_with_progress,
-)
+from src.core.utils.sleep import Sleeper, sleep, sleep_sync, sleep_until, sleep_with_progress
 
 
 @pytest.mark.asyncio

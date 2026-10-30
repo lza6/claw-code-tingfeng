@@ -8,13 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.core.quality_gate import (
-    GateCheck,
-    GateCheckResult,
-    GateLevel,
-    GateResult,
-    QualityGate,
-)
+from src.core.quality_gate import GateCheck, GateCheckResult, GateLevel, GateResult, QualityGate
 
 
 def _check(name: str) -> GateCheck:

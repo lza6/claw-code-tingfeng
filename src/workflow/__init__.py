@@ -43,11 +43,7 @@ from .models import (
 )
 
 # 从 oh-my-codex 汲取的管道恢复
-from .pipeline_orchestrator import (
-    can_resume_pipeline,
-    cancel_pipeline,
-    read_pipeline_state,
-)
+from .pipeline_orchestrator import can_resume_pipeline, cancel_pipeline, read_pipeline_state
 
 # 从 oh-my-codex 汲取的 RALPH 账本
 from .ralph_ledger import (

@@ -13,11 +13,7 @@ import pytest
 
 from src.agent.engine import AgentEngine
 from src.core.hook_registry.enums import HookPoint, HookResult
-from src.core.hook_registry.registry import (
-    get_hook_point_specs,
-    register_hook,
-    unregister_hook,
-)
+from src.core.hook_registry.registry import get_hook_point_specs, register_hook, unregister_hook
 from src.core.hook_registry.specs import FunctionHookSpec, HookExecutionResult
 from src.tools_runtime.base import ToolResult
 

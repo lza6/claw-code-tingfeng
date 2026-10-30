@@ -6,12 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.workflow.engine import WorkflowEngine
-from src.workflow.models import (
-    WorkflowIntent,
-    WorkflowPhase,
-    WorkflowStatus,
-    WorkflowTask,
-)
+from src.workflow.models import WorkflowIntent, WorkflowPhase, WorkflowStatus, WorkflowTask
 
 
 @pytest.fixture

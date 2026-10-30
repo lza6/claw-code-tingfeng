@@ -4,12 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.adversarial import (
-    CommandValidator,
-    PathValidator,
-    validate_command,
-    validate_path,
-)
+from src.utils.adversarial import CommandValidator, PathValidator, validate_command, validate_path
 
 
 class TestPathValidator:

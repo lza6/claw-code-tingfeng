@@ -24,12 +24,7 @@ from pathlib import Path
 
 from .base import BaseTool, ParameterSchema, ToolResult
 from .path_utils import resolve_path
-from .udiff_parser import (
-    SearchTextNotUnique,
-    apply_hunks,
-    find_diffs,
-    hunk_to_before_after,
-)
+from .udiff_parser import SearchTextNotUnique, apply_hunks, find_diffs, hunk_to_before_after
 
 logger = logging.getLogger(__name__)
 

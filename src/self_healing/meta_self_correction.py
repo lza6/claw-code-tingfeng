@@ -61,10 +61,7 @@ class ASTAuditor(ast.NodeVisitor):
         else:
             super().generic_visit(node)
 
-from ..self_healing.experience_bank import (
-    ExperienceEntry,
-    VectorExperienceBank,
-)
+from ..self_healing.experience_bank import ExperienceEntry, VectorExperienceBank
 
 logger = logging.getLogger(__name__)
 

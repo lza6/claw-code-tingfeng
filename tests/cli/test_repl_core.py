@@ -6,12 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.repl import (
-    BUILTIN_COMMANDS,
-    _handle_help,
-    _handle_version,
-    _print,
-)
+from src.cli.repl import BUILTIN_COMMANDS, _handle_help, _handle_version, _print
 
 
 class TestPrintHelper:

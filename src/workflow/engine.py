@@ -393,11 +393,7 @@ class WorkflowEngine:
                             )
 
                         # 恢复维度
-                        from .models import (
-                            Dimension,
-                            DimensionSource,
-                            DispatchableSlice,
-                        )
+                        from .models import Dimension, DimensionSource, DispatchableSlice
 
                         if "dimensions" in ct_data_clean:
                             ct_data_clean["dimensions"] = [

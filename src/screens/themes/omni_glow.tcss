@@ -1,5 +1,5 @@
 /* Omni-Glow Theme — HSL 响应式玻璃拟态风格
- * 
+ *
  * V5.0 视觉哲学: 智能状态的感官延伸
  * - HSL 动态色彩系统
  * - 玻璃拟态边框效果
@@ -461,12 +461,12 @@ ProgressBar.complete > .bar {
     #main-container {
         layout: vertical;
     }
-    
+
     #left-pane, #right-pane {
         width: 100%;
         height: 50%;
     }
-    
+
     MirrorPane {
         width: 100%;
         height: 50%;

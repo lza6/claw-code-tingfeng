@@ -15,11 +15,7 @@ import sys
 
 import pytest
 
-from src.workflow.verification_runner import (
-    VerificationRun,
-    resolve_command,
-    run_verification,
-)
+from src.workflow.verification_runner import VerificationRun, resolve_command, run_verification
 
 
 def _py(code: str) -> list[str]:

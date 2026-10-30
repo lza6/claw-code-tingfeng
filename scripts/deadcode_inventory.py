@@ -96,4 +96,3 @@ print("=" * 78)
 for n, mod, m in near_name[:30]:
     print(f"{n:5d}  {mod}")
     print(f"       └ 近名存活: {m[0]}")
-

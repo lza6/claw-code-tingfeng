@@ -64,5 +64,3 @@ def get_command_handler(command: str) -> CommandHandler | None:
 def get_available_commands() -> list[str]:
     """获取可用命令列表"""
     return list(COMMAND_REGISTRY.keys())
-
-

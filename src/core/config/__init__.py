@@ -18,13 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .enums import (
-    ApprovalMode,
-    ConfigSource,
-    ConfigSourceKind,
-    LLMProviderEnum,
-    LogLevelEnum,
-)
+from .enums import ApprovalMode, ConfigSource, ConfigSourceKind, LLMProviderEnum, LogLevelEnum
 from .merger import (
     OMX_FEATURE_FLAGS,
     OMX_TOP_LEVEL_KEYS,

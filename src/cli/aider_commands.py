@@ -27,10 +27,7 @@ from __future__ import annotations
 import logging
 
 # 向后兼容: 从子模块重新导出所有公共接口
-from .aider_commands_base import (
-    AiderCommandHandler,
-    get_aider_command_handler,
-)
+from .aider_commands_base import AiderCommandHandler, get_aider_command_handler
 from .aider_commands_registry import register_aider_commands
 
 logger = logging.getLogger(__name__)

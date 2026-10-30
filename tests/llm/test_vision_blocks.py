@@ -12,11 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.llm.vision import (
-    MAX_VISION_IMAGE_BYTES,
-    build_image_blocks,
-    supports_vision,
-)
+from src.llm.vision import MAX_VISION_IMAGE_BYTES, build_image_blocks, supports_vision
 
 # 1x1 透明 PNG
 PNG_BYTES = base64.b64decode(

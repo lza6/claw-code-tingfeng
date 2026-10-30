@@ -22,12 +22,7 @@ from .animations import (
     hsl_to_hex,
     lerp,
 )
-from .healing import (
-    ConfidenceGradient,
-    DiffView,
-    SelfHealingPanel,
-    SelfHealingStatsPanel,
-)
+from .healing import ConfidenceGradient, DiffView, SelfHealingPanel, SelfHealingStatsPanel
 from .models import (
     ChatMessage,
     ConfidenceHistory,
@@ -40,10 +35,7 @@ from .models import (
     ToolProbability,
 )
 from .step_tracker import StepTracker
-from .telemetry import (
-    AnimatedProgressBar,
-    TelemetryPanel,
-)
+from .telemetry import AnimatedProgressBar, TelemetryPanel
 
 __all__ = [
     # Animations

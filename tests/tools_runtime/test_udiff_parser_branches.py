@@ -19,11 +19,7 @@ import builtins
 import pytest
 
 from src.tools_runtime import udiff_parser
-from src.tools_runtime.udiff_parser import (
-    apply_hunks,
-    find_diffs,
-    hunk_to_before_after,
-)
+from src.tools_runtime.udiff_parser import apply_hunks, find_diffs, hunk_to_before_after
 
 
 class TestFindDiffsEdges:

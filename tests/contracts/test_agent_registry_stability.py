@@ -113,11 +113,7 @@ class TestAgentRegistryStability:
 
     def test_helper_functions_exist(self):
         """辅助函数应保持稳定"""
-        from src.agent.definitions import (
-            get_agent,
-            get_agent_names,
-            get_agents_by_category,
-        )
+        from src.agent.definitions import get_agent, get_agent_names, get_agents_by_category
 
         assert callable(get_agent)
         assert callable(get_agents_by_category)

@@ -13,13 +13,7 @@ from typing import Any
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .enums import (
-    ApprovalMode,
-    ConfigSource,
-    ConfigSourceKind,
-    LLMProviderEnum,
-    LogLevelEnum,
-)
+from .enums import ApprovalMode, ConfigSource, ConfigSourceKind, LLMProviderEnum, LogLevelEnum
 
 logger = logging.getLogger(__name__)
 

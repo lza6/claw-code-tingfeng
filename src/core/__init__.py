@@ -41,13 +41,7 @@ from .config.injector import config_injector
 # 路径重导向以支持旧代码引用 (v0.50.0 兼容性层)
 from .config.settings import AgentSettings, ConfigSourceKind, get_settings
 from .context import PortContext, build_port_context, render_context
-from .events import (
-    Event,
-    EventBus,
-    EventType,
-    get_event_bus,
-    reset_event_bus,
-)
+from .events import Event, EventBus, EventType, get_event_bus, reset_event_bus
 from .exceptions import (
     ClawdError,
     ErrorCode,
@@ -111,25 +105,11 @@ from .state import (
     SystemSnapshot,
 )
 from .telemetry.exporter import get_metrics_collector as metrics_exporter
-from .telemetry.metrics import (
-    MODEL_PRICING,
-    ModelPricing,
-    get_model_pricing,
-)
-from .telemetry.observability import (
-    LogEntry,
-    StructuredLogger,
-)
-from .telemetry.output_compressor import (
-    FilterRule,
-    FilterStrategy,
-    OutputCompressor,
-)
+from .telemetry.metrics import MODEL_PRICING, ModelPricing, get_model_pricing
+from .telemetry.observability import LogEntry, StructuredLogger
+from .telemetry.output_compressor import FilterRule, FilterStrategy, OutputCompressor
 from .telemetry.token_tracker import TokenUsage  # 这里原先是 from .usage import TokenUsage
-from .telemetry.token_tracker import (
-    TokenTracker,
-    TrackingRecord,
-)
+from .telemetry.token_tracker import TokenTracker, TrackingRecord
 from .transcript import TranscriptStore
 from .workspace import Workspace, WorkspaceManager
 

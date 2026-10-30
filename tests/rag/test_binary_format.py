@@ -2,11 +2,7 @@
 
 import pytest
 
-from src.rag.binary_format import (
-    FORMAT_VERSION,
-    LOOKUP_MAGIC,
-    POSTINGS_MAGIC,
-)
+from src.rag.binary_format import FORMAT_VERSION, LOOKUP_MAGIC, POSTINGS_MAGIC
 
 
 class TestConstants:

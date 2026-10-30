@@ -6,13 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.llm.cache import (
-    CacheEntry,
-    CacheStats,
-    LLMCache,
-    get_global_cache,
-    reset_global_cache,
-)
+from src.llm.cache import CacheEntry, CacheStats, LLMCache, get_global_cache, reset_global_cache
 
 
 class TestCacheEntry:

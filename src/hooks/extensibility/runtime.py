@@ -16,11 +16,7 @@ import os
 
 from .dispatcher import dispatch_hook_event
 from .loader import is_hook_plugins_enabled
-from .types import (
-    HookDispatchResult,
-    HookRuntimeDispatchInput,
-    HookRuntimeDispatchResult,
-)
+from .types import HookDispatchResult, HookRuntimeDispatchInput, HookRuntimeDispatchResult
 
 
 async def dispatch_hook_event_runtime(

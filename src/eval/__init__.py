@@ -7,12 +7,7 @@
 - **基线比对**：与基线 JSON 对比，pass_rate 下降即回归。
 """
 
-from .baseline import (
-    compare_with_baseline,
-    load_baseline,
-    load_baseline_strict,
-    save_baseline,
-)
+from .baseline import compare_with_baseline, load_baseline, load_baseline_strict, save_baseline
 from .metrics import evaluate_case, evaluate_case_status
 from .models import EvalCase, EvalOutcome, EvalReport
 from .runner import CaseNotRun, load_dataset, run_dataset

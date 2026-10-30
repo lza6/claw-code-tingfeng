@@ -11,9 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ...agent.definitions import AGENT_DEFINITIONS, get_agent
-from ...agent.keyword_registry import (
-    KEYWORD_TRIGGER_DEFINITIONS,
-)
+from ...agent.keyword_registry import KEYWORD_TRIGGER_DEFINITIONS
 
 app = typer.Typer(help="Agent 管理和执行命令")
 console = Console()

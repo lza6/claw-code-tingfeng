@@ -12,11 +12,7 @@ from typing import TYPE_CHECKING, Any
 from ..core.events import EventBus
 from ..core.events import get_event_bus as get_bus
 from ..core.patch.atomic_patcher import AtomicPatcher
-from ..llm import (
-    BaseLLMProvider,
-    LLMConfig,
-    create_llm_provider,
-)
+from ..llm import BaseLLMProvider, LLMConfig, create_llm_provider
 from ..llm.weak_model_router import WeakModelRouter, auto_detect_weak_model
 from ..tools_runtime import (
     BashTool,

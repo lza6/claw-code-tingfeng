@@ -16,7 +16,7 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-  
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -30,7 +30,7 @@ updates:
     labels:
       - "ci-cd"
       - "dependencies"
-  
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

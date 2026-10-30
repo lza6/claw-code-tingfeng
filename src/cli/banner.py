@@ -8,12 +8,7 @@ from __future__ import annotations
 import os
 
 from .. import __version__
-from ..utils.colors import (
-    bold_cyan,
-    bold_green,
-    dim,
-    green,
-)
+from ..utils.colors import bold_cyan, bold_green, dim, green
 
 
 def _get_brand_color() -> callable:

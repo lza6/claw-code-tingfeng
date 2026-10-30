@@ -4,11 +4,7 @@
 """
 
 # 从 command_event 导出核心快照类
-from .command_event import (
-    AuthoritySnapshot,
-    BacklogSnapshot,
-    ReadinessSnapshot,
-)
+from .command_event import AuthoritySnapshot, BacklogSnapshot, ReadinessSnapshot
 from .persistence import StateManager
 
 # 从子模块导出其余状态类

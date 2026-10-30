@@ -34,12 +34,7 @@ from src.workflow.pipeline import (
     create_team_exec_stage,
     run_pipeline,
 )
-from src.workflow.types import (
-    PipelineStage,
-    StageContext,
-    StageResult,
-    StageStatus,
-)
+from src.workflow.types import PipelineStage, StageContext, StageResult, StageStatus
 
 # ==========================================================================
 # 桩阶段

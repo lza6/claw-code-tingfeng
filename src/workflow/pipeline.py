@@ -22,12 +22,7 @@ from typing import Any
 
 from ..core.events import Event, EventBus, EventType, get_event_bus
 from ..core.exceptions import ClawdError, ErrorCode
-from .types import (
-    PipelineStage,
-    StageContext,
-    StageResult,
-    StageStatus,
-)
+from .types import PipelineStage, StageContext, StageResult, StageStatus
 
 logger = logging.getLogger(__name__)
 

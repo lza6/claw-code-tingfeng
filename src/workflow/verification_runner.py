@@ -34,10 +34,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .verifier import (
-    VerificationResult,
-    create_verification_result_from_evidence,
-)
+from .verifier import VerificationResult, create_verification_result_from_evidence
 
 #: 默认超时（秒）。验证可能跑完整测试集，给足时间但必须有上限。
 DEFAULT_TIMEOUT = 900

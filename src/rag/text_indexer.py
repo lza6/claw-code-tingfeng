@@ -29,24 +29,13 @@ logger = get_logger(__name__)
 from .dependency_graph import DependencyGraph
 
 # 重新导出持久化函数（向后兼容）
-from .indexer_persistence import (
-    load_index_legacy,
-    load_index_v2,
-    save_index_legacy,
-    save_index_v2,
-)
+from .indexer_persistence import load_index_legacy, load_index_v2, save_index_legacy, save_index_v2
 
 # 重新导出工具函数（向后兼容）
 # 重新导出工具函数（向后兼容）
-from .indexer_utils import (
-    chunk_document as _chunk_document,
-)
-from .indexer_utils import (
-    generate_id as _generate_id,
-)
-from .indexer_utils import (
-    tokenize as _tokenize,
-)
+from .indexer_utils import chunk_document as _chunk_document
+from .indexer_utils import generate_id as _generate_id
+from .indexer_utils import tokenize as _tokenize
 from .models import Chunk, Document, SearchResult
 from .symbol_extractor import FileOutline, SymbolExtractor
 from .trigram_index import TrigramIndex

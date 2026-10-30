@@ -14,9 +14,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from src.tools_runtime.code_edit.base_coder import BaseCoder, EditResult, MatchType
-from src.tools_runtime.code_edit.fuzzy_matcher import (
-    replace_most_similar_chunk,
-)
+from src.tools_runtime.code_edit.fuzzy_matcher import replace_most_similar_chunk
 
 # 标记正则
 HEAD = r"^<{5,9} SEARCH>?\s*$"

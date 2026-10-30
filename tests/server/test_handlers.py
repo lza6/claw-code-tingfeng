@@ -2,10 +2,7 @@
 
 import pytest
 
-from src.server.handlers import (
-    build_error,
-    build_response,
-)
+from src.server.handlers import build_error, build_response
 
 
 class TestBuildResponse:

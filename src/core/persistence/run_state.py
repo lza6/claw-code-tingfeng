@@ -32,10 +32,7 @@ try:
     from src.core.durable.surfaces.obligation_model import Obligation as DurableObligation
     from src.core.durable.surfaces.obligation_model import ObligationModel as DurableObligationModel
     from src.core.durable.surfaces.obligation_model import ObligationStatus
-    from src.core.durable.surfaces.status_summary import (
-        RunPhase,
-        StatusSummary,
-    )
+    from src.core.durable.surfaces.status_summary import RunPhase, StatusSummary
     _DURABLE_SURFACES_AVAILABLE = True
 except ImportError:
     # Durable surfaces not available, fall back to existing behavior

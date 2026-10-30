@@ -2,12 +2,7 @@
 
 import pytest
 
-from src.brain.models import (
-    BrainRule,
-    ConfigPatchResult,
-    EntropyReport,
-    OptimizationAdvice,
-)
+from src.brain.models import BrainRule, ConfigPatchResult, EntropyReport, OptimizationAdvice
 
 
 class TestOptimizationAdvice:

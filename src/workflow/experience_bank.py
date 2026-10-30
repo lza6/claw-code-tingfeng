@@ -5,12 +5,7 @@
 """
 from __future__ import annotations
 
-from ..core.experience_bank import (
-    ExperienceBank,
-    ExperienceEmbedder,
-    ExperienceRecord,
-    _tokenize,
-)
+from ..core.experience_bank import ExperienceBank, ExperienceEmbedder, ExperienceRecord, _tokenize
 
 __all__ = [
     "ExperienceBank",

@@ -14,12 +14,7 @@ import json
 from pathlib import Path
 
 from ..core.project_context import ProjectContext
-from .models import (
-    EpisodicMemory,
-    MemoryEntry,
-    SemanticPattern,
-    WorkingMemory,
-)
+from .models import EpisodicMemory, MemoryEntry, SemanticPattern, WorkingMemory
 
 
 class MemoryStorage:

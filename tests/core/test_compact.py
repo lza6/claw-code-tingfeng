@@ -704,4 +704,3 @@ class TestCompactSession:
         result = compact_session(session, config)
         assert result.compacted_session is session
         assert result.removed_message_count == 0
-

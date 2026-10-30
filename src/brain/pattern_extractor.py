@@ -13,12 +13,7 @@ import platform
 from typing import Any
 
 from .memory_adapter import MemoryAdapter
-from .models import (
-    BrainRule,
-    FailureSequence,
-    OptimizationAdvice,
-    SuccessVector,
-)
+from .models import BrainRule, FailureSequence, OptimizationAdvice, SuccessVector
 
 # 错误类型到规则的映射模板
 RULE_TEMPLATES: dict[str, str] = {

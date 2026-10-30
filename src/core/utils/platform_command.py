@@ -332,4 +332,3 @@ def run_command_check(
     """
     kwargs['check'] = True
     return spawn_platform_command_sync(command, args, **kwargs)
-

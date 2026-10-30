@@ -2,9 +2,7 @@
 
 import pytest
 
-from src.utils.http_client import (
-    EnhancedHTTPClient,
-)
+from src.utils.http_client import EnhancedHTTPClient
 
 
 class TestEnhancedHTTPClient:

@@ -1,6 +1,6 @@
 ﻿# Clawd Code — 增强版一键安装脚本 (Windows PowerShell)
 # 借鉴 ClawGod 安装脚本的优秀设计
-# 
+#
 # 新增功能:
 # - 智能检测已有安装
 # - 自动备份和还原
@@ -9,7 +9,7 @@
 # - 补丁引擎集成
 # - 版本迁移支持
 #
-# 用法: 
+# 用法:
 #   powershell -ExecutionPolicy Bypass -File install_enhanced.ps1
 #   powershell -ExecutionPolicy Bypass -File install_enhanced.ps1 -Uninstall
 #   powershell -ExecutionPolicy Bypass -File install_enhanced.ps1 -DryRun
@@ -48,14 +48,14 @@ Write-Host ""
 # ===== 卸载逻辑 (借鉴 ClawGod 的防御性设计) =====
 if ($Uninstall) {
     Write-Info "开始卸载 Clawd Code..."
-    
+
     # 查找所有可能的安装位置
     $locations = @(
         $BinDir,
         (Join-Path $env:USERPROFILE ".local\bin"),
         (Join-Path $env:ProgramFiles "clawd")
     )
-    
+
     foreach ($loc in $locations) {
         if (Test-Path $loc) {
             # 检查是否有原版备份
@@ -74,7 +74,7 @@ if ($Uninstall) {
             }
         }
     }
-    
+
     # 清理安装目录
     if (Test-Path $InstallDir) {
         # 备份用户数据
@@ -83,7 +83,7 @@ if ($Uninstall) {
             "provider.json",
             "runtime_overrides.json"
         )
-        
+
         foreach ($file in $userData) {
             $src = Join-Path $InstallDir $file
             if (Test-Path $src) {
@@ -94,15 +94,15 @@ if ($Uninstall) {
                 Copy-Item -Path $src -Destination $dst -Force
             }
         }
-        
+
         # 删除虚拟环境和缓存
         if (Test-Path $VenvDir) {
             Remove-Item -Path $VenvDir -Recurse -Force
         }
-        
+
         Write-Info "安装目录已清理"
     }
-    
+
     Write-Host ""
     Write-Info "Clawd Code 已卸载"
     Write-Dim "用户配置已备份到: $BackupDir"
@@ -113,31 +113,31 @@ if ($Uninstall) {
 # ===== 还原逻辑 =====
 if ($Revert) {
     Write-Info "开始还原 Clawd Code..."
-    
+
     if (-not (Test-Path $BackupDir)) {
         Write-Warn "没有找到备份目录: $BackupDir"
         exit 1
     }
-    
+
     # 查找最新备份
-    $latestBackup = Get-ChildItem -Path $BackupDir -Directory | 
-        Sort-Object Name -Descending | 
+    $latestBackup = Get-ChildItem -Path $BackupDir -Directory |
+        Sort-Object Name -Descending |
         Select-Object -First 1
-    
+
     if (-not $latestBackup) {
         Write-Warn "没有找到备份"
         exit 1
     }
-    
+
     Write-Info "从备份还原: $($latestBackup.Name)"
-    
+
     # 还原文件
     Get-ChildItem -Path $latestBackup.FullName -File | ForEach-Object {
         $dst = Join-Path $InstallDir $_.Name
         Copy-Item -Path $_.FullName -Destination $dst -Force
         Write-Info "已还原: $($_.Name)"
     }
-    
+
     Write-Host ""
     Write-Info "还原完成"
     Write-Host ""
@@ -148,7 +148,7 @@ if ($Revert) {
 if ($Status) {
     Write-Info "Clawd Code 状态检查..."
     Write-Host ""
-    
+
     # Python 版本
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) {
@@ -157,7 +157,7 @@ if ($Status) {
     } else {
         Write-Warn "Python: 未安装"
     }
-    
+
     # 安装目录
     if (Test-Path $InstallDir) {
         $size = (Get-ChildItem $InstallDir -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB
@@ -165,21 +165,21 @@ if ($Status) {
     } else {
         Write-Warn "安装目录: 不存在"
     }
-    
+
     # 启动器
     if (Test-Path $ClawdBin) {
         Write-Info "启动器: $ClawdBin"
     } else {
         Write-Warn "启动器: 不存在"
     }
-    
+
     # 原版备份
     if (Test-Path $ClawdOrigBin) {
         Write-Info "原版备份: $ClawdOrigBin"
     } else {
         Write-Dim "原版备份: 不存在"
     }
-    
+
     Write-Host ""
     exit 0
 }
@@ -207,7 +207,7 @@ $versionMatch = $pythonVersion -match "(\d+)\.(\d+)"
 if ($versionMatch) {
     $major = [int]$Matches[1]
     $minor = [int]$Matches[2]
-    
+
     if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
         Write-Warn "Python 版本过低 (需要 >= $PythonMinVersion)"
         exit 1
@@ -283,7 +283,7 @@ if (-not (Test-Path $VenvDir)) {
 $activateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
 if (Test-Path $activateScript) {
     & $activateScript
-    
+
     $pip = Join-Path $VenvDir "Scripts\pip.exe"
     if (Test-Path "requirements.txt") {
         & $pip install -r requirements.txt -q

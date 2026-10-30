@@ -2,10 +2,7 @@
 
 import pytest
 
-from src.rag.chunk_enrichment import (
-    RETURN_SEPARATOR,
-    ChunkEnrichmentConfig,
-)
+from src.rag.chunk_enrichment import RETURN_SEPARATOR, ChunkEnrichmentConfig
 
 
 class TestConstants:

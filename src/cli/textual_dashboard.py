@@ -37,10 +37,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, Input, Label
 
 # 从 screens 模块导入 Omni-Glow 组件
-from ..screens.omni_glow_widgets import (
-    MirrorPane,
-    RiskIndicator,
-)
+from ..screens.omni_glow_widgets import MirrorPane, RiskIndicator
 from ..screens.omni_glow_widgets import ThinkingTree as ThinkingTreeWidget
 
 # 从 dashboard 模块导入组件

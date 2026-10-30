@@ -29,12 +29,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.core import budget_guard as bg
-from src.core.budget_guard import (
-    BudgetConfig,
-    BudgetGuard,
-    ResourceThresholds,
-    parse_budget_string,
-)
+from src.core.budget_guard import BudgetConfig, BudgetGuard, ResourceThresholds, parse_budget_string
 from src.core.durable.surfaces.resource_state import ResourceHealthState
 from src.core.events import EventType
 from src.core.exceptions import ClawdError, ErrorCode

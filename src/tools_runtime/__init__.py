@@ -28,11 +28,7 @@ from .code_edit import try_dotdotdots
 from .dependency_tool import DependencyTool
 
 # Edit Format Switcher (from Aider)
-from .edit_format_switcher import (
-    EDIT_FORMAT_CHOICES,
-    EditFormatSwitcher,
-    get_edit_format_switcher,
-)
+from .edit_format_switcher import EDIT_FORMAT_CHOICES, EditFormatSwitcher, get_edit_format_switcher
 from .edit_parser import (
     count_edit_blocks,
     extract_shell_commands,

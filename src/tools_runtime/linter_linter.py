@@ -12,11 +12,7 @@ from pathlib import Path
 from .linter_python import lint_python_compile
 from .linter_tree_sitter import tree_sitter_lint
 from .linter_types import LANGUAGE_EXTENSIONS, LintResult
-from .linter_utils import (
-    _find_linenums_in_output,
-    _merge_lint_results,
-    _merge_multiple_results,
-)
+from .linter_utils import _find_linenums_in_output, _merge_lint_results, _merge_multiple_results
 
 
 class Linter:

@@ -4,12 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.plugins import (
-    PluginError,
-    PluginManager,
-    PluginManifest,
-    load_manifest_from_dir,
-)
+from src.plugins import PluginError, PluginManager, PluginManifest, load_manifest_from_dir
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_plugin"
 

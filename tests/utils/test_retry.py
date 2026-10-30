@@ -7,12 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.utils.retry import (
-    RetryPolicy,
-    default_should_retry,
-    get_error_status,
-    with_retry,
-)
+from src.utils.retry import RetryPolicy, default_should_retry, get_error_status, with_retry
 
 
 class TestGetErrorStatus:

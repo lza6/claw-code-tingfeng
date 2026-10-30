@@ -2,11 +2,7 @@
 import pytest
 
 from src.llm import LLMResponse
-from src.llm.structured_output import (
-    JsonSchema,
-    StructuredOutputMixin,
-    StructuredResponse,
-)
+from src.llm.structured_output import JsonSchema, StructuredOutputMixin, StructuredResponse
 
 
 class ExtractorTestMixin(StructuredOutputMixin):

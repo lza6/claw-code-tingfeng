@@ -7,12 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..utils.colors import (
-    cyan,
-    dim,
-    status_fail,
-    status_warn,
-)
+from ..utils.colors import cyan, dim, status_fail, status_warn
 from .rich_hud import RichLiveHud
 from .streaming_markdown import StreamingMarkdownRenderer
 

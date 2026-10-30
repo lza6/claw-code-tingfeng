@@ -6,11 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.file_ops import (
-    get_file_info,
-    is_binary,
-    normalize_content,
-)
+from src.utils.file_ops import get_file_info, is_binary, normalize_content
 
 
 class TestGetFileInfo:

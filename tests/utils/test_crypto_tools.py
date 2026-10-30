@@ -2,12 +2,7 @@
 
 import pytest
 
-from src.utils.crypto_tools import (
-    _derive_fernet_key,
-    decrypt,
-    encrypt,
-    get_fernet,
-)
+from src.utils.crypto_tools import _derive_fernet_key, decrypt, encrypt, get_fernet
 
 
 class TestDeriveFernetKey:

@@ -9,13 +9,7 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Label, Static
 
-from .omni_glow_models import (
-    COLOR_ALERT,
-    COLOR_IDLE,
-    COLOR_SUCCESS,
-    COLOR_THINKING,
-    RiskAlert,
-)
+from .omni_glow_models import COLOR_ALERT, COLOR_IDLE, COLOR_SUCCESS, COLOR_THINKING, RiskAlert
 
 # ============================================================================
 # RiskIndicator: SIP 风险警示

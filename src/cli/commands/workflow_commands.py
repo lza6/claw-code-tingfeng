@@ -19,10 +19,7 @@ from ...workflow.pipeline import (
     create_ralplan_stage,
     create_team_exec_stage,
 )
-from ...workflow.pipeline_orchestrator import (
-    can_resume_pipeline,
-    read_pipeline_state,
-)
+from ...workflow.pipeline_orchestrator import can_resume_pipeline, read_pipeline_state
 
 app = typer.Typer(help="工作流编排命令")
 console = Console()

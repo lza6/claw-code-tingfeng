@@ -2,10 +2,7 @@
 
 import pytest
 
-from src.utils.sensitive_word import (
-    AhoCorasickAutomaton,
-    SensitiveWordCache,
-)
+from src.utils.sensitive_word import AhoCorasickAutomaton, SensitiveWordCache
 
 
 class TestAhoCorasickAutomaton:

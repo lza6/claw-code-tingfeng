@@ -919,12 +919,7 @@ _COMMAND_MODULES: tuple[tuple[str, object, str], ...] = ()
 
 def _load_command_modules() -> tuple[tuple[str, object, str], ...]:
     """导入各命令组模块。导入失败不在这里处理，交给注册函数统一报告。"""
-    from .commands import (
-        agent_commands,
-        catalog_commands,
-        setup_commands,
-        workflow_commands,
-    )
+    from .commands import agent_commands, catalog_commands, setup_commands, workflow_commands
 
     return (
         ("agent", agent_commands, "register_agent_commands"),

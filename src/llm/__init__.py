@@ -13,19 +13,10 @@ from __future__ import annotations
 from . import cache, channel_cache
 
 # 从 config 模块导入配置类
-from .config import (
-    LLMConfig,
-    LLMMessage,
-    LLMProviderType,
-    LLMResponse,
-)
+from .config import LLMConfig, LLMMessage, LLMProviderType, LLMResponse
 
 # 从 lazy_litellm 模块导入 LiteLLM
-from .lazy_litellm import (
-    completion_cost,
-    get_litellm,
-    litellm,
-)
+from .lazy_litellm import completion_cost, get_litellm, litellm
 
 # 从 message_handler 模块导入消息处理
 from .message_handler import (
@@ -39,19 +30,10 @@ from .message_handler import (
 )
 
 # 从 message_sanitizer 模块导入消息清理
-from .message_sanitizer import (
-    ensure_alternating_roles,
-    sanitize_messages,
-    sanity_check_messages,
-)
+from .message_sanitizer import ensure_alternating_roles, sanitize_messages, sanity_check_messages
 
 # 从 prompts 模块导入提示词
-from .prompts import (
-    BasePrompts,
-    EditPrompts,
-    PromptSection,
-    get_prompts_for_model,
-)
+from .prompts import BasePrompts, EditPrompts, PromptSection, get_prompts_for_model
 
 # 从 providers 模块导入所有提供商
 # 工厂方法
@@ -98,11 +80,7 @@ from .structured_output import (
 )
 
 # 从 weak_model_router 模块导入弱模型路由
-from .weak_model_router import (
-    WeakModelConfig,
-    WeakModelRouter,
-    auto_detect_weak_model,
-)
+from .weak_model_router import WeakModelConfig, WeakModelRouter, auto_detect_weak_model
 
 logger = __import__('logging').getLogger('llm')
 

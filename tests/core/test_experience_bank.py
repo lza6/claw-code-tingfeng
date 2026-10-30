@@ -4,12 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.core.experience_bank import (
-    ExperienceBank,
-    ExperienceEmbedder,
-    ExperienceRecord,
-    _tokenize,
-)
+from src.core.experience_bank import ExperienceBank, ExperienceEmbedder, ExperienceRecord, _tokenize
 
 
 @pytest.fixture

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 # 向后兼容导入 (v0.62.0: 逻辑已移至 src.core.patch.diff_engine)
-from ..core.patch.diff_engine import (
-    create_progress_bar,
-)
+from ..core.patch.diff_engine import create_progress_bar
 from ..core.patch.diff_engine import find_last_non_deleted_line as find_last_non_deleted
 from ..core.patch.diff_engine import format_diff_line
 from ..core.patch.diff_engine import generate_partial_update_diff as diff_partial_update

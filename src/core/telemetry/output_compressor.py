@@ -350,4 +350,3 @@ class OutputCompressor:
     def _estimate_tokens(text: str) -> int:
         """估算 token 数量"""
         return max(1, len(text) // 3)
-

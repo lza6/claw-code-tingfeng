@@ -5,14 +5,7 @@
 """
 from __future__ import annotations
 
-from ..utils.colors import (
-    bold_cyan,
-    dim,
-    green,
-    status_fail,
-    status_pass,
-    status_warn,
-)
+from ..utils.colors import bold_cyan, dim, green, status_fail, status_pass, status_warn
 from ..utils.features import features
 from .command_registry import command_registry
 
