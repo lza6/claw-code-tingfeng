@@ -1472,7 +1472,9 @@
   function updateModelButton() {
     const label = $('modelBtnLabel');
     if (!label) return;
-    const short = String(selectedModel || '').split('/').pop() || '模型';
+    // 模型 id 现在可能是复合键 `provider_id:model`，按钮上只显示模型名
+    const raw = String(selectedModel || '');
+    const short = (raw.includes(':') ? raw.split(':').pop() : raw.split('/').pop()) || '模型';
     label.textContent = short + (fastMode ? ' · 快速' : '');
   }
 
@@ -1495,7 +1497,7 @@
       row.className = 'model-item' + (model.id === selectedModel ? ' active' : '');
       const idEl = document.createElement('span');
       idEl.className = 'm-id';
-      idEl.textContent = model.id;
+      idEl.textContent = model.model || model.id;
       const subEl = document.createElement('span');
       subEl.className = 'm-sub';
       subEl.textContent = (model.label || '')
@@ -1636,7 +1638,8 @@
             if (!val) return;
             try {
               await fetch('/api/session/rename?id=' + encodeURIComponent(it.id)
-                + '&title=' + encodeURIComponent(val));
+                + '&title=' + encodeURIComponent(val)
+                + '&token=' + encodeURIComponent(TOKEN));
               loadSessions();
               if (currentSessionId === it.id) $('sessionTitle').textContent = val;
             } catch (e) { showBanner('重命名失败: ' + e.message); }
@@ -1649,7 +1652,8 @@
             ev.stopPropagation();
             if (!window.confirm('删除会话「' + (it.title || it.id) + '」？\n只删这条记录，不动磁盘上的项目文件。')) return;
             try {
-              await fetch('/api/session/delete?id=' + encodeURIComponent(it.id));
+              await fetch('/api/session/delete?id=' + encodeURIComponent(it.id)
+                + '&token=' + encodeURIComponent(TOKEN));
               if (currentSessionId === it.id) {
                 currentSessionId = '';
                 resetChatArea();

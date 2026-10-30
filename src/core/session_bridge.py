@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from dataclasses import dataclass, field
@@ -138,6 +139,7 @@ def rename(session_id: str, title: str, directory: Path | str | None = None) -> 
 
 def delete_session(session_id: str, directory: Path | str | None = None) -> bool:
     """删除会话文件（侧栏"删除"）——只删这个会话，不动其它文件"""
+    session_id = _safe_session_id(session_id)
     d = _dir(directory)
     path = d / f"{session_id}.json"
     if not path.is_file():
@@ -160,7 +162,25 @@ def list_all(directory: Path | str | None = None) -> list[SessionView]:
     return views
 
 
+#: 会话 id 白名单：它会被拼成 `<dir>/<id>.json`，必须挡住 `../providers` 这类穿越值
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+
+
+def _safe_session_id(session_id: str) -> str:
+    """校验会话 id（只允许字母数字 . _ -，且不得含 `..`）
+
+    真实安全缺陷（v0.88.9）：`/api/session/delete?id=../providers` 会让
+    `d / "../providers.json"` 命中数据目录里的 **providers.json（含 API key）**并把它删掉。
+    所有按 id 拼路径的入口都必须先过这里。
+    """
+    sid = str(session_id or "").strip()
+    if not sid or sid in (".", "..") or ".." in sid or not _SESSION_ID_RE.match(sid):
+        raise ValueError(f"非法会话 ID: {session_id!r}")
+    return sid
+
+
 def load(session_id: str, directory: Path | str | None = None) -> SessionView:
+    session_id = _safe_session_id(session_id)
     d = _dir(directory)
     path = d / f"{session_id}.json"
     if not path.is_file():
@@ -173,6 +193,7 @@ def load(session_id: str, directory: Path | str | None = None) -> SessionView:
 
 def save(session: SessionView, directory: Path | str | None = None) -> Path:
     """以**引擎格式**保存（与 Agent 运行时同源）"""
+    session.session_id = _safe_session_id(session.session_id)
     d = _dir(directory)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{session.session_id}.json"

@@ -66,7 +66,7 @@ def _serve(fn):
 class TestRenameSession:
     def test_rename_changes_title_only(self, data_dir: Path):
         _seed(data_dir)
-        q = urllib.parse.urlencode({"id": "sess-keep", "title": "新标题 ABC"})
+        q = urllib.parse.urlencode({"id": "sess-keep", "title": "新标题 ABC", "token": "tok"})
 
         status, body = _serve(lambda port: _http_get(port, f"/api/session/rename?{q}"))
 
@@ -81,12 +81,12 @@ class TestRenameSession:
 
     def test_rename_missing_id_is_400(self, data_dir: Path):
         _seed(data_dir)
-        status, _ = _serve(lambda port: _http_get(port, "/api/session/rename?title=x"))
+        status, _ = _serve(lambda port: _http_get(port, "/api/session/rename?title=x&token=tok"))
         assert status == 400
 
     def test_rename_unknown_session_is_404(self, data_dir: Path):
         _seed(data_dir)
-        q = urllib.parse.urlencode({"id": "nope", "title": "x"})
+        q = urllib.parse.urlencode({"id": "nope", "title": "x", "token": "tok"})
         status, _ = _serve(lambda port: _http_get(port, f"/api/session/rename?{q}"))
         assert status == 404
 
@@ -94,7 +94,7 @@ class TestRenameSession:
 class TestDeleteSession:
     def test_delete_removes_only_that_file(self, data_dir: Path):
         _seed(data_dir)
-        q = urllib.parse.urlencode({"id": "sess-drop"})
+        q = urllib.parse.urlencode({"id": "sess-drop", "token": "tok"})
 
         status, body = _serve(lambda port: _http_get(port, f"/api/session/delete?{q}"))
 
@@ -105,7 +105,7 @@ class TestDeleteSession:
 
     def test_delete_unknown_returns_ok_false(self, data_dir: Path):
         _seed(data_dir)
-        q = urllib.parse.urlencode({"id": "ghost"})
+        q = urllib.parse.urlencode({"id": "ghost", "token": "tok"})
         status, body = _serve(lambda port: _http_get(port, f"/api/session/delete?{q}"))
         assert status == 200
         assert json.loads(body)["ok"] is False

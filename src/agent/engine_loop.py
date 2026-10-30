@@ -362,12 +362,11 @@ async def _run_agent_loop(
                 if _has_image_blocks(config.messages) and not getattr(config, '_vision_degraded', False):
                     config._vision_degraded = True
                     config.messages = _strip_image_blocks(config.messages)
+                    # 带上 str(e)：降级后若二次也失败，第一因（401/context 超限/断连）不能丢
                     warn(
-                        f"带图请求失败（{type(e).__name__}），已自动降级为纯文本重试；"
+                        f"带图请求失败（{type(e).__name__}: {e}），已自动降级为纯文本重试；"
                         "如需看图请换一个支持视觉的模型"
                     )
-                    if config.publish_token_and_cost:
-                        pass  # 保持回调引用（降级不额外计费）
                     continue
                 raise LLMProviderError(
                     message=f'LLM {"流式" if config.is_stream else ""}调用失败: {e}',

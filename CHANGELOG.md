@@ -7,6 +7,58 @@
 
 ---
 
+## [v0.88.9] (2026-10-30) — 独立审查抓到的 P0/P1 修复（路径穿越删配置 / 任务丢失 / 跨 provider 选型）
+
+独立 Critic（只读、不继承实现方推理）审 v0.86→v0.88.5，实跑后给出 **CONDITIONAL PASS**，
+列出 1 个 P0 + 2 个 P1。全部修复并各自补了回归测试。
+
+### P0（安全）：`/api/session/delete?id=../providers` 可删掉含 API key 的配置
+Critic 的实跑证据：
+```
+GET /api/session/delete?id=../providers  →  200 {"ok": true}
+providers.json 还在吗: False        # 含 api_key 的配置被删
+```
+两个根因叠加：
+1. `session_bridge` 把 id 直接拼成 `<dir>/<id>.json`，`../providers` 一步穿越到数据目录；
+2. `/api/session/rename|delete` 这些**破坏性**端点在 HTTP 层**完全没有 token 校验**
+   （本机任意进程、或网页 CSRF 的简单 GET 就能触发）。
+
+修复（两道防线）：
+- `session_bridge._safe_session_id()`：白名单 `^[A-Za-z0-9._-]{1,80}$` 且禁 `..`，
+  在 `load` / `save` / `rename` / `delete_session` 四个入口统一校验，不合法抛 `ValueError`
+- HTTP 层：`/api/session/rename|delete` 必须带 `?token=` 或 `X-Clawd-Token`（`secrets.compare_digest`），
+  否则 403；前端与 E2E 同步带 token，E2E 新增「无 token 必须 403」断言
+- 新增 `tests/server/test_session_delete_security.py`（6 条）：穿越 id 被拒且 `providers.json` 仍在、
+  无 token 403、带 token 正常删除、带 token 也不能穿越
+
+### P1：pipeline 把 `ctx.task` 填成 `session_id`，team-exec/ralplan 全程跑空任务
+`PipelineModeState` 没有 `task` 字段，`_initialize_state(task, ...)` 收到的目标初始化后就丢了，
+构建 `StageContext` 时只能填 `self._state.session_id`（那串 hex）。
+**上一版测试之所以是绿的**：它手工构造 `StageContext(task="...")`，绕开了真实 pipeline 的上下文构造。
+修复：状态里真正存 `task`（`to_dict` 随 `asdict` 自动带上，`from_dict` 兼容旧文件缺字段），
+`StageContext(task=self._state.task or self._state.session_id)`。
+新增 `tests/workflow/test_pipeline_task_propagation.py`（4 条，**两条走真实 `run()` 入口**）；
+`test_pipeline.py` 里那条登记该缺陷的 `xfail(strict)` 自动转正。
+
+### P1：跨 provider 选模型只换 `model`，不换 provider/密钥/base_url
+`/api/models` 返回**所有 provider** 的模型，前端原样回传，服务端只 `replace(model=...)`
+→ 等于「用 A 家密钥发 B 家模型名」，跨 provider 选型必然失败（默认选第一个时恰好对，演示看不出来）。
+修复：模型 id 改为复合键 `provider_id:model`，服务端解析后 `providers_store.build_llm_config(pid)`
+取整份配置；前端按钮显示仍取纯模型名。新增 `tests/server/test_model_provider_switch.py`（3 条，
+断言切到 B 家后 `api_key`/`base_url` 都换成 B 的）。
+
+### 同时采纳的审查建议（P3）
+- 删掉降级分支里的空语句 `if config.publish_token_and_cost: pass`，并把 `str(e)` 带进告警
+  （否则降级后二次失败查不到第一因）
+
+**验证**
+- 定向：`tests/server + workflow + contracts + cli + agent` **1903 passed**（修完后 1 条 xfail 转正）
+- 全量非 slow：见下（本轮复跑）
+- `verify_audit_p1.py` 28/28 · `check_doc_drift` 全一致（5413 / 可达 501 / 静默 155）
+- 新增 3 个测试文件共 13 条回归测试
+
+---
+
 ## [v0.88.8] (2026-10-30) — X-7 收口：6 个命令接入 `--json` 契约 + 压测验收
 
 **接入 `--json` 的命令（全部走 `CommandResult`，字段稳定、退出码一致）**

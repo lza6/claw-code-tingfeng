@@ -300,15 +300,8 @@ class TestOrchestratorExecution:
         record = orch._state.pipeline_stage_results["only"]
         assert record["duration_ms"] >= 0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "缺陷 src/workflow/pipeline.py:340：StageContext.task 传的是 self._state.session_id，"
-            "用户 task 文本从未进入管道；PipelineModeState 也没有 task 字段，"
-            "因此 ralplan/team-exec 都在对一个 session id 做规划"
-        ),
-    )
     async def test_stage_receives_user_task(self, tmp_path):
+        """v0.88.9 修复：PipelineModeState 现在有 task 字段，阶段拿到的是用户目标"""
         captured: list[StageContext] = []
         orch = _orchestrator(tmp_path, [_StubStage("only", captured=captured)])
 

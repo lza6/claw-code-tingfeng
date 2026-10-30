@@ -476,8 +476,13 @@ const admin = await page.evaluate(async () => {
   const rows = Array.from(document.querySelectorAll('#sessionList .session-item'));
   const hasTools = rows.some((el) => el.querySelector('.session-tools .st-btn'));
 
+  const tok = encodeURIComponent(window.__CLAWD_TOKEN__ || '');
+  // 安全回归保护：不带 token 的写操作必须被拒（此前可被网页 CSRF 直接删会话/配置）
+  const noTok = await fetch('/api/session/delete?id=' + encodeURIComponent(target.id));
+  const noTokStatus = noTok.status;
+
   const q1 = await fetch('/api/session/rename?id=' + encodeURIComponent(target.id)
-    + '&title=' + encodeURIComponent('E2E 重命名目标'));
+    + '&title=' + encodeURIComponent('E2E 重命名目标') + '&token=' + tok);
   const renamed = await q1.json();
 
   const input = document.querySelector('#sessionSearch');
@@ -486,7 +491,7 @@ const admin = await page.evaluate(async () => {
   await new Promise((res) => setTimeout(res, 900));
   const filtered = document.querySelectorAll('#sessionList .session-item').length;
 
-  const q2 = await fetch('/api/session/delete?id=' + encodeURIComponent(target.id));
+  const q2 = await fetch('/api/session/delete?id=' + encodeURIComponent(target.id) + '&token=' + tok);
   const deleted = await q2.json();
 
   input.value = '';
@@ -501,12 +506,14 @@ const admin = await page.evaluate(async () => {
     okRename: !!renamed.ok && renamed.title === 'E2E 重命名目标',
     filtered,
     okDelete: !!deleted.ok,
+    noTokStatus,
     afterDelete,
   };
 });
 check('会话可重命名 + 搜索过滤 + 删除（只动那一条）',
   !admin.skip && admin.hasTools && admin.okRename && admin.filtered === 1 && admin.okDelete,
   JSON.stringify(admin));
+check('未带 token 的写操作被拒绝（403）', admin.noTokStatus === 403, JSON.stringify({ noTokStatus: admin.noTokStatus }));
 
 await browser.close();
 const failed = results.filter(([, ok]) => !ok);

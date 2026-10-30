@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.88.8 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.88.9 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -440,9 +440,9 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5372 passed / 9 skipped / 9 xfailed / 0 failed**（2026-10-30 v0.88.7 实测，400.81s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5372 passed / 0 failed / 6 分 40 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5399 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5387 passed / 9 skipped / 8 xfailed / 0 failed**（2026-10-30 v0.88.9 实测，382.71s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5387 passed / 0 failed / 6 分 22 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5413 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **66.15%**（2026-10-30 v0.88.8 实测，38499/58196 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |

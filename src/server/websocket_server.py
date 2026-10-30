@@ -355,6 +355,13 @@ class ClawdWebSocketServer:
         raw_path = request.path
         path = raw_path.split('?')[0]
         if request.headers.get('Upgrade', '').lower() != 'websocket':
+            # 破坏性 HTTP 写操作必须带 token。
+            # 真实安全缺陷（v0.88.9）：这两个端点此前完全没有鉴权 —— 本机任意进程、
+            # 或网页 CSRF（简单 GET 不触发 preflight）一条请求就能改名/删除会话。
+            if path in ('/api/session/rename', '/api/session/delete'):
+                if not self._http_write_authorized(raw_path, request.headers):
+                    self.logger.warning(f'拒绝未授权的写操作: {path}')
+                    return _resp(403, b'forbidden: token required', 'text/plain; charset=utf-8')
             try:
                 # websockets 16 的 Request 无 method 属性；进入此回调的
                 # 非 upgrade 请求按 GET 处理（loopback-only 服务，可接受）
@@ -375,6 +382,27 @@ class ClawdWebSocketServer:
                     b'Internal Server Error',
                 )
         return None  # WS 握手走默认流程
+
+    def _http_write_authorized(self, raw_path: str, headers) -> bool:
+        """HTTP 写操作的 token 校验（`?token=` 或 `X-Clawd-Token` 头）
+
+        只用于**破坏性**端点；只读的 /api/* 保持免鉴权（loopback-only UI 需要它们）。
+        """
+        import secrets
+        from urllib.parse import parse_qs
+
+        expected = str(getattr(self._auth_manager, 'token', '') or '')
+        if not expected:
+            return False
+        given = ''
+        if '?' in raw_path:
+            given = (parse_qs(raw_path.split('?', 1)[1]).get('token') or [''])[0]
+        if not given:
+            try:
+                given = str(headers.get('X-Clawd-Token', '') or '')
+            except Exception:  # noqa: BLE001 — 老版本 Headers 可能不支持 get
+                given = ''
+        return bool(given) and secrets.compare_digest(given, expected)
 
     def _handle_static_http(self, path: str, raw_path: str = ""):
         """静态 HTTP 处理主体（返回 websockets Response）"""
@@ -476,7 +504,8 @@ class ClawdWebSocketServer:
                 for item in providers_store.list_providers():
                     if item.get('model') and item['model'] not in seen:
                         seen.add(item['model'])
-                        models.append({'id': item['model'],
+                        models.append({'id': f"{item['id']}:{item['model']}",
+                                       'model': item['model'],
                                        'label': item['name'] + ' · ' + item['model'],
                                        'source': 'provider', 'provider': item['id'],
                                        'vision': supports_vision(item['model'])})

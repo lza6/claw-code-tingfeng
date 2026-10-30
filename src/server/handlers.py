@@ -284,6 +284,21 @@ class MessageRouter:
             from dataclasses import replace as _dc_replace
 
             base_cfg = llm_config_from_msg
+
+            # 复合键 `provider_id:model`：选的是**另一家 provider 的模型**时，必须连
+            # provider / api_key / base_url 一起换。此前只 replace(model)，
+            # 等于「用 A 家密钥发 B 家模型名」，跨 provider 选型必然失败（真实缺陷）。
+            pid, sep, model_only = chosen_model.partition(':')
+            if sep and pid and model_only:
+                try:
+                    from ..core import providers_store as _ps
+
+                    base_cfg = _ps.build_llm_config(pid, self._workdir())
+                    chosen_model = model_only
+                    self.logger.info(f"按复合键切换 provider: {pid} / {model_only}")
+                except (ValueError, KeyError, OSError) as exc:
+                    self.logger.warning(f"复合键切换 provider 失败（回退默认配置）: {exc}")
+
             if base_cfg is None:
                 from ..llm.config import LLMConfig as _LLMConfig
 
@@ -660,6 +675,7 @@ class MessageRouter:
             if default_model:
                 models.append({
                     'id': default_model,
+                    'model': default_model,
                     'label': default_model,
                     'source': 'global',
                     'provider': str(getattr(settings, 'llm_provider', '') or ''),
@@ -671,7 +687,9 @@ class MessageRouter:
             for item in providers_store.list_providers():
                 if item.get('model'):
                     models.append({
-                        'id': item['model'],
+                        # 复合 id：前端原样回传，服务端据此连 provider/密钥一起换
+                        'id': f"{item['id']}:{item['model']}",
+                        'model': item['model'],
                         'label': item['name'] + ' · ' + item['model'],
                         'source': 'provider',
                         'provider': item['id'],

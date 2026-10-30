@@ -51,6 +51,9 @@ class PipelineModeState:
     current_phase: str
     session_id: str
     created_at: str
+    #: 用户给的目标（真实缺陷：此前没有这个字段，`run(task)` 的目标初始化后就丢了，
+    #: 每个阶段拿到的是 session_id 那串 hex —— team-exec/ralplan 全程在跑空任务）
+    task: str = ""
     artifacts: dict[str, Any] = field(default_factory=dict)
     max_ralph_iterations: int = 10
     worker_count: int = 2
@@ -74,11 +77,15 @@ class PipelineModeState:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PipelineModeState:
-        """从字典反序列化"""
-        # 处理字段类型
-        if "active" in data and isinstance(data["active"], bool):
-            pass  # 正确类型
-        return cls(**data)
+        """从字典反序列化（兼容旧状态文件）
+
+        旧文件没有 `task` 字段，直接 `cls(**data)` 会 TypeError；
+        这里只取已知字段，缺失的走 dataclass 默认值。
+        """
+        from dataclasses import fields as _fields
+
+        known = {f.name for f in _fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 class PipelineOrchestrator:
@@ -274,6 +281,7 @@ class PipelineOrchestrator:
             current_phase=f"stage:{stage_names[0]}" if stage_names else "idle",
             session_id=self._session_id,
             created_at=datetime.now(timezone.utc).isoformat(),
+            task=str(task or ""),
             artifacts=initial_artifacts,
         )
 
@@ -340,7 +348,8 @@ class PipelineOrchestrator:
 
             # 构建上下文
             ctx = StageContext(
-                task=self._state.session_id,  # 实际任务需从某处恢复
+                # 用真实目标；老状态文件没有 task 时才退回 session_id（并会在下面告警）
+                task=self._state.task or self._state.session_id,
                 artifacts=artifacts,
                 previous_stage_result=None,  # TODO: 传递前一阶段结果
                 cwd=self.workdir,
