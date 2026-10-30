@@ -420,11 +420,21 @@ class ConfigInjector:
         return {}
 
     def _load_features_config(self) -> dict[str, Any]:
-        """加载 features.json 配置"""
-        features_paths = [
+        """加载 features.json 配置
+
+        真实缺陷（CI Linux 实测）：测试用 `CLAWD_CONFIG_DIR` 指向临时目录，
+        但这里只查 `~/.clawd` 和 `cwd/.clawd` —— 环境变量被静默忽略，
+        测试里 `len(config) > 0` 必假（assert 0 > 0）。CLAWD_CONFIG_DIR
+        是本项目既有约定（core/data_dir.py 同名变量），必须纳入搜索链。
+        """
+        features_paths: list[Path] = []
+        env_config_dir = (os.environ.get("CLAWD_CONFIG_DIR") or "").strip()
+        if env_config_dir:
+            features_paths.append(Path(env_config_dir) / "features.json")
+        features_paths.extend([
             Path.home() / ".clawd" / "features.json",
             Path.cwd() / ".clawd" / "features.json",
-        ]
+        ])
 
         for features_path in features_paths:
             if features_path.exists():

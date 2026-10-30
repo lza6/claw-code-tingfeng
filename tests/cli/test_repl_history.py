@@ -97,4 +97,11 @@ class TestChatCliResumeFlag:
     def test_chat_has_resume_option(self):
         result = runner.invoke(app, ["chat", "--help"])
         assert result.exit_code == 0
-        assert "--resume" in result.output
+        # rich 会按终端宽度把 `--resume` 断行成 `-` + 换行 + `-resume`（CI 无 TTY 时
+        # 宽度不同），且输出带 ANSI 码 —— 子串匹配两种环境结论相反。
+        # 统一口径：剥 ANSI、去空白后再断言。
+        import re as _re
+
+        plain = _re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        compact = _re.sub(r"\s+", "", plain)
+        assert "--resume" in compact or "-resume" in compact

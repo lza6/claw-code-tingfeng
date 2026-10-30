@@ -148,17 +148,26 @@ class FileReadTool(BaseTool):
     def _read_with_timeout(self, path: Path, timeout: int) -> str:
         """带超时保护的文件读取
 
-        使用信号机制实现超时控制（仅 Unix）。
+        使用信号机制实现超时控制（仅 Unix **主线程**）。
         Windows 上使用简单的文件大小检查作为回退。
+
+        真实缺陷（CI Linux 矩阵实测 35 failed 的根因之一）：`signal.alarm` 只能在
+        **主线程** 用 —— pytest 下工具在线程池/子线程里执行时，
+        `signal.signal(SIGALRM, ...)` 直接抛
+        "signal only works in main thread of the main interpreter"，
+        被外层 `except Exception` 吞掉 → 所有 FileReadTool 调用全部"读取错误"。
+        修法：非主线程退化为直接读取（与 Windows 同路径）——
+        超时保护只在主线程提供，子线程靠文件大小校验兜底。
         """
         import sys
+        import threading
 
-        if sys.platform == 'win32':
-            # Windows 不支持 SIGALRM，使用直接读取
-            # 文件大小检查已在 validate 中完成
+        if sys.platform == 'win32' or threading.current_thread() is not threading.main_thread():
+            # Windows 不支持 SIGALRM；非主线程 SIGALRM 直接抛错。
+            # 文件大小检查已在 validate 中完成，直接读取不会失控。
             return path.read_text(encoding='utf-8', errors='replace')
 
-        # Unix 平台：使用 SIGALRM 实现超时
+        # Unix 主线程：使用 SIGALRM 实现超时
         def timeout_handler(signum, frame) -> NoReturn:
             raise TimeoutError(f'文件读取超时 ({timeout}s)')
 

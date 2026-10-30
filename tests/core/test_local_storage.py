@@ -121,7 +121,16 @@ class TestUsage:
 
     def test_record_failure_does_not_raise(self):
         """记账失败只告警（不能因为磁盘问题打断 agent 主流程）"""
-        assert usage_store.record(model="x", workdir="Z:/definitely/not/here") is False
+        # Z:/ 在 Windows 是无效盘符 → mkdir 抛 OSError → record 返回 False。
+        # Linux 上 "Z:/..." 只是 cwd 下的一个普通相对目录名，能正常创建 → 返回 True。
+        # 断言的语义是"不抛异常 + 失败有返回值"，跨平台用 monkeypatch 精确触发失败路径。
+        import unittest.mock as _mock
+
+        with _mock.patch(
+            "src.core.local_db.connect",
+            side_effect=OSError("simulated disk failure"),
+        ):
+            assert usage_store.record(model="x") is False
 
 
 class TestProviderTakesEffect:
@@ -189,7 +198,12 @@ class TestUsageCli:
         usage_store.record(model="m1", cost=0.02, client="cli", workdir=wd)
         result = CliRunner().invoke(entrypoint.app, ["usage", "--json"])
         assert result.exit_code == 0
-        payload = json.loads(result.output.strip().splitlines()[-1])
+        # CliRunner 默认把 stderr 混进 output（如"[*] 结构化日志已启用"横幅），
+        # 取"最后一行"会拿到横幅而不是 JSON。按 JSON 行提取，断言依然严格。
+        json_line = next(
+            ln for ln in result.output.strip().splitlines() if ln.lstrip().startswith("{")
+        )
+        payload = json.loads(json_line)
         assert payload["totals"]["requests"] == 1
         assert payload["recent"][0]["client"] == "cli"
 

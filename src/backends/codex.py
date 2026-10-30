@@ -107,15 +107,42 @@ def parse_events(lines: Iterable[str]) -> dict[str, Any]:
     }
 
 
+#: 探活阶段确认"PATH 上没有"的裸命令名 —— available() 据此诚实返回 False
+#: （真实缺陷：build_argv 是纯字符串拼装不该炸，但 available() 假 True 会让
+#:  CLI/引擎误以为后端可用，真正执行时才报含糊的 FileNotFoundError）
+_UNRESOLVED_BARE_COMMANDS: set[str] = set()
+
+
 def _resolve_binary(binary: str | Sequence[str]) -> list[str]:
-    """解析可执行文件（Windows 上 npm 全局装的 codex 是 .cmd）"""
+    """解析可执行文件（Windows 上 npm 全局装的 codex 是 .cmd）
+
+    真实缺陷（CI Linux 矩阵 6 failed）：显式传 `binary=["codex"]`（测试场景，
+    本机没装 codex）时把 "codex" 当**路径**做 `Path("codex").exists()` ——
+    相对路径恰好指 cwd 下的同名文件时为 False → 直接抛
+    "未找到 codex 可执行文件"，build_argv 纯字符串拼装测试根本不需要真实二进制。
+    修法：列表形式先查 `shutil.which(head)`（PATH 上的才算存在），
+    PATH 上没有且不是绝对路径 → 视为"运行时才会解析的命令名"，直接放行
+    （真正执行时 subprocess 会给出明确的 FileNotFoundError）。
+    """
     if isinstance(binary, (list, tuple)):
         argv = [str(b) for b in binary]
         if not argv:
             raise CodexBackendError("binary 不能为空")
         head = argv[0]
-        if not (Path(head).exists() or shutil.which(head)):
+        head_path = Path(head)
+        on_path = shutil.which(head) is not None
+        # 绝对/相对路径且真实存在 → 直接用；否则查 PATH；
+        # 都没有时：只有"看起来像路径"（含分隔符）才立即报错 ——
+        # 裸命令名留给运行时解析，但 available() 必须如实报 False
+        #（否则 CI 测试"binary 不存在要报错"假绿）。
+        if head_path.is_absolute() and not head_path.exists():
             raise CodexBackendError(f"未找到 codex 可执行文件（{head}）")
+        if not head_path.is_absolute() and os.sep in head and not head_path.exists():
+            raise CodexBackendError(f"未找到 codex 可执行文件（{head}）")
+        # 裸命令名且 PATH 上没有 → 不在解析时抛（build_argv 是纯字符串拼装），
+        # 但通过模块级"已确认缺失"记录，供 available() 诚实返回
+        if not on_path and os.sep not in head and head_path.is_file() is False:
+            _UNRESOLVED_BARE_COMMANDS.add(head)
         return argv
 
     found = shutil.which(binary)
@@ -167,9 +194,15 @@ class CodexBackend:
     def available(self) -> bool:
         try:
             _resolve_binary(self.binary)
-            return True
         except CodexBackendError:
             return False
+        if isinstance(self.binary, (list, tuple)):
+            head = str(self.binary[0])
+            if head in _UNRESOLVED_BARE_COMMANDS and shutil.which(head) is None:
+                return False
+        elif shutil.which(str(self.binary)) is None:
+            return False
+        return True
 
     def version(self) -> str | None:
         argv = _resolve_binary(self.binary)
@@ -239,6 +272,13 @@ class CodexBackend:
         argv = self.build_argv(goal)
         env = dict(os.environ)
         started = time.perf_counter()
+        # 已探明"PATH 上没有"的裸命令名 → 提前给出与 missing binary 一致的
+        # 明确错误（而不是等 Popen 抛含糊的 WinError 2 / FileNotFoundError）
+        head = argv[0] if argv else ""
+        if head in _UNRESOLVED_BARE_COMMANDS and shutil.which(head) is None:
+            raise CodexBackendError(
+                f"未找到 codex 可执行文件（{head}）。安装: npm i -g @openai/codex"
+            )
         try:
             proc = subprocess.Popen(
                 argv,

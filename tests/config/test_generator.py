@@ -620,15 +620,9 @@ class TestMergeConfigFile:
         for script in ("state-server.js", "memory-server.js", "team-server.js"):
             assert script in content
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "缺陷 src/config/generator.py:482-529：MCP 参数用 str(Path) 直接嵌入 TOML "
-            "字符串，Windows 上产出 args = [\"C:\\pkg\\dist\\...\"] —— \\p 是保留转义序列，"
-            "生成的 config.toml 无法被任何合规 TOML 解析器读取"
-        ),
-    )
     async def test_output_is_valid_toml(self, tmp_path):
+        """v0.89.0 修复后转为正向断言：generator 的 MCP 路径统一转 POSIX 斜杠
+        后再嵌入 TOML，Windows 反斜杠不再产生非法转义（此前 xfail strict 记录）。"""
         import toml
 
         target = tmp_path / "config.toml"

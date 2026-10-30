@@ -24,7 +24,11 @@ def temp_repo():
     # 必须有一个 commit 才能创建 worktree
     (temp_dir / "README.md").write_text("# Test Repo")
     subprocess.run(["git", "add", "."], cwd=temp_dir, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=temp_dir, check=True)
+    # CI 容器里 git 无 user.name/user.email → `git commit` 退出 128
+    # （真实 CI 矩阵 4 个 ERROR 的根因）。显式传身份，不依赖宿主配置。
+    env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@test",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@test"}
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=temp_dir, check=True, env=env)
     yield temp_dir
 
     # Windows git cleanup helper

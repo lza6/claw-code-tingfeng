@@ -82,6 +82,9 @@ dev = [
     # 未声明时干净环境 `pytest --collect-only` 直接 1 error（2026-10-23 CI 门禁实测），
     # 而本机因为系统 Python 装过 numpy 所以看不见这个失败。
     "numpy>=1.24",
+    # tests/tools_runtime/test_watch_tool.py 需要 pathspec（watch extra 的依赖，
+    # 但 CI 只装 `.[dev]` —— 本机装过全套所以看不见，Linux 矩阵实测 6 个测试全红）
+    "pathspec>=0.12",
 ]
 voice = [
     "pydub>=0.25",

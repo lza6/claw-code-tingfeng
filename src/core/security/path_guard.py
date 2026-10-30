@@ -80,14 +80,19 @@ def _resolve_symlink_chain(
             return symlink_found, chain, "broken"
 
         # 检查循环：通过 inode 或路径指纹
+        # 真实缺陷（CI Linux 实测 2 failed）：循环链接 a->b->a 上 `symlink_found.stat()`
+        # 会**跟随链接** → 内核直接 ELOOP 抛 OSError → `except OSError: pass` 跳过记录
+        # → seen_inodes 永远不命中 → 循环检测失效，depth 用尽后被当"成功"放行。
+        # 修法：用 `lstat()`（不跟随链接，拿到链接自身 inode）+ stat 失败时
+        # 降级用路径字符串指纹；两条路都保证"重复出现 = 循环"。
         try:
-            stat_info = symlink_found.stat()
+            stat_info = symlink_found.lstat()
             inode_id = f"{stat_info.st_ino}_{stat_info.st_dev}"
-            if inode_id in seen_inodes:
-                return symlink_found, chain, "circular"
-            seen_inodes.add(inode_id)
         except OSError:
-            pass  # 无法 stat，继续执行
+            inode_id = str(symlink_found)
+        if inode_id in seen_inodes:
+            return symlink_found, chain, "circular"
+        seen_inodes.add(inode_id)
 
         # 替换符号链接部分为目标路径
         # parts[0..symlink_index] 是到达符号链接的路径
@@ -128,11 +133,18 @@ def _resolve_symlink_chain(
     except Exception:
         final_abs = final
 
-    # 边界检查：必须在 repo_root 内
+    # 边界检查：必须在 repo_root 内（**先判逃逸**，越权优先于"目标不存在"）
     try:
         final_abs.relative_to(repo_root)
     except ValueError:
         return final_abs, chain, "escape"
+
+    # 真实缺陷（CI Linux 实测）：损坏符号链接（-> 不存在的目标）在 Linux 上
+    # resolve(strict=False) 会把链接直接替换成目标路径并"成功返回"，于是
+    # 沙箱校验判 valid —— 但该路径根本打不开，属于"broken"。
+    # 判据：链上有链接 且 最终路径不存在（目标缺失）。
+    if chain and not final_abs.exists():
+        return final_abs, chain, "broken"
 
     return final_abs, chain, ""
 

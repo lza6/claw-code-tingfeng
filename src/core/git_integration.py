@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,11 @@ class GitManager:
         """确保 repo 存在，必要时创建"""
         self._init_attempted = True
         try:
+            # GitPython 在 import 时会检查 git 版本，容器/精简环境里 git 过旧或缺失
+            # 时直接抛 ImportError 并打印一大段 "GIT_PYTHON_REFRESH" 指引，
+            # 还会污染 pytest 收集（tests/core/test_git_integration_deep.py 整文件 ERROR）。
+            # 静默处理 = "gitpython 不可用" 的既有降级路径，与 ImportError 同语义。
+            os.environ.setdefault("GIT_PYTHON_REFRESH", "quiet")
             import git
             from git.exc import InvalidGitRepositoryError
 

@@ -485,6 +485,20 @@ def _get_omx_tables_block(package_root: str, include_tui: bool = True) -> str:
     trace_server_path = str(pkg_root / "dist" / "mcp" / "trace-server.js")
     team_server_path = str(pkg_root / "dist" / "mcp" / "team-server.js")
 
+    # 真实缺陷（xfail strict 记录的 Windows 崩溃，CI Linux 上 XPASS 暴露）：
+    # str(Path) 直接嵌 TOML 字符串 —— Windows 上 `C:\pkg\dist\...` 的 `\p` 是
+    # 保留转义序列，生成的 config.toml 无法被任何合规 TOML 解析器读取。
+    # 修法：统一转 POSIX 风格斜杠（TOML basic string 不需要转义 `/`），
+    # node 在 Windows 上也接受正斜杠路径。
+    def _toml_path(p: str) -> str:
+        return p.replace("\\", "/")
+
+    state_server_path = _toml_path(state_server_path)
+    memory_server_path = _toml_path(memory_server_path)
+    code_intel_path = _toml_path(code_intel_path)
+    trace_server_path = _toml_path(trace_server_path)
+    team_server_path = _toml_path(team_server_path)
+
     lines = [
         "",
         "# ============================================================",

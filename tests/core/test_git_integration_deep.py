@@ -11,10 +11,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import git
 import pytest
 
 from src.core.git_integration import GitManager, get_git_manager
+
+# GitPython 在 import 时检查 git 版本：CI 精简容器里 git 缺失/过旧时
+# `import git` 直接抛 ImportError 并打印大段指引，整个模块收集失败（38 errors）。
+# 延迟到具体测试内再 import（测试本身就有"gitpython 缺失时降级"的用例）。
+git = pytest.importorskip("git")
 
 
 @pytest.fixture

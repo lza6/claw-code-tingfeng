@@ -26,7 +26,14 @@ class WorktreeManager:
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.worktree_base = repo_root / ".clawd" / "worktrees"
-        self.worktree_base.mkdir(parents=True, exist_ok=True)
+        try:
+            self.worktree_base.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            # 真实缺陷（CI Linux 实测）：GitManager("/nonexistent") 这类"探活"构造
+            # 会在只读路径上 mkdir → PermissionError 直接炸出构造函数，
+            # 连"git 不可用"的正常降级都走不到。worktree 目录延迟到真正
+            # 创建 worktree 时再建，构造函数永远不抛 OSError。
+            logger.warning(f"worktree 基目录创建失败（延迟到使用时重试）: {exc}")
 
     @classmethod
     def _validate_session_id(cls, session_id: str) -> str:
@@ -45,6 +52,9 @@ class WorktreeManager:
 
         # 0. 清理过期的工作树元数据
         subprocess.run(["git", "worktree", "prune"], cwd=self.repo_root)
+
+        # 基目录延迟创建（构造函数不再 mkdir，见 __init__ 注释）
+        self.worktree_base.mkdir(parents=True, exist_ok=True)
 
         worktree_path = self.worktree_base / session_id
         if worktree_path.exists():

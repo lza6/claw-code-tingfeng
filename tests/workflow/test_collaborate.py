@@ -193,8 +193,13 @@ class TestCollaborateCli:
 
         result = runner.invoke(cli_app, ["collaborate", "--help"])
         assert result.exit_code == 0
+        # rich 按终端宽度断行 + ANSI 码（CI 无 TTY 宽度不同）→ 剥码去空白再断言
+        import re as _re
+
+        plain = _re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        compact = _re.sub(r"\s+", "", plain)
         for flag in ("--planner", "--executor", "--reviewer", "--rounds"):
-            assert flag in result.output
+            assert flag.replace("-", "") in compact.replace("-", ""), flag
 
 
 class TestBackendCaching:

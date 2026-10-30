@@ -78,13 +78,22 @@ def resolve_command_path_for_platform(
     env = env or os.environ
     path_env = path_env or env.get("PATH", "")
 
+    # 真实缺陷（CI Linux 矩阵实测 35 failed 之一）：Linux 上 `os.altsep` 是 **None**，
+    # `None in command` 直接 TypeError（"'in <string>' requires string as left operand"）。
+    # Windows 上 os.altsep='/' 掩盖了这个 bug —— probe/which 系列测试在 Linux 必红。
+    # 另加空 command 防御（None/空串同样会在 `in` 处炸）。
+    if not command:
+        return None
+    altsep = os.altsep
+
     # If command contains path separators, check if it's executable
-    if os.sep in command or (hasattr(os, 'altsep') and os.altsep in command):
+    if os.sep in command or (altsep and altsep in command):
         if os.path.isfile(command) and os.access(command, os.X_OK):
             return command
         return None
 
     # Search in PATH
+    path_env = path_env or ""
     for path_dir in path_env.split(os.pathsep):
         if not path_dir:
             continue

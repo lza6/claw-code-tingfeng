@@ -2,6 +2,32 @@
 
 > 状态: **v0.89.0 CLI --json 全覆盖 + R6 + P3 清账**（2026-10-31）：查询类命令 --json 16 个（契约 {ok,code,...}，stdout 纯净）· R6 视觉降级改轮内重试不占迭代 · P3 五项全落（工具签名接线/只读清单单一来源/死参数 cwd/截断告知/缓存写价）· 全量非 slow 5440 passed/0 failed · 收集 5464 · 静默 155 · 可达 503 · 覆盖率 66.27% · 真实 E2E e2e_smoke 5/5 + e2e_production 8/8 · 装机 E2E 入库 scripts/e2e_desktop_install.ps1
 
+## 2026-10-31 v0.89.1 —— CI Linux 矩阵清零（35 failed + 4 errors → 0）
+
+> 承接 v0.89.0：quality-checks 已绿，但 `ci.yml` 的**测试矩阵跑在 Linux**，
+> 本机 Windows 测不出来的跨平台缺陷全在那里暴露。逐条查实修复。
+
+**产品缺陷（8 条，全部 Windows 掩盖型）**
+1. `FileReadTool._read_with_timeout()` 在子线程用 `signal.alarm` → 抛 "signal only works in
+   main thread"（`BaseTool.execute_async` 走 `asyncio.to_thread`）→ 9 个读文件测试连带失败。
+   非主线程/Windows 退化直接读。
+2. `platform_command`：Linux 上 `os.altsep` 是 **None** → `None in command` TypeError
+   （probe/which 5 个测试）。显式判空。
+3. `WorktreeManager.__init__` 对只读路径 mkdir → `GitManager("/nonexistent")` 构造即抛
+   PermissionError（4 ERROR）。延迟到 `create()`。
+4. 循环符号链接：`stat()` 跟随链接 → ELOOP 被 `except OSError: pass` 跳过 → 检测失效（**沙箱逃逸面**）。改 `lstat()`。
+5. 损坏符号链接被判 valid（`resolve(strict=False)` 假成功）→ 链上有链接且目标不存在判 broken（先判逃逸）。
+6. 生成的 config.toml 在 Windows 非法（`\p` 保留转义）→ MCP 路径转 POSIX 斜杠；xfail 移除转正向。
+7. `CLAWD_CONFIG_DIR` 被静默忽略（features.json 恒空）→ 纳入搜索链。
+8. codex 后端 `build_argv` 把裸命令名当路径校验 → 6 个测试红；改为解析期不抛、`available()` 如实 False。
+
+**测试自身缺陷（5 条）**：git commit 无身份（4 ERROR）· rich 断行导致 `--resume` 子串断言假红 ·
+`Z:/...` 在 Linux 是合法相对路径 · `usage --json` 取最后一行拿到 stderr 横幅 · 顶层 `import git` 污染收集。
+另 `dev` extras 补 `pathspec`。
+
+**验证**：本机 `pytest tests/core tests/config tests/backends tests/test_security -q` → **1213 passed / 4 xfailed**；
+Linux 容器（python:3.11-slim + git）复刻 CI 矩阵复跑同一批用例。
+
 ## 2026-10-31 v0.89.0 —— CLI --json 全覆盖 + R6 + P3 清零 + CI 修复 + 装机 E2E 入库
 
 **X-7 收尾（查询类命令 --json 全覆盖，12 个新增）**

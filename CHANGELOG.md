@@ -7,6 +7,45 @@
 
 ---
 
+## [v0.89.1] (2026-10-31) — CI Linux 矩阵清零：35 failed + 4 errors → 0
+
+CI 的 `ci.yml` 测试矩阵跑在 **Linux** 上，本机（Windows）测不出来的一批跨平台缺陷
+全在那里暴露。逐条查实并修复：
+
+### 真实产品缺陷（Windows 上被掩盖）
+
+| 缺陷 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| `FileReadTool` 在子线程必崩 | 全部读文件测试报"读取错误: signal only works in main thread"（**9 个测试**连带失败） | `_read_with_timeout()` 无条件用 `signal.alarm`，而 `BaseTool.execute_async` 走 `asyncio.to_thread` → 子线程调 `signal.signal` 直接抛 | 非主线程 / Windows 退化为直接读（大小校验仍在 validate 兜底） |
+| `platform_command` 探活在 Linux 必崩 | `probe/which/is_command_available` 5 个测试 TypeError | Linux 上 `os.altsep` 是 **None**，`None in command` 抛 "'in <string>' requires string as left operand" | 显式判空后比较；顺带加空 command 防御 |
+| GitManager 构造在只读路径炸 | `GenericManager("/nonexistent")` PermissionError（**4 个 ERROR**） | `WorktreeManager.__init__` 里 `mkdir(parents=True)`，探活构造就写盘 | 构造函数不 mkdir（延迟到 `create()`），失败只告警 |
+| 循环符号链接检测失效 | `a->b->a` 被判"安全"（沙箱逃逸面） | 循环链上 `stat()` **跟随链接** → ELOOP 抛 OSError → `except OSError: pass` 跳过记录 → inode 永不命中 | 改用 `lstat()`（不跟随）+ 路径指纹兜底 |
+| 损坏符号链接被判"合法" | `-> 不存在目标` 的链接校验通过 | `resolve(strict=False)` 把链接替换成目标路径并"成功"返回 | 链上有链接且最终路径不存在 → `broken`（**先判逃逸**，越权优先） |
+| 生成的 config.toml 在 Windows 非法 | xfail(strict) 在 Linux 上 XPASS | MCP 参数用 `str(Path)` 直接嵌 TOML，`C:\pkg\...` 的 `\p` 是保留转义 | 统一转 POSIX 斜杠再嵌入；xfail 标记移除转为正向断言 |
+| `CLAWD_CONFIG_DIR` 被忽略 | features.json 加载恒为空（`assert 0 > 0`） | `_load_features_config()` 只查 `~/.clawd` 与 `cwd/.clawd`，环境变量形同虚设 | 纳入搜索链首位（与 `core/data_dir.py` 同名约定一致） |
+| codex 后端"假可用" | `build_argv` 抛"未找到 codex"（6 个测试） | 显式 `binary=["codex"]` 时把裸命令名当**路径**校验 | 裸命令名不在解析期抛错（留给运行时），但 `available()` 如实返回 False、`run()` 给明确错误 |
+
+### 测试自身缺陷（假红/环境依赖）
+
+- `tests/integration/test_phase3_4_integration.py`：`git commit` 未设身份 → CI 容器 exit 128（4 个 ERROR）→ 显式传 `GIT_AUTHOR_*`/`GIT_COMMITTER_*`
+- `tests/cli/test_repl_history.py` + `tests/workflow/test_collaborate.py`：rich 按终端宽度把 `--resume` 断行成 `-`+`
+`+`-resume`，子串断言在无 TTY 环境失败 → 剥 ANSI + 去空白后断言
+- `tests/core/test_local_storage.py`：`Z:/definitely/not/here` 在 Linux 是**合法相对路径**（能创建）→ 改 monkeypatch 精确触发失败路径；`usage --json` 取"最后一行"会拿到 stderr 横幅 → 按 JSON 行提取
+- `tests/core/test_git_integration_deep.py`：顶层 `import git` 在无 git 环境整文件收集失败 → `pytest.importorskip`
+- `pyproject.toml` 的 `dev` extras 缺 `pathspec`（watch 测试要）→ 补上（`watch` extra 里有，CI 只装 `.[dev]`）
+
+### 顺带
+
+- `GitManager` 导入 gitpython 前设 `GIT_PYTHON_REFRESH=quiet`，避免无 git 环境打印大段指引并污染收集
+
+### 验证
+
+- 本机 Windows：`pytest tests/core tests/config tests/backends tests/test_security -q` → **1213 passed / 4 xfailed**
+- Linux 容器（`python:3.11-slim` + git，复刻 CI 矩阵）：同一批失败用例 **全绿**（见 evidence）
+- `ruff check src tests --select F821,F811,E9` → All checks passed
+
+---
+
 ## [v0.89.0] (2026-10-31) — CLI `--json` 全覆盖（查询类）+ R6 + P3 台账清零
 
 ### CLI：查询类命令全部接入 `--json` 契约（X-7 收尾）
