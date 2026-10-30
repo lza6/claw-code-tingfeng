@@ -1,6 +1,11 @@
 # 已知问题与风险
 
 ## 已解决（2026-10-30，留档防复现）
+- **commit message 变乱码**：用 `python -c "print(...)" > file.txt` 在 Windows 下生成的文件是 GBK，
+  `git commit -F` 按 UTF-8 读 → 提交信息乱码（本轮真实踩到，已推送后才发现）。
+  正确做法：commit message 文件一律用 Write 工具写（UTF-8 无 BOM）；
+  或 `git commit -m` 直接传。已推送的乱码提交需用户授权后 `amend` + `push --force-with-lease`，
+  且要确认没有 tag 指向该提交。
 - **打包版 Host 起不来（`ModuleNotFoundError: annotated_doc`）**：`prepare_host_bundle.py` 的
   依赖闭包用 `pip show` 查传递依赖，但把包名以**逗号**拼成单个参数（`pip show a,b,c`），
   pip 只当"一个不存在的包" → 闭包永远为空，白名单只剩直接 import + 人工补的名字。
