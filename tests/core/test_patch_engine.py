@@ -123,7 +123,7 @@ class TestPatchEngineEdgeCases:
             pattern=r"old",
             replacer=lambda m, fn: "new",
         )
-        
+
         # 应该抛出异常或返回错误结果
         try:
             result = engine.apply_patch(patch_def)

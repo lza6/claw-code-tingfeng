@@ -143,8 +143,8 @@ For comprehensive anti-analysis techniques and bypasses (30+ methods with code),
 ## Specialized Patterns
 
 ### S-Box / Keystream Patterns
-**Xorshift32:** Shifts 13, 17, 5  
-**Xorshift64:** Shifts 12, 25, 27  
+**Xorshift32:** Shifts 13, 17, 5
+**Xorshift64:** Shifts 12, 25, 27
 **Magic constants:** `0x2545f4914f6cdd1d`, `0x9e3779b97f4a7c15`
 
 ### Custom VM Analysis

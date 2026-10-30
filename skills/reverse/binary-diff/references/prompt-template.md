@@ -94,15 +94,15 @@ def migrate_function(ref_disasm, ref_procedure, target_disasm, target_procedure,
         procedure=target_procedure,
         symbol_name_list=", ".join(symbols)
     )
-    
+
     resp = httpx.post(api_url, json={
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0
     }, headers={"Authorization": f"Bearer {api_key}"}, timeout=60)
-    
+
     content = resp.json()["choices"][0]["message"]["content"]
-    
+
     # 提取 YAML 块
     if "```yaml" in content:
         yaml_str = content.split("```yaml")[1].split("```")[0]
@@ -110,7 +110,7 @@ def migrate_function(ref_disasm, ref_procedure, target_disasm, target_procedure,
         yaml_str = content.split("```")[1].split("```")[0]
     else:
         yaml_str = content
-    
+
     return yaml.safe_load(yaml_str)
 
 
@@ -118,38 +118,38 @@ def apply_results(results, ida_session):
     """将解析后的 YAML 结果应用到 IDA"""
     if not results:
         return
-    
+
     renames = []
     comments = []
-    
+
     if "found_call" in results:
         for item in results["found_call"]:
             # 从 insn_disasm 中提取 call target
             # call sub_XXXXXXX → 提取 sub_XXXXXXX 的地址
             renames.append({"addr": item["insn_va"], "name": item["func_name"], "type": "call_target"})
-    
+
     if "found_funcptr" in results:
         for item in results["found_funcptr"]:
             renames.append({"addr": item["insn_va"], "name": item["funcptr_name"], "type": "funcptr_target"})
-    
+
     if "found_gv" in results:
         for item in results["found_gv"]:
             renames.append({"addr": item["insn_va"], "name": item["gv_name"], "type": "gv"})
-    
+
     if "found_vcall" in results:
         for item in results["found_vcall"]:
             comments.append({
                 "addr": item["insn_va"],
                 "comment": f"vcall: {item['func_name']} @ +{item['vfunc_offset']}"
             })
-    
+
     if "found_struct_offset" in results:
         for item in results["found_struct_offset"]:
             comments.append({
                 "addr": item["insn_va"],
                 "comment": f"{item['struct_name']}.{item['member_name']} @ +{item['offset']}"
             })
-    
+
     return {"renames": renames, "comments": comments}
 ```
 
@@ -160,7 +160,7 @@ def apply_results(results, ida_session):
 default:
   api_url: "https://api.deepseek.com/v1/chat/completions"
   model: "deepseek-chat"
-  
+
 # 超大函数回退到 GPT
 fallback:
   api_url: "https://api.openai.com/v1/chat/completions"

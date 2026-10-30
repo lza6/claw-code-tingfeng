@@ -184,7 +184,7 @@ class TestEventBusAutoCleanup:
         """测试超过阈值时自动清理"""
         # 使用更小的阈值确保触发清理
         bus = EventBus(max_queue_size=10, auto_cleanup=True, cleanup_threshold=5, cleanup_target=3)
-        
+
         # 发布 6 个事件（超过阈值 5）
         for i in range(6):
             bus.publish(Event(type=EventType.SYSTEM_STARTUP, data={'i': i}))

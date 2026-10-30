@@ -53,7 +53,7 @@ Java.perform(function() {
     // PackageManager → 隐藏包名
     var PackageManager = Java.use("android.content.pm.PackageManager");
     PackageManager.getPackageInfo.overload('java.lang.String', 'int').implementation = function(pkg, flags) {
-        if (pkg == "de.robv.android.xposed.installer" || 
+        if (pkg == "de.robv.android.xposed.installer" ||
             pkg.includes("magisk") || pkg.includes("frida")) {
             throw Java.use("android.content.pm.PackageManager$NameNotFoundException").$new();
         }

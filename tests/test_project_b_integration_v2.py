@@ -7,13 +7,13 @@ from src.tools_runtime.grep_tool import GrepTool
 def test_symbol_extractor():
     print("Testing SymbolExtractor...")
     extractor = SymbolExtractor()
-    
+
     # Test Python
     py_code = """
 class MyClass:
     def method_a(self):
         pass
-        
+
 def top_level_func():
     pass
 """
@@ -22,7 +22,7 @@ def top_level_func():
     assert "MyClass" in [s.name for s in outline.symbols]
     assert "method_a" in [s.name for s in outline.symbols]
     assert "top_level_func" in [s.name for s in outline.symbols]
-    
+
     # Test Rust (New language)
     rs_code = """
 pub struct Point { x: i32, y: i32 }
@@ -35,7 +35,7 @@ use std::collections::HashMap;
     print(f"Rust symbols: {[s.name for s in outline.symbols]}")
     assert "Point" in [s.name for s in outline.symbols]
     assert "main" in [s.name for s in outline.symbols]
-    
+
     print("SymbolExtractor tests passed!")
 
 def test_grep_scope():
@@ -46,11 +46,11 @@ def test_grep_scope():
 class Calculator:
     def add(self, a, b):
         return a + b  # TARGET_LINE
-        
+
     def subtract(self, a, b):
         return a - b
 """)
-    
+
     try:
         tool = GrepTool(base_path=Path.cwd())
         result = tool.execute(pattern="TARGET_LINE", scope=True, file_pattern="temp_test_file.py")
@@ -59,7 +59,7 @@ class Calculator:
     finally:
         if test_file.exists():
             test_file.unlink()
-            
+
     print("GrepTool scope test passed!")
 
 if __name__ == "__main__":

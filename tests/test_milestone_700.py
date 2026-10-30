@@ -13,7 +13,7 @@ class TestUtilityFunctions:
     def test_path_operations_basic(self):
         """Basic path operations work correctly."""
         from pathlib import Path
-        
+
         test_path = Path("tmp_test")
         assert isinstance(test_path, Path)
         assert test_path.name == "tmp_test"
@@ -103,7 +103,7 @@ class TestErrorHandling:
             result = "error"
         else:
             result = "success"
-        
+
         assert result == "success"
 
     def test_try_finally_always_executes(self):
@@ -113,14 +113,14 @@ class TestErrorHandling:
             x = 1 / 1
         finally:
             cleanup_called = True
-        
+
         assert cleanup_called is True
 
     def test_raise_with_message(self):
         """Raise exception with custom message."""
         with pytest.raises(RuntimeError) as exc_info:
             raise RuntimeError("custom error")
-        
+
         assert "custom error" in str(exc_info.value)
 
 
@@ -131,14 +131,14 @@ class TestMockPatterns:
         """Mock with return value."""
         mock_obj = Mock()
         mock_obj.method.return_value = 42
-        
+
         assert mock_obj.method() == 42
 
     def test_mock_side_effect(self):
         """Mock with side effect."""
         mock_obj = Mock()
         mock_obj.method.side_effect = ValueError("error")
-        
+
         with pytest.raises(ValueError):
             mock_obj.method()
 
@@ -147,14 +147,14 @@ class TestMockPatterns:
         mock_obj = Mock()
         mock_obj.method()
         mock_obj.method()
-        
+
         assert mock_obj.method.call_count == 2
 
     def test_mock_assert_called_once(self):
         """Assert mock called exactly once."""
         mock_obj = Mock()
         mock_obj.method()
-        
+
         mock_obj.method.assert_called_once()
 
     def test_mock_with_spec(self):
@@ -162,7 +162,7 @@ class TestMockPatterns:
         class SampleClass:
             def sample_method(self):
                 pass
-        
+
         mock_obj = Mock(spec=SampleClass)
         assert hasattr(mock_obj, 'sample_method')
 
@@ -175,7 +175,7 @@ class TestAsyncPatterns:
         """Async function returns value."""
         async def simple_async():
             return 42
-        
+
         result = await simple_async()
         assert result == 42
 
@@ -183,10 +183,10 @@ class TestAsyncPatterns:
     async def test_async_with_gather(self):
         """Async gather multiple coroutines."""
         import asyncio
-        
+
         async def task(n):
             return n * 2
-        
+
         results = await asyncio.gather(task(1), task(2), task(3))
         assert results == [2, 4, 6]
 
@@ -195,7 +195,7 @@ class TestAsyncPatterns:
         """Async exception handling."""
         async def failing_task():
             raise ValueError("async error")
-        
+
         with pytest.raises(ValueError):
             await failing_task()
 
@@ -206,35 +206,35 @@ class TestContextManager:
     def test_with_statement_opens_file(self):
         """With statement properly manages file."""
         import tempfile
-        
+
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
             f.write("test content")
             temp_path = f.name
-        
+
         # Verify file was created
         assert Path(temp_path).exists()
-        
+
         # Cleanup
         Path(temp_path).unlink()
 
     def test_context_manager_suppresses_exception(self):
         """Context manager can suppress exceptions."""
         from contextlib import suppress
-        
+
         with suppress(ValueError):
             raise ValueError("suppressed")
-        
+
         # If we reach here, exception was suppressed
         assert True
 
     def test_custom_context_manager(self):
         """Custom context manager using contextmanager decorator."""
         from contextlib import contextmanager
-        
+
         @contextmanager
         def simple_context():
             yield "value"
-        
+
         with simple_context() as value:
             assert value == "value"
 
@@ -246,7 +246,7 @@ class TestTypeHints:
         """Integer type hints."""
         def add(a: int, b: int) -> int:
             return a + b
-        
+
         result = add(2, 3)
         assert result == 5
         assert isinstance(result, int)
@@ -255,27 +255,27 @@ class TestTypeHints:
         """String type hints."""
         def greet(name: str) -> str:
             return f"Hello, {name}"
-        
+
         result = greet("World")
         assert result == "Hello, World"
 
     def test_type_hint_list(self):
         """List type hints."""
         from typing import List
-        
+
         def sum_list(numbers: List[int]) -> int:
             return sum(numbers)
-        
+
         result = sum_list([1, 2, 3])
         assert result == 6
 
     def test_type_hint_optional(self):
         """Optional type hints."""
         from typing import Optional
-        
+
         def get_name(name: Optional[str] = None) -> str:
             return name or "default"
-        
+
         assert get_name("Alice") == "Alice"
         assert get_name() == "default"
         assert get_name(None) == "default"
@@ -289,7 +289,7 @@ class TestIteratorsAndGenerators:
         def count_up_to(n):
             for i in range(1, n + 1):
                 yield i
-        
+
         result = list(count_up_to(3))
         assert result == [1, 2, 3]
 
@@ -299,16 +299,16 @@ class TestIteratorsAndGenerators:
             def __init__(self, max_val):
                 self.max_val = max_val
                 self.current = 0
-            
+
             def __iter__(self):
                 return self
-            
+
             def __next__(self):
                 if self.current >= self.max_val:
                     raise StopIteration
                 self.current += 1
                 return self.current
-        
+
         counter = Counter(3)
         result = list(counter)
         assert result == [1, 2, 3]
@@ -345,7 +345,7 @@ class TestFunctionalProgramming:
     def test_reduce_function(self):
         """Reduce accumulates values."""
         from functools import reduce
-        
+
         numbers = [1, 2, 3, 4]
         product = reduce(lambda x, y: x * y, numbers)
         assert product == 24
@@ -363,7 +363,7 @@ class TestRegularExpressions:
     def test_regex_match_simple(self):
         """Simple regex match."""
         import re
-        
+
         pattern = r'\d+'
         match = re.search(pattern, 'abc123def')
         assert match is not None
@@ -372,7 +372,7 @@ class TestRegularExpressions:
     def test_regex_findall(self):
         """Regex find all matches."""
         import re
-        
+
         pattern = r'\d+'
         matches = re.findall(pattern, 'a1b2c3')
         assert matches == ['1', '2', '3']
@@ -380,7 +380,7 @@ class TestRegularExpressions:
     def test_regex_substitute(self):
         """Regex substitution."""
         import re
-        
+
         text = 'foo bar baz'
         result = re.sub(r'\s+', '-', text)
         assert result == 'foo-bar-baz'
@@ -388,7 +388,7 @@ class TestRegularExpressions:
     def test_regex_groups(self):
         """Regex capture groups."""
         import re
-        
+
         pattern = r'(\w+)@(\w+)\.(\w+)'
         match = re.search(pattern, 'user@example.com')
         assert match is not None
@@ -403,7 +403,7 @@ class TestDateTimeOperations:
     def test_datetime_now(self):
         """Get current datetime."""
         from datetime import datetime
-        
+
         now = datetime.now()
         assert isinstance(now, datetime)
         assert now.year >= 2020
@@ -411,7 +411,7 @@ class TestDateTimeOperations:
     def test_date_arithmetic(self):
         """Date arithmetic operations."""
         from datetime import date, timedelta
-        
+
         today = date.today()
         tomorrow = today + timedelta(days=1)
         assert tomorrow > today
@@ -419,7 +419,7 @@ class TestDateTimeOperations:
     def test_time_delta_seconds(self):
         """Timedelta in seconds."""
         from datetime import timedelta
-        
+
         delta = timedelta(hours=1)
         assert delta.total_seconds() == 3600
 
@@ -430,7 +430,7 @@ class TestJSONOperations:
     def test_json_dumps_dict(self):
         """Serialize dictionary to JSON string."""
         import json
-        
+
         data = {"key": "value", "number": 42}
         json_str = json.dumps(data)
         assert isinstance(json_str, str)
@@ -439,7 +439,7 @@ class TestJSONOperations:
     def test_json_loads_dict(self):
         """Deserialize JSON string to dictionary."""
         import json
-        
+
         json_str = '{"key": "value", "number": 42}'
         data = json.loads(json_str)
         assert data["key"] == "value"
@@ -448,7 +448,7 @@ class TestJSONOperations:
     def test_json_round_trip(self):
         """JSON round-trip preserves data."""
         import json
-        
+
         original = {"list": [1, 2, 3], "nested": {"a": 1}}
         json_str = json.dumps(original)
         restored = json.loads(json_str)
@@ -462,7 +462,7 @@ class TestIntegrationPatterns:
     def test_multiple_assertions_in_one_test(self):
         """Multiple assertions verify complete state."""
         result = {"status": "success", "count": 5, "items": [1, 2, 3]}
-        
+
         assert result["status"] == "success"
         assert result["count"] == 5
         assert len(result["items"]) == 3
@@ -471,11 +471,11 @@ class TestIntegrationPatterns:
         """Setup and teardown pattern."""
         # Setup
         test_data = [1, 2, 3]
-        
+
         # Test
         total = sum(test_data)
         assert total == 6
-        
+
         # Teardown (implicit in this case)
 
     def test_parametrized_simulation(self):
@@ -485,6 +485,6 @@ class TestIntegrationPatterns:
             (0, 0, 0),
             (-1, 1, 0),
         ]
-        
+
         for a, b, expected in test_cases:
             assert a + b == expected

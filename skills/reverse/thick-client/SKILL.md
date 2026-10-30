@@ -69,7 +69,7 @@ description: Use for authorized security testing of desktop thick clients includ
 
 ## 路由上下文
 
-**上游**: MASTER R32  
+**上游**: MASTER R32
 **下游**: 纯协议 `protocol-reverse`；供应链更新 `supply-chain-security`
 
 ## 任务完成自检

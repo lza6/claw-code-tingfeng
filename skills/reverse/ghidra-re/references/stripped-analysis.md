@@ -88,33 +88,33 @@ print(find_arm_prologues())
 
 def find_functions_by_xrefs():
     """Find likely function starts by analyzing call instructions"""
-    
+
     # Get all references
     ref_mgr = currentProgram.getReferenceManager()
     addr_factory = currentProgram.getAddressFactory()
-    
+
     candidates = set()
-    
+
     # Scan for CALL/BL/JAL instructions
     listing = currentProgram.getListing()
     mem = currentProgram.getMemory()
     instr = listing.getInstructions(True)
-    
+
     for ins in instr:
         mnemonic = ins.getMnemonicString()
-        
+
         # Architecture-specific call instructions
         if mnemonic in ["bl", "blx", "call", "jal", "jalr"]:
             # Get flow references
             for ref in ins.getReferencesFrom():
                 if ref.getReferenceType().isCall():
                     target = ref.getToAddress()
-                    
+
                     # Check if target is in executable memory
                     block = mem.getBlock(target)
                     if block and block.isExecute():
                         candidates.add(target)
-    
+
     # Create functions at candidates
     created = 0
     for addr in candidates:
@@ -122,7 +122,7 @@ def find_functions_by_xrefs():
             func = createFunction(addr, None)
             if func:
                 created += 1
-    
+
     print("Created {} functions from xref analysis".format(created))
     return created
 
@@ -138,26 +138,26 @@ find_functions_by_xrefs()
 
 def find_string_using_functions():
     """Identify functions by their string usage"""
-    
+
     # Get all defined strings
     listing = currentProgram.getListing()
     data_iter = listing.getDefinedData(True)
     string_refs = {}
-    
+
     for data in data_iter:
         if data.hasStringValue():
             string_val = data.getValue()
             refs = getReferencesTo(data.getAddress())
-            
+
             for ref in refs:
                 from_addr = ref.getFromAddress()
                 func = listing.getFunctionContaining(from_addr)
-                
+
                 if func:
                     if func not in string_refs:
                         string_refs[func] = []
                     string_refs[func].append(str(string_val))
-    
+
     # Analyze and rename based on strings
     for func, strings in string_refs.items():
         if func.getSymbol().getSource() != SourceType.DEFAULT:
@@ -167,7 +167,7 @@ def find_string_using_functions():
         if any(kw in s.lower() for s in strings for kw in auth_keywords):
             func.setName("auth_candidate_" + func.getEntryPoint().toString(),
                         SourceType.ANALYSIS)
-        
+
         # Network functions
         net_keywords = ["http", "socket", "connect", "send"]
         if func.getSymbol().getSource() == SourceType.DEFAULT and any(
@@ -194,25 +194,25 @@ from ghidra.program.model.data import *
 
 def analyze_structure_accesses(func):
     """Recover structure definitions from access patterns"""
-    
+
     decompiler = DecompInterface()
     decompiler.openProgram(currentProgram)
-    
+
     results = decompiler.decompileFunction(func, 30, monitor)
     if not results.decompileCompleted():
         decompiler.dispose()
         return None
-    
+
     high_func = results.getHighFunction()
-    
+
     # Track offset accesses to same base pointer
     access_patterns = {}
-    
+
     for op in high_func.getPcodeOps():
         if op.getOpcode() == PcodeOp.LOAD or op.getOpcode() == PcodeOp.STORE:
             # Analyze memory access
             pass  # Complex analysis here
-    
+
     decompiler.dispose()
     return access_patterns
 
@@ -261,23 +261,23 @@ from ghidra.program.model.pcode import PcodeOp
 
 def list_constant_copies(func):
     """List decompiler COPY constants; not a register def-use analysis."""
-    
+
     decompiler = DecompInterface()
     decompiler.openProgram(currentProgram)
     results = decompiler.decompileFunction(func, 30, monitor)
-    
+
     if not results.decompileCompleted():
         decompiler.dispose()
         return None
-    
+
     high_func = results.getHighFunction()
-    
+
     # List constant COPY operations (does not build def-use chains)
     for op in high_func.getPcodeOps():
         if op.getOpcode() == PcodeOp.COPY:
             output = op.getOutput()
             input = op.getInput(0)
-            
+
             if input.isConstant():
                 print("Constant {} assigned to {}".format(
                     input.getOffset(), output))
@@ -294,34 +294,34 @@ from ghidra.program.model.block import BasicBlockModel
 
 def detect_flattening(func):
     """Detect control flow flattening patterns"""
-    
+
     # Check for dispatcher pattern:
     # 1. Switch/dispatch block with many cases
     # 2. State variable updated in each block
     # 3. Return to dispatcher
-    
+
     bb_model = BasicBlockModel(currentProgram)
     blocks = bb_model.getCodeBlocksContaining(
         func.getBody(), monitor)
-    
+
     dispatcher_candidates = []
-    
+
     while blocks.hasNext():
         block = blocks.next()
-        
+
         # Count outgoing edges
         dests = block.getDestinations(monitor)
         dest_count = 0
         while dests.hasNext():
             dests.next()
             dest_count += 1
-        
+
         # Dispatcher has many outgoing edges
         if dest_count > 5:
             dispatcher_candidates.append(block)
             print("Potential dispatcher at {}".format(
                 block.getFirstStartAddress()))
-    
+
     return dispatcher_candidates
 ```
 
@@ -335,18 +335,18 @@ def detect_flattening(func):
 
 def analyze_call_sites(func):
     """Determine calling convention from call sites"""
-    
+
     # Track register usage before calls
     calls = []
-    
+
     instr_iter = listing.getInstructions(func.getBody(), True)
-    
+
     for instr in instr_iter:
         if instr.getFlowType().isCall():
             # Look at previous instructions for argument setup
             prev_addr = instr.getAddress()
             args_detected = []
-            
+
             for i in range(5):  # Look back 5 instructions
                 prev_instr = listing.getInstructionBefore(prev_addr)
                 if prev_instr is None or not func.getBody().contains(prev_instr.getAddress()):
@@ -356,17 +356,17 @@ def analyze_call_sites(func):
                 # ARM: arguments in r0-r3
                 # MIPS: arguments in $a0-$a3
                 # x86: arguments on stack or registers
-                
+
                 # Example for ARM
                 for reg in ["r0", "r1", "r2", "r3"]:
                     if reg in str(prev_instr):
                         args_detected.append(reg)
-            
+
             calls.append({
                 'address': instr.getAddress(),
                 'args': args_detected
             })
-    
+
     return calls
 ```
 
@@ -379,33 +379,33 @@ from ghidra.program.model.pcode import PcodeOp
 
 def analyze_return_value(func):
     """Identify what function returns"""
-    
+
     # Check all return sites
     returns = []
-    
+
     instr_iter = listing.getInstructions(func.getBody(), True)
-    
+
     for instr in instr_iter:
         mnemonic = instr.getMnemonicString()
-        
+
         # ARM: bx lr, pop {pc}
         # MIPS: jr $ra
         # x86: ret
-        
+
         if any(op.getOpcode() == PcodeOp.RETURN for op in instr.getPcode()):
             # Look at previous instruction for return value
             prev_instr = listing.getInstructionBefore(instr.getAddress())
-            
+
             if prev_instr:
                 # ARM: return in r0
                 # MIPS: return in $v0
                 # x86: return in eax/rax
-                
+
                 returns.append({
                     'address': instr.getAddress(),
                     'prev_instr': str(prev_instr)
                 })
-    
+
     return returns
 ```
 
@@ -429,18 +429,18 @@ from ghidra.program.model.symbol import SourceType
 
 def propagate_pointer_types():
     """Improve decompilation by propagating type information"""
-    
+
     dtm = currentProgram.getDataTypeManager()
     fm = currentProgram.getFunctionManager()
-    
+
     for func in fm.getFunctions(True):
         # Get function signature
         params = func.getParameters()
-        
+
         for param in params:
             # If parameter is pointer, try to determine pointed-to type
             data_type = param.getDataType()
-            
+
             if isinstance(data_type, Pointer):
                 # Analyze how pointer is used
                 pointed_type = analyze_pointer_usage(func, param)

@@ -33,12 +33,12 @@ INPUT_SOURCES = [
 
 def find_dangerous_calls():
     """Find calls to dangerous functions"""
-    
+
     fm = currentProgram.getFunctionManager()
     results = []
-    
+
     print("=== Scanning for Dangerous Function Calls ===\n")
-    
+
     for func in fm.getFunctions(True):
         monitor.checkCancelled()
         for location, call in get_call_sites(func):
@@ -49,63 +49,63 @@ def find_dangerous_calls():
                     'reason': DANGEROUS_FUNCTIONS[call],
                     'location': location
                 })
-    
+
     # Report findings
     if results:
         print("Found {} dangerous function calls:\n".format(len(results)))
-        
+
         for i, vuln in enumerate(results, 1):
             print("{}. {} calls {}() - {}".format(
-                i, 
+                i,
                 vuln['caller'].getName(),
                 vuln['dangerous_call'],
                 vuln['reason']
             ))
             print("   Location: {}".format(vuln['location']))
-            
+
             # Add comment at call site
             if vuln['location']:
                 append_eol_comment(vuln['location'],
                     "REVIEW: {}".format(vuln['reason']))
-            
+
             print()
     else:
         print("No dangerous function calls found.")
-    
+
     return results
 
 def find_source_sink_candidates():
     """Report same-function source/sink co-occurrence; no data-flow proof."""
-    
+
     fm = currentProgram.getFunctionManager()
     candidates = []
-    
+
     print("\n=== Source/sink co-occurrence (not taint analysis) ===\n")
-    
+
     for func in fm.getFunctions(True):
         monitor.checkCancelled()
         called = get_called_functions(func)
-        
+
         # Check for source and sink names in the same function
         has_source = any(source in called for source in INPUT_SOURCES)
         has_sink = any(sink in called for sink in DANGEROUS_FUNCTIONS.keys())
-        
+
         if has_source and has_sink:
             candidates.append({
                 'function': func,
                 'sources': [s for s in called if s in INPUT_SOURCES],
                 'sinks': [s for s in called if s in DANGEROUS_FUNCTIONS.keys()]
             })
-    
+
     if candidates:
         print("Found {} source/sink candidates:\n".format(len(candidates)))
-        
+
         for flow in candidates:
             print("Function: {}".format(flow['function'].getName()))
             print("  Sources: {}".format(", ".join(flow['sources'])))
             print("  Sinks: {}".format(", ".join(flow['sinks'])))
             print("  REVIEW: Verify data flow, bounds, and attacker control before reporting")
-            
+
             # Add function comment
             func = flow['function']
             note = "REVIEW: source/sink co-occurrence: {} / {}; data flow unverified".format(
@@ -113,30 +113,30 @@ def find_source_sink_candidates():
             previous = func.getComment() or ""
             if note not in previous.splitlines():
                 func.setComment(previous + ("\n" if previous else "") + note)
-            
+
             print()
 
 def find_stack_buffers():
     """Identify large recovered stack objects near risky API calls"""
-    
+
     fm = currentProgram.getFunctionManager()
     buffer_risks = []
-    
+
     print("\n=== Analyzing Stack Buffer Usage ===\n")
-    
+
     for func in fm.getFunctions(True):
         monitor.checkCancelled()
         # Get stack frame
         stack_frame = func.getStackFrame()
         if not stack_frame:
             continue
-        
+
         # Look for large local variables (potential buffers)
         locals = stack_frame.getLocals()
-        
+
         for var in locals:
             size = var.getLength()
-            
+
             # Buffers typically 16+ bytes
             if size >= 16:
                 # Check if function uses dangerous ops
@@ -147,11 +147,11 @@ def find_stack_buffers():
                         'buffer': var,
                         'size': size
                     })
-    
+
     if buffer_risks:
         print("Found {} large stack objects in functions with risky API calls:\n".format(
             len(buffer_risks)))
-        
+
         for risk in buffer_risks[:20]:  # Top 20
             print("Function: {} at {}".format(
                 risk['function'].getName(),

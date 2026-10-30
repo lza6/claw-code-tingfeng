@@ -113,5 +113,5 @@ RULES / MASTER-ROUTING / SKILL:
 
 ## 特色
 
-- 纯 Markdown，**无数据库**  
+- 纯 Markdown，**无数据库**
 - 与 `tool-index` / bootstrap 正交：scope 管「能不能打」，tool-index 管「用什么打」

@@ -72,7 +72,7 @@ GET /api/users?role=user&role=admin
 ### SSRF via API
 
 ```
-常见 SSRF 参数: webhook_url, callback_url, avatar_url, import_url, 
+常见 SSRF 参数: webhook_url, callback_url, avatar_url, import_url,
                 redirect_uri, file_url, proxy_url, image_url
 测试: http://169.254.169.254/latest/meta-data/ (AWS)
       http://metadata.google.internal/ (GCP)

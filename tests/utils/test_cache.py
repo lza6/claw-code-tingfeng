@@ -34,7 +34,7 @@ class TestLruCacheBasic:
         cache.put("a", 1)
         cache.put("b", 2)
         cache.put("c", 3)  # 应淘汰 "a"
-        
+
         assert cache.get("a") is None
         assert cache.get("b") == 2
         assert cache.get("c") == 3
@@ -46,7 +46,7 @@ class TestLruCacheBasic:
         cache.put("b", 2)
         cache.get("a")  # 访问 "a"
         cache.put("c", 3)  # 应淘汰 "b"
-        
+
         assert cache.get("a") == 1
         assert cache.get("b") is None
         assert cache.get("c") == 3
@@ -92,7 +92,7 @@ class TestLruCacheEdgeCases:
         cache = LruCache(max_size=1000)
         for i in range(1000):
             cache.put(f"key{i}", i)
-        
+
         assert cache.get("key0") == 0
         assert cache.get("key999") == 999
 
@@ -101,7 +101,7 @@ class TestLruCacheEdgeCases:
         cache = LruCache(max_size=10000)
         for i in range(1000):
             cache.put(f"key{i}", i)
-        
+
         assert len(cache.cache) == 1000
 
 
@@ -111,17 +111,17 @@ class TestLruCacheIntegration:
     def test_cache_workflow(self):
         """测试完整工作流"""
         cache = LruCache(max_size=5, ttl_seconds=60)
-        
+
         # 设置
         for i in range(5):
             cache.put(f"user:{i}", {"name": f"User{i}"})
-        
+
         # 获取
         assert cache.get("user:0")["name"] == "User0"
-        
+
         # 访问更新顺序
         cache.get("user:0")
         cache.put("user:5", {"name": "User5"})  # 淘汰 user:1
-        
+
         assert cache.get("user:1") is None
         assert cache.get("user:0") is not None

@@ -11,24 +11,24 @@ def test_sensitive_file_detection():
 
 def test_path_validation_traversal():
     base = Path("c:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/claw-code-tingfeng").resolve()
-    
+
     # Valid path
     valid = validate_path("src/main.py", base)
     assert valid.name == "main.py"
-    
+
     # Outside boundary (traversal)
     with pytest.raises(PermissionError, match="Adversarial path detected"):
         validate_path("../../../etc/passwd", base)
 
 def test_path_validation_sensitive():
     base = Path("c:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/claw-code-tingfeng").resolve()
-    
+
     # Access blocked sensitive file
     with pytest.raises(PermissionError, match="Access denied to sensitive file"):
         validate_path(".env", base)
 
 def test_forbidden_directories():
     base = Path("c:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/claw-code-tingfeng").resolve()
-    
+
     with pytest.raises(PermissionError, match="Access denied to forbidden directory"):
         validate_path(".git/config", base)

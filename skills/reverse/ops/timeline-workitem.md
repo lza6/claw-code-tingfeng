@@ -1,6 +1,6 @@
 # Timeline + WorkItem / Coverage
 
-> 可回放作战记录（Z3r0 timeline 思想）+ 覆盖勾选（WorkItem 思想）。  
+> 可回放作战记录（Z3r0 timeline 思想）+ 覆盖勾选（WorkItem 思想）。
 > 全部落在 **`work/<case>/`**（仓库 gitignore），不进 skill 包正文。
 
 ## 目录约定
@@ -82,6 +82,6 @@ status: pending | in_progress | blocked | done | cancelled
 
 ## 特色
 
-- Agent 友好的纯文本，diff/review 友好  
-- 与 tool-index 命令路径可交叉引用  
-- 不依赖 WebSocket 直播；需要时把 timeline 贴进报告即可  
+- Agent 友好的纯文本，diff/review 友好
+- 与 tool-index 命令路径可交叉引用
+- 不依赖 WebSocket 直播；需要时把 timeline 贴进报告即可

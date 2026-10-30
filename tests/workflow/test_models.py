@@ -353,7 +353,7 @@ class TestTechDebtRecord:
             priority=TechDebtPriority.LOW,
             description="Low",
         )
-        
+
         # Both records should maintain their priority
         assert critical.priority == TechDebtPriority.CRITICAL
         assert low.priority == TechDebtPriority.LOW

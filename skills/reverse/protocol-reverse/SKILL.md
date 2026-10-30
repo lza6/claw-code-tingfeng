@@ -85,8 +85,8 @@ MUST 产出：
 
 ## 路由上下文
 
-**上游**: `MASTER-ROUTING` R21 · `routing.md`  
-**下游**: 需客户端算法 → `ida-reverse`/`js-reverse`；需利用重放 → `pentest-tools`/`api-security`  
+**上游**: `MASTER-ROUTING` R21 · `routing.md`
+**下游**: 需客户端算法 → `ida-reverse`/`js-reverse`；需利用重放 → `pentest-tools`/`api-security`
 **同级**: `malware-analysis`（C2 协议）、`digital-forensics`（流量取证）
 
 ## 任务完成自检

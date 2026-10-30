@@ -16,7 +16,7 @@ class TestStopWords:
     def test_stop_words_contains_chinese(self):
         """Stop words should contain common Chinese words."""
         stop_words = _get_stop_words_cached()
-        
+
         assert '的' in stop_words
         assert '了' in stop_words
         assert '在' in stop_words
@@ -25,7 +25,7 @@ class TestStopWords:
     def test_stop_words_contains_python_keywords(self):
         """Stop words should contain Python keywords."""
         stop_words = _get_stop_words_cached()
-        
+
         assert 'def' in stop_words
         assert 'class' in stop_words
         assert 'return' in stop_words
@@ -35,7 +35,7 @@ class TestStopWords:
         """Stop words should be cached (same object on multiple calls)."""
         stop_words1 = _get_stop_words_cached()
         stop_words2 = _get_stop_words_cached()
-        
+
         # Should be the same object (cached)
         assert stop_words1 is stop_words2
 
@@ -46,7 +46,7 @@ class TestTextIndexerInit:
     def test_init_default_params(self):
         """Initialize with default parameters."""
         indexer = TextIndexer()
-        
+
         assert indexer.chunk_size == 500
         assert indexer.chunk_overlap == 50
         assert indexer.max_file_size == 1024 * 1024  # 1MB
@@ -66,7 +66,7 @@ class TestTextIndexerInit:
             enable_reranker=True,
             reranker_top_k=20,
         )
-        
+
         assert indexer.chunk_size == 1000
         assert indexer.chunk_overlap == 100
         assert indexer.max_file_size == 2 * 1024 * 1024
@@ -77,7 +77,7 @@ class TestTextIndexerInit:
     def test_init_creates_sub_indexes(self):
         """Initialize should create word index and trigram index."""
         indexer = TextIndexer()
-        
+
         assert indexer._word_index is not None
         assert indexer.trigram_index is not None
         assert indexer.symbol_extractor is not None
@@ -98,9 +98,9 @@ class TestAddDocument:
             content='This is a test document.',
             source='test.txt',
         )
-        
+
         result = self.indexer.add_document(doc)
-        
+
         assert result is True
         assert 'doc-001' in self.indexer._documents
 
@@ -114,16 +114,16 @@ class TestAddDocument:
                 source=f'test{i}.txt',
             )
             self.indexer.add_document(doc)
-        
+
         # Try to add one more
         extra_doc = Document(
             id='doc-extra',
             content='Extra document',
             source='extra.txt',
         )
-        
+
         result = self.indexer.add_document(extra_doc)
-        
+
         assert result is False
         assert 'doc-extra' not in self.indexer._documents
         # Should track skipped file
@@ -137,14 +137,14 @@ class TestAddDocument:
             source='test.txt',
         )
         self.indexer.add_document(doc1)
-        
+
         doc2 = Document(
             id='doc-001',
             content='Second version',
             source='test.txt',
         )
         self.indexer.add_document(doc2)
-        
+
         # Should have only one document
         assert len(self.indexer._documents) == 1
         assert self.indexer._documents['doc-001'].content == 'Second version'
@@ -164,9 +164,9 @@ class TestChunking:
             content='A' * 100,  # 100 characters
             source='test.txt',
         )
-        
+
         result = self.indexer.add_document(doc)
-        
+
         assert result is True
         # Should have created chunks
         assert len(self.indexer._chunks) >= 1
@@ -178,9 +178,9 @@ class TestChunking:
             content='ABCDEFGHIJ' * 10,  # 100 chars
             source='test.txt',
         )
-        
+
         self.indexer.add_document(doc)
-        
+
         # Should have created multiple chunks
         chunks = list(self.indexer._chunks.values())
         if len(chunks) > 1:
@@ -190,9 +190,9 @@ class TestChunking:
     def test_chunk_empty_text(self):
         """Empty document should produce no chunks."""
         doc = Document(id='doc-empty', content='', source='empty.txt')
-        
+
         self.indexer.add_document(doc)
-        
+
         # Empty content may or may not create chunks depending on implementation
         # Just verify it doesn't crash
         assert True
@@ -204,9 +204,9 @@ class TestChunking:
             content='Short text',
             source='short.txt',
         )
-        
+
         result = self.indexer.add_document(doc)
-        
+
         assert result is True
         # Document should be added
         assert 'doc-short' in self.indexer._documents
@@ -218,21 +218,21 @@ class TestSearch:
     def setup_method(self):
         """Setup test fixtures."""
         self.indexer = TextIndexer()
-        
+
         # Add some test documents
         docs = [
             Document(id='doc-1', content='Python programming language', source='python.txt'),
             Document(id='doc-2', content='Java development environment', source='java.txt'),
             Document(id='doc-3', content='JavaScript web development', source='js.txt'),
         ]
-        
+
         for doc in docs:
             self.indexer.add_document(doc)
 
     def test_search_basic(self):
         """Basic search returns relevant results."""
         results = self.indexer.search('Python')
-        
+
         assert isinstance(results, list)
         # Should find the Python document
         assert len(results) >= 1
@@ -240,7 +240,7 @@ class TestSearch:
     def test_search_no_results(self):
         """Search with no matches returns empty list."""
         results = self.indexer.search('RustLangXYZ')
-        
+
         assert isinstance(results, list)
         # May return empty or very low relevance
         assert len(results) >= 0
@@ -249,21 +249,21 @@ class TestSearch:
         """Search should be case-insensitive."""
         results_lower = self.indexer.search('python')
         results_upper = self.indexer.search('PYTHON')
-        
+
         # Both should find something
         assert len(results_lower) >= 1 or len(results_upper) >= 1
 
     def test_search_empty_query(self):
         """Empty query should return empty results."""
         results = self.indexer.search('')
-        
+
         assert isinstance(results, list)
         assert len(results) == 0
 
     def test_search_returns_search_result_objects(self):
         """Search should return SearchResult objects."""
         results = self.indexer.search('Python')
-        
+
         if len(results) > 0:
             assert isinstance(results[0], SearchResult)
             # SearchResult has 'chunk' field (not chunk_id)
@@ -279,7 +279,7 @@ class TestGetContext:
     def setup_method(self):
         """Setup test fixtures."""
         self.indexer = TextIndexer()
-        
+
         doc = Document(
             id='doc-1',
             content='Line 1\nLine 2\nLine 3\nLine 4\nLine 5',
@@ -291,7 +291,7 @@ class TestGetContext:
         """Get context by search query."""
         # get_context takes a query string, not chunk_id
         context = self.indexer.get_context('Line', top_k=2)
-        
+
         assert isinstance(context, str)
         # Should return some context (may be empty if no matches)
         assert len(context) >= 0
@@ -303,7 +303,7 @@ class TestIndexPersistence:
     def setup_method(self):
         """Setup test fixtures."""
         self.indexer = TextIndexer()
-        
+
         doc = Document(
             id='doc-1',
             content='Test content for persistence',
@@ -315,10 +315,10 @@ class TestIndexPersistence:
         """Save index to file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_path = Path(tmpdir) / 'index.json'
-            
+
             # save_index expects Path object, not string
             self.indexer.save_index(temp_path)
-            
+
             # File should exist
             assert temp_path.exists()
             # File should have content
@@ -328,22 +328,22 @@ class TestIndexPersistence:
         """Load index from file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_path = Path(tmpdir) / 'index.json'
-            
+
             # Save first
             self.indexer.save_index(temp_path)
-            
+
             # Load into new indexer
             new_indexer = TextIndexer()
             # load_index also expects Path object
             new_indexer.load_index(temp_path)
-            
+
             # Should have loaded the document
             assert 'doc-1' in new_indexer._documents
 
     def test_load_nonexistent_file(self):
         """Loading nonexistent file should handle gracefully."""
         indexer = TextIndexer()
-        
+
         # Should raise FileNotFoundError or similar
         with pytest.raises((FileNotFoundError, OSError, AttributeError)):
             indexer.load_index('/nonexistent/path/index.json')
@@ -366,7 +366,7 @@ class TestSkippedFilesTracking:
                 source=f'file{i}.txt',
             )
             self.indexer.add_document(doc)
-        
+
         # Try to add more (should be skipped)
         for i in range(2, 5):
             doc = Document(
@@ -375,7 +375,7 @@ class TestSkippedFilesTracking:
                 source=f'file{i}.txt',
             )
             self.indexer.add_document(doc)
-        
+
         # Should track skipped files (up to 50)
         assert len(self.indexer._skipped_files) >= 1
         assert 'file2.txt' in self.indexer._skipped_files
@@ -383,11 +383,11 @@ class TestSkippedFilesTracking:
     def test_skipped_files_limit(self):
         """Skipped files list should not exceed 50 entries."""
         indexer = TextIndexer(max_documents=1)
-        
+
         # Add one document
         doc = Document(id='doc-0', content='First', source='file0.txt')
         indexer.add_document(doc)
-        
+
         # Try to add 60 more (should skip all)
         for i in range(1, 61):
             doc = Document(
@@ -396,7 +396,7 @@ class TestSkippedFilesTracking:
                 source=f'file{i}.txt',
             )
             indexer.add_document(doc)
-        
+
         # Should cap at 50
         assert len(indexer._skipped_files) <= 50
 
@@ -412,9 +412,9 @@ class TestCacheManagement:
         """Clear search cache should empty it."""
         # Manually add something to cache
         self.indexer._search_cache['test'] = []
-        
+
         self.indexer._clear_search_cache()
-        
+
         assert len(self.indexer._search_cache) == 0
 
     def test_invalidate_chunk_lengths(self):
@@ -422,9 +422,9 @@ class TestCacheManagement:
         # Setup some cached data
         self.indexer._chunk_lengths['chunk-1'] = 100
         self.indexer._search_cache['query'] = []
-        
+
         self.indexer._invalidate_chunk_lengths_cache()
-        
+
         assert len(self.indexer._chunk_lengths) == 0
         assert len(self.indexer._search_cache) == 0
 
@@ -435,20 +435,20 @@ class TestIntegration:
     def test_full_workflow(self):
         """Test complete indexing and search workflow."""
         indexer = TextIndexer()
-        
+
         # Add documents
         docs = [
             Document(id='doc-1', content='Python is great for AI', source='ai.txt'),
             Document(id='doc-2', content='JavaScript is great for web', source='web.txt'),
             Document(id='doc-3', content='Rust is great for systems', source='sys.txt'),
         ]
-        
+
         for doc in docs:
             indexer.add_document(doc)
-        
+
         # Search
         results = indexer.search('Python AI')
-        
+
         assert isinstance(results, list)
         # Should find relevant results
         assert len(results) >= 1
@@ -456,7 +456,7 @@ class TestIntegration:
     def test_multiple_documents_different_sources(self):
         """Handle multiple documents from different sources."""
         indexer = TextIndexer()
-        
+
         sources = ['file1.py', 'file2.js', 'file3.java']
         for i, source in enumerate(sources):
             doc = Document(
@@ -465,7 +465,7 @@ class TestIntegration:
                 source=source,
             )
             indexer.add_document(doc)
-        
+
         assert len(indexer._documents) == 3
         # All sources should be tracked
         for source in sources:
@@ -478,47 +478,47 @@ class TestEdgeCases:
     def test_very_large_document(self):
         """Handle very large document content."""
         indexer = TextIndexer()
-        
+
         # Create a large document (but under max_file_size)
         large_content = "Word " * 10000  # ~50KB
-        
+
         doc = Document(
             id='large-doc',
             content=large_content,
             source='large.txt',
         )
-        
+
         result = indexer.add_document(doc)
-        
+
         # Should succeed (under max_file_size)
         assert result is True
 
     def test_special_characters_in_content(self):
         """Handle special characters in document content."""
         indexer = TextIndexer()
-        
+
         doc = Document(
             id='special',
             content='Special chars: !@#$%^&*()_+-=[]{}|;:\'",.<>?/~`',
             source='special.txt',
         )
-        
+
         result = indexer.add_document(doc)
-        
+
         assert result is True
 
     def test_unicode_content(self):
         """Handle Unicode content (Chinese, emojis, etc.)."""
         indexer = TextIndexer()
-        
+
         doc = Document(
             id='unicode',
             content='中文文本 🎉 Emoji 測試 Ελληνικά',
             source='unicode.txt',
         )
-        
+
         result = indexer.add_document(doc)
-        
+
         assert result is True
         # Should be able to search
         results = indexer.search('中文')
@@ -527,9 +527,9 @@ class TestEdgeCases:
     def test_zero_max_documents(self):
         """Handle zero max_documents limit."""
         indexer = TextIndexer(max_documents=0)
-        
+
         doc = Document(id='doc-1', content='Test', source='test.txt')
         result = indexer.add_document(doc)
-        
+
         # Should reject immediately
         assert result is False

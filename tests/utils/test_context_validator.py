@@ -39,7 +39,7 @@ def get_feature_value(key):
 class FeatureManager:
     def __init__(self):
         self.growthBook = GrowthBook()
-    
+
     def evaluate(self, context):
         return self.growthBook.evaluate(context)
 '''

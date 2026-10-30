@@ -83,4 +83,4 @@ result = await run_pipeline(config)
 
 - **team**: Pipeline delegates execution to team mode (agent swarm)
 - **ralph**: Pipeline delegates verification to ralph mode (configurable iterations)
-- **ralplan**: Pipeline's first stage runs RALPLAN consensus planning  
+- **ralplan**: Pipeline's first stage runs RALPLAN consensus planning

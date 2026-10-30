@@ -75,8 +75,8 @@ analyzeHeadless /path/to/project Proj -import sample.bin -postScript ExportDecom
 
 ## 路由上下文
 
-**上游**: MASTER R22  
-**下游**: 动态验证 → Frida/GDB；利用 → `pwn-chain`  
+**上游**: MASTER R22
+**下游**: 动态验证 → Frida/GDB；利用 → `pwn-chain`
 **同级**: `ida-reverse`（商业深挖）
 
 ## 任务完成自检

@@ -336,7 +336,7 @@ Decompiled code:
 int check_password(char *username, char *password) {
     char stored_hash[32];
     load_user_hash(username, stored_hash);
-    
+
     if (strcmp(password_hash(password), stored_hash) == 0) {
         return AUTH_SUCCESS;
     }

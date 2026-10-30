@@ -12,7 +12,7 @@
 ```javascript
 Java.perform(function() {
     var TargetClass = Java.use("com.target.ClassName");
-    
+
     // Hook 无参方法
     TargetClass.methodName.implementation = function() {
         console.log("[*] methodName called");
@@ -20,7 +20,7 @@ Java.perform(function() {
         console.log("[*] return: " + ret);
         return ret;
     };
-    
+
     // Hook 有参方法
     TargetClass.methodName.overload('java.lang.String', 'int').implementation = function(str, num) {
         console.log("[*] methodName(" + str + ", " + num + ")");
@@ -64,7 +64,7 @@ Java.perform(function() {
 ```javascript
 Java.perform(function() {
     var Cipher = Java.use("javax.crypto.Cipher");
-    
+
     Cipher.doFinal.overload('[B').implementation = function(input) {
         var mode = this.getOpmode ? this.getOpmode() : "?";
         console.log("[Cipher.doFinal] mode=" + mode);
@@ -73,14 +73,14 @@ Java.perform(function() {
         console.log("  output: " + bytesToHex(result));
         return result;
     };
-    
+
     // 捕获密钥
     var SecretKeySpec = Java.use("javax.crypto.spec.SecretKeySpec");
     SecretKeySpec.$init.overload('[B', 'java.lang.String').implementation = function(key, algo) {
         console.log("[SecretKeySpec] algo=" + algo + " key=" + bytesToHex(key));
         this.$init(key, algo);
     };
-    
+
     // 捕获 IV
     var IvParameterSpec = Java.use("javax.crypto.spec.IvParameterSpec");
     IvParameterSpec.$init.overload('[B').implementation = function(iv) {
@@ -103,7 +103,7 @@ function bytesToHex(bytes) {
 ```javascript
 Java.perform(function() {
     var MessageDigest = Java.use("java.security.MessageDigest");
-    
+
     MessageDigest.digest.overload('[B').implementation = function(input) {
         console.log("[MessageDigest.digest] algo=" + this.getAlgorithm());
         console.log("  input: " + bytesToHex(input));
@@ -111,7 +111,7 @@ Java.perform(function() {
         console.log("  hash: " + bytesToHex(result));
         return result;
     };
-    
+
     MessageDigest.digest.overload().implementation = function() {
         console.log("[MessageDigest.digest] algo=" + this.getAlgorithm());
         var result = this.digest();
@@ -126,7 +126,7 @@ Java.perform(function() {
 ```javascript
 Java.perform(function() {
     var Mac = Java.use("javax.crypto.Mac");
-    
+
     Mac.doFinal.overload('[B').implementation = function(input) {
         console.log("[Mac.doFinal] algo=" + this.getAlgorithm());
         console.log("  input: " + bytesToHex(input));
@@ -134,7 +134,7 @@ Java.perform(function() {
         console.log("  mac: " + bytesToHex(result));
         return result;
     };
-    
+
     Mac.init.overload('java.security.Key').implementation = function(key) {
         var keyBytes = key.getEncoded();
         console.log("[Mac.init] key=" + bytesToHex(keyBytes));
@@ -153,7 +153,7 @@ Java.perform(function() {
 Java.perform(function() {
     var OkHttpClient = Java.use("okhttp3.OkHttpClient");
     var Interceptor = Java.use("okhttp3.Interceptor");
-    
+
     // Hook newCall 获取请求 URL
     var RealCall = Java.use("okhttp3.RealCall");
     RealCall.execute.implementation = function() {
@@ -191,7 +191,7 @@ Java.perform(function() {
         console.log("[WebView.loadUrl] " + url);
         this.loadUrl(url);
     };
-    
+
     WebView.evaluateJavascript.implementation = function(script, callback) {
         console.log("[WebView.evaluateJavascript] " + script.substring(0, 200));
         this.evaluateJavascript(script, callback);
@@ -214,7 +214,7 @@ Java.perform(function() {
             console.log("[*] SSL Pinning bypassed (OkHttp3)");
         };
     } catch(e) {}
-    
+
     // TrustManagerImpl
     try {
         var TrustManagerImpl = Java.use("com.android.org.conscrypt.TrustManagerImpl");
@@ -223,7 +223,7 @@ Java.perform(function() {
             return untrustedChain;
         };
     } catch(e) {}
-    
+
     // X509TrustManager
     try {
         var X509TrustManager = Java.use("javax.net.ssl.X509TrustManager");
@@ -237,7 +237,7 @@ Java.perform(function() {
             }
         });
     } catch(e) {}
-    
+
     // Network Security Config (Android 7+)
     try {
         var NetworkSecurityConfig = Java.use("android.security.net.config.NetworkSecurityConfig");
@@ -252,10 +252,10 @@ Java.perform(function() {
 Java.perform(function() {
     // File.exists 绕过
     var File = Java.use("java.io.File");
-    var rootPaths = ["su", "Superuser", "magisk", "busybox", "xposed", 
+    var rootPaths = ["su", "Superuser", "magisk", "busybox", "xposed",
                      "/system/xbin/su", "/system/bin/su", "/sbin/su",
                      "/data/local/xbin/su", "/data/local/bin/su"];
-    
+
     File.exists.implementation = function() {
         var path = this.getAbsolutePath();
         for (var i = 0; i < rootPaths.length; i++) {
@@ -266,7 +266,7 @@ Java.perform(function() {
         }
         return this.exists();
     };
-    
+
     // Runtime.exec 绕过
     var Runtime = Java.use("java.lang.Runtime");
     Runtime.exec.overload('java.lang.String').implementation = function(cmd) {
@@ -276,7 +276,7 @@ Java.perform(function() {
         }
         return this.exec(cmd);
     };
-    
+
     // Build.TAGS 绕过
     var Build = Java.use("android.os.Build");
     Build.TAGS.value = "release-keys";
@@ -293,7 +293,7 @@ Java.perform(function() {
         console.log("[AntiDebug] isDebuggerConnected → false");
         return false;
     };
-    
+
     // TracerPid 检测绕过（native 层）
     var fopen = Module.findExportByName("libc.so", "fopen");
     Interceptor.attach(fopen, {
@@ -321,7 +321,7 @@ Java.perform(function() {
     Build.DEVICE.value = "walleye";
     Build.PRODUCT.value = "walleye";
     Build.HARDWARE.value = "walleye";
-    
+
     // TelephonyManager
     var TelephonyManager = Java.use("android.telephony.TelephonyManager");
     TelephonyManager.getDeviceId.implementation = function() { return "352099001761481"; };
@@ -339,13 +339,13 @@ Java.perform(function() {
 ```javascript
 Java.perform(function() {
     var SharedPreferencesImpl = Java.use("android.app.SharedPreferencesImpl");
-    
+
     SharedPreferencesImpl.getString.implementation = function(key, defValue) {
         var value = this.getString(key, defValue);
         console.log("[SP.get] " + key + " = " + value);
         return value;
     };
-    
+
     var Editor = Java.use("android.app.SharedPreferencesImpl$EditorImpl");
     Editor.putString.implementation = function(key, value) {
         console.log("[SP.put] " + key + " = " + value);
@@ -359,13 +359,13 @@ Java.perform(function() {
 ```javascript
 Java.perform(function() {
     var SQLiteDatabase = Java.use("android.database.sqlite.SQLiteDatabase");
-    
+
     SQLiteDatabase.rawQuery.implementation = function(sql, args) {
         console.log("[SQL] " + sql);
         if (args) console.log("  args: " + JSON.stringify(args));
         return this.rawQuery(sql, args);
     };
-    
+
     SQLiteDatabase.execSQL.overload('java.lang.String').implementation = function(sql) {
         console.log("[SQL.exec] " + sql);
         this.execSQL(sql);

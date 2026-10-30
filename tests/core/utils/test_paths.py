@@ -132,9 +132,9 @@ def test_ensure_omx_dirs():
         if omx_base.exists():
             import shutil
             shutil.rmtree(omx_base)
-        
+
         ensure_omx_dirs(tmpdir)
-        
+
         assert (omx_base / "state").exists()
         assert (omx_base / "plans").exists()
         assert (omx_base / "logs").exists()
@@ -162,7 +162,7 @@ def test_find_project_root():
         # Create .omx in tmpdir
         omx_dir = Path(tmpdir) / ".omx"
         omx_dir.mkdir()
-        
+
         # Change to tmpdir and find
         original_cwd = os.getcwd()
         try:

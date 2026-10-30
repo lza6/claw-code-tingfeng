@@ -53,11 +53,11 @@
 
 ## 与 master-route 关系
 
-- `master-route` 定 **PRIMARY skill**  
-- `role-map` 定 **谁在当前阶段负责**（可写在 scope.md）  
-- 多阶段任务 PRIMARY 常为 `attack-chain/`，由 lead 再分发  
+- `master-route` 定 **PRIMARY skill**
+- `role-map` 定 **谁在当前阶段负责**（可写在 scope.md）
+- 多阶段任务 PRIMARY 常为 `attack-chain/`，由 lead 再分发
 
 ## MUST NOT
 
-- 不要假设存在 Z3r0 会话 API  
-- 不要为角色启动未授权目标的额外扫描  
+- 不要假设存在 Z3r0 会话 API
+- 不要为角色启动未授权目标的额外扫描

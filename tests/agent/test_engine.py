@@ -12,19 +12,19 @@ from src.tools_runtime.base import BaseTool
 
 class MockTool(BaseTool):
     """Mock tool for testing."""
-    
+
     def __init__(self, name: str = "mock_tool"):
         super().__init__()
         self._name = name
-    
+
     @property
     def name(self) -> str:
         return self._name
-    
+
     @property
     def description(self) -> str:
         return f"Mock tool for {self._name}"
-    
+
     async def execute(self, **kwargs) -> dict:
         return {"status": "success", "output": "mock result"}
 
@@ -38,9 +38,9 @@ class TestBuildSystemPrompt:
             'BashTool': MockTool('BashTool'),
             'FileReadTool': MockTool('FileReadTool'),
         }
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert isinstance(prompt, str)
         assert len(prompt) > 0
         # Should contain tool descriptions
@@ -55,9 +55,9 @@ class TestBuildSystemPrompt:
             'Tool2': MockTool('Tool2'),
             'Tool3': MockTool('Tool3'),
         }
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert 'Tool1' in prompt
         assert 'Tool2' in prompt
         assert 'Tool3' in prompt
@@ -65,9 +65,9 @@ class TestBuildSystemPrompt:
     def test_build_prompt_empty_tools(self):
         """Handle empty tools dictionary."""
         tools = {}
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert isinstance(prompt, str)
         # Should still generate a valid prompt
         assert len(prompt) > 0
@@ -75,36 +75,36 @@ class TestBuildSystemPrompt:
     def test_build_prompt_developer_mode_disabled(self):
         """Developer mode should not add extra text when disabled."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt_normal = build_system_prompt(tools, developer_mode=False)
-        
+
         assert '开发者模式' not in prompt_normal
         assert 'God Mode' not in prompt_normal
 
     def test_build_prompt_developer_mode_enabled(self):
         """Developer mode should add God Mode instructions."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt_god = build_system_prompt(tools, developer_mode=True)
-        
+
         assert '开发者模式' in prompt_god or 'God Mode' in prompt_god
         assert '内部授权用户' in prompt_god or 'authorized' in prompt_god.lower()
 
     def test_build_prompt_format_instructions(self):
         """Prompt should include tool call format instructions."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert '<tool>' in prompt
         assert 'JSON' in prompt or 'json' in prompt
 
     def test_build_prompt_workflow_steps(self):
         """Prompt should include workflow steps."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert '工作流程' in prompt or 'workflow' in prompt.lower()
         assert '理解' in prompt or 'understand' in prompt.lower()
 
@@ -204,9 +204,9 @@ class TestSystemPromptGeneration:
     def test_prompt_with_many_tools(self):
         """Generate prompt with many tools."""
         tools = {f'Tool{i}': MockTool(f'Tool{i}') for i in range(20)}
-        
+
         prompt = build_system_prompt(tools)
-        
+
         # Should include all tool names
         for i in range(20):
             assert f'Tool{i}' in prompt
@@ -217,27 +217,27 @@ class TestSystemPromptGeneration:
             'Tool-With-Dashes': MockTool('Tool-With-Dashes'),
             'Tool_With_Underscores': MockTool('Tool_With_Underscores'),
         }
-        
+
         prompt = build_system_prompt(tools)
-        
+
         assert 'Tool-With-Dashes' in prompt
         assert 'Tool_With_Underscores' in prompt
 
     def test_prompt_language_chinese(self):
         """Prompt should be in Chinese."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt = build_system_prompt(tools)
-        
+
         # Should contain Chinese text
         assert any(char in prompt for char in ['你', '的', '是', '任务'])
 
     def test_prompt_structure_consistency(self):
         """Prompt structure should be consistent."""
         tools = {'Tool': MockTool('Tool')}
-        
+
         prompt1 = build_system_prompt(tools)
         prompt2 = build_system_prompt(tools)
-        
+
         # Same inputs should produce same outputs
         assert prompt1 == prompt2

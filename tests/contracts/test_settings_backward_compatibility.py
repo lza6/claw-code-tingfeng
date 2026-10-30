@@ -148,7 +148,7 @@ class TestPublicAPISignatures:
     def test_intent_router_module_exists(self):
         """意图路由模块应存在"""
         import importlib
-        
+
         # 尝试导入意图路由相关模块
         try:
             intent_module = importlib.import_module('src.agent.intent_router')

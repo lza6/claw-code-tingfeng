@@ -31,16 +31,16 @@ class TestTaskDAG:
             {'task_id': 'T3', 'title': 'Task 3', 'description': 'Desc', 'depends_on': 'T2'},
         ]
         dag = TaskDAG(tasks)
-        
+
         # 初始只有 T1 就绪
         ready = dag.get_ready_tasks(set())
         assert ready == ['T1']
-        
+
         # 完成 T1 后 T2 就绪
         dag.mark_task_completed('T1')
         ready = dag.get_ready_tasks({'T1'})
         assert 'T2' in ready
-        
+
         # 完成 T2 后 T3 就绪
         dag.mark_task_completed('T2')
         ready = dag.get_ready_tasks({'T1', 'T2'})
@@ -65,17 +65,17 @@ class TestTaskDAG:
             {'task_id': 'T3', 'title': 'Task 3', 'description': 'Desc', 'depends_on': 'T1,T2'},
         ]
         dag = TaskDAG(tasks)
-        
+
         # 初始只有 T1, T2 就绪
         ready = dag.get_ready_tasks(set())
         assert set(ready) == {'T1', 'T2'}
         assert 'T3' not in ready
-        
+
         # 完成 T1 后 T3 仍不就绪（还需 T2）
         dag.mark_task_completed('T1')
         ready = dag.get_ready_tasks({'T1'})
         assert 'T3' not in ready
-        
+
         # 完成 T2 后 T3 就绪
         dag.mark_task_completed('T2')
         ready = dag.get_ready_tasks({'T1', 'T2'})

@@ -38,11 +38,11 @@
 
 ## 特色（必须保留）
 
-1. **三轴路由 + PRIMARY 快路径**（目标类型 / 意图 / 工具链）  
-2. **bootstrap 按需装工具**，跨 Windows/Kali/Linux/macOS  
-3. **MCP 友好**（IDA/Burp/jshook/anything-analyzer）  
-4. **field-journal 脱敏进化**  
-5. **服从性工程**：ACTION REQUIRED / 完成自检 / 禁止假停  
+1. **三轴路由 + PRIMARY 快路径**（目标类型 / 意图 / 工具链）
+2. **bootstrap 按需装工具**，跨 Windows/Kali/Linux/macOS
+3. **MCP 友好**（IDA/Burp/jshook/anything-analyzer）
+4. **field-journal 脱敏进化**
+5. **服从性工程**：ACTION REQUIRED / 完成自检 / 禁止假停
 
 ## 与 Z3r0 的健康关系
 
@@ -56,7 +56,7 @@ reverse-skill = Agent 的安全作业路由器 + 说明书
 
 ## 与「800+ 社区微 skill」的关系
 
-- **不** submodule 巨型 skill 库（投毒面与维护成本，见 `skill-supply-chain.md`）  
-- **要** 维护 `references/community-security-skills.md` 作索引与借鉴规则  
-- **要** 用 `domain-coverage-map.md` 证明：深度 skill + 路由 > 碎片 skill 堆叠  
-- 外部 skill 安装：AST10 思维 + 只信 curated 源（如 Trail of Bits curated）  
+- **不** submodule 巨型 skill 库（投毒面与维护成本，见 `skill-supply-chain.md`）
+- **要** 维护 `references/community-security-skills.md` 作索引与借鉴规则
+- **要** 用 `domain-coverage-map.md` 证明：深度 skill + 路由 > 碎片 skill 堆叠
+- 外部 skill 安装：AST10 思维 + 只信 curated 源（如 Trail of Bits curated）

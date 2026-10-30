@@ -49,10 +49,10 @@ def decode_ioctl(code):
     access = (code >> 14) & 0x3
     function = (code >> 2) & 0xFFF
     method = code & 0x3
-    
+
     methods = {0: "BUFFERED", 1: "IN_DIRECT", 2: "OUT_DIRECT", 3: "NEITHER"}
     access_types = {0: "ANY", 1: "READ", 2: "WRITE", 3: "READ|WRITE"}
-    
+
     return f"DevType=0x{device_type:X} Func=0x{function:X} Method={methods[method]} Access={access_types[access]}"
 
 # 示例
@@ -201,7 +201,7 @@ decode_ioctl(0x80002034)
 
 方法 2：从 sizeof 推断
   call malloc(0x30) → 结构体大小 0x30 (48 bytes)
-  
+
 方法 3：从构造函数推断
   构造函数会初始化所有字段 → 字段类型和偏移一目了然
 

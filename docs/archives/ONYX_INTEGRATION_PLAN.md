@@ -1,7 +1,7 @@
 # 📋 Onyx → Clawd Code 整合建议清单
 
-> 分析日期：2026-04-08  
-> 项目A（主项目）：`claw-code-tingfeng` — AI编程代理框架  
+> 分析日期：2026-04-08
+> 项目A（主项目）：`claw-code-tingfeng` — AI编程代理框架
 > 项目B（参考项目）：`onyx-main` — 企业级AI平台（原Danswer）
 
 ---

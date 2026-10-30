@@ -17,7 +17,7 @@ python -m src.main workflow # Workflow engine
 
 ### Aider-style Commands (from integration)
 - `/add` - Add file to chat
-- `/drop` - Remove file from chat  
+- `/drop` - Remove file from chat
 - `/run` - Execute code/command
 - `/test` - Run tests
 - `/git` - Git shortcuts
@@ -43,7 +43,7 @@ Core Components:
 │   └── role-based system prompts
 ├── Agent Roles (roles.py)
 │   ├── PLANNER
-│   ├── ARCHITECT  
+│   ├── ARCHITECT
 │   ├── CRITIC
 │   ├── EXECUTOR
 │   └── AUDITOR

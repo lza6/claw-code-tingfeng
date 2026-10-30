@@ -45,7 +45,7 @@ description: Use for authorized database security assessment covering PostgreSQL
 
 ## 路由上下文
 
-**上游**: MASTER R35  
+**上游**: MASTER R35
 **下游**: 获 OS 命令 → attack-chain；云托管 → cloud-k8s
 
 ## 任务完成自检

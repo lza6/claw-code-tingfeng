@@ -63,7 +63,7 @@ def test_resolve_command_path_for_platform_absolute():
         command = "cmd.exe"
     else:
         command = "/bin/sh"
-    
+
     result = resolve_command_path_for_platform(command)
     assert result is not None
     assert command in result or result == command
@@ -82,7 +82,7 @@ def test_probe_platform_command_found():
         command = "cmd.exe"
     else:
         command = "sh"
-    
+
     probed = probe_platform_command(command)
     assert probed is not None
     assert probed.spec.command == command
@@ -125,7 +125,7 @@ def test_spawn_platform_command_sync_success():
     else:
         # Unix
         result = spawn_platform_command_sync("echo", ["hello"])
-    
+
     assert result.returncode == 0
     assert "hello" in (result.stdout or "")
 
@@ -169,7 +169,7 @@ def test_spawn_platform_command_sync_cwd():
         # Create a file in tmpdir
         test_file = Path(tmpdir) / "test.txt"
         test_file.write_text("test content")
-        
+
         # Read the file
         if os.name == 'nt':
             result = spawn_platform_command_sync(
@@ -183,7 +183,7 @@ def test_spawn_platform_command_sync_cwd():
                 ["test.txt"],
                 cwd=tmpdir,
             )
-        
+
         assert result.returncode == 0
         assert "test content" in (result.stdout or "")
 
@@ -191,19 +191,19 @@ def test_spawn_platform_command_sync_cwd():
 def test_run_command():
     """Test run_command convenience function."""
     from src.core.utils.platform_command import run_command
-    
+
     if os.name == 'nt':
         result = run_command("cmd.exe", ["/c", "echo test"])
     else:
         result = run_command("echo", ["test"])
-    
+
     assert result.returncode == 0
 
 
 def test_run_command_check():
     """Test run_command_check raises on failure."""
     from src.core.utils.platform_command import run_command_check
-    
+
     if os.name == 'nt':
         with pytest.raises(subprocess.CalledProcessError):
             run_command_check("cmd.exe", ["/c", "exit 1"])

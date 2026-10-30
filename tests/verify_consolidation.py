@@ -39,15 +39,15 @@ class TestConsolidation(unittest.TestCase):
     def test_output_compressor_save_to_file(self):
         compressor = OutputCompressor()
         # Create a very large output (>25000)
-        large_output = "Line content\n" * 3000 
+        large_output = "Line content\n" * 3000
         command = "cat huge_file.txt"
-        
+
         # This should trigger truncation and save to file
         compressed = compressor.compress(command, large_output)
-        
+
         self.assertIn("⚠️  Output was significantly truncated", compressed)
         self.assertIn("Full output saved to:", compressed)
-        
+
         # Extract path
         import re
         match = re.search(r"Full output saved to: (.*)\n", compressed)
@@ -65,10 +65,10 @@ async def run_retry_test():
         if count < 3:
             raise Exception("Transient error")
         return "success"
-    
+
     result = await retry_with_backoff(
-        failing_func, 
-        max_attempts=5, 
+        failing_func,
+        max_attempts=5,
         initial_delay_ms=10,
         should_retry=lambda e: "Transient error" in str(e)
     )
@@ -79,6 +79,6 @@ async def run_retry_test():
 if __name__ == "__main__":
     # Run sync tests
     unittest.main(exit=False)
-    
+
     # Run async retry test
     asyncio.run(run_retry_test())

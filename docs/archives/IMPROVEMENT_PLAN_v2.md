@@ -1,8 +1,8 @@
 # Clawd Code 改进优化迭代计划指南
 
-**项目**: Clawd Code (AI 编程代理框架)  
-**版本**: v0.50.1  
-**生成日期**: 2026-04-10  
+**项目**: Clawd Code (AI 编程代理框架)
+**版本**: v0.50.1
+**生成日期**: 2026-04-10
 **状态**: 待执行
 
 ---
@@ -266,6 +266,6 @@ python -m pytest tests/ --cov=src --cov-report=term-missing
 
 ---
 
-**文档版本**: v1.1  
-**生成**: Claude Code Agent  
+**文档版本**: v1.1
+**生成**: Claude Code Agent
 **下次评审**: 改进完成后

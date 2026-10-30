@@ -44,7 +44,7 @@ description: Use for authorized hardware and embedded interface security researc
 
 ## 路由上下文
 
-**上游**: MASTER R34  
+**上游**: MASTER R34
 **MUST NOT**: 未授权拆机/损坏他人设备
 
 ## 任务完成自检

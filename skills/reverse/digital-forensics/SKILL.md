@@ -71,7 +71,7 @@ vol -f mem.dmp windows.cmdline
 
 ## 路由上下文
 
-**上游**: MASTER R25  
+**上游**: MASTER R25
 **下游**: 恶意样本深挖 → malware-analysis；规则 → threat-hunting
 
 ## 任务完成自检

@@ -13,7 +13,7 @@ class TestAdversarial(unittest.TestCase):
         self.test_dir = Path("tmp_adversarial_test")
         self.test_dir.mkdir(exist_ok=True)
         self.registry = ToolRegistry()
-        
+
     def tearDown(self):
         # Cleanup
         import shutil
@@ -25,7 +25,7 @@ class TestAdversarial(unittest.TestCase):
         large_file = self.test_dir / "large.txt"
         content = "A" * (1024 * 1024) # 1MB (MAX_FILE_SIZE is 5MB)
         large_file.write_text(content)
-        
+
         tool = FileReadTool(base_path=self.test_dir)
         result = tool.execute(file_path="large.txt", limit=100)
         self.assertTrue(result.success)
@@ -36,7 +36,7 @@ class TestAdversarial(unittest.TestCase):
         bin_file = self.test_dir / "binary.bin"
         with open(bin_file, "wb") as f:
             f.write(b"\xff\xfe\xfd\x00\x01\x02")
-            
+
         tool = FileReadTool(base_path=self.test_dir)
         result = tool.execute(file_path="binary.bin")
         # Validate should catch binary extension (.bin is in common binary list)
@@ -51,7 +51,7 @@ class TestAdversarial(unittest.TestCase):
         bundle = BundleTool(registry=self.registry)
         # Register bundle as a tool
         self.registry.register(bundle)
-        
+
         # Self-referential bundle
         ops = [
             {"tool": "bundle", "arguments": {"ops": [{"tool": "bundle", "arguments": {"ops": []}}]}}
@@ -66,7 +66,7 @@ class TestAdversarial(unittest.TestCase):
         tracker = RecencyTracker(root_dir=self.test_dir)
         tracker.scan()
         self.assertEqual(len(tracker.get_hot_files()), 0)
-        
+
         # Add a file
         f1 = self.test_dir / "f1.py"
         f1.write_text("print(1)")

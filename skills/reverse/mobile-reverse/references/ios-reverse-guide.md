@@ -91,7 +91,7 @@ console.log(str.UTF8String());
 Swift 名称修饰（Name Mangling）：
 $s10ModuleName5ClassC6method3argSi_tF
   │ │         │     │ │      │  │   └─ 参数类型
-  │ │         │     │ │      │  └───── 返回类型  
+  │ │         │     │ │      │  └───── 返回类型
   │ │         │     │ │      └──────── 参数名
   │ │         │     │ └─────────────── 方法名
   │ │         │     └──────────────── 类名(长度+名称)
@@ -141,7 +141,7 @@ var defaultManager = NSFileManager.defaultManager();
 Interceptor.attach(defaultManager["- fileExistsAtPath:"].implementation, {
     onLeave: function(retval) {
         var path = ObjC.Object(args[2]).toString();
-        if (path.includes("Cydia") || path.includes("apt") || 
+        if (path.includes("Cydia") || path.includes("apt") ||
             path.includes("sshd") || path.includes("bash")) {
             retval.replace(0); // false
         }
@@ -149,7 +149,7 @@ Interceptor.attach(defaultManager["- fileExistsAtPath:"].implementation, {
 });
 
 // fork 绕过
-Interceptor.replace(Module.findExportByName(null, "fork"), 
+Interceptor.replace(Module.findExportByName(null, "fork"),
     new NativeCallback(function() { return -1; }, 'int', []));
 
 // dyld 绕过

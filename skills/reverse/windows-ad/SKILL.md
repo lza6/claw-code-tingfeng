@@ -72,8 +72,8 @@ bloodhound-python -d domain.local -u user -p pass -c All -ns <DC>
 
 ## 路由上下文
 
-**上游**: MASTER R24  
-**下游**: 报告 `docs-generator`；需 EDR 研究 `edr-bypass-re`  
+**上游**: MASTER R24
+**下游**: 报告 `docs-generator`；需 EDR 研究 `edr-bypass-re`
 **MUST NOT**: 无授权 DCSync / 黄金票打生产
 
 ## 任务完成自检

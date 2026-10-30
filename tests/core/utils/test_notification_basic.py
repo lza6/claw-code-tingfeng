@@ -60,14 +60,14 @@ async def test_dispatch_notifications_with_mock_platform():
         enabled=True,
         webhook=None  # No real webhook
     )
-    
+
     payload = FullNotificationPayload(
         event=NotificationEvent.SESSION_START,
         session_id="test123",
         message="Test message",
         timestamp="2024-01-01T00:00:00Z",
     )
-    
+
     # Mock the aiohttp session to avoid actual HTTP calls
     with patch('aiohttp.ClientSession') as mock_session_class:
         mock_session = AsyncMock()
@@ -75,9 +75,9 @@ async def test_dispatch_notifications_with_mock_platform():
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_session.post.return_value.__aenter__.return_value = mock_response
-        
+
         result = await dispatch_notifications(config, payload)
-        
+
         assert isinstance(result, DispatchResult)
         # Should have attempted to send to webhook (even though disabled)
         # Actually webhook is None so no attempt
@@ -105,7 +105,7 @@ def test_dispatch_result_properties():
         NotificationResult(platform="slack", success=False, error="Network error"),
     ]
     dispatch_result = DispatchResult(results=results)
-    
+
     assert len(dispatch_result.results) == 2
     assert dispatch_result.all_succeeded is False
     assert dispatch_result.any_succeeded is True

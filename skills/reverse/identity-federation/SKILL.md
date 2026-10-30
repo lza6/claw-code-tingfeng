@@ -45,7 +45,7 @@ description: Use for authorized assessment of federated identity systems includi
 
 ## 路由上下文
 
-**上游**: MASTER R37  
+**上游**: MASTER R37
 **下游**: 纯 API JWT → api-security；云 IdP → cloud-k8s
 
 ## 任务完成自检

@@ -22,7 +22,7 @@ class TestHudContext:
     def test_create_default_context(self):
         """Create context with default values."""
         ctx = HudContext()
-        
+
         assert ctx.model == ''
         assert ctx.provider == ''
         assert ctx.iteration == 0
@@ -46,7 +46,7 @@ class TestHudContext:
             workflow_phase='planning',
             git_branch='feature/test',
         )
-        
+
         assert ctx.model == 'gpt-4'
         assert ctx.provider == 'openai'
         assert ctx.iteration == 5
@@ -65,7 +65,7 @@ class TestRenderModel:
         """Render simple model name."""
         ctx = HudContext(model='gpt-4')
         result = _render_model(ctx)
-        
+
         assert result is not None
         assert 'gpt-4' in result
 
@@ -73,7 +73,7 @@ class TestRenderModel:
         """Render model name with path (extract last part)."""
         ctx = HudContext(model='openai/gpt-4-turbo')
         result = _render_model(ctx)
-        
+
         assert result is not None
         assert 'gpt-4-turbo' in result
         # Should not contain the full path
@@ -83,14 +83,14 @@ class TestRenderModel:
         """Return None when model is empty."""
         ctx = HudContext(model='')
         result = _render_model(ctx)
-        
+
         assert result is None
 
     def test_render_model_none_equivalent(self):
         """Return None when model is falsy."""
         ctx = HudContext(model=None)  # type: ignore
         result = _render_model(ctx)
-        
+
         assert result is None
 
 
@@ -101,7 +101,7 @@ class TestRenderIteration:
         """Render normal iteration progress."""
         ctx = HudContext(iteration=3, max_iterations=10)
         result = _render_iteration(ctx)
-        
+
         assert result is not None
         assert 'iter:3/10' in result
 
@@ -109,7 +109,7 @@ class TestRenderIteration:
         """Render iteration at maximum."""
         ctx = HudContext(iteration=10, max_iterations=10)
         result = _render_iteration(ctx)
-        
+
         assert result is not None
         assert 'iter:10/10' in result
 
@@ -117,19 +117,19 @@ class TestRenderIteration:
         """Return None when iteration is zero."""
         ctx = HudContext(iteration=0, max_iterations=10)
         result = _render_iteration(ctx)
-        
+
         assert result is None
 
     def test_render_iteration_no_max(self):
         """Return None when max_iterations is zero or negative."""
         ctx = HudContext(iteration=5, max_iterations=0)
         result = _render_iteration(ctx)
-        
+
         assert result is None
-        
+
         ctx = HudContext(iteration=5, max_iterations=-1)
         result = _render_iteration(ctx)
-        
+
         assert result is None
 
 
@@ -140,7 +140,7 @@ class TestRenderTokens:
         """Render positive token count."""
         ctx = HudContext(total_tokens=15000)
         result = _render_tokens(ctx)
-        
+
         assert result is not None
         assert 'tokens:' in result
         assert '15' in result or '15K' in result or '15,000' in result
@@ -149,14 +149,14 @@ class TestRenderTokens:
         """Return None when tokens is zero."""
         ctx = HudContext(total_tokens=0)
         result = _render_tokens(ctx)
-        
+
         assert result is None
 
     def test_render_tokens_negative(self):
         """Return None when tokens is negative."""
         ctx = HudContext(total_tokens=-100)
         result = _render_tokens(ctx)
-        
+
         assert result is None
 
 
@@ -167,7 +167,7 @@ class TestRenderCost:
         """Render positive cost."""
         ctx = HudContext(total_cost=0.0450)
         result = _render_cost(ctx)
-        
+
         assert result is not None
         assert '$' in result
         assert '0.0450' in result
@@ -176,21 +176,21 @@ class TestRenderCost:
         """Return None when cost is zero."""
         ctx = HudContext(total_cost=0.0)
         result = _render_cost(ctx)
-        
+
         assert result is None
 
     def test_render_cost_negative(self):
         """Return None when cost is negative."""
         ctx = HudContext(total_cost=-0.01)
         result = _render_cost(ctx)
-        
+
         assert result is None
 
     def test_render_cost_formatting(self):
         """Verify cost is formatted to 4 decimal places."""
         ctx = HudContext(total_cost=0.1)
         result = _render_cost(ctx)
-        
+
         assert result is not None
         # Should have 4 decimal places
         assert '0.1000' in result
@@ -203,7 +203,7 @@ class TestRenderTurns:
         """Render positive turn count."""
         ctx = HudContext(session_turns=8)
         result = _render_turns(ctx)
-        
+
         assert result is not None
         assert 'turns:8' in result
 
@@ -211,7 +211,7 @@ class TestRenderTurns:
         """Return None when turns is zero."""
         ctx = HudContext(session_turns=0)
         result = _render_turns(ctx)
-        
+
         assert result is None
 
 
@@ -222,7 +222,7 @@ class TestRenderWorkflow:
         """Render workflow phase."""
         ctx = HudContext(workflow_phase='planning')
         result = _render_workflow(ctx)
-        
+
         assert result is not None
         assert 'workflow:planning' in result
 
@@ -230,7 +230,7 @@ class TestRenderWorkflow:
         """Return None when workflow phase is empty."""
         ctx = HudContext(workflow_phase='')
         result = _render_workflow(ctx)
-        
+
         assert result is None
 
 
@@ -241,7 +241,7 @@ class TestRenderGit:
         """Render git branch name."""
         ctx = HudContext(git_branch='main')
         result = _render_git(ctx)
-        
+
         assert result is not None
         assert 'main' in result
 
@@ -249,7 +249,7 @@ class TestRenderGit:
         """Render git branch with prefix."""
         ctx = HudContext(git_branch='feature/new-ui')
         result = _render_git(ctx)
-        
+
         assert result is not None
         assert 'feature/new-ui' in result
 
@@ -257,7 +257,7 @@ class TestRenderGit:
         """Return None when git branch is empty."""
         ctx = HudContext(git_branch='')
         result = _render_git(ctx)
-        
+
         assert result is None
 
 
@@ -273,9 +273,9 @@ class TestRenderHud:
             total_tokens=5000,
             total_cost=0.0150,
         )
-        
+
         result = render_hud(ctx, preset='minimal')
-        
+
         assert isinstance(result, str)
         # Minimal should show fewer elements
         assert len(result) > 0
@@ -290,9 +290,9 @@ class TestRenderHud:
             total_cost=0.0150,
             session_turns=5,
         )
-        
+
         result = render_hud(ctx, preset='focused')
-        
+
         assert isinstance(result, str)
         # Focused should show more than minimal
         assert len(result) > 0
@@ -310,9 +310,9 @@ class TestRenderHud:
             workflow_phase='coding',
             git_branch='main',
         )
-        
+
         result = render_hud(ctx, preset='full')
-        
+
         assert isinstance(result, str)
         # Full should show all available elements
         assert 'gpt-4' in result or 'iter:3/10' in result
@@ -320,9 +320,9 @@ class TestRenderHud:
     def test_render_hud_empty_context(self):
         """Render HUD with mostly empty context."""
         ctx = HudContext()
-        
+
         result = render_hud(ctx, preset='full')
-        
+
         assert isinstance(result, str)
         # Should still return a string (possibly minimal)
         assert result is not None
@@ -331,14 +331,14 @@ class TestRenderHud:
         """Render HUD respects separator configuration."""
         # Need multiple elements to see separator
         ctx = HudContext(
-            model='test', 
-            iteration=1, 
+            model='test',
+            iteration=1,
             max_iterations=5,
             total_tokens=1000,
         )
-        
+
         result = render_hud(ctx, preset='minimal')
-        
+
         assert isinstance(result, str)
         # With multiple elements, should have separator
         if len(result.strip()) > 0 and ('test' in result and 'tokens:' in result):
@@ -356,16 +356,16 @@ class TestRenderHud:
             workflow_phase='review',
             git_branch='develop',
         )
-        
+
         minimal = render_hud(ctx, preset='minimal')
         focused = render_hud(ctx, preset='focused')
         full = render_hud(ctx, preset='full')
-        
+
         # All should be strings
         assert isinstance(minimal, str)
         assert isinstance(focused, str)
         assert isinstance(full, str)
-        
+
         # Full should generally be longer or equal to focused
         # (depending on implementation details)
         assert len(full) >= len(minimal)
@@ -387,7 +387,7 @@ class TestHudIntegration:
             workflow_phase='testing',
             git_branch='feature/hud',
         )
-        
+
         # All renderers should produce non-None results
         assert _render_model(ctx) is not None
         assert _render_iteration(ctx) is not None
@@ -400,7 +400,7 @@ class TestHudIntegration:
     def test_all_renderers_with_empty_context(self):
         """Test all renderers return None with empty context."""
         ctx = HudContext()
-        
+
         assert _render_model(ctx) is None
         assert _render_iteration(ctx) is None
         assert _render_tokens(ctx) is None
@@ -412,7 +412,7 @@ class TestHudIntegration:
     def test_hud_context_immutability_pattern(self):
         """Verify HudContext can be recreated with updated values."""
         ctx1 = HudContext(model='gpt-3', iteration=1, max_iterations=10)
-        
+
         # Create new context with updated values (dataclass pattern)
         ctx2 = HudContext(
             model=ctx1.model,
@@ -420,7 +420,7 @@ class TestHudIntegration:
             max_iterations=ctx1.max_iterations,
             total_tokens=1000,
         )
-        
+
         assert ctx2.iteration == 2
         assert ctx2.total_tokens == 1000
         # Original unchanged
@@ -434,7 +434,7 @@ class TestHudEdgeCases:
         """Handle very large token counts."""
         ctx = HudContext(total_tokens=999999999)
         result = _render_tokens(ctx)
-        
+
         assert result is not None
         # Should handle large numbers gracefully
         assert 'tokens:' in result
@@ -443,7 +443,7 @@ class TestHudEdgeCases:
         """Handle very small cost values."""
         ctx = HudContext(total_cost=0.0001)
         result = _render_cost(ctx)
-        
+
         assert result is not None
         assert '$' in result
 
@@ -451,7 +451,7 @@ class TestHudEdgeCases:
         """Handle iteration exceeding max (edge case)."""
         ctx = HudContext(iteration=15, max_iterations=10)
         result = _render_iteration(ctx)
-        
+
         assert result is not None
         assert 'iter:15/10' in result
 
@@ -459,7 +459,7 @@ class TestHudEdgeCases:
         """Handle special characters in model name."""
         ctx = HudContext(model='model-with-dashes_and_underscores.v2')
         result = _render_model(ctx)
-        
+
         assert result is not None
         # Should preserve special chars
         assert 'model-with-dashes_and_underscores.v2' in result
@@ -468,7 +468,7 @@ class TestHudEdgeCases:
         """Handle unicode in git branch name."""
         ctx = HudContext(git_branch='功能分支')
         result = _render_git(ctx)
-        
+
         assert result is not None
         # Should handle unicode
         assert '功能分支' in result or len(result) > 0

@@ -138,15 +138,15 @@ const { chromium } = require('playwright');
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto('https://target.com');
-    
+
     // 提取 cookies
     const cookies = await context.cookies();
     console.log(JSON.stringify(cookies, null, 2));
-    
+
     // 提取 localStorage
     const storage = await page.evaluate(() => JSON.stringify(localStorage));
     console.log(storage);
-    
+
     await browser.close();
 })();
 ```
@@ -184,10 +184,10 @@ const { chromium } = require('playwright');
         userAgent: 'Mozilla/5.0 ...',
     });
     const page = await context.newPage();
-    
+
     await page.goto('https://target.com');
     // ... 操作 ...
-    
+
     await browser.close();
 })();
 ```

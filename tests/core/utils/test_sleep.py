@@ -25,21 +25,21 @@ async def test_sleep_basic():
 async def test_sleep_with_signal():
     """Test sleep can be interrupted."""
     signal = asyncio.Event()
-    
+
     # Start sleep that would take 1 second
     async def sleeper():
         await sleep(1000, signal)
-    
+
     task = asyncio.create_task(sleeper())
-    
+
     # Wait a bit then signal
     await asyncio.sleep(0.05)
     signal.set()
-    
+
     start = time.time()
     await task
     elapsed = time.time() - start
-    
+
     # 收到信号后应尽快返回；上界放宽以抗 CI 负载
     assert elapsed < 1.0
 
@@ -65,16 +65,16 @@ def test_sleep_until():
 async def test_sleep_with_progress_completes():
     """Test sleep_with_progress completes normally."""
     progress_calls = []
-    
+
     def track_progress(elapsed, total):
         progress_calls.append((elapsed, total))
-    
+
     result = await sleep_with_progress(
         total_ms=200,
         check_interval_ms=50,
         progress_callback=track_progress,
     )
-    
+
     assert result is True
     assert len(progress_calls) >= 2  # Should have been called at least twice
 
@@ -83,18 +83,18 @@ async def test_sleep_with_progress_completes():
 async def test_sleep_with_progress_interrupted():
     """Test sleep_with_progress can be interrupted."""
     stop_event = asyncio.Event()
-    
+
     async def interrupter():
         await asyncio.sleep(0.1)
         stop_event.set()
-    
+
     asyncio.create_task(interrupter())
-    
+
     result = await sleep_with_progress(
         total_ms=1000,
         stop_event=stop_event,
     )
-    
+
     assert result is False
 
 

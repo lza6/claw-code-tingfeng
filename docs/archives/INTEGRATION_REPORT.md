@@ -1,7 +1,7 @@
 # 📦 项目整合报告：Claw-Code-Tingfeng × New-API
 
-> **整合日期**: 2026年4月8日  
-> **整合目标**: 汲取 new-api 项目优秀实现，增强 claw-code-tingfeng 项目  
+> **整合日期**: 2026年4月8日
+> **整合目标**: 汲取 new-api 项目优秀实现，增强 claw-code-tingfeng 项目
 > **整合原则**: 优先工具类/通用算法，谨慎修改核心业务逻辑，完全适配项目A技术栈
 
 ---
@@ -380,5 +380,5 @@ code = generate_invitation_code(length=8)
 
 ---
 
-**整合完成！** 🎉  
+**整合完成！** 🎉
 所有新增模块都已适配项目A的技术栈（Python 3.10+, asyncio, loguru），可直接使用。

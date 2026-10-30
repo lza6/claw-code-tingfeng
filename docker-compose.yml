@@ -20,15 +20,15 @@ services:
       # OpenAI API 配置
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
-      
+
       # Anthropic API 配置
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-opus-20240229}
-      
+
       # 日志配置
       - CLAWD_LOG_LEVEL=${CLAWD_LOG_LEVEL:-info}
       - CLAWD_ENV=${CLAWD_ENV:-production}
-      
+
       # 工作目录
       - CLAWD_WORKDIR=/workspace
     stdin_open: true

@@ -60,7 +60,7 @@ description: Use for reverse engineering stripped Go and Rust binaries including
 
 ## 路由上下文
 
-**上游**: MASTER R33  
+**上游**: MASTER R33
 **下游**: 恶意样本流程 `malware-analysis`；通用 RE `reverse-engineering`
 
 ## 任务完成自检

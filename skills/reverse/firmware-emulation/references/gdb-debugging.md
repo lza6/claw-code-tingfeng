@@ -294,7 +294,7 @@ class MyBreakpoint(gdb.Breakpoint):
     def __init__(self, location):
         super().__init__(location)
         self.count = 0
-    
+
     def stop(self):
         self.count += 1
         print(f"Hit {self.count} times")

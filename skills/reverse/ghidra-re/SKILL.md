@@ -364,20 +364,20 @@ high_func = results.getHighFunction()
 def infer_name(func):
     strings = get_function_strings(func)
     called = get_called_functions(func)
-    
+
     # Authentication
     if any("password" in s.lower() for s in strings):
         if "strcmp" in called:
             return "check_password"
-    
+
     # Network
     if "socket" in called or "recv" in called:
         return "network_handler"
-    
+
     # Crypto
     if "aes" in "".join(strings).lower():
         return "crypto_aes"
-    
+
     return None
 ```
 

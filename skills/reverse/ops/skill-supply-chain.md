@@ -1,7 +1,7 @@
 # Agent Skill 供应链安全（本包特色）
 
-> 来源综合：OWASP Agentic Skills Top 10（AST10）、Anthropic Agent Skills 安全建议、公开投毒事件（如 ClawHavoc，见 AST10 时间线）  
-> 检索日期：2026-07-17  
+> 来源综合：OWASP Agentic Skills Top 10（AST10）、Anthropic Agent Skills 安全建议、公开投毒事件（如 ClawHavoc，见 AST10 时间线）
+> 检索日期：2026-07-17
 > 适用：安装/编写/合并 **任何** skill、MCP、bootstrap 脚本时
 
 本包**可执行脚本面**静态审计（后门 / 删库 / 管道执行）：[`docs/PACKAGE-SECURITY-AUDIT.md`](../../docs/PACKAGE-SECURITY-AUDIT.md)。
@@ -11,10 +11,10 @@
 本包会：
 
 - 指导 AI **执行命令与 bootstrap 下载**
-- 通过 MCP 接触本地与网络  
-- 写入 field-journal / 报告  
+- 通过 MCP 接触本地与网络
+- 写入 field-journal / 报告
 
-恶意 skill 可导致：凭据窃取、持久化提示词、供应链后门。  
+恶意 skill 可导致：凭据窃取、持久化提示词、供应链后门。
 我们用 **文档门闩 + 工具真相源**，而不是再做一个 skill 应用商店。
 
 ## 2. 威胁对照（精简 AST10 思路）
@@ -51,8 +51,8 @@
 
 ## 5. 本包作者/贡献者
 
-- 新 skill：CONTRIBUTING + ACTION REQUIRED + 完成自检  
-- 引用社区内容：标注 URL + 日期（本文件 / community-security-skills.md）  
+- 新 skill：CONTRIBUTING + ACTION REQUIRED + 完成自检
+- 引用社区内容：标注 URL + 日期（本文件 / community-security-skills.md）
 - 发现可疑行为：停止执行，告知用户，不自动「尝试绕过」
 
 ## 6. 快速自检（每次合并外部材料前）
@@ -66,6 +66,6 @@ Get-ChildItem -Recurse -Include *.ps1,*.sh,*.py,*.js | Select-Object FullName
 
 ## 7. 相关
 
-- 身份：`IDENTITY.md`  
-- 外部目录：`../references/community-security-skills.md`  
-- 授权：`scope-contract.md` + `field-journal/precedent-auth.md`  
+- 身份：`IDENTITY.md`
+- 外部目录：`../references/community-security-skills.md`
+- 授权：`scope-contract.md` + `field-journal/precedent-auth.md`

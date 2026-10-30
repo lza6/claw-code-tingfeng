@@ -39,13 +39,13 @@ class TestPrintHelper:
         # Mock print to raise UnicodeEncodeError on first call
         original_print = __builtins__['print'] if isinstance(__builtins__, dict) else print
         call_count = [0]
-        
+
         def mock_print_side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise UnicodeEncodeError('gbk', '', 0, 1, 'illegal encoding')
             return original_print(*args, **kwargs)
-        
+
         with patch('builtins.print', side_effect=mock_print_side_effect):
             # Should not crash
             try:
@@ -53,7 +53,7 @@ class TestPrintHelper:
                 success = True
             except UnicodeEncodeError:
                 success = False
-            
+
             # The function should handle the error (either succeed or be caught internally)
             # We're testing that it doesn't propagate unhandled
 
@@ -84,7 +84,7 @@ class TestBuiltinCommands:
         """Verify reasonable number of builtin commands."""
         # Should have at least the basic commands
         assert len(BUILTIN_COMMANDS) >= 8
-        
+
         # Should not have excessive duplicates
         commands = list(BUILTIN_COMMANDS.keys())
         assert len(commands) == len(set(commands))  # No duplicates
@@ -105,7 +105,7 @@ class TestHandleHelp:
         """Help should print Clawd Code header."""
         _handle_help()
         captured = capsys.readouterr()
-        
+
         assert "Clawd Code" in captured.out
         assert "AI 编程代理 CLI" in captured.out or "AI" in captured.out
 
@@ -113,21 +113,21 @@ class TestHandleHelp:
         """Help should include usage instructions."""
         _handle_help()
         captured = capsys.readouterr()
-        
+
         assert "使用方法" in captured.out or "Usage" in captured.out
 
     def test_help_prints_builtin_commands_section(self, capsys):
         """Help should list builtin commands section."""
         _handle_help()
         captured = capsys.readouterr()
-        
+
         assert "内置命令" in captured.out or "Commands" in captured.out
 
     def test_help_prints_shortcuts_section(self, capsys):
         """Help should show keyboard shortcuts."""
         _handle_help()
         captured = capsys.readouterr()
-        
+
         assert "快捷键" in captured.out or "Shortcut" in captured.out
         assert "Ctrl+C" in captured.out
         assert "Ctrl+D" in captured.out
@@ -151,10 +151,10 @@ class TestHandleHelp:
         """Help should fallback to BUILTIN_COMMANDS if registry returns empty."""
         with patch('src.cli.repl.command_registry') as mock_registry:
             mock_registry.get_help_text.return_value = ""
-            
+
             _handle_help()
             captured = capsys.readouterr()
-            
+
             # Should still show some commands from BUILTIN_COMMANDS
             assert "/help" in captured.out or "/exit" in captured.out
 
@@ -166,7 +166,7 @@ class TestHandleVersion:
         """Version should print Clawd Code with version."""
         _handle_version()
         captured = capsys.readouterr()
-        
+
         assert "Clawd Code" in captured.out
         assert "v" in captured.out  # Version indicator
 
@@ -174,14 +174,14 @@ class TestHandleVersion:
         """Version should print LLM provider and model."""
         _handle_version()
         captured = capsys.readouterr()
-        
+
         assert "LLM:" in captured.out or "Model" in captured.out
 
     def test_version_prints_python_version(self, capsys):
         """Version should print Python version."""
         _handle_version()
         captured = capsys.readouterr()
-        
+
         # Should contain Python version like "3.11.9"
         assert "Python:" in captured.out or "Python" in captured.out
         # Check for version pattern (major.minor)
@@ -194,9 +194,9 @@ class TestHandleVersion:
             with patch('src.cli.banner._get_model_info') as mock_model:
                 mock_version.return_value = "0.40.0"
                 mock_model.return_value = ("openai", "gpt-4")
-                
+
                 _handle_version()
-                
+
                 mock_version.assert_called_once()
                 mock_model.assert_called_once()
 
@@ -209,7 +209,7 @@ class TestHandleDoctor:
         from src.cli.repl import _handle_doctor
         _handle_doctor()
         captured = capsys.readouterr()
-        
+
         assert "诊断" in captured.out or "Doctor" in captured.out or "Diagnostic" in captured.out
 
     def test_doctor_checks_python_version(self, capsys):
@@ -217,7 +217,7 @@ class TestHandleDoctor:
         from src.cli.repl import _handle_doctor
         _handle_doctor()
         captured = capsys.readouterr()
-        
+
         assert "Python" in captured.out
 
     def test_doctor_checks_dependencies(self, capsys):
@@ -225,9 +225,9 @@ class TestHandleDoctor:
         from src.cli.repl import _handle_doctor
         _handle_doctor()
         captured = capsys.readouterr()
-        
+
         # Should mention some dependencies
-        deps_mentioned = sum(1 for dep in ['openai', 'anthropic', 'websockets'] 
+        deps_mentioned = sum(1 for dep in ['openai', 'anthropic', 'websockets']
                             if dep in captured.out.lower())
         assert deps_mentioned >= 1
 
@@ -236,7 +236,7 @@ class TestHandleDoctor:
         from src.cli.repl import _handle_doctor
         _handle_doctor()
         captured = capsys.readouterr()
-        
+
         # Should mention LLM_PROVIDER or API key
         assert "LLM_PROVIDER" in captured.out or "API_KEY" in captured.out or "Provider" in captured.out
 
@@ -248,9 +248,9 @@ class TestREPLIntegration:
         """Test calling help then version works correctly."""
         _handle_help()
         _handle_version()
-        
+
         captured = capsys.readouterr()
-        
+
         # Both outputs should be present
         assert "Clawd Code" in captured.out
         assert "Ctrl+C" in captured.out  # From help
@@ -261,7 +261,7 @@ class TestREPLIntegration:
         # All commands should start with /
         for cmd in BUILTIN_COMMANDS.keys():
             assert cmd.startswith('/'), f"Command {cmd} should start with /"
-        
+
         # All descriptions should be non-empty strings
         for desc in BUILTIN_COMMANDS.values():
             assert isinstance(desc, str)
@@ -276,10 +276,10 @@ class TestREPLIntegration:
             "Special chars: !@#$%",
             "中文文本",  # Unicode
         ]
-        
+
         for test_input in test_cases:
             _print(test_input)
-        
+
         captured = capsys.readouterr()
         # Should have printed all test cases
         assert "Simple text" in captured.out
@@ -299,13 +299,13 @@ class TestREPLErrorHandling:
             # Should not raise unhandled exceptions
             success = False
             pytest.fail(f"_handle_version raised unexpected exception: {e}")
-        
+
         assert success
 
     def test_handle_doctor_missing_deps(self, capsys):
         """Doctor should handle missing dependencies gracefully."""
         from src.cli.repl import _handle_doctor
-        
+
         # Should not crash even if some deps are missing
         try:
             _handle_doctor()
@@ -313,7 +313,7 @@ class TestREPLErrorHandling:
         except Exception as e:
             success = False
             pytest.fail(f"_handle_doctor raised unexpected exception: {e}")
-        
+
         assert success
         captured = capsys.readouterr()
         # Should have printed something

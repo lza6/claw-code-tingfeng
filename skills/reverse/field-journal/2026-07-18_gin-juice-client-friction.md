@@ -1,12 +1,12 @@
 # 现代 Web 靶场摩擦 → skill 加固
 
-> 日期：2026-07-18  
-> 场景：合法公开靶场（PortSwigger 类 scanner-eval / OWASP Juice Shop demo）  
+> 日期：2026-07-18
+> 场景：合法公开靶场（PortSwigger 类 scanner-eval / OWASP Juice Shop demo）
 > 脱敏：无真实业务域名利用细节
 
 ## 结论（给下次 Agent）
 
-**未打穿 ≠ 包无效。** 必须交付：surface map、sink 列表、门闩原因、Evidence(observed|validated)。  
+**未打穿 ≠ 包无效。** 必须交付：surface map、sink 列表、门闩原因、Evidence(observed|validated)。
 失败要写进 timeline，并反哺 playbook。
 
 ## 踩坑
@@ -23,17 +23,17 @@
 
 ## 可复用模式
 
-1. Surface → Sink → Chain（见 `pentest-tools/references/client-side-lab-playbook.md`）  
-2. 库存类 `innerHTML = fetchBody`：先证 sink，再找 200 非数字  
-3. 静态 rg sink + agent-browser eval 双证  
+1. Surface → Sink → Chain（见 `pentest-tools/references/client-side-lab-playbook.md`）
+2. 库存类 `innerHTML = fetchBody`：先证 sink，再找 200 非数字
+3. 静态 rg sink + agent-browser eval 双证
 
 ## 工具链
 
-- case-init / case-guard / append-evidence / smoke  
-- agent-browser（CDP）  
-- curl --globoff  
+- case-init / case-guard / append-evidence / smoke
+- agent-browser（CDP）
+- curl --globoff
 
 ## 环境
 
-- Windows + PowerShell 5.1  
-- Docker Desktop 可能 daemon 未就绪  
+- Windows + PowerShell 5.1
+- Docker Desktop 可能 daemon 未就绪

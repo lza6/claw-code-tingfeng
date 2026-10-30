@@ -41,7 +41,7 @@ description: Use for authorized RF/SDR security research including signal identi
 
 ## 路由上下文
 
-**上游**: MASTER R38  
+**上游**: MASTER R38
 **MUST NOT**: 干扰公共通信、未授权发射
 
 ## 任务完成自检

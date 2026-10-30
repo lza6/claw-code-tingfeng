@@ -20,18 +20,18 @@ class TestBuildParser:
     def test_build_parser_basic(self):
         """Build parser with basic structure."""
         parser = build_parser()
-        
+
         assert parser.description == 'Clawd Code - AI 编程代理框架'
         assert '--version' in parser.format_help()
 
     def test_parser_version_argument(self):
         """Parser should have version argument."""
         parser = build_parser()
-        
+
         # Should not raise exception
         with pytest.raises(SystemExit) as exc_info:
             parser.parse_args(['--version'])
-        
+
         # SystemExit is expected for --version
         assert exc_info.value.code == 0
 
@@ -39,14 +39,14 @@ class TestBuildParser:
         """Parse with no command (default to chat)."""
         parser = build_parser()
         args = parser.parse_args([])
-        
+
         assert args.command is None
 
     def test_parser_chat_command(self):
         """Parse chat command."""
         parser = build_parser()
         args = parser.parse_args(['chat'])
-        
+
         assert args.command == 'chat'
         assert args.max_iterations == 10
         assert args.tui is False
@@ -55,7 +55,7 @@ class TestBuildParser:
         """Parse chat command with options."""
         parser = build_parser()
         args = parser.parse_args(['chat', '--max-iterations', '20', '--tui'])
-        
+
         assert args.command == 'chat'
         assert args.max_iterations == 20
         assert args.tui is True
@@ -64,14 +64,14 @@ class TestBuildParser:
         """Parse doctor command."""
         parser = build_parser()
         args = parser.parse_args(['doctor'])
-        
+
         assert args.command == 'doctor'
 
     def test_parser_cost_report_command(self):
         """Parse cost-report command."""
         parser = build_parser()
         args = parser.parse_args(['cost-report'])
-        
+
         assert args.command == 'cost-report'
         assert args.tokens is False
         assert args.chart is False
@@ -88,7 +88,7 @@ class TestBuildParser:
             '--tools',
             '--days', '14'
         ])
-        
+
         assert args.tokens is True
         assert args.chart is True
         assert args.daily == 7
@@ -103,7 +103,7 @@ class TestBuildParser:
             '--goal', 'Fix bug',
             '--iterations', '5'
         ])
-        
+
         assert args.command == 'workflow'
         assert args.workflow_command == 'run'
         assert args.goal == 'Fix bug'
@@ -113,7 +113,7 @@ class TestBuildParser:
         """Parse workflow hotfix subcommand."""
         parser = build_parser()
         args = parser.parse_args(['workflow', 'hotfix', 'on', '--id', 'BUG-123'])
-        
+
         assert args.command == 'workflow'
         assert args.workflow_command == 'hotfix'
         assert args.mode == 'on'
@@ -128,7 +128,7 @@ class TestBuildParser:
             '--changelog-entry', 'Added feature X',
             '--category', 'Feature'
         ])
-        
+
         assert args.command == 'workflow'
         assert args.workflow_command == 'version'
         assert args.version_command == 'bump'
@@ -138,20 +138,20 @@ class TestBuildParser:
         """Parse workflow version check subcommand."""
         parser = build_parser()
         args = parser.parse_args(['workflow', 'version', 'check'])
-        
+
         assert args.version_command == 'check'
 
     def test_parser_workflow_status(self):
         """Parse workflow status subcommand."""
         parser = build_parser()
         args = parser.parse_args(['workflow', 'status'])
-        
+
         assert args.workflow_command == 'status'
 
     def test_parser_invalid_command(self):
         """Parse invalid command raises error."""
         parser = build_parser()
-        
+
         with pytest.raises(SystemExit):
             parser.parse_args(['invalid-command'])
 
@@ -165,9 +165,9 @@ class TestInitialize:
         # Reset global state
         import src.main
         src.main._initialized = False
-        
+
         initialize()
-        
+
         mock_load_env.assert_called_once()
 
     @patch('src.utils.env_loader.load_env', side_effect=Exception("File not found"))
@@ -175,9 +175,9 @@ class TestInitialize:
         """Initialize handles .env loading errors gracefully."""
         import src.main
         src.main._initialized = False
-        
+
         initialize()
-        
+
         captured = capsys.readouterr()
         assert '警告' in captured.err
         assert '.env' in captured.err
@@ -195,16 +195,16 @@ class TestInitialize:
     def test_initialize_idempotent(self):
         """Initialize should be idempotent (only runs once)."""
         import src.main
-        
+
         # First call
         src.main._initialized = False
         initialize()
         first_state = src.main._initialized
-        
+
         # Second call
         initialize()
         second_state = src.main._initialized
-        
+
         assert first_state is True
         assert second_state is True
 
@@ -217,9 +217,9 @@ class TestMainEntry:
         """Main with no command starts REPL."""
         from src.main import main
         mock_repl.return_value = 0
-        
+
         result = main([])
-        
+
         assert result == 0
         mock_repl.assert_called_once()
 
@@ -228,9 +228,9 @@ class TestMainEntry:
         """Main with chat command starts REPL."""
         from src.main import main
         mock_repl.return_value = 0
-        
+
         result = main(['chat'])
-        
+
         assert result == 0
         mock_repl.assert_called_once()
 
@@ -238,9 +238,9 @@ class TestMainEntry:
     def test_main_doctor_command(self, mock_doctor):
         """Main with doctor command runs diagnostics."""
         from src.main import main
-        
+
         result = main(['doctor'])
-        
+
         assert result == 0
         mock_doctor.assert_called_once()
 
@@ -249,7 +249,7 @@ class TestMainEntry:
         """Main with unknown command shows error."""
         from src.main import main
         mock_get_handler.return_value = None
-        
+
         with pytest.raises(SystemExit):
             main(['unknown'])
 
@@ -260,7 +260,7 @@ class TestMainEntry:
         mock_handler = Mock()
         mock_handler.return_value = Mock(exit_code=0, output="Success")
         mock_get_handler.return_value = mock_handler
-        
+
         # Note: This test may not work as expected due to initialize() being called
         # which sets up real handlers. We verify the structure instead.
         assert callable(main)
@@ -273,7 +273,7 @@ class TestMainEntry:
         mock_handler = Mock()
         mock_handler.return_value = Mock(exit_code=0, output="Command output")
         mock_get_handler.return_value = mock_handler
-        
+
         # Due to initialize() calling real handlers, we just verify structure
         assert callable(main)
 
@@ -284,7 +284,7 @@ class TestMainEntry:
         mock_handler = Mock()
         mock_handler.return_value = Mock(exit_code=1, output="Error occurred")
         mock_get_handler.return_value = mock_handler
-        
+
         # Verify function exists and is callable
         assert callable(main)
 
@@ -293,7 +293,7 @@ class TestMainEntry:
         """Main handles ClawdError with structured message."""
         from src.main import main
         from src.core.exceptions import ClawdError, ErrorCode
-        
+
         mock_handler = Mock()
         mock_handler.side_effect = ClawdError(
             code=ErrorCode.TOOL_EXECUTION_FAILED,
@@ -301,7 +301,7 @@ class TestMainEntry:
             details="Permission denied"
         )
         mock_get_handler.return_value = mock_handler
-        
+
         # Verify error handling structure exists
         assert callable(main)
 
@@ -309,11 +309,11 @@ class TestMainEntry:
     def test_main_handles_generic_exception(self, mock_get_handler, capsys):
         """Main handles generic exceptions."""
         from src.main import main
-        
+
         mock_handler = Mock()
         mock_handler.side_effect = RuntimeError("Unexpected error")
         mock_get_handler.return_value = mock_handler
-        
+
         # Verify exception handling structure exists
         assert callable(main)
 
@@ -325,9 +325,9 @@ class TestMainEntry:
         mock_ctx = Mock()
         mock_ctx_class.return_value = mock_ctx
         mock_repl.return_value = 0
-        
+
         main([])
-        
+
         mock_ctx_class.assert_called_once()
         mock_ctx.ensure_dirs.assert_called_once()
 
@@ -340,9 +340,9 @@ class TestMainEntry:
         mock_ctx = Mock()
         mock_ctx_class.return_value = mock_ctx
         mock_repl.return_value = 0
-        
+
         main([])
-        
+
         # Verify workdir was passed
         call_kwargs = mock_ctx_class.call_args[1]
         assert 'workdir' in call_kwargs
@@ -352,12 +352,12 @@ class TestMainEntry:
         """Main registers shutdown hook via atexit."""
         import atexit
         from src.main import main
-        
+
         # This test verifies atexit registration happens
         # Actual execution happens at process exit
         with patch('src.cli.repl.start_repl', return_value=0):
             main([])
-        
+
         # Shutdown hook should be registered
         # (We can't easily test atexit callbacks without exiting)
         assert True  # Registration happened if no exception
@@ -369,14 +369,14 @@ class TestIntegration:
     def test_full_parser_workflow(self):
         """Test complete parser construction and usage."""
         parser = build_parser()
-        
+
         # Parse various commands
         args1 = parser.parse_args([])
         assert args1.command is None
-        
+
         args2 = parser.parse_args(['doctor'])
         assert args2.command == 'doctor'
-        
+
         args3 = parser.parse_args(['cost-report', '--tokens'])
         assert args3.command == 'cost-report'
         assert args3.tokens is True
@@ -385,7 +385,7 @@ class TestIntegration:
         """Verify command help text is organized by groups."""
         parser = build_parser()
         help_text = parser.format_help()
-        
+
         assert '交互模式' in help_text
         assert '显示执行' in help_text
         assert '工作流引擎' in help_text

@@ -1,7 +1,7 @@
 # ✅ Onyx → Clawd Code 整合完成报告
 
-> 执行日期：2026-04-08  
-> 状态：**P0 阶段已完成，测试全部通过**  
+> 执行日期：2026-04-08
+> 状态：**P0 阶段已完成，测试全部通过**
 > 测试通过：39/39 ✅
 
 ---
@@ -111,7 +111,7 @@ class MySearchTool(BaseTool):
 
 # 执行后自动追踪
 stats = tool.get_usage_stats()
-# → {"name": "search", "category": "search", "version": "2.0.0", 
+# → {"name": "search", "category": "search", "version": "2.0.0",
 #    "enabled": True, "usage_count": 42, "last_used": 1712563200.0}
 ```
 

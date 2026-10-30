@@ -1,8 +1,8 @@
 # 非 PE / 多格式 Agent 响应菜谱 U–AV + AW–DN
 
-> 与 PE 反调试菜谱 A–T（../anti-analysis.md）并列：按**文件类型**给出「触发 → 动作一行 → Evidence」。  
-> **不是**第二套主流程。Triage 识别类型后跳转到对应 skill + 本表。  
-> 默认 **授权隔离 lab / 已授权样本与设备**。格机、BYOVD、反射注入等写**检测与取证**，不写未授权破坏/利用教程。  
+> 与 PE 反调试菜谱 A–T（../anti-analysis.md）并列：按**文件类型**给出「触发 → 动作一行 → Evidence」。
+> **不是**第二套主流程。Triage 识别类型后跳转到对应 skill + 本表。
+> 默认 **授权隔离 lab / 已授权样本与设备**。格机、BYOVD、反射注入等写**检测与取证**，不写未授权破坏/利用教程。
 > 绕过或还原失败也 MUST 记 Evidence；禁止静默当「无害」。
 >
 > §1–§8 / U–AV = 原始规则（Issue #65）。§9–§23 / AW–DN = 扩展规则（Issue #87，去重后 + 语义增强 + edge-case 补丁）。
@@ -266,10 +266,10 @@ DLL/SYS 硬门仍：E-imports + E-exports（见 re-agent-workflow）。
 
 ## 24. 约束（全局）
 
-1. **不平行主流程**：阶段门闩仍以 re-agent-workflow / 各 skill 为准。  
-2. **Evidence 必记**：含失败、半还原、quality= 标注。  
-3. **与 A–T 去重**：PE 反调试不重复；AM→R；AJ 补 DLL 视角不推翻 TLS 火箭。  
-4. **工具缺失**：记 n/a + 手工等价，不假装已用商业套件。  
+1. **不平行主流程**：阶段门闩仍以 re-agent-workflow / 各 skill 为准。
+2. **Evidence 必记**：含失败、半还原、quality= 标注。
+3. **与 A–T 去重**：PE 反调试不重复；AM→R；AJ 补 DLL 视角不推翻 TLS 火箭。
+4. **工具缺失**：记 n/a + 手工等价，不假装已用商业套件。
 5. **授权**：破坏性/注入/驱动漏洞类只做防御分析与取证表述。
 6. **扩展规则去重**：ELF → elf-analysis.md；Mach-O → platforms.md；Python → languages.md。本表不重复这些格式的规则。
 

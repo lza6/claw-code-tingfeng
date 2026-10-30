@@ -197,7 +197,7 @@ class TestConfigInjectorProviderConfig:
         clawd_dir.mkdir()
         provider_file = clawd_dir / "provider.json"
         provider_file.write_text(json.dumps({"api_key": "test_key"}))
-        
+
         # 直接测试文件读取逻辑
         assert provider_file.exists()
         data = json.loads(provider_file.read_text())
@@ -216,7 +216,7 @@ class TestConfigInjectorProviderConfig:
             }
         }
         provider_file.write_text(json.dumps(data))
-        
+
         # 验证文件内容
         assert provider_file.exists()
         loaded_data = json.loads(provider_file.read_text())
@@ -233,11 +233,11 @@ class TestConfigInjectorFeaturesConfig:
         clawd_dir.mkdir()
         features_file = clawd_dir / "features.json"
         features_file.write_text(json.dumps({"feature1": True, "feature2": False}))
-        
+
         import os
         original_clawd = os.environ.get("CLAWD_CONFIG_DIR")
         os.environ["CLAWD_CONFIG_DIR"] = str(clawd_dir)
-        
+
         try:
             reset_config_injector()
             injector = ConfigInjector()
@@ -267,10 +267,10 @@ class TestConfigInjectorDelete:
         """测试删除触发回调"""
         callbacks = []
         injector.on_change(lambda event: callbacks.append(event))
-        
+
         injector.set("key", "value")
         injector.delete("key")
-        
+
         assert len(callbacks) == 2  # set 和 delete 各触发一次
         assert callbacks[-1].new_value is None
 
@@ -282,9 +282,9 @@ class TestConfigInjectorCallbacks:
         """测试变更回调"""
         events = []
         injector.on_change(lambda event: events.append(event))
-        
+
         injector.set("key", "value")
-        
+
         assert len(events) == 1
         assert events[0].key == "key"
         assert events[0].new_value == "value"
@@ -294,16 +294,16 @@ class TestConfigInjectorCallbacks:
         events = []
         injector.on_change(lambda event: events.append(("cb1", event)))
         injector.on_change(lambda event: events.append(("cb2", event)))
-        
+
         injector.set("key", "value")
-        
+
         assert len(events) == 2
 
     def test_callback_exception_handling(self, injector, caplog):
         """测试回调异常处理"""
         def failing_callback(event):
             raise ValueError("Test error")
-        
+
         injector.on_change(failing_callback)
         injector.set("key", "value")  # 不应抛出异常
 
@@ -337,9 +337,9 @@ class TestConfigInjectorGetFullConfig:
         """测试获取完整配置"""
         injector.set("key1", "value1")
         injector.set("key2", "value2")
-        
+
         config = injector.get_full_config()
-        
+
         assert config.get("key1") == "value1"
         assert config.get("key2") == "value2"
 
@@ -364,9 +364,9 @@ class TestConfigInjectorPriorityReport:
         """测试获取优先级报告"""
         injector.set("key1", "value1")
         injector.set("key2", "value2")
-        
+
         report = injector.get_priority_report()
-        
+
         assert "配置优先级报告" in report
         assert "Runtime Overrides" in report
         assert "key1" in report
@@ -381,13 +381,13 @@ class TestConfigInjectorPersistToFile:
         # 模拟持久化路径
         clawd_dir = tmp_path / ".clawd"
         clawd_dir.mkdir()
-        
+
         with patch.object(injector, '_persist_to_file', wraps=injector._persist_to_file):
             # 修改 _persist_to_file 使用的路径
             persist_path = clawd_dir / "runtime_overrides.json"
             with patch('src.core.config_injector.Path.cwd', return_value=tmp_path):
                 injector.set("key", "value", persistent=True)
-                
+
                 # 检查文件是否创建
                 assert persist_path.exists()
                 data = json.loads(persist_path.read_text())
@@ -403,7 +403,7 @@ class TestConfigInjectorLoadPersistentOverrides:
         clawd_dir.mkdir()
         persist_file = clawd_dir / "runtime_overrides.json"
         persist_file.write_text(json.dumps({"key1": "value1", "key2": "value2"}))
-        
+
         with patch('src.core.config_injector.Path.cwd', return_value=tmp_path):
             count = injector.load_persistent_overrides()
             assert count == 2

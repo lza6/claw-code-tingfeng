@@ -71,8 +71,8 @@ description: Use for blue-team threat hunting, detection engineering with Sigma/
 
 ## 路由上下文
 
-**上游**: MASTER R27  
-**下游**: 确认入侵 → forensics；恶意样本 → malware-analysis  
+**上游**: MASTER R27
+**下游**: 确认入侵 → forensics；恶意样本 → malware-analysis
 **MUST NOT**: 在无授权生产环境跑攻击模拟
 
 ## 任务完成自检

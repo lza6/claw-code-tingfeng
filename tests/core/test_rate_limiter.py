@@ -213,7 +213,7 @@ class TestTokenRateLimiter:
         """测试获取使用量"""
         limiter = TokenRateLimiter()
         limiter.set_limit(key="user1")
-        
+
         # 注意：当前实现中 check_limit 追加的是 token 值而非时间戳
         # get_usage 过滤条件 t > window_start 会过滤掉所有 token 值
         # 这是一个已知问题，这里测试基本结构
@@ -223,7 +223,7 @@ class TestTokenRateLimiter:
             completion_tokens=500,
         )
         assert allowed is True
-        
+
         # get_usage 应返回数据结构（即使值为0因实现bug）
         usage = limiter.get_usage("user1")
         assert usage is not None

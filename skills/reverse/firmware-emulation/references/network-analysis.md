@@ -383,15 +383,15 @@ mkdir -p "$CAPTURE_DIR"
 while true; do
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
     FILENAME="$CAPTURE_DIR/capture_$TIMESTAMP.pcap"
-    
+
     echo "Starting capture: $FILENAME"
-    
+
     # Capture for ROTATE_INTERVAL seconds
     sudo timeout --signal=INT "$ROTATE_INTERVAL" tcpdump -i "$INTERFACE" -w "$FILENAME"
-    
+
     # Compress old captures
     gzip "$FILENAME"
-    
+
     echo "Rotated to new capture file"
 done
 ```
@@ -415,12 +415,12 @@ sudo tcpdump -i "$INTERFACE" -l -n -A -s 0 | while IFS= read -r line; do
         # Send notification
         notify-send "Security Alert" "Possible SQL injection detected"
     fi
-    
+
     # Alert on command injection
     if echo "$line" | grep -E "\||;|&|\`"; then
         echo "[ALERT] Possible command injection: $line"
     fi
-    
+
     # Alert on directory traversal
     if echo "$line" | grep -Eq '\.\./|\.\.\\'; then
         echo "[ALERT] Possible directory traversal: $line"
@@ -447,7 +447,7 @@ class ProtocolAnalyzer:
             'endpoints': set(),
             'suspicious': []
         }
-    
+
     def analyze(self):
         for pkt in self.packets:
             # Count protocols
@@ -455,11 +455,11 @@ class ProtocolAnalyzer:
                 proto = pkt[IP].proto
                 self.analysis['protocols'][proto] = \
                     self.analysis['protocols'].get(proto, 0) + 1
-                
+
                 # Track endpoints
                 self.analysis['endpoints'].add(pkt[IP].src)
                 self.analysis['endpoints'].add(pkt[IP].dst)
-            
+
             # Check for suspicious patterns
             if Raw in pkt:
                 payload = pkt[Raw].load
@@ -468,9 +468,9 @@ class ProtocolAnalyzer:
                         'packet': pkt.summary(),
                         'reason': 'Credential-related keywords in raw payload; verify protocol context'
                     })
-        
+
         return self.analysis
-    
+
     def report(self):
         print(json.dumps({
             **self.analysis,

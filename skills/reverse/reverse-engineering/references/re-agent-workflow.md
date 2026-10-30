@@ -1,7 +1,7 @@
 # RE Agent 工作流门闩（静态↔动态）
 
-> 来源启发：binary-re 阶段划分、社区 RE skill（Frida/r2/Ghidra/IDA 循环）、Cerberus 三头环（静/动/插桩）  
-> Issue #65 增量：IAT 修复铁律、六阶段映射、.NET/DLL·SYS 等价路径；用户指令可行性门闩；旁路补丁 6–10；反调试/混淆菜谱 A–T；非 PE 多格式菜谱 U–AV（2026-08-12）  
+> 来源启发：binary-re 阶段划分、社区 RE skill（Frida/r2/Ghidra/IDA 循环）、Cerberus 三头环（静/动/插桩）
+> Issue #65 增量：IAT 修复铁律、六阶段映射、.NET/DLL·SYS 等价路径；用户指令可行性门闩；旁路补丁 6–10；反调试/混淆菜谱 A–T；非 PE 多格式菜谱 U–AV（2026-08-12）
 > 适用：`reverse-engineering/`、`ida-reverse/`、`radare2/`、`malware-analysis/`、与 cre 角色交接
 
 ## 0. 启动
@@ -234,7 +234,7 @@ Blindspots (Rust/Go/VMP/injection/OLE/PDF/agent-meta): [analysis-blindspot-cookb
 
 ## 6. 与「堆 RE skill 插件」的差异
 
-- 本包用 **阶段门闩 + tool-index**，不默认启用 Hex-Rays「unsafe 全自动执行」类插件  
-- 动态插桩默认 **offline/lab** network_profile  
-- IAT/导入表：**尝试 + 记录** 优先于「无限静态死磕」或「静默跳过」  
+- 本包用 **阶段门闩 + tool-index**，不默认启用 Hex-Rays「unsafe 全自动执行」类插件
+- 动态插桩默认 **offline/lab** network_profile
+- IAT/导入表：**尝试 + 记录** 优先于「无限静态死磕」或「静默跳过」
 - 用户指令：**目标优先 + 前提协商**，禁止用无关步骤冒充被点名步骤

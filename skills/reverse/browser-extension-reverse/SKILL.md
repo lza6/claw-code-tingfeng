@@ -63,7 +63,7 @@ description: Use for authorized reverse engineering of browser extensions (Chrom
 
 ## 路由上下文
 
-**上游**: MASTER R30  
+**上游**: MASTER R30
 **下游**: 复杂混淆 JS → `js-reverse`；投毒调查 → supply-chain / malware
 
 ## 任务完成自检

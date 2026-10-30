@@ -75,7 +75,7 @@ print("  SHA256 constants: {}".format(len(sha256_addrs)))
 # Find functions that reference these
 if aes_sbox_addrs or md5_addrs or sha256_addrs:
     print("\n=== Functions referencing candidate tables ===")
-    
+
     for addr in aes_sbox_addrs + md5_addrs + sha256_addrs:
         refs = currentProgram.getReferenceManager().getReferencesTo(addr)
         for ref in refs:
@@ -83,7 +83,7 @@ if aes_sbox_addrs or md5_addrs or sha256_addrs:
             if func:
                 print("Candidate reference: {} at {}".format(
                     func.getName(), func.getEntryPoint()))
-                
+
                 # Rename if not already named
                 if func.getSymbol().getSource() == SourceType.DEFAULT:
                     func.setName("crypto_candidate_" + str(func.getEntryPoint()).replace(":", "_"),

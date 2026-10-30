@@ -104,29 +104,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: SBOM Generate
         run: |
           npm install -g @cyclonedx/cdxgen
           cdxgen -o sbom.json
-      
+
       - name: OSV Scan
         run: |
           go install github.com/google/osv-scanner/cmd/osv-scanner@latest
           osv-scanner scan --sbom sbom.json --format sarif > osv-results.sarif
-      
+
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           severity: CRITICAL,HIGH
           exit-code: 1
-      
+
       - name: Secret Scan
         run: |
           docker run --rm -v $PWD:/src ghcr.io/gitleaks/gitleaks:latest \
             detect --source /src --verbose
-      
+
       - name: Dependency-Track Upload
         run: |
           curl -X POST https://dtrack.example.com/api/v1/bom \

@@ -80,8 +80,8 @@ MUST NOT 在未明确允许时：
 
 ## 路由上下文
 
-**上游**: MASTER R28  
-**下游**: 固件深挖 `firmware-pentest`；协议 `protocol-reverse`；IT 横向 `windows-ad`/`attack-chain`  
+**上游**: MASTER R28
+**下游**: 固件深挖 `firmware-pentest`；协议 `protocol-reverse`；IT 横向 `windows-ad`/`attack-chain`
 **同级**: 不要用普通 Web 扫默认参数打 OT
 
 ## 任务完成自检

@@ -15,12 +15,12 @@ def test_trigram_search_basic():
     idx = TrigramIndex()
     idx.add_document("file1.py", "def my_function():\n    return True")
     idx.add_document("file2.py", "class MyClass:\n    pass")
-    
+
     # Search for 'func'
     results = idx.search("function")
     assert "file1.py" in results
     assert "file2.py" not in results
-    
+
     # Search for 'my_func' (case-insensitive)
     results = idx.search("my_func")
     assert "file1.py" in results
@@ -29,7 +29,7 @@ def test_trigram_search_basic():
 def test_word_index_basic():
     widx = WordIndex()
     widx.add_document("f1.py", "import os\ndef start(): pass")
-    
+
     hits = widx.find_word("start")
     assert len(hits) == 1
     assert hits[0][0] == "f1.py"

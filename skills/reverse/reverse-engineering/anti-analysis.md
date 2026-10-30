@@ -781,16 +781,16 @@ Many CTF challenges stack multiple checks:
 
 ## Agent 响应菜谱 A–T（Issue #65）
 
-> 检测类长文仍见 `malware-analysis/references/anti-analysis-techniques.md`；OLLVM 长流程见 `references/ollvm-deobfuscation.md`。  
-> 本节是 **触发 → 动作 → Evidence** 短菜谱，供 agent 在 Dynamic/Static 旁路选用。  
+> 检测类长文仍见 `malware-analysis/references/anti-analysis-techniques.md`；OLLVM 长流程见 `references/ollvm-deobfuscation.md`。
+> 本节是 **触发 → 动作 → Evidence** 短菜谱，供 agent 在 Dynamic/Static 旁路选用。
 > **授权隔离 lab 默认**；静态 patch / 改 PEB / 改返回值不是未授权目标上的默认动作。
 
 ### 使用规则
 
-1. 先 **识别并记录** 检测点（地址/API/字符串），再决定绕过或换环境。  
-2. 绕过尝试（成功或失败）MUST 写 Evidence；禁止把反调试退出写成「样本无害」。  
-3. H/S 不在此展开长文 → 跳转 OLLVM 专章。  
-4. L 仅 Linux/ELF 强制；Windows PE 主路径不因缺 TracerPid 判失败。  
+1. 先 **识别并记录** 检测点（地址/API/字符串），再决定绕过或换环境。
+2. 绕过尝试（成功或失败）MUST 写 Evidence；禁止把反调试退出写成「样本无害」。
+3. H/S 不在此展开长文 → 跳转 OLLVM 专章。
+4. L 仅 Linux/ELF 强制；Windows PE 主路径不因缺 TracerPid 判失败。
 5. E 的 VT 对照为 **可选**；无外部情报源时写 n/a，不编造首次提交时间。
 
 ### 全表 A–T
@@ -829,8 +829,8 @@ Many CTF challenges stack multiple checks:
 
 ### 工具注记（非强制安装清单）
 
-- Windows 用户态：x64dbg + **ScyllaHide**（PEB/NtQuery/硬件 BP 等批量隐藏）  
-- 签名：Sysinternals **SigCheck**  
-- PE 结构：PE-bear / CFF Explorer  
-- 平坦化：见 ollvm 专章工具表（d810-ng 等）  
+- Windows 用户态：x64dbg + **ScyllaHide**（PEB/NtQuery/硬件 BP 等批量隐藏）
+- 签名：Sysinternals **SigCheck**
+- PE 结构：PE-bear / CFF Explorer
+- 平坦化：见 ollvm 专章工具表（d810-ng 等）
 - 无某工具时：等价命令 + 记失败，禁止假装已验证签名/已脱平坦化

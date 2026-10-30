@@ -75,7 +75,7 @@ def test_full_notification_payload_required_fields():
         message="Test message",
         timestamp="2024-01-01T00:00:00Z",
     )
-    
+
     assert payload.event == NotificationEvent.SESSION_START
     assert payload.session_id == "test123"
     assert payload.message == "Test message"
@@ -99,7 +99,7 @@ def test_full_notification_payload_optional_fields():
         agents_spawned=3,
         agents_completed=3,
     )
-    
+
     assert payload.tmux_session == "session-1"
     assert payload.project_path == "/path/to/project"
     assert payload.project_name == "my-project"

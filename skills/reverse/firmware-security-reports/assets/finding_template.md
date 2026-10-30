@@ -6,13 +6,13 @@
 
 ## FW-[ID]: [Vulnerability Title]
 
-**Severity:** [Critical/High/Medium/Low/Informational]  
-**CVSS v3.1 Score:** [SCORE] ([RATING])  
+**Severity:** [Critical/High/Medium/Low/Informational]
+**CVSS v3.1 Score:** [SCORE] ([RATING])
 **CVSS Vector:** CVSS:3.1/AV:[N/A/L/P]/AC:[L/H]/PR:[N/L/H]/UI:[N/R]/S:[U/C]/C:[N/L/H]/I:[N/L/H]/A:[N/L/H]
 
-**Category:** [CWE-XXX: Category Name]  
-**Affected Component:** [Component/Service/Binary Name]  
-**Location:** [File path / Function / Address]  
+**Category:** [CWE-XXX: Category Name]
+**Affected Component:** [Component/Service/Binary Name]
+**Location:** [File path / Function / Address]
 **Discovery Method:** [Static Analysis / Dynamic Analysis / Fuzzing / Manual Testing]
 
 ---
@@ -51,8 +51,8 @@ An attacker exploiting this vulnerability can:
 
 #### Vulnerable Code
 
-**File:** `/path/to/vulnerable/file`  
-**Function:** `function_name`  
+**File:** `/path/to/vulnerable/file`
+**Function:** `function_name`
 **Address:** `0x[HEX_ADDRESS]` (if applicable)
 
 **Vulnerable Code Snippet:**
@@ -145,11 +145,11 @@ def exploit(target_ip, command):
     Exploits command injection to execute arbitrary commands
     """
     url = f"http://{target_ip}/cgi-bin/diagnostic.cgi"
-    
+
     payload = {
         'target': f'127.0.0.1;{command}'
     }
-    
+
     try:
         r = requests.post(url, data=payload, timeout=5)
         print(f"[+] Command executed successfully")
@@ -163,10 +163,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(f"Usage: {sys.argv[0]} <target_ip> <command>")
         sys.exit(1)
-    
+
     target = sys.argv[1]
     cmd = sys.argv[2]
-    
+
     exploit(target, cmd)
 ```
 
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 1. **[Action 1]** - [Description]
    - Disable affected functionality
    - Apply input filtering workaround
-   
+
 2. **[Action 2]** - [Description]
    - Implement temporary access controls
    - Enable additional logging
@@ -321,7 +321,7 @@ No regression in legitimate functionality
 
 ---
 
-**Finding ID:** FW-[ID]  
-**Analyst:** [NAME]  
-**Date:** [DATE]  
+**Finding ID:** FW-[ID]
+**Analyst:** [NAME]
+**Date:** [DATE]
 **Status:** [Open / In Progress / Fixed / Verified]

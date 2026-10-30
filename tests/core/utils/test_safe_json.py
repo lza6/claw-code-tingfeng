@@ -52,7 +52,7 @@ def test_safe_json_dump_non_serializable():
     """Test dumping non-serializable object returns empty object."""
     class CustomObject:
         pass
-    
+
     result = safe_json_dump(CustomObject())
     assert result == "{}"
 
@@ -83,7 +83,7 @@ def test_safe_json_parse_with_datetime():
     """Test parsing datetime-like objects."""
     from datetime import datetime
     from src.core.utils.safe_json import SafeJSONEncoder
-    
+
     data = {"timestamp": datetime(2024, 1, 1, 12, 0, 0)}
     encoder = SafeJSONEncoder()
     result = encoder.encode(data)

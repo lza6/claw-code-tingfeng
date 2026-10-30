@@ -341,7 +341,7 @@ def try_aes_decrypt(data, key, mode='ECB'):
             data = data[16:]
         else:
             raise ValueError('Unsupported probe mode')
-        
+
         decrypted = cipher.decrypt(data)
         return decrypted
     except ValueError:
@@ -358,27 +358,27 @@ def main():
     if len(sys.argv) < 3:
         print("Usage: decrypt_firmware.py <firmware.bin> <key_in_hex>")
         sys.exit(1)
-    
+
     firmware_file = sys.argv[1]
     key_hex = sys.argv[2]
-    
+
     with open(firmware_file, 'rb') as f:
         encrypted = f.read()
-    
+
     key = bytes.fromhex(key_hex)
-    
+
     # Try different modes
     for mode in ['ECB', 'CBC']:
         print(f"Trying AES-{mode}...")
         decrypted = try_aes_decrypt(encrypted, key, mode)
-        
+
         if decrypted and check_firmware_candidate(decrypted):
             output = f"decrypted_{mode}.bin"
             with open(output, 'wb') as f:
                 f.write(decrypted)
             print(f"Header candidate saved to {output}")
             print("Verify full parsing, lengths/checksums and any authentication tag.")
-    
+
     print("Probe complete; absent header matches do not rule out a correct key.")
 
 if __name__ == '__main__':

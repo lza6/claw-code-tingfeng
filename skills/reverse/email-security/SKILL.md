@@ -44,7 +44,7 @@ description: Use for authorized email security review including phishing analysi
 
 ## 路由上下文
 
-**上游**: MASTER R36  
+**上游**: MASTER R36
 **MUST NOT**: 未授权对第三方域群发测试钓鱼
 
 ## 任务完成自检

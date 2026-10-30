@@ -181,10 +181,10 @@ from ghidra.app.services import AbstractAnalyzer, AnalyzerType
 class MyAnalyzer(AbstractAnalyzer):
     def __init__(self):
         AbstractAnalyzer.__init__(self, "Custom Analyzer", "Description", AnalyzerType.FUNCTION_ANALYZER)
-    
+
     def canAnalyze(self, program):
         return True
-    
+
     def added(self, program, addrSet, monitor, log):
         # Your analysis logic
         return True

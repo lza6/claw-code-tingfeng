@@ -172,7 +172,7 @@ void shell() { system("/bin/sh"); }
   - 内核全局变量 modprobe_path 默认 "/sbin/modprobe"
   - 当 execve 一个不认识 magic 的文件时，内核调用 modprobe_path 以 root 执行
   - 改成 "/tmp/x"，写 /tmp/x（chmod +x），触发未知 magic 执行
-  
+
 适用：有任意写原语，但不一定能 ROP
 ```
 

@@ -50,5 +50,5 @@ powershell -File skills\scripts\refresh-tool-index.ps1
 
 沙箱内扫描仍受 case `scope.md` 的 `network_profile` 约束：
 
-- `offline` → 不建议起对外扫描容器  
-- `authorized_target_only` → 容器也只能打 in_scope  
+- `offline` → 不建议起对外扫描容器
+- `authorized_target_only` → 容器也只能打 in_scope

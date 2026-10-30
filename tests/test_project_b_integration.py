@@ -28,9 +28,9 @@ class TestIgnoreFilter:
         (root / ".gitignore").write_text("*.log\n!important.log")
         (root / "subdir").mkdir()
         (root / "subdir" / ".gitignore").write_text("secret.txt\n")
-        
+
         filter = IgnoreFilter(root)
-        
+
         assert filter.is_ignored("test.log") is True
         assert filter.is_ignored("important.log") is False
         assert filter.is_ignored("subdir/secret.txt") is True
@@ -64,15 +64,15 @@ class TestSettingsSource:
         # Test the logic of _track_sources
         # We can't easily avoid AgentSettings entirely as it's the class being tested.
         # But we can try to run it in a way that doesn't trigger pytest's inspection issues.
-        
+
         # Mock environment
         os.environ["LLM_PROVIDER"] = "groq"
-        
+
         try:
             settings = AgentSettings()
             # Explicitly call the tracking
             settings._track_sources()
-            
+
             # Verify
             source = settings.get_source("llm_provider")
             assert source.kind == ConfigSourceKind.ENV

@@ -99,9 +99,9 @@ class TestRetryPolicyExecute:
         """测试首次成功"""
         policy = RetryPolicy(max_retries=3)
         mock_func = AsyncMock(return_value="result")
-        
+
         result = await policy.execute(mock_func, "arg1")
-        
+
         assert result == "result"
         mock_func.assert_called_once()
 
@@ -180,8 +180,8 @@ class TestRetryPolicyEdgeCases:
         """测试零重试"""
         policy = RetryPolicy(max_retries=0)
         mock_func = AsyncMock(side_effect=Exception("Fail"))
-        
+
         with pytest.raises(Exception):
             await policy.execute(mock_func)
-        
+
         assert mock_func.call_count == 1

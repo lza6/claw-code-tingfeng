@@ -250,11 +250,11 @@ Base Score: 6.5 (Medium)
    Read all data → C:H
    Read some data → C:L
    No data read → C:N
-   
+
    Modify all data → I:H
    Modify some data → I:L
    No modification → I:N
-   
+
    Crash/DoS device → A:H
    Degrade performance → A:L
    No availability impact → A:N
