@@ -1,0 +1,91 @@
+{
+  "task_id": "round-2026-10-30-client-and-ledger",
+  "status": "in_progress",
+  "timestamp": "2026-10-30T23:59:00+08:00",
+  "scope": "v0.86.0 → v0.88.8：桌面客户端收口（数据持久化/多模态/观感/会话管理）+ 计划台账对账（P1 6/6、P2 9/10、M1~M5、G1~G4）+ 死码清理 + CLI --json 契约",
+  "commands_executed": [
+    {
+      "cmd": "venv/Scripts/python.exe scripts/e2e_smoke.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 5 项，通过 5，失败 0 —— 0.读配置 1.应用可导入 2.真实LLM对话(content='PONG') 3.工具调用(tool=get_weather) 4.推理内容(answer='391')"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 200 --rounds 10",
+      "exit_code": 0,
+      "raw_output_tail": "并发客户端 200 / 成功 200 / 失败 0 / 请求 2000 / 墙钟 0.77s / QPS 2583 / P50 10.7ms P95 15.9ms P99 16.3ms / 错误率 0.0% / STRESS: PASS"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/baseline.py --out .clawd/baseline.json",
+      "exit_code": 0,
+      "raw_output_tail": "version 0.88.7×3 consistent=True; collect 5399/0 errors; ruff_hard ok; silent 155; reachable 501; fully_unreachable 26; import_sweep ok(fail 0); coverage 65.54%"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_mcp_startup.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 4 个 server，通过 4，失败 0（clawd-state/memory/trace/team 真 spawn + 握手）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/core_surface.py",
+      "exit_code": 0,
+      "raw_output_tail": "[PASS] 没有新增向上层 import（存量 0，allow 清单已清空）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/import_sweep.py --strict-exit",
+      "exit_code": 0,
+      "raw_output_tail": "IMPORT-FAIL 0 / IMPORT-EXIT 0 / DEP-MISSING 0"
+    },
+    {
+      "cmd": "pwsh -File %TEMP%/clawd-install-e2e.ps1 (v0.88.5 轮次)",
+      "exit_code": 0,
+      "raw_output_tail": "STEP2b/2c/2d exit 0（控制台 32 项 + 附件落盘 1）；STEP2e PASS；STEP2f HTTP 200 带 workdir；STEP3 残留 0；STEP5 注册表残留 0"
+    }
+  ],
+  "files_changed": {
+    "desktop_client": [
+      "src/core/data_dir.py（新增，数据目录唯一入口）",
+      "src/core/providers_store.py（改 JSON）",
+      "src/core/projects_store.py（新增）",
+      "desktop/electron/main.js（菜单栏移除/preload 桥/崩溃留痕/migrateLegacyData/quitAndInstall）",
+      "desktop/web/app.js + index.html（会话分组/toast/工具折叠/上下文/停止生成/协议剥离/空态/搜索/重命名删除）"
+    ],
+    "vision": ["src/llm/vision.py（新增）", "src/agent/engine_loop.py（images + 降级）", "src/agent/message_truncator.py（多模态归一化）"],
+    "boundary": ["src/core/patch/fuzzy_matcher.py（下沉）", "src/core/workflow_status.py（下沉）", "core_surface_allow.json（清零）"],
+    "team": ["src/workflow/team_persistence.py（状态目录走 data_path）", "src/workflow/pipeline.py（TeamExecStage 接线）"],
+    "pricing": ["src/core/cost_estimator/cost_estimator.py（resolve_pricing + litellm 兜底）"],
+    "cli_json": ["src/cli/command_result.py（新增契约）", "entrypoint.py / repl_commands.py / catalog_commands.py（6 命令接入）"],
+    "docs": ["CHANGELOG.md", "README.md", "workflow_status.md", "CLAUDE.md", "docs/adr/0021", "docs/MAINTENANCE.md", ".agent/memory/*"],
+    "deps": ["requirements.lock（新增 149 精确版本）"]
+  },
+  "tests": [
+    {"name": "全量非 slow 回归", "type": "unit+integration", "status": "passed", "evidence": "5372 passed / 0 failed（6m40s，v0.88.7 时点）；v0.88.8 复跑见 coverage_summary"},
+    {"name": "装机 E2E（真实安装包）", "type": "e2e", "status": "passed", "evidence": "32 项控制台断言 + 真实 LLM 对话 + 重启持久化 + 卸载残留 0"},
+    {"name": "真实端点 smoke", "type": "e2e", "status": "passed", "evidence": "5/5 exit 0（含 function calling 与 reasoning）"},
+    {"name": "压测", "type": "stress", "status": "passed", "evidence": "200 并发 QPS 2583 / P99 16.3ms / 错误率 0%"},
+    {"name": "CLI --json 契约", "type": "contract", "status": "passed", "evidence": "tests/cli/test_command_result.py 10 条 + test_doctor_json.py 4 条"}
+  ],
+  "coverage_summary": {"percent_covered": 65.54, "gate": 60, "note": "v0.88.7 时点；v0.88.8 复跑数据见 v-final-cov 日志"},
+  "seams_touched": [
+    "Electron ↔ Python Host（端口文件/token/WS）",
+    "Host ↔ LLM provider（文本协议 + 多模态 image_url + 降级）",
+    "CLI ↔ 命令组（--json 契约）",
+    "桌面端 ↔ 数据目录（CLAWD_DATA_DIR）"
+  ],
+  "mock_scenarios_covered": [
+    "带图请求失败（APIConnectionError）→ 自动降级纯文本重试一次",
+    "cancel 打断进行中的 run（asyncio task cancel）",
+    "E_BUSY 并发保护",
+    "tool 签名自省失败不影响整体收集"
+  ],
+  "browser_validation": {
+    "tool": "Playwright（真实 Chromium 驱动已安装版 Host）",
+    "items": 32,
+    "result": "全绿（含布局可见性/协议剥离/停止按钮/会话管理/视觉标注）"
+  },
+  "limitations": [
+    "真实视觉对话未验证：当前端点 step-5-preview 不支持 image_url（纯文本 PONG 正常 / 带图断连，可用 scripts/probe_vision_endpoint.py 复现）",
+    "正式代码签名未做：需 CA 证书（现自签名 Status=UnknownError 属预期）",
+    "部署与线上热更新未做：本项目是本地桌面应用 + CLI 框架，无 staging/生产环境；electron-updater 更新源已确认保持未配置（UI 明确提示）",
+    "X-7 只接了 6 个命令（session list/show、role list、doctor、catalog list/show），entrypoint 里仍有约 13 个查询类命令待接",
+    "完全不可达 26 个模块（4058 行）按拍板保留：src/hooks/*（ADR 0019 参考快照）、agent/modes+mailbox（真实能力）、未接线 stage、包 __init__"
+  ]
+}

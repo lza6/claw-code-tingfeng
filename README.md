@@ -444,7 +444,7 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 | 快速层（不含 slow） | **5372 passed / 0 failed / 6 分 40 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
 | 用例收集 | **5399 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
-| 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
+| 覆盖率 | **66.15%**（2026-10-30 v0.88.8 实测，38499/58196 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
