@@ -8,6 +8,8 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        # .bat 依赖 CRLF（见 .gitattributes），CR 会被误判为行尾空白，豁免
+        exclude: '\.bat$'
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
@@ -23,6 +25,7 @@ repos:
       - id: debug-statements
       - id: mixed-line-ending
         args: ['--fix=lf']
+        exclude: '\.bat$'
 
   # Mypy 严格检查**不放进 pre-commit**（Quality Checks 里已有独立的 mypy-strict job，
   # 且它显式声明 non-blocking）：存量 391 个文件 / 1600+ 条严格模式报错，

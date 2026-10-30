@@ -1,0 +1,2 @@
+# Windows 批处理历史上依赖 CRLF；whitespace hook 会把 \r 当行尾空白误报 → 显式声明
+*.bat text eol=crlf
