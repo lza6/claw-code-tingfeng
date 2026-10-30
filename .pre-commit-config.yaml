@@ -15,6 +15,8 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: detect-private-key
+        # pentest 参考载荷（密钥样式文本，非真实密钥）+ 测试断言，误报豁免
+        exclude: '^(skills/reverse/pentest-tools/|tests/)'
       - id: detect-aws-credentials
         args: ['--allow-missing-credentials']
       - id: check-merge-conflict

@@ -176,5 +176,5 @@
 
 ## 附录 B：覆盖率门禁实测复核
 
-`pytest --cov=src` 实测 **62.49% ≥ 60%**，`Required test coverage of 60.0% reached` —— 
+`pytest --cov=src` 实测 **62.49% ≥ 60%**，`Required test coverage of 60.0% reached` ——
 P1-5 收紧后的门禁**真实生效且当前通过**（旧门禁 47 下即使掉 15 个点也全绿）。
