@@ -7,6 +7,20 @@
 
 ---
 
+## [v0.88.3] (2026-10-30) — 结构化日志跟随数据目录（不再写进安装目录）
+
+`src/main.py` 里日志目录写死 `WORK_DIR/.clawd/logs`，而桌面端的 cwd 是 `resources/host` ——
+日志落在**安装目录**里：升级覆盖即丢，安装目录还可能只读。排障时按文档找不到日志。
+
+- 新增 `src/utils/logger.py: resolve_log_dir(workdir=None)`：统一走 `data_dir` 唯一入口
+  （与 provider / 会话 / 用量同一套规则，见 ADR 0022），数据目录不可用时才回落工作区并告警
+- `src/main.py` 改用它；`ENABLE_FILE_LOGGING=false` 的行为不变（打包自检依赖它）
+- 新增 `tests/core/test_log_dir.py`（6 条：跟随 CLAWD_DATA_DIR / 与 cwd 无关且不在 cwd 造
+  `.clawd` / 无 env 时回落工作区 / 显式 workdir / main.py 不得再硬编码 WORK_DIR 日志路径 /
+  开关仍有效）
+
+---
+
 ## [v0.88.2] (2026-10-30) — UI 细节：标题残留提示词、会话行被按钮挤压
 
 - 会话标题里的 goal 会被截断到 60 字（没有收尾的 `]`），原来的剥离正则要求闭合括号 →

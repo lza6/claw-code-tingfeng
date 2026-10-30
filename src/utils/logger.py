@@ -8,9 +8,11 @@ from __future__ import annotations
 import io
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from enum import IntEnum
+from pathlib import Path
 from typing import Any
 
 
@@ -19,6 +21,23 @@ class LogLevel(IntEnum):
     INFO = logging.INFO
     WARN = logging.WARNING
     ERROR = logging.ERROR
+
+def resolve_log_dir(workdir: str | Path | None = None) -> Path:
+    """结构化日志目录 —— 跟随数据目录（CLI 与桌面端同一套规则）
+
+    历史问题：这里写死 `WORK_DIR/.clawd/logs`，桌面端会落到
+    `resources/host/.clawd/logs`（升级被覆盖、安装目录还可能只读），
+    真实排障时找不到日志。改为走 `data_dir` 唯一入口（见 ADR 0022）。
+    """
+    from ..core.data_dir import data_path
+
+    try:
+        return data_path('logs', workdir=workdir)
+    except (OSError, ValueError) as exc:  # pragma: no cover - 极端路径异常
+        logging.getLogger(__name__).warning(f'数据目录不可用，日志回落工作区: {exc}')
+        base = Path(workdir) if workdir else Path(os.environ.get('WORK_DIR', '.'))
+        return base / '.clawd' / 'logs'
+
 
 class JsonFormatter(logging.Formatter):
     """JSON log formatter for automated log analytics."""

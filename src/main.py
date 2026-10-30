@@ -8,7 +8,6 @@ import os as _os
 import sys
 import threading
 import time
-from pathlib import Path
 
 from . import __version__
 
@@ -92,8 +91,10 @@ def initialize() -> None:
     enable_logging = _os.environ.get('ENABLE_FILE_LOGGING', 'true').lower() in ('1', 'true', 'yes')
     if enable_logging:
         try:
-            from .utils.logger import setup_logging
-            log_dir = Path(_os.environ.get('WORK_DIR', '.')) / '.clawd' / 'logs'
+            from .utils.logger import resolve_log_dir, setup_logging
+
+            # 跟随数据目录（桌面端写进 userData/data/logs，升级不丢、不写安装目录）
+            log_dir = resolve_log_dir()
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / f"clawd_{int(time.time())}.jsonl"
             setup_logging(level=logging.INFO, log_file=str(log_file))

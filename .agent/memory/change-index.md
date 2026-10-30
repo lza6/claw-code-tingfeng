@@ -1,5 +1,18 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.88.3 结构化日志跟随数据目录
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/utils/logger.py | 新增 `resolve_log_dir(workdir=None)`：走 `data_dir`（桌面端 → userData/data/logs），失败回落工作区并告警 |
+| 修改 | src/main.py | 改用 `resolve_log_dir()`；删已失效的 `from pathlib import Path` |
+| 新增 | tests/core/test_log_dir.py | 6 条（跟随 env / 与 cwd 无关 / 无 env 回落 / 显式 workdir / 禁止硬编码 / 开关有效） |
+
+## 2026-10-30 v0.88.2 UI 细节
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | desktop/web/app.js | `stripAttachmentNote` 正则放宽（标题 goal 被截断到 60 字，无收尾 `]`） |
+| 修改 | desktop/web/index.html | 会话行标题 `flex:1 1 auto` + 省略号、时间 `nowrap`（悬停按钮挤压问题） |
+
 ## 2026-10-30 v0.88.1 会话管理 + 修内联图片 403
 | 类型 | 路径 | 说明 |
 |------|------|------|

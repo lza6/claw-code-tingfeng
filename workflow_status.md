@@ -1,19 +1,21 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.88.1 客户端去垃圾 + 会话管理**（2026-10-30）：7 个观感缺陷（输入框顶出屏幕/协议原文/注入提示当用户话/错误重复/挂住锁死/切会话丢回复/每轮新开会话）+ 会话重命名·删除·搜索 + 修 /api/file 只认 cwd 导致内联图片 403；控制台 UI E2E **32 项** · 全量 **5329 passed/0 failed**
+> 状态: **v0.88.3 客户端收口**（2026-10-30）：数据持久化 → 多模态 → 观感 → 会话管理 → UI 细节 → 日志跟随数据目录；控制台 UI E2E **32 项** · 收集 **5365** · 门禁全绿
 
-## 下一轮待办（用户已拍板）
-- **真多模态视觉输入**（用户批准做）：改造点已勘察 ——
-  ①`LLMMessage.content` 放宽为 `str | list[dict]`（`src/llm/config.py`）；
-  ②`AgentLoopConfig` 加 `images: list[str]`（本地绝对路径），`build_initial_messages`
-  把它们拼成 `[{"type":"image_url","image_url":{"url":"data:..."}}]` 内容块；
-  ③`engine.run/run_stream(images=...)` 透传到 loop config；
-  ④`handlers._handle_run` 不再只把路径塞进 goal，而是传 `images=`；
-  ⑤provider 不支持视觉时（`BadRequestError`/`unsupported`）**自动回退**成"路径告知 + 如实说看不到"；
-  ⑥单图上限收紧到 2MB（base64 膨胀会吃 token）。
-  验收：单测覆盖 blocks 构造/回退路径；真实调用需一个支持视觉的模型（当前 `step-5-preview` 未知，
-  若无则标注"待验证"并保留回退路径）。
-- 结构化日志目录改走 `data_path('logs')`（见 known-issues P3-0）。
+## 下一轮待办（已闭环 / 待外部条件）
+- ~~真多模态视觉输入~~ **v0.87.0 已落地**（`image_url` 内容块 + 能力判定 + 诚实回退，19 条测试）。
+  仍待：**真实视觉对话**需要一个支持视觉的模型（当前 `step-5-preview` 无视觉证据）
+- ~~结构化日志目录走 `data_path`~~ **v0.88.3 已修**（`resolve_log_dir()` + 6 条测试）
+- **core 边界 5 处存量越界**（`scripts/core_surface_allow.json`）需要单独一轮设计，不顺手改：
+  1. `core/patch/atomic_patcher.py` → `tools_runtime.code_edit.fuzzy_matcher`（纯函数，可下沉到 core/patch）
+  2. `core/security/allowlist.py` → `tools_runtime.bash_constants`（常量表，可下沉到 core）
+  3. `core/args_parser.py` → `tools_runtime.code_edit`（构造补丁引擎参数）
+  4. `core/config/generator.py` → `tools_runtime.tool_manager`（枚举工具签名，需 core 侧协议）
+  5. `core/persistence/run_state.py` → `workflow.models`（需要 TaskProtocol）
+  1/2 风险低可做；3/4/5 要先定协议，否则只是把环搬家
+- **110 个不可达模块**（33 个完全不可达）：按"发现死码只提示不删"的约定登记，
+  删除需单独一轮 + reachability 复核（当前门禁 ≥443，实测 498）
+- **正式代码签名**：需 CA 证书（现在是自签名，`Status=UnknownError` 属预期）
 
 ## 桌面端进度（DSH 模式 + Electron）
 | 阶段 | 内容 | 状态 |

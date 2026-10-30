@@ -26,9 +26,7 @@
   「残留进程数=0」是假象、卸载会留文件）。
   教训：E2E 报「进程自己退了」时，先通读脚本里所有 `taskkill`/`Stop-Process`，再怀疑产品。
 ## P3（不阻塞交付）
-0. **结构化日志目录仍走 `WORK_DIR`/cwd**（`src/main.py:96`）：桌面端会写进
-   `resources/host/.clawd/logs` —— 升级覆盖会丢、安装目录可能只读。应改 `data_path('logs')`
-   （数据目录唯一入口，见 ADR 0022）。仅影响排障日志，不影响功能。
+0. ~~结构化日志目录走 WORK_DIR/cwd~~ **已修（v0.88.3）**：新增 `src/utils/logger.py:resolve_log_dir()`，统一走 `data_dir`（桌面端写 userData/data/logs），6 条测试守着。
 
 1. js-reverse-skill 上游未声明 LICENSE — 商用分发前确认（skills/reverse/js-reverse/LICENSE-WARNING.md）
 2. 17 个存量测试失败需环境治理: 安装 redis 包（5 个）+ Windows bash/echo 依赖（12 个）
