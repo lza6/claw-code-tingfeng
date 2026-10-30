@@ -64,7 +64,7 @@ try {
       return msgs.length ? msgs[msgs.length - 1].textContent : '';
     });
     if (finalText && !finalText.includes('处理中')) break;
-    const sendDisabled = await page.$eval('#send', (b) => b.disabled);
+    const sendDisabled = await page.$eval('#send', (b) => b.classList.contains('stop-mode'));
     if (!sendDisabled && finalText) break;
   }
   log(`最终回复: ${finalText.slice(0, 200)}`);

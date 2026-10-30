@@ -36,6 +36,25 @@ page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 200)))
 await page.goto(`http://127.0.0.1:${info.port}/?token=${info.token}`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2000);
 
+// ---------- 0. 输入框必须在视口内（真实事故：长会话把 composer 顶到 y=1895，用户以为没有输入框） ----------
+const layout = await page.evaluate(() => {
+  const cw = document.querySelector('.composer-wrap');
+  const box = cw ? cw.getBoundingClientRect() : null;
+  const input = document.querySelector('#input');
+  const ibox = input ? input.getBoundingClientRect() : null;
+  return {
+    exists: !!cw,
+    composerInView: box ? (box.top >= 0 && box.bottom <= window.innerHeight + 1) : false,
+    composerY: box ? Math.round(box.top) : null,
+    inputInView: ibox ? (ibox.top >= 0 && ibox.bottom <= window.innerHeight + 1 && ibox.height > 8) : false,
+    innerH: window.innerHeight,
+    mainScroll: Math.round(document.querySelector('main.main')?.getBoundingClientRect().height || 0),
+  };
+});
+check('输入框在视口内（composer 未被顶出屏幕）',
+  layout.exists && layout.composerInView && layout.inputInView && layout.mainScroll <= layout.innerH + 1,
+  JSON.stringify(layout));
+
 // ---------- 1. 滚动 ----------
 await page.evaluate(() => {
   const chat = document.querySelector('#chat');
@@ -178,7 +197,7 @@ if (pasted.chips >= 1) {
   let done = false;
   while (Date.now() < deadline2) {
     await page.waitForTimeout(1500);
-    const busy = await page.$eval('#send', (b) => b.disabled);
+    const busy = await page.$eval('#send', (b) => b.classList.contains('stop-mode'));
     if (!busy) { done = true; break; }
   }
   const after = await page.evaluate(() => ({
@@ -187,9 +206,26 @@ if (pasted.chips >= 1) {
       const all = document.querySelectorAll('.msg-assistant .body');
       return all.length ? (all[all.length - 1].textContent || '').slice(0, 120) : '';
     })(),
+    err: (() => {
+      const all = document.querySelectorAll('.msg-err');
+      return all.length ? (all[all.length - 1].textContent || '').slice(0, 120) : '';
+    })(),
     base64Leak: (document.querySelector('#chat')?.textContent || '').includes('data:image/png;base64'),
+    msgs: Array.from(document.querySelectorAll('#chat > *')).slice(-3).map((el) => ({
+      cls: el.className,
+      len: (el.textContent || '').length,
+      kids: Array.from(el.children).map((c) => c.className).slice(0, 4),
+    })),
   }));
-  check('带图消息发送完成且附件已清空', done && after.chips === 0, JSON.stringify(after));
+  // 断言只负责"发送链路走完 + 附件清空 + 不泄漏 base64"。
+  // 模型有没有回复取决于外部端点（本轮实测会 APIConnectionError），
+  // 有错误提示同样证明链路已结束 —— 不把外部可用性当产品门禁。
+  // send 解锁比"流式收尾"早（前端有 1.2s 兜底把 pendingFinal 灌进气泡），等它稳定再断言
+  await page.waitForTimeout(2200);
+  const sendStillBusy = await page.$eval('#send', (b) => b.classList.contains('stop-mode'));
+  check('带图消息发送完成且附件已清空',
+    done && after.chips === 0 && (after.last.length > 0 || after.err.length > 0),
+    JSON.stringify({ ...after, done, sendStillBusy }));
   check('消息里没有把 base64 直接铺到对话区', after.base64Leak === false);
 }
 
@@ -225,6 +261,25 @@ const fold = await page.evaluate(async () => {
 check('工具调用默认折叠成一组', fold.collapsedByDefault === true && fold.groupsAfter > fold.before, JSON.stringify(fold));
 check('折叠标题带分类计数', fold.summary.includes('命令') && fold.summary.includes('读取'), fold.summary);
 check('展开后逐条可见', fold.items === 3 && fold.openAfterClick === true, JSON.stringify(fold));
+
+// ---------- 2.8 正文不得露出工具协议原文（真实缺陷：<tool>{...}</tool> 直接显示在气泡里） ----------
+const proto = await page.evaluate(() => {
+  const raw = '让我用程序分析一下。' + String.fromCharCode(10)
+    + '<tool>{"name": "BashTool", "args": {"command": "python3 -c \\"print(1)\\""}}</tool> </tool_call>';
+  window.__clawdAddAssistant(raw);
+  const last = document.querySelectorAll('#chat .msg-assistant');
+  const el = last[last.length - 1];
+  const text = el.textContent || '';
+  return {
+    hasProtocol: text.includes('<tool>') || text.includes('</tool') || text.includes('tool_call'),
+    hasSummary: !!el.querySelector('.tool-summary'),
+    summaryText: (el.querySelector('.tool-summary')?.textContent || ''),
+    bodyText: (el.querySelector('.body')?.textContent || '').slice(0, 80),
+  };
+});
+check('正文不露工具协议原文（折叠成摘要）',
+  proto.hasProtocol === false && proto.hasSummary && proto.summaryText.includes('BashTool'),
+  JSON.stringify(proto));
 await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '26-tool-fold.png') });
 
 // ---------- 2.9 上下文用量面板 ----------
@@ -289,6 +344,31 @@ check('模型列表标注视觉能力（UI 与后端一致）',
   JSON.stringify(visionUi));
 await page.evaluate(() => document.querySelector('#modelClose')?.click());
 
+// ---------- 2.9 忙时"发送"变"停止"且永远可点（端点挂住也能中断） ----------
+const busyUi = await page.evaluate(async () => {
+  window.__clawdSetBusy(true);
+  await new Promise((r) => setTimeout(r, 120));
+  const btn = document.querySelector('#send');
+  const on = {
+    disabled: btn.disabled,
+    stopClass: btn.classList.contains('stop-mode'),
+    label: (btn.textContent || '').trim(),
+    title: btn.title,
+  };
+  window.__clawdSetBusy(false);
+  await new Promise((r) => setTimeout(r, 120));
+  const off = {
+    disabled: btn.disabled,
+    stopClass: btn.classList.contains('stop-mode'),
+    label: (btn.textContent || '').trim(),
+  };
+  return { on, off };
+});
+check('忙时按钮变停止且可点（不锁死用户）',
+  busyUi.on.disabled === false && busyUi.on.stopClass === true
+  && busyUi.off.stopClass === false && busyUi.off.disabled === false,
+  JSON.stringify(busyUi));
+
 // ---------- 3. 用量页 ----------
 await page.click('#btnUsage');
 await page.waitForTimeout(1200);
@@ -349,8 +429,12 @@ const grouped = await page.evaluate(async () => {
   };
 });
 check('会话接口返回 workdir 字段', grouped.apiHasWorkdirField, JSON.stringify(grouped));
-check('侧栏分组数 = 唯一项目数 且条目数一致',
-  grouped.heads === grouped.apiWorkdirs && grouped.items === grouped.api && grouped.itemCountsSum === grouped.api,
+// 侧栏每项目默认只渲染最近 8 条（其余折成"还有 N 条 ▾"），所以 items ≤ api，
+// 但**分组标题上的计数必须等于真实总数**（itemCountsSum），否则折叠就变成数据丢失。
+check('侧栏分组数 = 唯一项目数 且计数与实际一致',
+  grouped.heads === grouped.apiWorkdirs
+  && grouped.itemCountsSum === grouped.api
+  && grouped.items <= grouped.api && grouped.items > 0,
   JSON.stringify(grouped));
 if (grouped.heads > 0) {
   await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '31-session-groups.png') });

@@ -64,7 +64,7 @@ const dl = Date.now() + 150000;
 let done = false;
 while (Date.now() < dl) {
   await page.waitForTimeout(1500);
-  if (!(await page.$eval('#send', (b) => b.disabled))) { done = true; break; }
+  if (!(await page.$eval('#send', (b) => b.classList.contains('stop-mode')))) { done = true; break; }
 }
 await page.waitForTimeout(800);
 const fold = await page.evaluate(() => ({

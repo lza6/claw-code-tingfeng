@@ -42,6 +42,40 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 .session-group{display:flex;align-items:center;gap:6px;padding:10px 10px 4px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--label-tertiary)}
 .session-group-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .session-group-count{margin-left:auto;font-weight:500;opacity:.7}
+/* ===== 布局兜底（真实事故：main 被内容撑到 2038px，输入框跑到屏幕外 y=1895） =====
+   body 是 100vh 的 flex，main 必须自己限高并裁掉溢出，否则长会话会把 composer 顶出视口，
+   用户会以为"这个应用没有输入框"。Playwright 会自动滚动到元素，所以 E2E 抓不到这类问题。 */
+body{overflow:hidden}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100vh;max-height:100vh;overflow:hidden}
+.view{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.composer-wrap{flex:0 0 auto}
+aside{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.side-scroll,.session-list,.sessionList{min-height:0}
+
+/* 侧栏内部滚动（实测：会话多时列表被底部入口按钮压住，看不到"还有 N 条"） */
+.sidebar{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.project-list{flex:0 0 auto;max-height:22vh;overflow-y:auto}
+.session-list{flex:1 1 auto;min-height:0;overflow-y:auto}
+.sidebar-footer{flex:0 0 auto}
+.blank-reply{color:var(--label-tertiary);font-size:12.5px}
+/* 忙时发送键变"停止"（模型挂住时用户可以中断） */
+.send-btn.stop-mode{background:#c2410c;border-color:#c2410c;font-size:14px}
+.stopped-note{margin:6px 0 10px;font-size:12px;color:var(--label-tertiary);text-align:center}
+/* 用量表格头不换行（"输出"曾被挤成两行） */
+.usage-table th,#usageRows th,#usageChart+table th{white-space:nowrap}
+/* 侧栏"还有 N 条"折叠行 */
+.session-more{padding:6px 10px;font-size:11.5px;color:var(--brand);cursor:pointer;border-radius:var(--radius-s)}
+.session-more:hover{background:var(--hover)}
+/* ===== 布局兜底结束 ===== */
+/* 空态欢迎区（新会话什么都没有时，告诉用户能干什么） */
+.empty-hero{max-width:640px;margin:8vh auto 0;padding:0 8px;text-align:center}
+.eh-logo{font-size:34px;color:var(--brand);line-height:1}
+.eh-title{margin-top:10px;font-size:18px;font-weight:600;color:var(--label-primary)}
+.eh-sub{margin-top:6px;font-size:12.5px;color:var(--label-tertiary)}
+.eh-list{margin-top:18px;display:flex;flex-direction:column;gap:8px}
+.eh-item{text-align:left;padding:10px 12px;border-radius:var(--radius-c);border:1px solid var(--border-l1);background:var(--bg-layer-1);color:var(--label-secondary);font-size:12.5px;cursor:pointer;transition:border-color .15s,background .15s}
+.eh-item:hover{border-color:var(--brand);background:var(--bg-layer-2);color:var(--label-primary)}
+
 .session-group:first-child{padding-top:4px}
 .toast-host{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:900;max-width:340px}
 .toast{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:var(--radius-l);background:rgba(42,42,42,.96);border:1px solid var(--border-l2);box-shadow:0 8px 24px rgba(0,0,0,.45);color:var(--label-primary);font-size:12.5px;animation:toast-in .18s ease-out;backdrop-filter:blur(10px)}
@@ -215,6 +249,8 @@ input,textarea{font-family:inherit;color:var(--label-primary)}
 
 /* ===== 工具调用折叠组（参考 orca：运行 N 命令 · 编辑 M 文件 ⌄） ===== */
 .tool-group{margin:6px 0 10px;border:1px solid var(--border-l1);border-radius:var(--radius-c);background:var(--bg-layer-1);overflow:hidden;max-width:100%}
+/* 历史消息里工具调用的摘要行（正文不再露 <tool> 协议原文） */
+.tool-summary{margin-top:8px;font-size:12px;color:var(--label-tertiary);border-top:1px dashed var(--border-l1);padding-top:6px}
 .tg-head{display:flex;align-items:center;gap:8px;width:100%;padding:7px 12px;font-size:12px;color:var(--label-secondary);text-align:left}
 .tg-head:hover{background:var(--hover);color:var(--label-primary)}
 .tg-chev{width:12px;color:var(--label-tertiary)}
@@ -499,7 +535,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
     <div class="market-head" style="display:flex;align-items:flex-start">
       <div style="flex:1">
         <h1>用量统计</h1>
-        <p>本机记录（SQLite：<code>.clawd/clawd.db</code>）—— 成本 / 请求数 / token / 缓存命中率</p>
+        <p>本机记录（SQLite：<code>&lt;数据目录&gt;/clawd.db</code>）—— 成本 / 请求数 / token / 缓存命中率</p>
       </div>
       <button class="sbtn" id="usageRefresh" style="margin-left:auto">刷新</button>
       <button class="market-close" id="usageClose">✕</button>
@@ -542,7 +578,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
       <div class="srow"><label>工作目录</label><span id="setWorkdir">—</span></div>
       <div class="srow"><label>API Key</label><span id="setApiKey">—</span></div>
 
-      <div class="srow" style="border-bottom:none;padding-top:14px"><label>API 提供商</label><span style="color:var(--label-tertiary);font-size:12px">可配置多套，随时切换（存在本地 SQLite）</span></div>
+      <div class="srow" style="border-bottom:none;padding-top:14px"><label>API 提供商</label><span style="color:var(--label-tertiary);font-size:12px">可配置多套，随时切换（存 <数据目录>/providers.json，可直接手改）</span></div>
       <div class="prov-list" id="provList"></div>
       <div class="prov-form">
         <input id="provId" placeholder="标识（英文，如 deepseek-main）">

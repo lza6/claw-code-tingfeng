@@ -133,22 +133,82 @@ class WSManager:
                 break
 
     async def _message_loop(self, ws: ServerProtocol, session: ConnectionSession) -> None:
-        """主消息循环"""
-        async for raw in ws:
-            try:
-                session.message_count += 1
-                message = json.loads(raw)
+        """主消息循环
 
-                # 注入路由器上下文（如运行时间等）
-                # 这里可以扩展更多会话相关的上下文
-                response = await self.router.dispatch(ws, message, self.engine_factory)
-                await ws.send(json.dumps(response, ensure_ascii=False))
-            except json.JSONDecodeError:
-                await ws.send(json.dumps(build_error(None, 'E_INVALID_JSON', '无效的 JSON 格式')))
-            except Exception as e:
-                logger.error(f"处理消息时出错: {e}", exc_info=True)
-                # 不中断循环，仅返回错误
-                await ws.send(json.dumps(build_error(None, 'E_INTERNAL_ERROR', str(e))))
+        **run 必须起 task，不能在这里 await**：否则一次长任务跑着的时候，循环收不到
+        任何后续消息 —— 包括"停止生成"（真实缺陷：模型端点挂住时按钮永久禁用，
+        用户只能重启应用）。
+        """
+        try:
+            async for raw in ws:
+                try:
+                    session.message_count += 1
+                    message = json.loads(raw)
+                    mtype = message.get('type')
+
+                    if mtype == 'run':
+                        if session.run_task and not session.run_task.done():
+                            await ws.send(json.dumps(build_error(
+                                message.get('id'), 'E_BUSY', '上一轮还在运行，先点停止再发新消息'
+                            ), ensure_ascii=False))
+                            continue
+                        session.run_task = asyncio.create_task(self._run_and_reply(ws, message))
+                        continue
+
+                    if mtype == 'cancel':
+                        task = session.run_task
+                        stopped = bool(task and not task.done())
+                        if stopped:
+                            task.cancel()
+                        await ws.send(json.dumps({
+                            'type': 'response',
+                            'id': message.get('id'),
+                            'data': {
+                                'status': 'cancelled',
+                                'stopped': stopped,
+                                'result': '已停止本轮输出。' if stopped else '当前没有在跑的任务。',
+                            },
+                        }, ensure_ascii=False))
+                        continue
+
+                    # 注入路由器上下文（如运行时间等）
+                    # 这里可以扩展更多会话相关的上下文
+                    response = await self.router.dispatch(ws, message, self.engine_factory)
+                    await ws.send(json.dumps(response, ensure_ascii=False))
+                except json.JSONDecodeError:
+                    await ws.send(json.dumps(build_error(None, 'E_INVALID_JSON', '无效的 JSON 格式')))
+                except Exception as e:
+                    logger.error(f"处理消息时出错: {e}", exc_info=True)
+                    # 不中断循环，仅返回错误
+                    await ws.send(json.dumps(build_error(None, 'E_INTERNAL_ERROR', str(e))))
+        finally:
+            task = getattr(session, 'run_task', None)
+            if task and not task.done():
+                task.cancel()
+
+    async def _run_and_reply(self, ws: ServerProtocol, message: dict[str, Any]) -> None:
+        """在独立 task 里跑一轮 run，并回包（可被 cancel 打断）"""
+        try:
+            response = await self.router.dispatch(ws, message, self.engine_factory)
+            await ws.send(json.dumps(response, ensure_ascii=False))
+        except asyncio.CancelledError:
+            try:
+                await ws.send(json.dumps({
+                    'type': 'response',
+                    'id': message.get('id'),
+                    'data': {'status': 'cancelled', 'stopped': True, 'result': '已停止本轮输出。'},
+                }, ensure_ascii=False))
+            except Exception:  # noqa: BLE001 — 连接可能已断，停止本身已生效
+                logger.debug('取消回包发送失败（连接可能已断开）')
+            raise
+        except Exception as e:  # noqa: BLE001 — 兜底回包，不让前端永久等待
+            logger.error(f"run 执行异常: {e}", exc_info=True)
+            try:
+                await ws.send(json.dumps(
+                    build_error(message.get('id'), 'E_INTERNAL_ERROR', str(e)), ensure_ascii=False
+                ))
+            except Exception:  # noqa: BLE001
+                logger.debug('异常回包发送失败（连接可能已断开）')
 
     async def broadcast(self, message: dict[str, Any], authenticated_only: bool = True) -> int:
         """广播消息到所有（已认证的）客户端"""

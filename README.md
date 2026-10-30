@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.87.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.88.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -31,6 +31,9 @@ DSH 式桌面客户端，**双击即用**：
 - **上下文面板**：实时显示已用 token / 窗口上限 / 占比条与分段明细。
 - **用量统计**：KPI（请求数/输入输出 token/成本/缓存命中率）+ 按小时柱状图 + 按模型/调用方汇总 + 最近请求表。
   调用方维度区分 `cli` / `desktop`，成本按 provider 单价估算。
+- **能停下来**：模型卡住时发送键变 `■`（停止），点一下就打断本轮并解锁；同一连接不会并发跑两轮（返回 `E_BUSY`）
+- **续聊不碎**：点开历史继续聊会回传 `session_id`，Host 追加到**同一会话**，侧栏不会堆出几十条同名记录
+- **正文只说人话**：模型写出的 `<tool>{...}` 协议、注入给模型的附件说明、错误码与堆栈都不会显示在气泡里
 - **工具调用折叠**：连续工具调用合成一行「运行 N 命令 和 编辑 M 文件」，点开逐条看参数与结果；
   每轮显示「工作了 32m 3s」「思考了 7s」。
 - **消息渲染**：完整 Markdown（标题/列表/表格/引用/代码块/行内码）+ 内联图片（本地 `/api/file?path=` 与 http(s)）；
@@ -56,12 +59,12 @@ DSH 式桌面客户端，**双击即用**：
 - 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）、`docs/RELEASE_UPDATES.md`（发布/更新）、`docs/adr/`（决策记录）
 
 > **桌面端 E2E**（真实浏览器 + 真实 Electron + 真实安装包，非桩）：
-> - `node ui_console_e2e.mjs` — 浏览器驱动装好的 Host，**28 项**（滚动/Markdown+图片/会话分组/toast/视觉能力标注/
+> - `node ui_console_e2e.mjs` — 浏览器驱动装好的 Host，**31 项**（滚动/Markdown+图片/会话分组/toast/视觉能力标注/布局可见性/停止生成/协议剥离/
 >   工具折叠/上下文/用量/provider/项目/模型选择器）
 > - `node ui_stream_persona_e2e.mjs` — 真流式 + 角色库 + 无顶栏
 > - `node ui_settings_e2e.mjs`（18 项）、`node electron_bridge_e2e.mjs`（10 项）、
 >   `node update_feed_e2e.mjs`（4 项）
-> - 装机全链路：`%TEMP%\clawd-install-e2e.ps1` —— 静默安装 → 28 项浏览器断言 → 重启后
+> - 装机全链路：`%TEMP%\clawd-install-e2e.ps1` —— 静默安装 → 31 项浏览器断言 → 重启后
 >   provider 与会话接口仍在 → 卸载 → 残留清理
 > - 静态防回归：`tests/test_electron_main_static.py`（7 条：electron 符号必须解构导入、
 >   同一函数内不得先用后声明、无默认菜单、preload 不透 Node 能力）
@@ -434,15 +437,15 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5314 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.87.0 实测，352.10s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5314 passed / 0 failed / 5 分 52 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5344 / 0 errors**（2026-10-30 v0.87.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5322 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.88.0 实测，368.84s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5322 passed / 0 failed / 6 分 8 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5352 / 0 errors**（2026-10-30 v0.88.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **498**（2026-10-30 v0.87.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **498**（2026-10-30 v0.88.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |

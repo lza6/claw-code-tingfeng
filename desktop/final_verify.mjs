@@ -48,7 +48,7 @@ log(`连接已安装版 Host: port=${info.port}`);
       const msgs = document.querySelectorAll('.msg-assistant');
       return msgs.length ? msgs[msgs.length - 1].textContent : '';
     });
-    const disabled = await page.$eval('#send', (b) => b.disabled);
+    const disabled = await page.$eval('#send', (b) => b.classList.contains('stop-mode'));
     if (finalText && !disabled) break;
   }
   log(`最终回复: ${finalText.slice(0, 150)}`);

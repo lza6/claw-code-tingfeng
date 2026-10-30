@@ -1,6 +1,22 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.88.0 客户端去垃圾（7 个观感缺陷 + 停止生成）
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | desktop/web/index.html | 布局兜底（main 限高 + view 内滚 + 侧栏分区滚动）；空态/摘要/停止态样式；设置页与用量页过时文案（SQLite→providers.json、`.clawd/clawd.db`→`<数据目录>`) |
+| 修改 | desktop/web/app.js | `stripToolProtocol()` 剥 3 种工具协议（括号平衡取 JSON）；`stripAttachmentNote()` 气泡/标题去提示词；`humanizeError()` + 3s 去重；`setBusy()` 忙时变停止；`resetChatArea()` 重置流式状态；迟到事件丢弃；空态欢迎区；会话列表折叠；`currentSessionId` 续聊 |
+| 修改 | src/server/ws/manager.py | run 起独立 task（不再阻塞消息循环）；新增 `cancel` 处理；`E_BUSY` 防并发；`_run_and_reply` 兜底回包 |
+| 修改 | src/server/ws/sessions.py | `ConnectionSession.run_task` 槽 |
+| 修改 | src/server/handlers.py | 透传 `session_id` 给引擎；响应带 `session_id` |
+| 修改 | src/agent/engine.py | `session_id_hint` + `append=True` + `last_session_id` |
+| 修改 | src/core/session_bridge.py | `persist_agent_session(append=)`：追加到同一会话并保留 title/created_at |
+| 新增 | tests/core/test_session_append.py | 5 条（追加不覆盖/保留 title/created_at/无 append 覆盖/文件不存在） |
+| 新增 | tests/server/test_cancel.py | 3 条（run 不阻塞循环+真打断/E_BUSY/空 cancel 无害） |
+| 修改 | desktop/ui_console_e2e.mjs | 28 → 31 项；忙判定改 `stop-mode`（按钮不再 disabled）；分组断言随折叠调整；等待流式收尾 2.2s |
+| 修改 | desktop/{final_verify,ui_snapshot,ui_e2e_real}.mjs | 忙判定同步改 `stop-mode` |
+
 ## 2026-10-30 v0.87.0 真多模态视觉输入
+
 | 类型 | 路径 | 说明 |
 |------|------|------|
 | 新增 | src/llm/vision.py | `supports_vision()`（模型白名单 + CLAWD_VISION 双向强制）+ `build_image_blocks()`（路径→image_url 内容块，≤2MB/≤4 张） |

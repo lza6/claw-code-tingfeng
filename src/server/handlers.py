@@ -331,6 +331,15 @@ class MessageRouter:
         except TypeError:
             engine = engine_factory.create(llm_config=llm_config_from_msg)
 
+        # 续聊：客户端带上会话 id，则本轮结果追加到该会话（而不是每轮新开一条）
+        sid_hint = str(message.get('session_id') or '').strip()
+        if sid_hint:
+            try:
+                engine.session_id_hint = sid_hint
+            except AttributeError as exc:
+                # 引擎不支持续聊 id（老实现/测试桩）→ 退回"每轮新开"，但要留痕
+                self.logger.debug(f'引擎不接受 session_id_hint，本轮将新开会话: {exc}')
+
         # 角色（personas/*.md）：用户不用自己写提示词，选一个即可
         persona_name = str(message.get('persona') or '').strip()
         if persona_name:
@@ -522,6 +531,7 @@ class MessageRouter:
                 message.get('id'),
                 {
                     'status': 'completed',
+                    'session_id': str(getattr(engine, 'last_session_id', '') or ''),
                     'attachments': attachments,
                     'result': session.final_result or '',
                     'steps': len(session.steps),

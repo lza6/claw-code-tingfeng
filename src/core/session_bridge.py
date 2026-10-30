@@ -251,6 +251,7 @@ def persist_agent_session(
     persona: str = "",
     directory: Path | str | None = None,
     workdir: str = "",
+    append: bool = False,
 ) -> SessionView:
     """把一次 Agent 运行写入会话存储（供 `clawd session list` 看到真实数据）
 
@@ -258,7 +259,19 @@ def persist_agent_session(
     此前一律压平成 assistant 文本，导致 `clawd explain` 只能看到"读到了文件内容"，
     却看不出"调用了哪个工具、成没成功"（真实运行发现）。
     """
-    messages: list[dict[str, Any]] = [{"role": "user", "content": goal, "timestamp": time.time()}]
+    # 续聊（append=True）：在**同一会话**上追加本轮消息，而不是覆盖掉之前的对话。
+    # 真实体验问题 —— 覆盖会让"点开历史继续聊"变成"历史被这一轮替换"。
+    prev: SessionView | None = None
+    if append and directory:
+        try:
+            existing_path = _dir(directory) / f"{session_id}.json"
+            if existing_path.is_file():
+                prev = _detect_and_parse(existing_path)
+        except (OSError, ValueError):
+            prev = None
+
+    messages: list[dict[str, Any]] = list(prev.messages) if prev else []
+    messages.append({"role": "user", "content": goal, "timestamp": time.time()})
     for step in steps or []:
         role = str(step.get("role") or "assistant")
         content = str(step.get("content") or "")
@@ -278,10 +291,11 @@ def persist_agent_session(
 
     view = SessionView(
         session_id=session_id,
-        title=(goal[:60] + ("…" if len(goal) > 60 else "")) if goal else "",
+        title=(prev.title if prev and prev.title else
+               ((goal[:60] + ("…" if len(goal) > 60 else "")) if goal else "")),
         messages=messages,
         status="completed",
-        created_at=time.time(),
+        created_at=(prev.created_at if prev and prev.created_at else time.time()),
         updated_at=time.time(),
         input_tokens=total_tokens,
         output_tokens=output_tokens,

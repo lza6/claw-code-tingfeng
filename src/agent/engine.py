@@ -791,8 +791,11 @@ class AgentEngine:
             total_cost = float(usage.get('total_cost') or 0.0)
 
             stamp = time.strftime('%Y%m%d_%H%M%S')
+            # 续聊时由客户端指定会话 id（同一对话持续更新，而不是每轮新开一条）：
+            # 真实体验问题 —— 不这样做侧栏会堆出几十条同名会话。
+            sid = str(getattr(self, 'session_id_hint', '') or '').strip() or f'sess-{stamp}'
             persist_agent_session(
-                session_id=f'sess-{stamp}',
+                session_id=sid,
                 goal=str(getattr(session, 'goal', '') or ''),
                 steps=steps,
                 final_result=str(getattr(session, 'final_result', '') or ''),
@@ -804,7 +807,9 @@ class AgentEngine:
                 provider=provider,
                 directory=_session_dir(),
                 workdir=str(getattr(self, "workdir", "") or ""),
+                append=bool(str(getattr(self, 'session_id_hint', '') or '').strip()),
             )
+            self.last_session_id = sid  # 供客户端续聊时复用（同一对话不新建）
 
             # 用量记账（CLI 与桌面端共用这条路径）：用户面板里的成本/请求数/缓存命中率就靠它
             try:
@@ -819,7 +824,7 @@ class AgentEngine:
                     cost=total_cost,
                     steps=len(getattr(session, 'steps', []) or []),
                     status='completed' if getattr(session, 'is_complete', True) else 'incomplete',
-                    session_id=f'sess-{stamp}',
+                    session_id=sid,
                     goal_chars=len(str(getattr(session, 'goal', '') or '')),
                     client=str(getattr(self, 'client_tag', 'cli') or 'cli'),
                     workdir=self.workdir,

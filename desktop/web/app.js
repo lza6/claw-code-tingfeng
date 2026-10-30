@@ -27,6 +27,7 @@
   let sessionStartedAt = 0;
   let elapsedTimer = null;
   let loadedHistory = [];   // 点开旧会话后载入的历史（续聊时作为 prior_messages 发送）
+  let currentSessionId = '';  // 当前会话 id（续聊时回传，Host 追加而不是新开一条）
   let attachments = [];     // 待发送图片（data URL）
   let pendingFinal = null;    // 已收到 response 的最终文本，等 STREAM_COMPLETED 收尾
   let finalizedAt = 0;        // 上次收尾时间（用于丢弃迟到 delta）
@@ -50,6 +51,24 @@
   const $ = (id) => document.getElementById(id);
   const $conn = $('conn'), $connText = $('connText'), $banner = $('banner');
   const $chat = $('chat'), $trace = $('trace'), $input = $('input'), $send = $('send');
+
+  // 忙时不再是"禁用按钮"，而是切成"停止"——否则模型端点挂住时用户永远等（真实缺陷）
+  let runBusy = false;
+  function setBusy(v) {
+    runBusy = !!v;
+    if (!$send) return;
+    $send.disabled = false;
+    $send.classList.toggle('stop-mode', runBusy);
+    $send.textContent = runBusy ? '■' : '↑';
+    $send.title = runBusy ? '停止本轮输出' : '发送（Enter）';
+    if (!runBusy) {
+      // 兜底看门狗：解锁后若流式气泡还没收尾（事件丢包/乱序），1.5 秒后强制收尾，
+      // 绝不让用户看到一个永远"输出中"的空白气泡。
+      setTimeout(() => {
+        if (streamEl && !runBusy) finalizeStream();
+      }, 1500);
+    }
+  }
 
   function setConn(ok, text) {
     $conn.className = 'conn' + (ok ? ' ok' : '');
@@ -132,13 +151,175 @@
   }
 
   // —— 消息渲染 ——
-  function addUser(text) {
+  // Host 会把"随消息附图 N 张…"这类**给模型看的**说明拼进 goal 落盘；
+  // 那是提示词，不是用户说的话 —— 气泡里必须剥掉（真实观感问题）。
+  function stripAttachmentNote(text) {
+    const NOTE_RE = new RegExp(String.fromCharCode(10) + '*\\[随消息附图[\\s\\S]*?\\]\\s*$');
+    return String(text || '').replace(NOTE_RE, '').trim();
+  }
+
+  // 空态：新会话什么都没有时，给一句"这是什么 + 能干什么"和几个可直接点的示例
+  // （此前一片纯空白，用户不知道该干什么）
+  const EMPTY_EXAMPLES = [
+    '解释这个项目的架构，指出最重要的三个模块',
+    '跑一遍测试，把失败的原因讲清楚',
+    '把这个函数重构成更清晰的写法，并说明改动理由',
+  ];
+  function renderEmptyState() {
+    if (!window.__clawdEmptyEnabled) return;
+    if ($chat.querySelector('.empty-hero')) return;
+    const hero = document.createElement('div');
+    hero.className = 'empty-hero';
+    const logo = document.createElement('div');
+    logo.className = 'eh-logo';
+    logo.textContent = '◍';
+    const h = document.createElement('div');
+    h.className = 'eh-title';
+    h.textContent = '开始一个新会话';
+    const sub = document.createElement('div');
+    sub.className = 'eh-sub';
+    const proj = (activeProject && activeProject.name) || '';
+    sub.textContent = proj ? ('当前项目：' + proj + ' —— 我会在这个目录里干活') : '先在左侧选一个项目，或直接说要做什么';
+    const list = document.createElement('div');
+    list.className = 'eh-list';
+    EMPTY_EXAMPLES.forEach((t) => {
+      const btn = document.createElement('button');
+      btn.className = 'eh-item';
+      btn.textContent = t;
+      btn.onclick = () => {
+        $input.value = t;
+        $input.focus();
+        $input.dispatchEvent(new Event('input'));
+      };
+      list.appendChild(btn);
+    });
+    hero.appendChild(logo); hero.appendChild(h); hero.appendChild(sub); hero.appendChild(list);
+    $chat.appendChild(hero);
+  }
+  window.__clawdEmptyEnabled = true;
+
+  function addUser(text, opts) {
     closeToolGroup();
     const d = document.createElement('div');
     d.className = 'msg-user';
     d.textContent = text;
+    if (opts && opts.title) d.title = opts.title;
     $chat.appendChild(d);
     scrollEnd();
+  }
+  // —— 剥掉模型偷偷写进正文的工具协议文本 ——
+  // 真实事故：模型用文本协议调工具时，`<tool>{"name":"BashTool",...}</tool>` 会原样出现在
+  // 助手气泡里（用户看到的"半成品"就是这个）。工具执行与否由上面的折叠组呈现，
+  // 正文里绝不能露出协议原文。
+  // 三种写法都要覆盖：`<tool>{json}</tool>`（含多写 `>` / 漏 `</tool>`）、
+  // `<tool_call><file_read>{json}</file_read></tool_call>`、遗留 `<tool>Name</tool><args>{json}</args>`。
+  // JSON 必须用**括号平衡扫描**取，正则 `\{.*?\}` 会在嵌套对象处提前截断（实测踩到）。
+  function _balancedJsonFrom(src, start) {
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    const BACKSLASH = String.fromCharCode(92);
+    for (let i = start; i < src.length; i += 1) {
+      const ch = src[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === BACKSLASH) esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) return src.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+
+  function stripToolProtocol(text, opts) {
+    const partial = !!(opts && opts.partial);
+    let src = String(text == null ? '' : text);
+    const calls = [];
+    const pushCall = (name, argsRaw) => {
+      const n = String(name || '').trim();
+      if (!n) return;
+      calls.push({ name: n, args: String(argsRaw || '').trim().slice(0, 300) });
+    };
+    const recordJson = (jsonText) => {
+      try {
+        const o = JSON.parse(jsonText);
+        pushCall(o.name || o.tool || o.function,
+          JSON.stringify(o.args || o.parameters || o.arguments || {}));
+      } catch (_) {
+        // 模型偶尔写出不合法 JSON（字符串里混入 </parameter> 之类）——
+        // 解析失败也要把工具名捞出来，摘要行不能只显示 "tool"
+        const m = jsonText.match(/"name"\s*:\s*"([^"]+)"/) || jsonText.match(/<([A-Za-z_][\w.]+)>/);
+        pushCall(m ? m[1] : 'tool', jsonText);
+      }
+    };
+    let guard = 0;
+    while (guard < 40) {
+      guard += 1;
+      const lower = src.toLowerCase();
+      const tc = lower.indexOf('<tool_call>');
+      const plain = lower.indexOf('<tool>');
+      if (tc === -1 && plain === -1) break;
+      const isToolCall = tc !== -1 && (plain === -1 || tc < plain);
+      const tagOpen = isToolCall ? tc : plain;
+      const afterTag = tagOpen + (isToolCall ? 11 : 6);
+      if (isToolCall) {
+        const close = lower.indexOf('</tool_call>', afterTag);
+        const inner = close === -1 ? src.slice(afterTag) : src.slice(afterTag, close);
+        const im = inner.match(/<\s*([A-Za-z_][\w.]*)\s*>\s*\{/);
+        if (im) {
+          const brace = inner.indexOf('{', im.index);
+          const jt = _balancedJsonFrom(inner, brace);
+          if (jt) pushCall(im[1], jt);
+        } else {
+          const b = inner.indexOf('{');
+          if (b !== -1) {
+            const jt = _balancedJsonFrom(inner, b);
+            if (jt) recordJson(jt);
+          }
+        }
+        src = src.slice(0, tagOpen) + src.slice(close === -1 ? src.length : close + 12);
+        continue;
+      }
+      // 遗留 XML：<tool>Name</tool><args>{json}</args>
+      const legacy = src.slice(afterTag).match(/^\s*([A-Za-z_][\w.]*)\s*<\/tool>\s*<args>\s*\{/);
+      if (legacy) {
+        const brace = src.indexOf('{', afterTag + legacy[0].length - 1);
+        const jt = _balancedJsonFrom(src, brace);
+        pushCall(legacy[1], jt || '');
+        const closeArgs = src.toLowerCase().indexOf('</args>', brace);
+        src = src.slice(0, tagOpen) + src.slice(closeArgs === -1 ? src.length : closeArgs + 7);
+        continue;
+      }
+      const brace = src.indexOf('{', afterTag);
+      if (brace === -1 || brace - afterTag > 40) {
+        src = src.slice(0, tagOpen) + src.slice(afterTag);  // 只删标签，避免死循环
+        continue;
+      }
+      const jsonText = _balancedJsonFrom(src, brace);
+      if (!jsonText) {
+        if (partial) { src = src.slice(0, tagOpen); break; }
+        src = src.slice(0, tagOpen) + src.slice(afterTag);
+        continue;
+      }
+      recordJson(jsonText);
+      let endAt = brace + jsonText.length;
+      const tail = src.slice(endAt).match(/^\s*(?:<\/tool>)?\s*>?/i);
+      if (tail) endAt += tail[0].length;
+      src = src.slice(0, tagOpen) + src.slice(endAt);
+    }
+    src = src.replace(/<\/?(?:tool|tool_call|args)>/gi, '');
+    if (partial) {
+      const open = src.toLowerCase().search(/<tool(?:_call)?/);
+      if (open >= 0) src = src.slice(0, open);
+    }
+    const squeezed = src.split(/\n{3,}/).join('\n\n');
+    return { clean: squeezed.trim(), calls };
   }
 
   // —— Markdown 渲染（安全：全部用 textContent / createElement，不碰 innerHTML） ——
@@ -357,8 +538,21 @@
     return img;
   }
 
+  // 工具摘要行：历史消息必加；实时消息只在"正文剥离后为空"时加（否则会和折叠组重复）
+  function buildToolSummary(calls) {
+    const byName = {};
+    calls.forEach((c) => { byName[c.name] = (byName[c.name] || 0) + 1; });
+    const summary = document.createElement('div');
+    summary.className = 'tool-summary';
+    summary.textContent = '⚙ ' + Object.entries(byName)
+      .map(([n, c]) => (c > 1 ? n + ' ×' + c : n)).join(' · ');
+    summary.title = calls.map((c) => c.name + ' ' + c.args).join(String.fromCharCode(10));
+    return summary;
+  }
+
   function addAssistant(text, opts) {
     closeToolGroup();
+    const parsed = stripToolProtocol(text);
     const wrap = document.createElement('div');
     wrap.className = 'msg-assistant';
     if (text.length > DEGRADE_THRESHOLD) wrap.classList.add('degraded');
@@ -367,12 +561,16 @@
     who.textContent = (opts && opts.who) || 'Clawd';
     const body = document.createElement('div');
     body.className = 'body';
-    renderRich(body, text);
+    renderRich(body, parsed.clean);
+    // 历史消息没有折叠组可依 → 必给摘要；实时消息若正文被剥空 → 也得给，不能留个空气泡
+    if (parsed.calls.length && (!(opts && opts.streaming) || !parsed.clean)) {
+      body.appendChild(buildToolSummary(parsed.calls));
+    }
     const actions = document.createElement('div');
     actions.className = 'msg-actions';
     const copy = document.createElement('button');
     copy.textContent = '复制';
-    copy.onclick = () => navigator.clipboard.writeText(text);
+    copy.onclick = () => navigator.clipboard.writeText(parsed.clean);
     actions.appendChild(copy);
     wrap.appendChild(who); wrap.appendChild(body);
     if (!(opts && opts.streaming)) wrap.appendChild(actions);
@@ -382,8 +580,13 @@
   }
 
   // —— 流式：开始 / 追加 / 收尾（orca 式：正文边到边显示） ——
+  let streamBuf = '';
   function beginStream() {
     if (streamEl) return streamEl;
+    // 刚收尾 3 秒内出现的 started/迟到增量：这是事件乱序的尾巴，
+    // 再新建气泡就会留下一个永远"输出中"的空气泡（实测踩到）。
+    if ((Date.now() - finalizedAt) < 3000) return null;
+    streamBuf = '';
     streamEl = addAssistant('', { streaming: true });
     streamEl.classList.add('streaming');
     const caret = document.createElement('span');
@@ -396,10 +599,13 @@
     window.__streamDeltas = (window.__streamDeltas || 0) + 1; // E2E 观测点
     if (!streamEl && (Date.now() - finalizedAt) < 3000) return; // 迟到的增量：丢弃
     const el = beginStream();
+    if (!el) return;   // 迟到增量：丢弃（防止空气泡）
     const body = el.querySelector('.body');
     const caret = body.querySelector('.caret');
     if (caret) caret.remove();
-    body.appendChild(document.createTextNode(text));
+    streamBuf += text;
+    // 边流边剥离：正文里不出现 `<tool>{...}` 半截协议
+    body.textContent = stripToolProtocol(streamBuf, { partial: true }).clean;
     const c2 = document.createElement('span');
     c2.className = 'caret';
     body.appendChild(c2);
@@ -410,7 +616,21 @@
     const body = streamEl.querySelector('.body');
     const caret = body.querySelector('.caret');
     if (caret) caret.remove();
-    if (typeof finalText === 'string' && finalText.trim()) renderRich(body, finalText);
+    const finalSrc = (typeof finalText === 'string' && finalText.trim()) ? finalText : streamBuf;
+    if (finalSrc && String(finalSrc).trim()) {
+      const fin = stripToolProtocol(finalSrc);
+      renderRich(body, fin.clean);
+      if (fin.calls.length && !fin.clean) {
+        body.appendChild(buildToolSummary(fin.calls));
+      }
+    }
+    // 模型什么都没返回时不能留个空气泡（用户会以为界面卡了）
+    if (!(body.textContent || '').trim() && !body.querySelector('.tool-summary')) {
+      const blank = document.createElement('div');
+      blank.className = 'blank-reply';
+      blank.textContent = '（模型没有返回内容，可以再试一次或换个模型）';
+      body.appendChild(blank);
+    }
     streamEl.classList.remove('streaming');
     const text = body.textContent || '';
     if (text.length > DEGRADE_THRESHOLD) streamEl.classList.add('degraded');
@@ -429,18 +649,35 @@
 
   // 收尾当前流式气泡（若没有则不做事），优先用 response 给的最终文本
   function finalizeStream() {
+    window.__streamCompleted = (window.__streamCompleted || 0) + 1; // E2E 观测点
     if (!streamEl) return false;
     const text = pendingFinal;
     pendingFinal = null;
     return endStream(text || '');
   }
 
+  // 错误信息面向用户：去掉 `[E1002]` 错误码与 `| 详情: {...} | 原因: ...` 技术尾巴（放 title 里）
+  function humanizeError(raw) {
+    let s = String(raw || '').trim();
+    s = s.replace(/^\[E\d+\]\s*/, '');
+    const head = s.split('|')[0].trim();
+    return head || s || '未知错误';
+  }
+
+  let lastErrKey = '';
+  let lastErrAt = 0;
   function addError(text) {
+    // 流式失败会同时从"事件"和"响应"两条路各报一次 → 3 秒内同一条只显示一次
+    const key = String(text || '').slice(0, 80);
+    if (key && key === lastErrKey && Date.now() - lastErrAt < 3000) return;
+    lastErrKey = key;
+    lastErrAt = Date.now();
     pendingFinal = null;
     endStream('');
     const d = document.createElement('div');
     d.className = 'msg-err';
-    d.textContent = '⚠ ' + text;
+    d.textContent = '⚠ ' + humanizeError(text);
+    d.title = String(text || '');
     $chat.appendChild(d);
     scrollEnd();
   }
@@ -550,6 +787,11 @@
 
   // E2E 钩子：把工具分组暴露出来，便于用真实浏览器断言折叠行为（不改变运行逻辑）
   window.__clawdAddTool = (name, args, ok, detail) => addToolEvent(name, args, ok, detail);
+  // E2E 钩子：注入一条助手消息，用来验证"正文里不出现 <tool> 协议原文"
+  window.__clawdAddAssistant = (text, opts) => addAssistant(text, opts);
+  window.__clawdStripTool = (text) => stripToolProtocol(text).clean;
+  // E2E 钩子：验证忙时按钮切成停止且永远可点（端点挂住时不能把用户锁死）
+  window.__clawdSetBusy = (v) => setBusy(v);
 
   // 兼容旧调用（其它地方还在用 addToolRow）
   function addToolRow(label, detail) {
@@ -609,7 +851,7 @@
     if (msg.type === 'error') {
       if (msg.code === 'E_AUTH_REQUIRED') return;
       addError(msg.message || msg.code);
-      $send.disabled = false;
+      setBusy(false);
       return;
     }
     if (msg.type === 'response' && pending[msg.id]) {
@@ -649,7 +891,21 @@
       if (d0 && Array.isArray(d0.personas)) { applyPersonas(d0.personas); return; }
       // run 响应: {id, type:'response', data:{status, result, steps, elapsed_seconds}}
       const d = msg.data || msg.result || {};
+      if (typeof d === 'object' && d.status === 'cancelled') {
+        // 用户点了"停止"：收尾当前气泡并解锁
+        pendingFinal = null;
+        if (streamEl) finalizeStream();
+        const note = document.createElement('div');
+        note.className = 'stopped-note';
+        note.textContent = '已停止本轮输出';
+        $chat.appendChild(note);
+        setBusy(false);
+        stopElapsed();
+        scrollEnd();
+        return;
+      }
       if (typeof d === 'object' && d.status === 'completed') {
+        if (d.session_id) currentSessionId = String(d.session_id);
         if (streamEl) {
           pendingFinal = d.result || '';
           setTimeout(() => { if (streamEl) finalizeStream(); }, 1200);
@@ -659,14 +915,14 @@
         const st = $('stTurns');
         st.textContent = `${turnCount} 轮`;
         if (d.elapsed_seconds) $('stCalls').textContent = `工具 ${callCount} 次 · ${d.elapsed_seconds}s · ${d.steps} 步`;
-        $send.disabled = false;
+        setBusy(false);
         stopElapsed();
         loadSessions(); // 跑完一轮刷新侧栏历史
         return;
       }
       const out = typeof d === 'string' ? d : (d.result || JSON.stringify(d, null, 2));
       if (out && out !== 'null') addAssistant(out);
-      $send.disabled = false;
+      setBusy(false);
     }
     if (msg.type === 'event') {
       const d = msg.data || {};
@@ -1327,6 +1583,10 @@
         if (!a[0] !== !b[0]) return a[0] ? -1 : 1; // 未关联项目沉底
         return tb - ta;
       });
+      // 每个项目默认只列最近 8 条（实测有 37 条同名会话把侧栏拉成一张长表），
+      // 剩下的折成"还有 N 条"，点开才展开。
+      const SESSION_LIMIT = 8;
+      const expandedGroups = window.__clawdExpandedGroups || (window.__clawdExpandedGroups = new Set());
       for (const [workdir, rows] of ordered) {
         const head = document.createElement('div');
         head.className = 'session-group';
@@ -1340,7 +1600,9 @@
         head.appendChild(cnt);
         if (workdir) head.title = workdir;
         list.appendChild(head);
-        for (const it of rows) {
+        const showAll = expandedGroups.has(workdir);
+        const visibleRows = showAll ? rows : rows.slice(0, SESSION_LIMIT);
+        for (const it of visibleRows) {
           const row = document.createElement('div');
           row.className = 'session-item';
           const ico = document.createElement('span');
@@ -1358,6 +1620,13 @@
           row.onclick = () => openSession(it.id);
           list.appendChild(row);
         }
+        if (!showAll && rows.length > SESSION_LIMIT) {
+          const more = document.createElement('div');
+          more.className = 'session-more';
+          more.textContent = '还有 ' + (rows.length - SESSION_LIMIT) + ' 条 ▾';
+          more.onclick = () => { expandedGroups.add(workdir); loadSessions(); };
+          list.appendChild(more);
+        }
       }
     } catch (e) {
       list.innerHTML = '';
@@ -1371,11 +1640,15 @@
   async function openSession(id) {
     try {
       const data = await fetchJsonRetry('/api/session?id=' + encodeURIComponent(id), 2);
-      $chat.innerHTML = '';
-      $('sessionTitle').textContent = data.title || id;
+      resetChatArea();
+      $('sessionTitle').textContent = stripAttachmentNote(data.title || '') || id;
+      currentSessionId = id;
       loadedHistory = (data.messages || [])
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: String(m.content || '') }));
+        .map((m) => ({
+          role: m.role,
+          content: m.role === 'user' ? stripAttachmentNote(m.content) : String(m.content || ''),
+        }));
       const hintEl = $('sessionHint');
       if (hintEl) {
         hintEl.textContent = loadedHistory.length
@@ -1387,7 +1660,7 @@
       for (const m of (data.messages || [])) {
         const content = String(m.content || '');
         if (m.role === 'user') {
-          addUser(content);
+          addUser(stripAttachmentNote(content), { title: content });
           lastRendered = 'user:' + content;
         } else if (m.role === 'assistant') {
           // 历史会话里可能同时存了"步骤结果"和"最终回答"（旧版本落盘行为）——同内容只显示一次
@@ -1435,6 +1708,8 @@
     if (!ws || ws.readyState !== 1 || !authenticated) {
       showBanner('未连接或未认证，消息未发送'); return;
     }
+    const heroEl = $chat.querySelector('.empty-hero');
+    if (heroEl) heroEl.remove();
     addUser(text);
     turnCount++; updateStats();
     const persona = ($('persona') && $('persona').value) || '';
@@ -1446,17 +1721,23 @@
       workdir: (activeProject && activeProject.path) || undefined,
     };
     if (loadedHistory.length) payload.prior_messages = loadedHistory.slice(-20);
+    if (currentSessionId) payload.session_id = currentSessionId;
     if (attachments.length) payload.images = attachments.map((a) => ({ data_url: a.dataUrl }));
     ws.send(JSON.stringify(payload));
     startElapsed();
     clearAttachments();
     $input.value = '';
-    $send.disabled = true;
+    setBusy(true);
     hideBanner();
   }
-  $send.onclick = send;
+  function stopRun() {
+    if (!ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ type: 'cancel', id: 'cancel-' + Date.now() }));
+    $send.textContent = '…';   // 立刻反馈：正在停
+  }
+  $send.onclick = () => (runBusy ? stopRun() : send());
   $input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!runBusy) send(); }
   });
   $input.addEventListener('input', function () {
     this.style.height = 'auto';
@@ -1464,11 +1745,24 @@
   });
 
   // —— 新会话 ——
+  // 清空对话区时必须重置流式状态：否则 streamEl 仍指向已从 DOM 移除的节点，
+  // 切会话/新会话后再流式回复会"写进看不见的地方"（实测：气泡空白、用户以为卡住）
+  function resetChatArea() {
+    $chat.innerHTML = '';
+    $trace.innerHTML = '';
+    streamEl = null;
+    streamBuf = '';
+    pendingFinal = null;
+    closeToolGroup();
+  }
+
   $('newChat').onclick = () => {
-    $chat.innerHTML = ''; $trace.innerHTML = '';
+    resetChatArea();
     turnCount = 0; callCount = 0; updateStats();
     $('sessionTitle').textContent = '新会话';
     loadedHistory = [];
+    currentSessionId = '';
+    renderEmptyState();
     const hintReset = $('sessionHint');
     if (hintReset) { hintReset.textContent = ''; hintReset.classList.remove('show'); }
     hideBanner();
@@ -1567,7 +1861,7 @@
     if (activeLine) {
       activeLine.textContent = ap.configured
         ? ('provider 列表里的「' + ap.name + '」' + (ap.has_key ? '' : '（缺密钥，会回退全局）'))
-        : '未选择 provider —— 走下面的全局配置';
+        : '还没有选中的 provider —— 当前用下面的全局配置（在上面点「设为默认」即可切换）';
     }
     const usageActive = $('usageActiveProvider');
     if (usageActive) usageActive.textContent = ap.configured ? ('生效: ' + ap.name) : '';
@@ -1789,5 +2083,6 @@
 
   // —— 启动 ——
   if (!TOKEN) showBanner('缺少 token：请通过 Host 入口访问（壳自动注入），不要直接打开文件。');
+  renderEmptyState();  // 首次打开：给"能干什么"，不要一片空白
   connect();
 })();
