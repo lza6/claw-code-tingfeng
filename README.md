@@ -2,7 +2,7 @@
 
 > **"让 AI 像交响乐团一样协作，让编程像呼吸一样自然。"**
 
-**当前版本**: v0.88.0 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
+**当前版本**: v0.88.1 | **测试**: 见 `test_ledger.md` 与 `scripts/e2e_smoke.py` | **覆盖率**: 见 `coverage.json`（由 `pytest --cov=src` 生成） | **质量工具**: ruff, mypy, pytest-cov | **CI/CD**: GitHub Actions
 
 > 版本号以 `pyproject.toml` 为唯一真相源，`src.__version__` 自动读取，不再手工维护。
 > 具体数字请以命令输出为准，避免文档与代码漂移。
@@ -59,12 +59,12 @@ DSH 式桌面客户端，**双击即用**：
 - 详见 `docs/ENHANCEMENT_GUIDE.md`（使用/排障）、`docs/RELEASE_UPDATES.md`（发布/更新）、`docs/adr/`（决策记录）
 
 > **桌面端 E2E**（真实浏览器 + 真实 Electron + 真实安装包，非桩）：
-> - `node ui_console_e2e.mjs` — 浏览器驱动装好的 Host，**31 项**（滚动/Markdown+图片/会话分组/toast/视觉能力标注/布局可见性/停止生成/协议剥离/
+> - `node ui_console_e2e.mjs` — 浏览器驱动装好的 Host，**32 项**（滚动/Markdown+图片/会话分组/toast/视觉能力标注/布局可见性/停止生成/协议剥离/会话管理/
 >   工具折叠/上下文/用量/provider/项目/模型选择器）
 > - `node ui_stream_persona_e2e.mjs` — 真流式 + 角色库 + 无顶栏
 > - `node ui_settings_e2e.mjs`（18 项）、`node electron_bridge_e2e.mjs`（10 项）、
 >   `node update_feed_e2e.mjs`（4 项）
-> - 装机全链路：`%TEMP%\clawd-install-e2e.ps1` —— 静默安装 → 31 项浏览器断言 → 重启后
+> - 装机全链路：`%TEMP%\clawd-install-e2e.ps1` —— 静默安装 → 32 项浏览器断言 → 重启后
 >   provider 与会话接口仍在 → 卸载 → 残留清理
 > - 静态防回归：`tests/test_electron_main_static.py`（7 条：electron 符号必须解构导入、
 >   同一函数内不得先用后声明、无默认菜单、preload 不透 Node 能力）
@@ -437,15 +437,15 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5322 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.88.0 实测，368.84s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5322 passed / 0 failed / 6 分 8 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5352 / 0 errors**（2026-10-30 v0.88.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5329 passed / 9 skipped / 12 xfailed / 0 failed**（2026-10-30 v0.88.1 实测，371.37s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5329 passed / 0 failed / 6 分 11 秒**（同一命令，本轮实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5359 / 0 errors**（2026-10-30 v0.88.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
 | 覆盖率 | **62.39%**（上一轮实测；本轮未重跑，需时请以现跑为准） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **498**（2026-10-30 v0.88.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **498**（2026-10-30 v0.88.1 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |

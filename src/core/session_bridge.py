@@ -128,6 +128,24 @@ def _detect_and_parse(path: Path) -> SessionView | None:
     )
 
 
+def rename(session_id: str, title: str, directory: Path | str | None = None) -> SessionView:
+    """改会话标题（侧栏"重命名"）"""
+    view = load(session_id, directory)
+    view.title = str(title or "").strip()[:120] or view.title
+    save(view, directory)
+    return view
+
+
+def delete_session(session_id: str, directory: Path | str | None = None) -> bool:
+    """删除会话文件（侧栏"删除"）——只删这个会话，不动其它文件"""
+    d = _dir(directory)
+    path = d / f"{session_id}.json"
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 def list_all(directory: Path | str | None = None) -> list[SessionView]:
     """列出全部会话（两套格式都能读），按更新时间倒序"""
     d = _dir(directory)

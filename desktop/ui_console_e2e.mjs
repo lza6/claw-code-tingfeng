@@ -465,6 +465,49 @@ check('toast 出现在右下角',
   JSON.stringify(toastInfo));
 await page.screenshot({ path: path.join(DESKTOP, 'screenshots', '32-toast.png') });
 
+// ---------- 4.5 会话管理：重命名 / 搜索 / 删除（只用最新那条，不动其它历史） ----------
+const admin = await page.evaluate(async () => {
+  const r = await fetch('/api/sessions');
+  const d = await r.json();
+  const target = (d.sessions || [])[0];
+  if (!target) return { skip: true };
+
+  // 行内操作按钮存在（悬停才显示，但 DOM 里必须有）
+  const rows = Array.from(document.querySelectorAll('#sessionList .session-item'));
+  const hasTools = rows.some((el) => el.querySelector('.session-tools .st-btn'));
+
+  const q1 = await fetch('/api/session/rename?id=' + encodeURIComponent(target.id)
+    + '&title=' + encodeURIComponent('E2E 重命名目标'));
+  const renamed = await q1.json();
+
+  const input = document.querySelector('#sessionSearch');
+  input.value = 'E2E 重命名目标';
+  input.dispatchEvent(new Event('input'));
+  await new Promise((res) => setTimeout(res, 900));
+  const filtered = document.querySelectorAll('#sessionList .session-item').length;
+
+  const q2 = await fetch('/api/session/delete?id=' + encodeURIComponent(target.id));
+  const deleted = await q2.json();
+
+  input.value = '';
+  input.dispatchEvent(new Event('input'));
+  await new Promise((res) => setTimeout(res, 700));
+  const afterDelete = (await (await fetch('/api/sessions')).json()).count;
+
+  return {
+    id: target.id,
+    hasTools,
+    renamedTitle: renamed.title,
+    okRename: !!renamed.ok && renamed.title === 'E2E 重命名目标',
+    filtered,
+    okDelete: !!deleted.ok,
+    afterDelete,
+  };
+});
+check('会话可重命名 + 搜索过滤 + 删除（只动那一条）',
+  !admin.skip && admin.hasTools && admin.okRename && admin.filtered === 1 && admin.okDelete,
+  JSON.stringify(admin));
+
 await browser.close();
 const failed = results.filter(([, ok]) => !ok);
 log(`合计 ${results.length} 项，通过 ${results.length - failed.length}，失败 ${failed.length}`);

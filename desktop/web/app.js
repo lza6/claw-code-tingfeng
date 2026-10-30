@@ -1560,7 +1560,9 @@
     if (!list) return;
     try {
       const data = await fetchJsonRetry('/api/sessions', 2);
-      const items = data.sessions || [];
+      const kw = String(($('sessionSearch') && $('sessionSearch').value) || '').trim().toLowerCase();
+      const items = (data.sessions || []).filter((it) =>
+        !kw || String(it.title || '').toLowerCase().includes(kw) || String(it.id).includes(kw));
       window.__sessionCount = items.length;
       list.innerHTML = '';
       if (!items.length) {
@@ -1618,6 +1620,47 @@
             + (it.model ? ` · ${it.provider ? it.provider + '/' : ''}${it.model}` : '')
             + (workdir ? ` · ${workdir}` : '');
           row.onclick = () => openSession(it.id);
+          // 悬停出现的会话操作：重命名 / 删除（删的只是这条会话文件）
+          const tools = document.createElement('span');
+          tools.className = 'session-tools';
+          const ren = document.createElement('button');
+          ren.className = 'st-btn';
+          ren.textContent = '✎';
+          ren.title = '重命名';
+          ren.onclick = async (ev) => {
+            ev.stopPropagation();
+            const next = window.prompt('新的会话标题', it.title || '');
+            if (next == null) return;
+            const val = String(next).trim();
+            if (!val) return;
+            try {
+              await fetch('/api/session/rename?id=' + encodeURIComponent(it.id)
+                + '&title=' + encodeURIComponent(val));
+              loadSessions();
+              if (currentSessionId === it.id) $('sessionTitle').textContent = val;
+            } catch (e) { showBanner('重命名失败: ' + e.message); }
+          };
+          const del = document.createElement('button');
+          del.className = 'st-btn danger';
+          del.textContent = '✕';
+          del.title = '删除这条会话';
+          del.onclick = async (ev) => {
+            ev.stopPropagation();
+            if (!window.confirm('删除会话「' + (it.title || it.id) + '」？\n只删这条记录，不动磁盘上的项目文件。')) return;
+            try {
+              await fetch('/api/session/delete?id=' + encodeURIComponent(it.id));
+              if (currentSessionId === it.id) {
+                currentSessionId = '';
+                resetChatArea();
+                renderEmptyState();
+                $('sessionTitle').textContent = '新会话';
+                loadedHistory = [];
+              }
+              loadSessions();
+            } catch (e) { showBanner('删除失败: ' + e.message); }
+          };
+          tools.appendChild(ren); tools.appendChild(del);
+          row.appendChild(tools);
           list.appendChild(row);
         }
         if (!showAll && rows.length > SESSION_LIMIT) {
@@ -1920,6 +1963,10 @@
   $('setSave').onclick = saveSettings;
 
   // 用量页 / 多 provider 绑定
+  // 会话搜索：输入即过滤（只过滤标题/id，不查服务端）
+  const sessSearch = $('sessionSearch');
+  if (sessSearch) sessSearch.oninput = () => loadSessions();
+
   const usageBtn = $('btnUsage');
   if (usageBtn) usageBtn.onclick = openUsage;
   const usageClose = $('usageClose');

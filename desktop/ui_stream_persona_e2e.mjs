@@ -60,8 +60,10 @@ while (Date.now() < deadline) {
   await page.waitForTimeout(400);
   const snap = await page.evaluate(() => {
     const el = document.querySelector('.msg-assistant.streaming .body');
-    const sendDisabled = document.querySelector('#send')?.disabled;
-    return { len: el ? (el.textContent || '').length : -1, busy: !!sendDisabled };
+    // 忙禁用已改为"忙时变停止按钮"，判定看 stop-mode（disabled 恒为 false）
+    const btn = document.querySelector('#send');
+    const busy = !!(btn && btn.classList.contains('stop-mode'));
+    return { len: el ? (el.textContent || '').length : -1, busy };
   });
   if (snap.len >= 0) samples.push(snap.len);
   if (!snap.busy) { finished = true; break; }

@@ -63,6 +63,14 @@ aside{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .stopped-note{margin:6px 0 10px;font-size:12px;color:var(--label-tertiary);text-align:center}
 /* 用量表格头不换行（"输出"曾被挤成两行） */
 .usage-table th,#usageRows th,#usageChart+table th{white-space:nowrap}
+/* 会话搜索框 + 悬停操作按钮 */
+.session-search{flex:0 0 auto;margin:0 10px 6px;height:28px;padding:0 8px;border-radius:var(--radius-s);border:1px solid var(--border-l1);background:var(--bg-layer-1);color:var(--label-primary);font-size:12px}
+.session-search:focus{outline:none;border-color:var(--brand)}
+.session-tools{display:none;margin-left:4px;gap:2px}
+.session-item:hover .session-tools{display:flex}
+.st-btn{width:18px;height:18px;border-radius:4px;border:none;background:transparent;color:var(--label-tertiary);cursor:pointer;font-size:11px;line-height:1}
+.st-btn:hover{background:var(--bg-layer-3);color:var(--label-primary)}
+.st-btn.danger:hover{color:#ff8080}
 /* 侧栏"还有 N 条"折叠行 */
 .session-more{padding:6px 10px;font-size:11.5px;color:var(--brand);cursor:pointer;border-radius:var(--radius-s)}
 .session-more:hover{background:var(--hover)}
@@ -387,6 +395,7 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
     </div>
     <div class="project-list" id="projectList"></div>
     <div class="group-head"><span>会话</span><span style="font-size:11px" id="sessionScope">当前项目</span></div>
+    <input class="session-search" id="sessionSearch" placeholder="搜索会话标题…" autocomplete="off" />
     <div class="session-list" id="sessionList"></div>
     <div class="sidebar-footer">
       <button class="side-entry" id="btnMarket"><span class="ico">◉</span> 插件市场</button>

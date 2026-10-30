@@ -1,5 +1,14 @@
 # 变更索引（change-index）
 
+## 2026-10-30 v0.88.1 会话管理 + 修内联图片 403
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/core/session_bridge.py | `rename(session_id, title)` / `delete_session(session_id)`（只动这一条会话文件） |
+| 修改 | src/server/websocket_server.py | `/api/session/rename`、`/api/session/delete`；`/api/file` 放行数据目录（仍只许图片后缀） |
+| 修改 | desktop/web/app.js + index.html | 会话行悬停 `✎`/`✕`、搜索框「搜索会话标题…」、样式 |
+| 新增 | tests/server/test_session_admin_api.py | 7 条（改名不丢消息/400/404/只删一条/未知 ok=false/数据目录图片 200/providers.json 仍 403） |
+| 修改 | desktop/ui_console_e2e.mjs | 32 项（新增会话重命名+搜索+删除） |
+
 ## 2026-10-30 v0.88.0 客户端去垃圾（7 个观感缺陷 + 停止生成）
 | 类型 | 路径 | 说明 |
 |------|------|------|

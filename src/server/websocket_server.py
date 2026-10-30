@@ -619,6 +619,46 @@ class ClawdWebSocketServer:
                 body,
             )
 
+        # API 端点：会话重命名 / 删除（侧栏 ⋯ 菜单）
+        if path in ('/api/session/rename', '/api/session/delete'):
+            from urllib.parse import parse_qs
+
+            from ..core import session_bridge
+            from ..core.data_dir import data_path as _dp2
+
+            source = raw_path or path
+            q = parse_qs(source.split('?', 1)[1] if '?' in source else '')
+            sid = (q.get('id') or [''])[0].strip()
+            if not sid:
+                body = json.dumps({'error': '缺少 id'}, ensure_ascii=False).encode('utf-8')
+                return _WsResponse(400, 'Bad Request', _H([
+                    ('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))), ('Connection', 'close')]), body)
+            try:
+                if path == '/api/session/rename':
+                    title = (q.get('title') or [''])[0]
+                    view = session_bridge.rename(sid, title, _dp2('sessions'))
+                    payload = {'ok': True, 'id': view.session_id, 'title': view.title}
+                else:
+                    ok = session_bridge.delete_session(sid, _dp2('sessions'))
+                    payload = {'ok': ok, 'id': sid}
+                body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                status = 200
+            except (FileNotFoundError, ValueError) as exc:
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 404
+            except Exception as exc:  # noqa: BLE001
+                body = json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8')
+                status = 500
+            return _WsResponse(
+                status, 'OK' if status == 200 else ('Not Found' if status == 404 else 'Internal Server Error'),
+                _H([('Content-Type', 'application/json; charset=utf-8'),
+                    ('Content-Length', str(len(body))),
+                    ('Cache-Control', 'no-cache'),
+                    ('Connection', 'close')]),
+                body,
+            )
+
         # API 端点：工作区文件（只给图片，供 Markdown 里内嵌图片用）
         if path == '/api/file':
             from urllib.parse import parse_qs
@@ -639,7 +679,17 @@ class ClawdWebSocketServer:
             try:
                 target = target.resolve()
                 root = Path.cwd().resolve()
-                if not target.is_relative_to(root):
+                # 桌面端上传的图片在数据目录（userData/data/uploads），不在 cwd 下 ——
+                # 只认 cwd 会让内联图片一律 403（真实缺陷）。
+                from ..core.data_dir import data_path as _dp3
+
+                allowed_roots = [root]
+                try:
+                    allowed_roots.append(_dp3().resolve())
+                except OSError as exc:
+                    # 数据目录解析不出来时只放行 cwd（图片会 403，但不至于整个端点挂掉）
+                    self.logger.debug(f'/api/file: 数据目录不可用，仅放行 cwd: {exc}')
+                if not any(target.is_relative_to(r) for r in allowed_roots):
                     return _WsResponse(403, 'Forbidden', _H([('Content-Type', 'text/plain; charset=utf-8'),
                                                             ('Content-Length', '9'), ('Connection', 'close')]), b'forbidden')
                 mime = img_mime.get(target.suffix.lower())
