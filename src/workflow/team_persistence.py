@@ -14,6 +14,7 @@ Team Persistence - 团队持久化
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ from ..utils.file_ops import file_lock, locked_atomic_write_json
 TEAM_STATE_FILE = "team-state.json"
 TEAM_MEMBERS_FILE = "team-members.json"
 TEAM_MESSAGES_FILE = "team-messages.json"
+#: 兜底目录（数据目录不可用时才用）；正常走 `_team_state_root()`
 TEAM_STATE_DIR = Path(".clawd") / "state"
 
 
@@ -91,12 +93,26 @@ class TeamStateData:
         )
 
 
+def _team_state_root() -> Path:
+    """团队状态的根目录 —— 跟随数据目录（桌面端写进 userData/data，而不是安装目录）
+
+    原来直接写 `Path(".clawd") / "state"`，是**相对 cwd** 的：桌面端 cwd 是
+    `resources/host`，团队状态会落在安装目录里（升级即丢、可能只读）。
+    与 v0.88.3 的日志目录问题同源。
+    """
+    try:
+        from ..core.data_dir import data_path
+
+        return data_path("state")
+    except (ImportError, OSError) as exc:  # pragma: no cover - 极端环境
+        logging.getLogger(__name__).warning(f"数据目录不可用，团队状态回落 {TEAM_STATE_DIR}: {exc}")
+        return TEAM_STATE_DIR
+
+
 def _get_team_state_path(cwd: str = ".", session_id: str | None = None) -> Path:
     """获取团队状态文件路径"""
-    if session_id:
-        root = TEAM_STATE_DIR / session_id
-    else:
-        root = TEAM_STATE_DIR
+    base = _team_state_root()
+    root = base / session_id if session_id else base
     root.mkdir(parents=True, exist_ok=True)
     return root / TEAM_STATE_FILE
 

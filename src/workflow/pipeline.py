@@ -529,6 +529,30 @@ def create_ralplan_stage() -> PipelineStage:
     return RalplanStage()
 
 
+def _finish_team_state(stage, ctx, member_ids: list[str], *, ok: bool, note: str) -> None:
+    """收尾：把成员状态与最终阶段写回团队状态文件（失败只记 debug，不影响主流程）"""
+    try:
+        from .team_persistence import (
+            add_team_message,
+            read_team_state,
+            update_member_status,
+            write_team_state,
+        )
+
+        now = datetime.now().isoformat()
+        _sid = getattr(ctx, "session_id", None) or None
+        for mid in member_ids:
+            update_member_status(mid, "idle" if ok else "offline", cwd=str(ctx.cwd), session_id=_sid)
+        state = read_team_state(str(ctx.cwd), session_id=_sid)
+        state.phase = "completed" if ok else "failed"
+        state.completed_at = now
+        write_team_state(state, str(ctx.cwd), session_id=_sid)
+        add_team_message(member_id="system", content=note, msg_type="system",
+                         cwd=str(ctx.cwd), session_id=_sid)
+    except Exception as exc:  # noqa: BLE001
+        stage._logger.debug("团队状态收尾失败（不影响结果）: %s: %s", type(exc).__name__, exc)
+
+
 def create_team_exec_stage(
     worker_count: int = 2,
     agent_type: str = "executor",
@@ -564,6 +588,48 @@ def create_team_exec_stage(
                 f"{self.agent_type} workers"
             )
 
+            # 团队状态落盘（此前 `team_persistence` 270 行只有 re-export、零调用点）
+            team_started_at = datetime.now().isoformat()
+            _sid = getattr(ctx, "session_id", None) or None
+            member_ids: list[str] = []
+            try:
+                from .team_persistence import (
+                    TeamMemberState,
+                    add_team_message,
+                    add_team_member,
+                    read_team_state,
+                    update_member_status,
+                    write_team_state,
+                )
+
+                state = read_team_state(str(ctx.cwd), session_id=_sid)
+                state.task = (ctx.task or "")[:500]
+                state.phase = "executing"
+                state.started_at = state.started_at or team_started_at
+                state.team_id = state.team_id or f"team-{int(time.time())}"
+                write_team_state(state, str(ctx.cwd), session_id=_sid)
+                for idx in range(max(1, self.worker_count)):
+                    mid = f"worker-{idx + 1}"
+                    added = add_team_member(
+                        TeamMemberState(
+                            id=mid, name=mid, role=self.agent_type, status="busy",
+                            current_task=(ctx.task or "")[:120],
+                            joined_at=team_started_at, last_active_at=team_started_at,
+                        ),
+                        str(ctx.cwd), session_id=_sid,
+                    )
+                    if added:
+                        member_ids.append(mid)
+                add_team_message(
+                    member_id="system",
+                    content=f"team-exec 开始：{self.worker_count} × {self.agent_type}",
+                    msg_type="system",
+                    cwd=str(ctx.cwd),
+                    session_id=_sid,
+                )
+            except Exception as exc:  # noqa: BLE001 — 状态落盘失败不能挡住真正执行
+                self._logger.debug("团队状态落盘失败（不影响执行）: %s: %s", type(exc).__name__, exc)
+
             # 接入真实 Swarm 引擎（此前是返回 "<未实现>" 的占位实现，
             # 却仍报 SUCCESS —— 会让调用方以为 worker 真的执行过）。
             try:
@@ -581,6 +647,8 @@ def create_team_exec_stage(
                 result = await engine.run(ctx.task)
             except Exception as exc:
                 self._logger.error("team-exec 阶段失败: %s: %s", type(exc).__name__, exc)
+                _finish_team_state(self, ctx, member_ids, ok=False,
+                                   note=f"team-exec 失败: {type(exc).__name__}: {exc}")
                 return StageResult(
                     status=StageStatus.FAILED,
                     artifacts={"execution_implemented": True, "execution_completed": False},
@@ -597,6 +665,10 @@ def create_team_exec_stage(
                 "execution_completed": bool(result.success),
             }
 
+            _finish_team_state(
+                self, ctx, member_ids, ok=bool(result.success),
+                note=f"team-exec 结束：success={bool(result.success)} errors={artifacts['errors']}",
+            )
             return StageResult(
                 status=StageStatus.SUCCESS if result.success else StageStatus.FAILED,
                 artifacts=artifacts,

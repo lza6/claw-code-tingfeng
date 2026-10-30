@@ -7,6 +7,42 @@
 
 ---
 
+## [v0.88.5] (2026-10-30) — 团队状态接线（270 行代码首次真跑）+ 定价接 litellm + 依赖锁
+
+按《下一步改进指南》逐条对账后剩下的 4 项，全部处理：
+
+**1. M5：`team_persistence` 接线（此前 270 行零调用）**
+`src/workflow/team_persistence.py` 整套 API 造好了，却只在 `workflow/__init__.py` 里 re-export ——
+"团队状态持久化"这个能力**从来没跑过**。现在 `TeamExecStage.run()` 三处落盘：
+开始写成员（worker-1..N / busy）、成功收尾（idle + phase=completed）、失败收尾（offline + phase=failed），
+并写系统消息。
+- 顺带修两处**同源缺陷**：①`TEAM_STATE_DIR` 原来写死 `Path(".clawd")/state`（相对 cwd，
+  桌面端会落进安装目录）→ 改走 `data_path("state")`；②接线时踩到 `update_member_status`
+  的第 3 个参数是 **`current_task`** 而不是 `cwd`，按位置传会把 `cwd` 喂错 → 全部改成关键字传参
+  （`add_team_message` 的真实签名也是 `(member_id, content, msg_type, cwd, session_id)`，
+  传 `TeamMessage` 对象同样会错位，一并修正）。
+- 新增 `tests/workflow/test_team_state_wiring.py`（4 条：成员/phase/时间落盘、失败置 failed、
+  `session_id` 作用域隔离、状态目录跟随数据目录且不再写 cwd 的 `.clawd`）。
+
+**2. P2-2：定价表接 litellm 内置价格兜底**
+自有 `MODEL_PRICING`（91 条手写快照）已过期 **172 天**，每条 CLI 都警告，成本护栏按旧价估算。
+新增 `resolve_pricing()`：**自有表 → litellm 内置（4500+ 模型，随包升级）→ 默认价**，
+所有算钱的地方（`get_model_pricing` / 估算 / 记账）统一走它；自有表仍优先，可放自有报价。
+实测：`gpt-4o` 走自有表 2.5/10.0，`deepseek-chat` 0.27/1.1，未知模型才落默认价。
+新增 `tests/core/test_pricing_resolution.py`（6 条，含"只被 litellm 收录的模型能查到自己价格"
+与 provider 前缀归一）。
+
+**3. P2-6：加 `requirements.lock`**
+Python 侧一直没有锁文件（`requirements.txt` 全是 `>=`），干净环境无法复现。
+新增 `requirements.lock`（149 个精确版本，由 `pip freeze` 生成，文件头写明用途/更新时机）。
+`requirements.txt` 保持 `>=` 不动。
+
+**4. P2-5：更新源保持未配置（已确认）**
+`build.publish.url` 仍是占位域名，代码里靠 `pkgUrl !== DEFAULT_UPDATE_URL` 判定 →
+UI 明确提示"更新源未配置"，**不静默失败**。已与用户确认：占位域名不属于本项目，保持未配置状态。
+
+---
+
 ## [v0.88.4] (2026-10-30) — core 边界清零（5 处）+ 修 3 个"调用即崩"的缺陷
 
 **core 层不再 import 任何上层模块**（`scripts/core_surface_allow.json` 已清空，门禁从"允许 5 条存量"变成"0 条"）。

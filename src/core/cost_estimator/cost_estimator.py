@@ -11,10 +11,13 @@
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # 定价数据版本和更新日期
 PRICING_VERSION = '2026-04-12-v1'
@@ -470,7 +473,7 @@ class CostEstimator:
         返回:
             本次调用的成本（USD）
         """
-        pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
+        pricing = resolve_pricing(model)
 
         # 计算基础成本（USD / 1M tokens）
         input_cost = (input_tokens / 1_000_000) * pricing.input_price
@@ -660,9 +663,61 @@ class CostEstimator:
         self._total_reasoning_tokens = 0
 
 
+def _litellm_pricing(model_name: str) -> "ModelPricing | None":
+    """从 litellm 内置价格表取价（美元/token → 换成我们用的"美元/1M token"）
+
+    为什么需要它：自有 `MODEL_PRICING` 是手写快照，写死 `PRICING_VERSION` 后会长期过期
+    （实测过期 172 天，每条 CLI 都警告，成本护栏按旧价估算）。litellm 自带 4500+ 模型价格
+    且随包升级而更新，用它兜底比"人工记得去核价"可靠得多；自有表仍优先（可放自有报价）。
+    """
+    if not model_name:
+        return None
+    try:
+        from litellm import model_cost  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001 — litellm 不可用时退化为自有表
+        logger.debug(f"litellm 价格表不可用（回退自有表）: {exc}")
+        return None
+
+    candidates = [model_name]
+    if "/" in model_name:  # `openai/gpt-4o` -> `gpt-4o`
+        candidates.append(model_name.split("/", 1)[1])
+    for cand in candidates:
+        info = model_cost.get(cand)
+        if not isinstance(info, dict):
+            continue
+        inp = info.get("input_cost_per_token")
+        out = info.get("output_cost_per_token")
+        if inp is None and out is None:
+            continue
+        cache_read = info.get("cache_read_input_token_cost")
+        return ModelPricing(
+            input_price=float(inp or 0.0) * 1_000_000,
+            output_price=float(out or 0.0) * 1_000_000,
+            cache_read_price=float(cache_read) * 1_000_000 if cache_read else 0.0,
+            cache_write_price=0.0,
+            reasoning_price=0.0,
+        )
+    return None
+
+
+def resolve_pricing(model_name: str) -> ModelPricing:
+    """统一查价：自有表（可被 model_pricing.json 覆盖）→ litellm 内置 → 默认价
+
+    所有算钱的地方都应该走这里，而不是直接 `MODEL_PRICING.get(model, DEFAULT_PRICING)`
+    —— 那样新模型/自有表里没写的模型会一路按 $1/$3 的默认价估算，毫无提示。
+    """
+    exact = MODEL_PRICING.get(model_name)
+    if exact is not None:
+        return exact
+    fallback = _litellm_pricing(model_name)
+    if fallback is not None:
+        return fallback
+    return DEFAULT_PRICING
+
+
 def get_model_pricing(model_name: str) -> ModelPricing:
-    """获取模型定价信息"""
-    return MODEL_PRICING.get(model_name, DEFAULT_PRICING)
+    """获取模型定价信息（自有表 → litellm 内置 → 默认价）"""
+    return resolve_pricing(model_name)
 
 
 def estimate_cost(
@@ -686,7 +741,7 @@ def estimate_cost(
     返回:
         估算成本（USD）
     """
-    pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
+    pricing = resolve_pricing(model)
     input_cost = (input_tokens / 1_000_000) * pricing.input_price
     output_cost = (output_tokens / 1_000_000) * pricing.output_price
     cache_read_cost = (cache_read_tokens / 1_000_000) * pricing.cache_read_price
