@@ -264,3 +264,44 @@ class TestBindHost:
             "端口文件仍可能写入 0.0.0.0 —— Electron 壳/浏览器会连不上"
         )
         assert "write_port_file(workdir, actual_port, client_host, token)" in src
+
+
+class TestPortFileFailureIsNotFatal:
+    """端口文件写不进去时，Host 必须继续跑。
+
+    真实事故（2026-10-31，CI Linux runner）：容器以 UID 1000 运行而 /app 属 root，
+    `write_port_file(/app/.clawd_host_port)` 抛 PermissionError 直接冒到顶层 →
+    `clawd serve` 崩 → `/healthz` 000。端口文件只是"自动发现"的便利机制，
+    写不进去应该降级为告警，而不是把服务带走。
+    """
+
+    def test_warning_instead_of_raising(self, monkeypatch, tmp_path, caplog):
+        import asyncio
+
+        from src.server import host_entry
+
+        def boom(workdir, port, host, token):
+            raise PermissionError(13, "Permission denied", str(workdir / ".clawd_host_port"))
+
+        monkeypatch.setattr(host_entry, "write_port_file", boom)
+
+        async def scenario():
+            task = asyncio.create_task(
+                host_entry.run_host(port=0, workdir=tmp_path / "readonly")
+            )
+            # 给它时间跑到写端口文件那一步
+            await asyncio.sleep(1.5)
+            still_running = not task.done()
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001 - 关停路径
+                    pass
+            return still_running
+
+        try:
+            still_running = asyncio.run(asyncio.wait_for(scenario(), timeout=90))
+        except Exception as exc:  # noqa: BLE001 - 只判断"没崩"这一件事
+            raise AssertionError(f"run_host 在端口文件失败时崩了: {type(exc).__name__}: {exc}")
+        assert still_running, "run_host 在端口文件写入失败后不应退出"

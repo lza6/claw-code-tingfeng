@@ -65,6 +65,16 @@ class TestDockerfile:
     def test_binds_all_interfaces_in_container(self, dockerfile: str):
         assert "AGENT_SERVER_HOST=0.0.0.0" in dockerfile, "容器内不绑 0.0.0.0 时端口映射无效"
 
+    def test_workdir_owned_by_runtime_user(self, dockerfile: str):
+        """整个 /app 必须归运行用户：serve 要把端口文件写进 workdir。
+
+        真实事故（CI Linux runner）：只 chown 了 logs/.clawd，/app 属 root →
+        `PermissionError: [Errno 13] /app/.clawd_host_port` → Host 崩 → /healthz 000。
+        """
+        assert "chown -R 1000:1000 /app" in dockerfile, (
+            "Dockerfile 未把 /app 交给运行用户（端口文件会写不进去）"
+        )
+
 
 class TestCompose:
     def test_service_binds_all_interfaces(self, compose: dict):

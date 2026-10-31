@@ -55,8 +55,11 @@ COPY --from=builder /install /usr/local
 COPY --chown=1000:1000 . .
 
 # 创建必要的目录
+# 整个 /app 必须归运行用户所有：`clawd serve` 会把端口文件 `.clawd_host_port` 写到 workdir（/app），
+# 属主不对就会 `PermissionError: [Errno 13] /app/.clawd_host_port` → Host 直接崩 → 探活 000。
+# （2026-10-31 CI 实测：本机 Docker Desktop 因挂载语义没暴露，Linux runner 上必现。）
 RUN mkdir -p /app/logs /app/.clawd /app/.clawd/experience && \
-    chown -R 1000:1000 /app/logs /app/.clawd
+    chown -R 1000:1000 /app
 
 # 非 root 用户运行
 USER 1000:1000

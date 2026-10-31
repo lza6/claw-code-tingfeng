@@ -116,12 +116,23 @@ async def run_host(
     # （0.0.0.0 是监听地址，不是可路由目标）。对外暴露由 AGENT_SERVER_HOST 控制，
     # 客户端侧仍走 loopback。
     client_host = "127.0.0.1" if host in ("0.0.0.0", "::", "", "[::]") else host
-    pf = write_port_file(workdir, actual_port, client_host, token)
+    # 端口文件只是"壳/浏览器如何发现服务"的便利机制，写不进去**不能把服务带走**：
+    # 容器里 workdir 可能只读或属主不对（真实事故：/app 属 root、进程 UID 1000 →
+    # PermissionError 直接冒到顶层 → Host 崩 → /healthz 000）。
+    # 所以这里降级为告警：服务照跑，只是没有端口文件。
+    try:
+        pf: Path | None = write_port_file(workdir, actual_port, client_host, token)
+    except OSError as exc:
+        pf = None
+        logger.warning(
+            "端口文件写入失败（服务继续运行，仅自动发现不可用）: %s — %s: %s",
+            workdir / PORT_FILE_NAME, type(exc).__name__, exc,
+        )
     print(f"[clawd-host] ws://{client_host}:{actual_port}（监听 {host}）")
     print(f"[clawd-host] token: {token}")
     if static_dir:
         print(f"[clawd-host] web ui: http://{client_host}:{actual_port}/?token={token[:8]}...")
-    print(f"[clawd-host] 端口文件: {pf}")
+    print(f"[clawd-host] 端口文件: {pf if pf else '（写入失败，已跳过）'}")
 
     try:
         await server.run_forever()
