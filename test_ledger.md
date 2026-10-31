@@ -384,3 +384,49 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 | eval-paid-gate | src/eval/runner.py | 环境变量 | live 模式需 `CLAWD_EVAL_ALLOW_PAID=1` + agent_fn，缺一即拒 | 2026-10-28 | locked |
 | eval-baseline | src/eval/baseline.py | .clawd/eval_baseline.json | pass_rate 与逐用例通过状态比对；新增用例不算回归 | 2026-10-28 | locked |
 | dimension-guidance | src/workflow/engine.py | src/workflow/dimensions.py | `--dimension` → 运行期配置 → run() 入口注入；无/未知/异常均降级 | 2026-10-28 | locked |
+
+## 2026-10-31 v0.89.0 / v0.89.1 —— 本轮实跑台账
+
+> 只记录**实际执行过**的命令与结果。未执行标 `not_run`。
+
+| 范围 | 命令 | 结果 |
+|:---|:---|:---|
+| 全量（not slow，最终 HEAD） | `pytest tests/ -q -m "not slow"` | **5444 passed / 7 skipped / 7 xfailed / 0 failed**（315.06s） |
+| 覆盖率 | `pytest tests/ -q -m "not slow" --cov=src` | **66.29%**（38741/58439，`fail_under=60` 生效） |
+| 收集 | `pytest tests/ --collect-only -q` | **5467 / 0 errors**（4.02s） |
+| 契约 | `pytest tests/contracts -q` | 39 passed |
+| ruff 硬指标（全仓） | `ruff check src tests --select F821,F811,E9` | All checks passed |
+| 导入完整性 | `scripts/import_sweep.py --strict-exit` | IMPORT-FAIL 0 / DEP-MISSING 0（604 模块） |
+| 生产可达 | `scripts/reachability.py --min-reachable 443` | **503**（基线 501，未降）/ 完全不可达 25 |
+| 静默吞异常 | `scripts/check_silent_except.py --fail-over 154` | **154**（门禁 155→154，只降不升） |
+| 审计台账 | `scripts/verify_audit_p1.py` | **28/28** |
+| 假成功扫描 / MCP 启动 / core 边界 | `scan_fake_success.py` / `check_mcp_startup.py` / `core_surface.py` | 0 命中 / **4/4** / PASS |
+| 文档漂移 | `scripts/check_doc_drift.py` | 全一致 |
+| 版本一致性 | `scripts/baseline.py` | 0.89.1 / 0.89.1 / 0.89.1（pyproject / CLI / dist-info） |
+| pre-commit 全套 | `pre-commit run --all-files` | **14 个 hook 全 Passed** |
+| 真实端点 E2E | `scripts/e2e_smoke.py` / `scripts/e2e_production.py` | **5/5** / **8/8**（exit 0） |
+| 压测（本地 WS Host） | `scripts/stress_host.py --n 200 --rounds 10` | QPS **2514** · P50 11.1 / P95 15.4 / **P99 15.6ms** · 错误率 **0%** |
+| 压测（300×5） | `scripts/stress_host.py --n 300 --rounds 5` | QPS 1355 · P99 15.2ms · 错误率 0% |
+| **Linux 矩阵复刻**（docker python:3.11-slim + git） | 原 35 failed + 4 errors 的用例集 | **464 passed / 1 skipped / 4 xfailed / 0 failed** |
+| **GitHub Actions 真机**（run 41148646608） | Test (3.10)/(3.11)/(3.12) + Lint + Docker Build | **全部 success**（修复前三版本各 35 failed + 4 errors） |
+| 装机 E2E（0.89.1 安装包） | `scripts/e2e_desktop_install.ps1` | **0 失败**（含 UI E2E 32/32 / 无 token 403 / 重启持久化 / 卸载 / 残留 0） |
+| 依赖漏洞审计 | `pip-audit -r requirements.txt` | 报告型：filelock 13 条 OSV（已发布全部版本均命中，修复版未发布）→ MAINTENANCE §6.5 |
+| CI 镜像发布 | `docker.yml`（v0.89.1 tag 触发） | ghcr 镜像构建 **success** |
+
+### 本轮新增/改写的测试
+
+| 文件 | 用例数 | 覆盖点 |
+|:---|:---|:---|
+| `tests/cli/test_json_contract_queries.py` | 27 | 12 个查询命令的 `--json` 契约 + stdout 纯净度 + `config --generate` 真落盘 |
+| `tests/server/test_fast_mode_truncation_notice.py` | 3 | 快速模式截断必告知 / 未截断不打扰 |
+| `tests/tools_runtime/test_git_allowlist_single_source.py` | 6 | git 只读清单单一来源（两套判定结论一致） |
+| `tests/core/utils/test_platform_command.py`（追加） | 3 | `os.altsep=None`（Linux）回归 |
+| `tests/agent/test_vision_degrade_loop.py`（追加） | 1 | 降级重试不消耗迭代额度（R6） |
+| 5 个测试文件缺陷修复 | — | git 身份 / rich 断行 / `Z:/` 相对路径 / JSON 行提取 / `importorskip` |
+
+### 未执行（如实）
+
+| 项 | 原因 |
+|:---|:---|
+| `pytest tests/ -q`（**含 slow**） | 约 13 分钟以上；本轮改动不触及 slow 层语义，按项目惯例交付前只跑 `not slow` + 定向 |
+| 正式 CA 代码签名验证 | 外部阻塞（需证书），已与用户确认保持自签名 |
