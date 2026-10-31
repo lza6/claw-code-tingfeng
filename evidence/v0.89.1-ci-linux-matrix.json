@@ -225,8 +225,10 @@
       "Lint & Type Check": "success",
       "Test (Python 3.10)": "success",
       "Test (Python 3.11)": "success",
-      "Test (Python 3.12)": "success"
+      "Test (Python 3.12)": "success",
+      "Docker Build Test": "success"
     },
-    "before_fix": "35 failed + 4 errors（同一 job）"
+    "before_fix": "35 failed + 4 errors（同一 job）",
+    "note": "该 run 的 Security Scan=失败是因为该 commit 尚未包含 safety→pip-audit 修复；修复后的 run（a71f5c2/5e97e35/ce1403a/680e4db）Security Scan 均 success。"
   }
 }
