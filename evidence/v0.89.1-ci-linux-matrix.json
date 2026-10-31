@@ -212,6 +212,16 @@
       "cmd": "gh run view 41148646608（GitHub Actions 真机，commit 8ace867）",
       "exit_code": 0,
       "summary": "**Test (Python 3.10) success · Test (Python 3.11) success · Test (Python 3.12) success**（同一 commit；修复前该 job 为 35 failed + 4 errors）· Lint & Type Check success · Docker Build Test 见 run 详情；Security Scan 的 failure 只出现在引入 pip-audit 修复前的 commit，后续 run（a71f5c2 / 5e97e35 / ce1403a）Security Scan 均 success"
+    },
+    {
+      "cmd": "pytest tests/ -q -m 'not slow'（path_guard 自查修复后）",
+      "exit_code": 0,
+      "summary": "**5446 passed / 7 skipped / 7 xfailed / 0 failed**（376.89s）"
+    },
+    {
+      "cmd": "pytest tests/test_security tests/tools_runtime tests/agent tests/core -q（path_guard 依赖面）",
+      "exit_code": 0,
+      "summary": "**2209 passed / 1 xfailed**"
     }
   ],
   "limitations": [
@@ -230,5 +240,9 @@
     },
     "before_fix": "35 failed + 4 errors（同一 job）",
     "note": "该 run 的 Security Scan=失败是因为该 commit 尚未包含 safety→pip-audit 修复；修复后的 run（a71f5c2/5e97e35/ce1403a/680e4db）Security Scan 均 success。"
-  }
+  },
+  "self_review_findings": [
+    "悬空链接判据过宽（本轮引入的回归）：`not final_abs.exists()` 会把 link→dir 下新建文件误判 broken → 改为 lexists/exists 精确判据",
+    "存量 Windows 缺陷：resolve() 经符号链接返回 `\\?\\` 前缀，repo_root 不带 → relative_to 必失败 → 仓库内合法符号链接一律判逃逸。比较前统一去前缀（含 UNC）"
+  ]
 }
