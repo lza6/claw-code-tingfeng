@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pytest
+
 from src.core import data_dir as data_dir_mod
 
 CHINESE = re.compile(r"[一-鿿]")

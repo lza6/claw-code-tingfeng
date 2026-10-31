@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import pytest
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 SCRIPT = SCRIPTS / "startup_budget.py"

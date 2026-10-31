@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from src.eval import (
     ReplayResult,
     Step,
@@ -21,11 +22,7 @@ from src.eval import (
     replay,
     save_trajectory,
 )
-from src.eval.trajectory import (
-    SCHEMA_VERSION,
-    StepKind,
-    trajectory_from_dict,
-)
+from src.eval.trajectory import SCHEMA_VERSION, StepKind, trajectory_from_dict
 
 
 def _session(messages: list[dict], **extra) -> dict:

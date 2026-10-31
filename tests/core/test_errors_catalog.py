@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 
 import pytest
+
 from src.core.errors_catalog import (
     CATEGORY_DOCS,
     DOCS_BASE,
