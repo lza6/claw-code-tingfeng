@@ -376,6 +376,12 @@ select option{background:var(--bg-layer-2);color:var(--label-primary)}
 .scheck{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--label-primary);cursor:pointer}
 .snote{margin-top:14px;font-size:12px;min-height:16px;color:var(--label-secondary)}
 .snote.ok{color:#16a34a}.snote.err{color:#dc2626}
+/* 面板内联错误（失败四态）：一条人话 + 重试按钮，不抢正文 */
+.inline-error{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:6px 0;padding:9px 12px;border-radius:8px;background:rgba(220,38,38,.12);border:1px solid rgba(255,128,128,.45);color:#ffb4b4;font-size:12.5px;line-height:1.5}
+.inline-error .ie-msg{flex:1 1 auto;min-width:0;word-break:break-word}
+.inline-error .ie-retry{flex:0 0 auto;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:var(--label-primary);font-size:12px;cursor:pointer}
+.inline-error .ie-retry:hover{background:rgba(255,255,255,.14)}
+.inline-error .ie-retry:active{transform:translateY(1px)}
 .sactions{display:flex;gap:10px;margin-top:16px}
 .sbtn{height:34px;padding:0 16px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--label-primary);cursor:pointer;font-size:13px}
 .sbtn.primary{background:#536dfe;border-color:#536dfe;color:#fff}

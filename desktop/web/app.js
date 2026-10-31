@@ -19,6 +19,7 @@
   let turnCount = 0;
   let streamEl = null;        // 当前正在流式输出的助手气泡
   let projectsCache = [];
+  let projectsLoadError = null;    // 读项目列表失败时留给 renderProjects 显示（不再静默清空）
   let activeProject = null;
   let modelsCache = [];
   let selectedModel = '';
@@ -144,6 +145,140 @@
     return api;
   }
   window.__clawdToast = toast;
+
+  // ——————————————————————————————————————————————
+  // 交互反馈统一约定（四态：加载中 / 成功 / 失败 / 可重试）
+  // 此前多数异步操作点了之后没有任何视觉反馈，失败只进 console 或干脆什么都不显示。
+  // 下面三个工具把已有 toast 复用成统一约定，不引入任何依赖。
+  // ——————————————————————————————————————————————
+
+  /** 把底层异常翻成人话（复用 humanizeError 去掉错误码/技术尾巴的规则） */
+  function describeError(raw, fallback) {
+    // Error 对象直接 String() 会得到 "Error: xxx"，用户不需要这个前缀
+    const s = String((raw && raw.message) ? raw.message : (raw == null ? '' : raw)).trim();
+    if (!s) return fallback || '操作失败，请重试';
+    const low = s.toLowerCase();
+    const code = (s.match(/HTTP\s*(\d{3})/i) || [])[1] || '';
+    if (code === '500' || code === '502' || code === '503') {
+      return '本地 Host 出错了（HTTP ' + code + '），稍后重试或查看 Host 日志';
+    }
+    if (code === '401' || code === '403') {
+      return '没有权限（HTTP ' + code + '）：令牌可能已失效，请重启 Host 后用新链接打开';
+    }
+    if (code === '404') return '接口不存在（HTTP 404）：Host 版本可能不匹配，更新后再试';
+    if (code) return '请求失败（HTTP ' + code + '）';
+    if (low.includes('failed to fetch') || low.includes('networkerror')
+      || low.includes('load failed') || low.includes('network error')) {
+      return '连不上本地 Host（网络中断或 Host 已停止）';
+    }
+    if (s.includes('请求超时') || low.includes('timeout') || low.includes('timed out')) {
+      return '请求超时：Host 正在忙或端点无响应，稍后重试';
+    }
+    if (s.includes('未连接')) return '还没连上 Host，等连接恢复后重试';
+    return humanizeError(s) || fallback || '操作失败，请重试';
+  }
+
+  /**
+   * 按钮忙态：进入时 disabled + 文案换成 busyLabel（保留原 innerHTML 与原 disabled 状态），
+   * 无论成功 / 抛错 / 超时都在 finally 里复原；忙时带 aria-busy="true"。
+   * fn 卡死时（Host 不回应）由兜底定时器把按钮还回去，绝不让用户对着灰按钮干等。
+   */
+  async function withBusy(btn, busyLabel, fn, opts) {
+    if (typeof fn !== 'function') return undefined;
+    if (!btn) return fn();
+    const o = opts || {};
+    const timeoutMs = o.timeoutMs === undefined ? 20000 : Number(o.timeoutMs);
+    const prevHtml = btn.innerHTML;
+    const prevDisabled = !!btn.disabled;
+    const prevAria = btn.getAttribute('aria-busy');
+    let timer = null;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      btn.innerHTML = prevHtml;
+      btn.disabled = prevDisabled;
+      if (prevAria === null) btn.removeAttribute('aria-busy');
+      else btn.setAttribute('aria-busy', prevAria);
+    };
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.textContent = String(busyLabel || '处理中…');
+    if (timeoutMs > 0) timer = setTimeout(restore, timeoutMs);
+    try {
+      return await fn();
+    } finally {
+      restore();
+    }
+  }
+  window.__clawdWithBusy = withBusy;
+
+  /**
+   * 面板内联错误：在容器内渲染一条 .inline-error（人话 + 「重试」按钮）。
+   * 同一容器只保留一条（重试后不会堆成墙）；点重试先移除本条再回调 onRetry。
+   */
+  function inlineError(container, message, onRetry) {
+    if (!container) return { el: null, clear() {} };
+    container.querySelectorAll('.inline-error').forEach((n) => n.remove());
+    const el = document.createElement('div');
+    el.className = 'inline-error';
+    el.setAttribute('role', 'alert');
+    const msg = document.createElement('span');
+    msg.className = 'ie-msg';
+    msg.textContent = '⚠ ' + describeError(message, '加载失败');
+    el.appendChild(msg);
+    if (typeof onRetry === 'function') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ie-retry';
+      btn.textContent = '重试';
+      btn.onclick = () => {
+        el.remove();
+        try {
+          const r = onRetry();
+          if (r && typeof r.catch === 'function') r.catch(() => {});
+        } catch (_) { /* onRetry 自己负责把失败显示出来 */ }
+      };
+      el.appendChild(btn);
+    }
+    container.appendChild(el);
+    return { el, clear() { el.remove(); } };
+  }
+  window.__clawdInlineError = inlineError;
+
+  // —— 全局兜底：没被 catch 的异常 / 未处理的 rejection 都要让用户看见（不许只 console） ——
+  // 同一条错误 5 秒内只报一次，避免一个循环里刷屏。
+  let lastUncaughtKey = '';
+  let lastUncaughtAt = 0;
+  let reportingUncaught = false;
+  function reportUncaught(title, raw, keyOverride) {
+    if (reportingUncaught) return;
+    const text = describeError(raw && (raw.message || raw), '页面出现未捕获的错误');
+    const key = String(keyOverride || text).slice(0, 80);
+    if (key === lastUncaughtKey && Date.now() - lastUncaughtAt < 5000) return;
+    lastUncaughtKey = key;
+    lastUncaughtAt = Date.now();
+    reportingUncaught = true;
+    try {
+      toast({ kind: 'err', icon: '⚠', title: title, detail: text, timeout: 6000 });
+    } finally {
+      reportingUncaught = false;
+    }
+  }
+  window.addEventListener('unhandledrejection', (e) => {
+    reportUncaught('有一个操作失败了', e ? e.reason : '');
+  });
+  // 捕获阶段才能收到资源加载失败（img/script），普通 JS 异常一样会到这里
+  window.addEventListener('error', (e) => {
+    if (e && e.target && e.target !== window && e.target.tagName) {
+      const t = String(e.target.tagName).toLowerCase();
+      // 一页里可能同时坏很多张图：按标签去重，别一次刷出一墙 toast
+      reportUncaught('资源加载失败', t + ' ' + (e.target.src || e.target.href || ''), '资源加载失败:' + t);
+      return;
+    }
+    reportUncaught('页面出错了', e && (e.error || e.message));
+  }, true);
 
   function updateStats() {
     $('stTurns').textContent = turnCount + ' 轮';
@@ -849,6 +984,14 @@
   }
 
   function handleMessage(msg) {
+    // 先看是不是"某个 request 的回执错"：必须按 id reject，否则调用方只能等 15s 超时，
+    // 最终提示出来的还是"请求超时"，真实原因（如"目录不存在"）全丢了。
+    if (msg.type === 'error' && msg.id && pending[msg.id]) {
+      const { reject } = pending[msg.id];
+      delete pending[msg.id];
+      reject(new Error(msg.message || msg.code || '请求失败'));
+      return;
+    }
     if (msg.type === 'error') {
       if (msg.code === 'E_AUTH_REQUIRED') return;
       addError(msg.message || msg.code);
@@ -859,12 +1002,6 @@
       const { resolve } = pending[msg.id];
       delete pending[msg.id];
       resolve({ ok: true, data: msg.data || msg.result || {} });
-      return;
-    }
-    if (msg.type === 'error' && msg.id && pending[msg.id]) {
-      const { reject } = pending[msg.id];
-      delete pending[msg.id];
-      reject(new Error(msg.message || msg.code || '请求失败'));
       return;
     }
     if (msg.type === 'error' && pending[msg.id]) {
@@ -1033,7 +1170,9 @@
         }
       }
     } catch (e) {
-      totalEl.textContent = '上下文统计不可用: ' + e.message;
+      totalEl.textContent = '上下文统计不可用';
+      itemsEl.innerHTML = '';
+      inlineError(itemsEl, e, () => openContext());
     }
   }
 
@@ -1171,11 +1310,12 @@
       drawUsageChart(data.hourly || []);
       renderUsageRows(data.recent || []);
     } catch (e) {
+      // 重试都用完了还是失败：面板里必须留下一条人话 + 「重试」，不能留个空白面板
       kpis.innerHTML = '';
-      const div = document.createElement('div');
-      div.className = 'usage-empty';
-      div.textContent = '用量服务不可用（Host 未提供 /api/usage）: ' + e;
-      kpis.appendChild(div);
+      rowsEl.innerHTML = '';
+      $('usageChart').innerHTML = '';
+      $('usageEmpty').style.display = 'none';
+      inlineError(kpis, e, () => loadUsage());
     }
   }
 
@@ -1261,6 +1401,7 @@
 
   // —— 多 provider 设置 ——
   let providersCache = [];
+  let providersLoadError = null;   // 读列表失败时留给 renderProviders 显示（不再静默清空）
 
   function wsRequest(payload, idPrefix) {
     return new Promise((resolve, reject) => {
@@ -1275,14 +1416,18 @@
   }
 
   async function loadProviders() {
+    providersLoadError = null;
     try {
       const res = await wsRequest({ type: 'providers_list' }, 'providers');
       providersCache = (res.data && res.data.providers) || [];
-    } catch (_) {
+    } catch (e1) {
       try {
         const data = await fetchJsonRetry('/api/providers', 2);
         providersCache = data.providers || [];
-      } catch (__) { providersCache = []; }
+      } catch (e2) {
+        // 两条路都失败：保留上一次的列表，但必须在列表位置上说清楚失败原因
+        providersLoadError = e2 || e1;
+      }
     }
     renderProviders();
   }
@@ -1291,6 +1436,10 @@
     const list = $('provList');
     if (!list) return;
     list.innerHTML = '';
+    if (providersLoadError) {
+      inlineError(list, providersLoadError, () => loadProviders());
+      return;
+    }
     if (!providersCache.length) {
       const div = document.createElement('div');
       div.className = 'usage-empty';
@@ -1345,33 +1494,46 @@
       key: $('provKey').value.trim(),
     };
     const note = $('setNote');
-    try {
-      await wsRequest({ type: 'providers_save', provider: payload }, 'provsave');
-      note.className = 'snote ok';
-      note.textContent = '提供商已保存';
-      $('provKey').value = '';
-      await loadProviders();
-    } catch (e) {
-      note.className = 'snote err';
-      note.textContent = '保存失败: ' + e.message;
-    }
+    await withBusy($('provSave'), '保存中…', async () => {
+      try {
+        await wsRequest({ type: 'providers_save', provider: payload }, 'provsave');
+        note.className = 'snote ok';
+        note.textContent = '提供商已保存';
+        $('provKey').value = '';
+        toast({
+          kind: 'ok', icon: '✅', title: '提供商已保存',
+          detail: payload.name || payload.id || '已写入本机配置', timeout: 3000,
+        });
+        await loadProviders();
+      } catch (e) {
+        const why = describeError(e, '保存提供商失败');
+        note.className = 'snote err';
+        note.textContent = '保存失败：' + why;
+        toast({ kind: 'err', icon: '⚠', title: '保存提供商失败', detail: why, timeout: 6000 });
+      }
+    });
   }
 
   // —— 项目（工作区）——
   async function loadProjects() {
     const list = $('projectList');
     if (!list) return;
+    projectsLoadError = null;
     try {
       const data = await wsRequest({ type: 'projects_list' }, 'projects');
       projectsCache = (data.data && data.data.projects) || [];
       activeProject = (data.data && data.data.active) || null;
-    } catch (_) {
+    } catch (e1) {
       try {
         const resp = await fetch('/api/projects');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
         projectsCache = data.projects || [];
         activeProject = data.active || null;
-      } catch (__) { projectsCache = []; }
+      } catch (e2) {
+        // 两条路都失败：保留上次列表（清空会让用户以为项目丢了），并在列表位显示失败 + 重试
+        projectsLoadError = e2 || e1;
+      }
     }
     renderProjects();
   }
@@ -1380,6 +1542,10 @@
     const list = $('projectList');
     if (!list) return;
     list.innerHTML = '';
+    if (projectsLoadError) {
+      inlineError(list, projectsLoadError, () => loadProjects());
+      return;
+    }
     if (!projectsCache.length) {
       const empty = document.createElement('div');
       empty.className = 'session-item';
@@ -1418,30 +1584,48 @@
     }
   }
 
-  async function addProjectByPath(path, name) {
+  async function addProjectByPath(path, name, btn) {
     const note = $('projNote');
-    try {
-      await wsRequest({ type: 'projects_add', path, name: name || '' }, 'projadd');
-      if (note) { note.className = 'snote ok'; note.textContent = '已添加：' + path; }
-      await loadProjects();
-      return true;
-    } catch (e) {
-      if (note) { note.className = 'snote err'; note.textContent = '添加失败: ' + e.message; }
-      return false;
-    }
+    return withBusy(btn, '添加中…', async () => {
+      try {
+        await wsRequest({ type: 'projects_add', path, name: name || '' }, 'projadd');
+        if (note) { note.className = 'snote ok'; note.textContent = '已添加：' + path; }
+        toast({ kind: 'ok', icon: '📁', title: '项目已添加', detail: path, timeout: 3000 });
+        await loadProjects();
+        return true;
+      } catch (e) {
+        const why = describeError(e, '添加项目失败');
+        if (note) { note.className = 'snote err'; note.textContent = '添加失败：' + why; }
+        toast({ kind: 'err', icon: '⚠', title: '添加项目失败', detail: why, timeout: 6000 });
+        return false;
+      }
+    });
   }
 
   async function pickFolder() {
     const api = window.clawdDesktop;
-    if (api && typeof api.pickFolder === 'function') {
-      try {
-        const picked = await api.pickFolder();
-        if (picked) await addProjectByPath(picked);
-        return;
-      } catch (_) { /* 落到手动输入 */ }
-    }
     const input = $('projPathInput');
+    if (api && typeof api.pickFolder === 'function') {
+      return withBusy($('projBrowse'), '选择中…', async () => {
+        try {
+          const picked = await api.pickFolder();
+          if (picked) await addProjectByPath(picked, '', $('projPathSave'));
+        } catch (e) {
+          // 以前这里静默吞掉、只把焦点挪到输入框，用户以为"点了没反应"
+          const why = describeError(e, '打开文件夹选择器失败');
+          toast({
+            kind: 'warn', icon: '📁', title: '打开文件夹选择器失败',
+            detail: why + '，可以直接把路径粘贴到下面的输入框', timeout: 6000,
+          });
+          if (input) input.focus();
+        }
+      });
+    }
     if (input) { input.focus(); input.placeholder = '当前环境没有原生选择器，请粘贴路径'; }
+    toast({
+      kind: 'warn', icon: '📁', title: '当前环境没有文件夹选择器',
+      detail: '把项目文件夹的路径粘贴到下面的输入框，点「添加」即可', timeout: 6000,
+    });
   }
 
   async function cloneProject(url) {
@@ -1994,7 +2178,7 @@
     });
   }
   const usageRefresh = $('usageRefresh');
-  if (usageRefresh) usageRefresh.onclick = loadUsage;
+  if (usageRefresh) usageRefresh.onclick = () => withBusy(usageRefresh, '刷新中…', () => loadUsage());
   const usageOverlay = $('usageOverlay');
   if (usageOverlay) usageOverlay.addEventListener('click', (e) => { if (e.target === usageOverlay) closeUsage(); });
   const btnAddProject = $('btnAddProject');
@@ -2006,7 +2190,13 @@
   const projPathSave = $('projPathSave');
   if (projPathSave) projPathSave.onclick = async () => {
     const value = ($('projPathInput').value || '').trim();
-    if (value && await addProjectByPath(value)) {
+    if (!value) {
+      const note = $('projNote');
+      if (note) { note.className = 'snote err'; note.textContent = '请先填项目文件夹路径'; }
+      toast({ kind: 'warn', icon: '📁', title: '还没填路径', detail: '把项目文件夹的路径粘贴到输入框再点添加', timeout: 4000 });
+      return;
+    }
+    if (await addProjectByPath(value, '', projPathSave)) {
       $('projPathInput').value = '';
       $('projectOverlay').classList.remove('show');
     }

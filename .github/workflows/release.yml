@@ -1,0 +1,198 @@
+# 发布流水线 —— tag → 校验 → 构建 → 冒烟 → GitHub Release
+#
+# 背景（为什么需要这条工作流）：
+#   发版此前是纯手工步骤（改版本号三处 → 打 tag → 手敲 `gh release create` → 手传产物）。
+#   手工链路有三类真实失败：版本号只改了一处（发出来的包自称旧版本）、
+#   release 说明取不到（发出去是空壳）、产物里缺 prompts/（装完 `clawd review` 必崩）。
+#   这条流水线把这三类都变成「tag 打下去就自动失败的检查」。
+#
+# 与其它工作流的分工：
+#   - ci.yml        : push/PR 上的测试矩阵与硬指标门禁（本文件复用同样的门禁命令）
+#   - docker.yml    : tag 推送后构建并推 ghcr 镜像
+#   - release.yml   : 本文件，产出 sdist/wheel + GitHub Release（含说明与产物）
+#
+# 桌面安装包**不在此构建**：Windows NSIS 构建需 ~10 分钟且需证书。
+# 自签名管线请本地跑 `pwsh -File scripts/build_desktop_signed.ps1 -SelfSigned`，
+# 正式签名需 CA 证书（当前为 BLOCKED，见 workflow_status.md）。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已存在的 tag（如 v0.90.0）'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  verify:
+    name: Verify tag / version / changelog
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # 三处版本号必须一致：tag / pyproject.toml / src.__version__。
+      # 历史上出现过「只改 pyproject，装出来的包仍报旧版本」的假发布。
+      # 注意：**不要在这里写 heredoc**（`python - <<'PY'`）——YAML 的块标量要求内容整体缩进，
+      # heredoc 正文顶格会截断块标量，整个 workflow 变成非法 YAML（本轮实测踩到过一次，
+      # 被 tests/scripts/test_workflows.py 抓住）。复杂逻辑一律放 scripts/*.py。
+      - name: Version consistency (tag vs pyproject vs src.__version__)
+        id: ver
+        run: |
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG_VERSION="${REF#v}"
+          PYPROJECT_VERSION="$(python -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
+          CODE_VERSION="$(python -c 'import src; print(src.__version__)')"
+          echo "tag=$TAG_VERSION pyproject=$PYPROJECT_VERSION code=$CODE_VERSION"
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::tag($TAG_VERSION) 与 pyproject.toml($PYPROJECT_VERSION) 不一致"; exit 1
+          fi
+          if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "::error::tag($TAG_VERSION) 与 src.__version__($CODE_VERSION) 不一致"; exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      # 说明取不到就是失败：不允许发空壳 release。
+      - name: Extract release notes from CHANGELOG
+        run: |
+          python scripts/changelog_notes.py --version "${{ steps.ver.outputs.version }}" --out release-notes.md
+          echo "--- release-notes.md 前 20 行 ---"
+          head -20 release-notes.md
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 7
+
+      # 复用 ci.yml 的硬指标口径：发版不能放宽尺子。
+      - name: Ruff hard gate
+        run: ruff check src/ tests/ scripts/ --select F821,F811,E9
+
+      - name: Collect gate
+        run: pytest tests/ --collect-only -q
+
+      - name: Contracts
+        run: pytest tests/contracts/ -q
+
+  build:
+    name: Build sdist/wheel + smoke
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip build
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Assert distribution contents
+        run: |
+          # 打包契约（prompts 必须随包 + 关键模块在包内 + 版本一致）落到脚本里：
+          # 内联 heredoc 会破坏 YAML 块标量；脚本还能本地跑、有单测。
+          python scripts/verify_wheel_contents.py \
+            --dist dist \
+            --expect-version "${{ needs.verify.outputs.version }}"
+
+      # 装到干净 venv 里跑，验证「装出来的东西真能用」而不是源码树能用。
+      - name: Install wheel in clean venv and smoke
+        run: |
+          python -m venv /tmp/venv-release
+          /tmp/venv-release/bin/python -m pip install --upgrade pip
+          /tmp/venv-release/bin/pip install dist/*.whl
+          /tmp/venv-release/bin/python -m src --version
+          INSTALLED="$(/tmp/venv-release/bin/python -m src --version)"
+          echo "$INSTALLED"
+          case "$INSTALLED" in
+            *"${{ needs.verify.outputs.version }}"*) echo "版本一致: $INSTALLED" ;;
+            *) echo "::error::装出来的包版本与 tag 不一致: $INSTALLED"; exit 1 ;;
+          esac
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          retention-days: 7
+
+  publish:
+    name: Create GitHub Release
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Create release (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          # 幂等：tag 重跑时更新已有 release，而不是因 422 失败
+          if gh release view "$REF" >/dev/null 2>&1; then
+            echo "release $REF 已存在 → 上传/覆盖产物与说明"
+            gh release upload "$REF" dist/* --clobber
+            gh release edit "$REF" --notes-file release-notes.md
+          else
+            gh release create "$REF" dist/* \
+              --title "v${{ needs.verify.outputs.version }}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi
+          echo "release url: $(gh release view "$REF" --json url -q .url)"
+
+      - name: Job summary
+        run: |
+          {
+            echo "## Release v${{ needs.verify.outputs.version }}"
+            echo ""
+            echo "产物："
+            ls -la dist
+            echo ""
+            echo "说明（前 30 行）："
+            head -30 release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
