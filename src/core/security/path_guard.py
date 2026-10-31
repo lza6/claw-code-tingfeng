@@ -18,6 +18,26 @@ from pathlib import Path
 HARNESS_ROOT_ENV = "CLAWD_SANDBOX_ROOT"
 MAX_SYMLINK_DEPTH = 10
 
+#: Windows 长路径前缀（resolve() 在走符号链接时会加）
+_WIN_LONG_PREFIX = chr(92) * 2 + "?" + chr(92)  # \?\
+_WIN_UNC_PREFIX = _WIN_LONG_PREFIX + "UNC" + chr(92)  # \?\UNC\
+
+
+def _strip_win_long_prefix(path: Path) -> Path:
+    r"""去掉 Windows 的 `\?\` 长路径前缀，便于与普通路径比较包含关系。
+
+    真实缺陷（本轮自查发现）：`Path.resolve()` 在**经过符号链接**时返回带
+    `\?\` 前缀的路径，而 `repo_root` 不带 → `relative_to()` 必然失败 →
+    仓库内的合法符号链接被误判 "path escapes sandbox"（Windows 上 fail-closed，
+    通过符号链接目录读写全被拦）。比较前统一去前缀。
+    """
+    text = str(path)
+    if text.startswith(_WIN_UNC_PREFIX):
+        return Path("\\\\" + text[len(_WIN_UNC_PREFIX):])
+    if text.startswith(_WIN_LONG_PREFIX):
+        return Path(text[len(_WIN_LONG_PREFIX):])
+    return path
+
 
 @dataclass(frozen=True, slots=True)
 class PathValidationResult:
@@ -134,17 +154,22 @@ def _resolve_symlink_chain(
         final_abs = final
 
     # 边界检查：必须在 repo_root 内（**先判逃逸**，越权优先于"目标不存在"）
+    # 两侧都去 Windows 长路径前缀，否则经过符号链接的合法路径会被误判逃逸
     try:
-        final_abs.relative_to(repo_root)
+        _strip_win_long_prefix(final_abs).relative_to(_strip_win_long_prefix(repo_root))
     except ValueError:
         return final_abs, chain, "escape"
 
     # 真实缺陷（CI Linux 实测）：损坏符号链接（-> 不存在的目标）在 Linux 上
     # resolve(strict=False) 会把链接直接替换成目标路径并"成功返回"，于是
     # 沙箱校验判 valid —— 但该路径根本打不开，属于"broken"。
-    # 判据：链上有链接 且 最终路径不存在（目标缺失）。
-    if chain and not final_abs.exists():
-        return final_abs, chain, "broken"
+    #
+    # 判据必须**精确到"链接本身悬空"**：不能用"最终路径不存在"，
+    # 否则 `repo/link/ -> repo/real/` + 新建文件 `repo/link/new.txt` 也会被误判
+    # broken（写新文件是合法操作）。悬空判据：lexists=True（链接在）且 exists=False。
+    for link in chain:
+        if os.path.lexists(link) and not os.path.exists(link):
+            return final_abs, chain, "broken"
 
     return final_abs, chain, ""
 

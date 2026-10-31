@@ -296,3 +296,35 @@ class TestEdgeCases:
 
 # 导入 os 用于环境变量操作
 import os
+
+
+class TestSymlinkedDirectoryWritePath:
+    """回归：符号链接指向**存在的目录**时，通过它写新文件必须放行
+
+    真实风险（本轮自查发现）：损坏链接的判据若写成"最终路径不存在"，那么
+    `repo/link -> repo/real/` + `repo/link/new.txt`（新文件，尚不存在）会被
+    误判 broken —— 合法写入被拦。判据必须精确到"链接自身悬空"
+    （lexists=True 且 exists=False）。
+    """
+
+    def test_new_file_under_symlinked_dir_is_valid(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(HARNESS_ROOT_ENV, str(tmp_path / "repo"))
+        repo = tmp_path / "repo"
+        (repo / "real").mkdir(parents=True)
+        (repo / "link").symlink_to(repo / "real", target_is_directory=True)
+
+        result = validate_path_sandbox(repo, repo / "link" / "new.txt")
+
+        assert result.is_valid, result.error_message
+        assert "broken" not in (result.error_message or "")
+
+    def test_dangling_link_still_rejected(self, tmp_path, monkeypatch):
+        """悬空链接（目标目录不存在）必须仍然被拒 —— 别把回归修过头"""
+        monkeypatch.setenv(HARNESS_ROOT_ENV, str(tmp_path / "repo"))
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "gone").symlink_to(repo / "nowhere", target_is_directory=True)
+
+        result = validate_path_sandbox(repo, repo / "gone" / "x.txt")
+
+        assert not result.is_valid
