@@ -25,8 +25,19 @@
 `Z:/...` 在 Linux 是合法相对路径 · `usage --json` 取最后一行拿到 stderr 横幅 · 顶层 `import git` 污染收集。
 另 `dev` extras 补 `pathspec`。
 
-**验证**：本机 `pytest tests/core tests/config tests/backends tests/test_security -q` → **1213 passed / 4 xfailed**；
-Linux 容器（python:3.11-slim + git）复刻 CI 矩阵复跑同一批用例。
+**验证**（最终，全部实跑）：
+- 本机 Windows 全量：**5446 passed / 7 skipped / 7 xfailed / 0 failed**（376.89s）
+- Linux 容器复刻原失败集：**464 passed / 0 failed**；security 面 480 passed / 0 failed
+- **GitHub 真机 CI run 41153602277（commit d94f0ad）：整条 Pipeline success** ——
+  Security Scan / Lint / Test 3.10 / 3.11 / 3.12 / Docker Build 全 success
+  （修复前同一矩阵：35 failed + 4 errors）
+- 覆盖率 66.29% · 收集 5467/0 · 静默吞异常 154（门禁同步收紧）· 可达 503 · verify_audit_p1 28/28
+- 装机 E2E（0.89.1 安装包）：0 失败（UI E2E 32/32、无 token 403、重启持久化、卸载/残留 0）
+- ghcr 镜像（v0.89.1 tag）：success
+
+**自查追加修复（本轮 diff 复审发现）**：
+1. 悬空链接判据过宽（本轮引入的回归）→ 改 `lexists && !exists` 精确判据
+2. Windows `\?\` 长路径前缀导致仓库内合法符号链接被误判逃逸（**存量缺陷**）→ 比较前统一去前缀
 
 ## 2026-10-31 v0.89.0 —— CLI --json 全覆盖 + R6 + P3 清零 + CI 修复 + 装机 E2E 入库
 

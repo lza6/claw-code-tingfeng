@@ -234,9 +234,10 @@
     "Linux 矩阵验证用 python:3.11-slim + git 复刻，与 CI 的 ubuntu-latest 略有差异（git 版本/系统库），但失败用例集完全覆盖"
   ],
   "ci_matrix_result": {
-    "run_id": 41148646608,
-    "commit": "8ace867",
+    "run_id": 41153602277,
+    "commit": "d94f0ad（含 path_guard 自查修复的最后一个代码提交）",
     "jobs": {
+      "Security Scan": "success",
       "Lint & Type Check": "success",
       "Test (Python 3.10)": "success",
       "Test (Python 3.11)": "success",
@@ -244,7 +245,8 @@
       "Docker Build Test": "success"
     },
     "before_fix": "35 failed + 4 errors（同一 job）",
-    "note": "该 run 的 Security Scan=失败是因为该 commit 尚未包含 safety→pip-audit 修复；修复后的 run（a71f5c2/5e97e35/ce1403a/680e4db）Security Scan 均 success。"
+    "note": "整条 CI Pipeline 结论 success —— 修复前同一矩阵为 35 failed + 4 errors",
+    "run_conclusion": "success"
   },
   "self_review_findings": [
     "悬空链接判据过宽（本轮引入的回归）：`not final_abs.exists()` 会把 link→dir 下新建文件误判 broken → 改为 lexists/exists 精确判据",
