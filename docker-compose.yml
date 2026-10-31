@@ -31,8 +31,16 @@ services:
 
       # 工作目录
       - CLAWD_WORKDIR=/workspace
+      # 容器内必须绑全部网卡，否则端口映射/健康检查都不通（服务默认绑 127.0.0.1）
+      - AGENT_SERVER_HOST=0.0.0.0
+      # 数据目录走挂载卷，重启/升级不丢（与桌面端同一套 CLAWD_DATA_DIR 入口）
+      - CLAWD_DATA_DIR=/app/.clawd
     stdin_open: true
     tty: true
+    # 服务容器必须跑 `serve`（Host 服务）：
+    # Dockerfile 的默认 CMD 是交互式 `chat`，它**不监听任何端口** ——
+    # 所以此前声明的 8765 端口映射与健康检查都是摆设（"远程访问"不成立）。
+    command: ["serve", "--port", "8765", "--workdir", "/workspace"]
     # 资源限制
     deploy:
       resources:
@@ -42,13 +50,14 @@ services:
         reservations:
           cpus: '1.0'
           memory: 1G
-    # 健康检查
+    # 健康检查：打真实存活端点（/healthz 免 token，只回答"进程还在跑"）
+    # 旧写法 `python -c "sys.exit(0)"` 无论服务死活都返回 0，等于没有健康检查。
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=5).status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
+      start_period: 20s
 
 volumes:
   clawd-data:

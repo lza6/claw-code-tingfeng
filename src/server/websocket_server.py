@@ -27,6 +27,28 @@ if TYPE_CHECKING:
     from websockets.asyncio.server import Server as WsServer
 
 
+_HTTP_REASONS = {200: 'OK', 404: 'Not Found', 503: 'Service Unavailable'}
+
+
+def _json_response(status: int, payload: dict) -> Any:
+    """构造 JSON HTTP 响应（探针端点用；`Connection: close` 避免探针连接挂住）"""
+    from websockets.datastructures import Headers as _H
+    from websockets.http11 import Response as _WsResponse
+
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    return _WsResponse(
+        status,
+        _HTTP_REASONS.get(status, 'OK'),
+        _H([
+            ('Content-Type', 'application/json; charset=utf-8'),
+            ('Content-Length', str(len(body))),
+            ('Cache-Control', 'no-cache'),
+            ('Connection', 'close'),
+        ]),
+        body,
+    )
+
+
 class ClawdWebSocketServer:
     """Clawd WebSocket 服务器。"""
 
@@ -106,6 +128,72 @@ class ClawdWebSocketServer:
     def uptime(self) -> float:
         return time.time() - self._start_time
 
+    def liveness_payload(self) -> dict:
+        """存活探针（`/healthz`）：只回答"进程还在跑"，**不含任何路径/密钥**
+
+        故意保持零 IO：存活探针要能在磁盘打满、数据目录坏掉时仍然返回 200，
+        否则编排系统会把"服务还活着"误判成"挂掉"并反复重启。
+        """
+        from .. import __version__
+
+        try:
+            connections = len(getattr(self._manager, '_sessions', {}) or {})
+        except Exception:  # noqa: BLE001 — 探针不能因为内部结构变化而 500
+            connections = -1
+        return {
+            'status': 'ok',
+            'version': __version__,
+            'uptime_s': round(self.uptime, 3),
+            'connections': connections,
+            'shutting_down': bool(self._shutting_down),
+        }
+
+    def readiness_payload(self) -> tuple[dict, bool]:
+        """就绪探针（`/readyz`）：真做两件可能导致"跑不了活"的检查
+
+        1. 数据目录可写（不可写 → 会话/用量/配置全落不下来）
+        2. LLM 已配置（provider + model 非空；**不校验 key 是否有效**，那要真花钱）
+        返回 `(payload, ok)`，ok=False 时调用方应回 503 —— 让编排系统不把流量导进来。
+        """
+        checks: list[dict] = []
+
+        try:
+            from ..core.data_dir import data_dir
+
+            probe_dir = data_dir(create=True)
+            probe = probe_dir / '.readyz-probe'
+            probe.write_text('ok', encoding='utf-8')
+            probe.unlink()
+            checks.append({'name': 'data_dir_writable', 'ok': True, 'detail': 'ok'})
+        except Exception as exc:  # noqa: BLE001 — 探针必须把原因写进 payload 而不是崩掉
+            # 只报异常类型，不回显绝对路径（探针端点免鉴权）
+            checks.append(
+                {'name': 'data_dir_writable', 'ok': False, 'detail': type(exc).__name__}
+            )
+
+        raw_provider = getattr(self._settings, 'llm_provider', '')
+        # 设置里的 provider 是枚举，str() 会得到 "LLMProviderEnum.OPENAI"（对人无用）
+        provider = str(getattr(raw_provider, 'value', raw_provider) or '')
+        model = str(getattr(self._settings, 'llm_model', '') or '')
+        llm_ok = bool(provider and model)
+        checks.append({
+            'name': 'llm_configured',
+            'ok': llm_ok,
+            # **不回显 provider/model 的值**：/readyz 免鉴权，容器/内网里谁都能打，
+            # 报出具体模型等于免费给出"这家在用什么"的情报；编排系统只需要"配没配"。
+            'detail': 'provider/model 已配置' if llm_ok else '未配置 provider 或 model',
+        })
+
+        ready = all(c['ok'] for c in checks)
+        return (
+            {
+                'status': 'ready' if ready else 'not_ready',
+                'version': self.liveness_payload()['version'],
+                'checks': checks,
+            },
+            ready,
+        )
+
     async def start(self) -> tuple[str, int]:
         """启动服务器"""
         from websockets.asyncio.server import serve
@@ -113,7 +201,9 @@ class ClawdWebSocketServer:
         self._start_time = time.time()
         self._shutting_down = False
 
-        process_request = self._serve_static if self._static_dir else None
+        # 探针端点（/healthz、/readyz）与 API 404 语义必须在**没有静态目录**时也可用：
+        # 容器/纯服务模式下根本不托管 Web UI，但编排系统仍要能探活。
+        process_request = self._serve_static
         self._ws_server = await serve(
             self._manager.handle_connection,
             self.host,
@@ -409,6 +499,17 @@ class ClawdWebSocketServer:
         from pathlib import Path as _Path
 
         from websockets.datastructures import Headers as _H
+
+        # ---- 探针端点（不需要 token，也不回显任何路径/密钥）----
+        # 为什么要它：docker-compose 里原来的 healthcheck 是
+        # `python -c "sys.exit(0)"` —— 无论服务死活都返回 0，等于没有健康检查；
+        # 而任何外部监控想探活只能打 `/health`，那个路径不存在（会掉进静态托管被
+        # mime 白名单判成 403，看起来像"鉴权问题"，实际是"没有这个端点"）。
+        if path == '/healthz':
+            return _json_response(200, self.liveness_payload())
+        if path == '/readyz':
+            payload, ok = self.readiness_payload()
+            return _json_response(200 if ok else 503, payload)
         from websockets.http11 import Response as _WsResponse
 
         # API 端点：宿主信息（版本/运行环境/模型配置 — 供 UI 显示，绝不含密钥）
@@ -764,6 +865,17 @@ class ClawdWebSocketServer:
                 body,
             )
 
+        # 未知 API 路径：明确 404。此前会掉进下面的静态托管，被 mime 白名单
+        # （无后缀 → ctype=None）判成 **403 Forbidden**，调用方看到"鉴权失败"
+        # 而真相是"没有这个端点"，排障方向被带偏。
+        if path.startswith('/api/'):
+            return _json_response(404, {'error': 'not_found', 'path': path})
+
+        if not self._static_dir:
+            # 纯服务模式（无 Web UI 托管）：非探针、非 API 的路径一律 404，
+            # 而不是因为拿不到静态根而抛异常变成 500。
+            return _json_response(404, {'error': 'not_found', 'path': path})
+
         root = _Path(self._static_dir).resolve()
         if path in ('/', '/index.html'):
             target = root / 'index.html'
@@ -772,6 +884,10 @@ class ClawdWebSocketServer:
             # 防路径穿越（is_relative_to 而非字符串前缀，C:\web 不会放行 C:\webstore）
             if not target.is_relative_to(root):
                 return _resp(403, b'Forbidden', 'text/plain; charset=utf-8')
+        # 无后缀路径不可能是静态资源（`/health` 这类）。此前会走到下面的 mime
+        # 白名单分支被判 403 Forbidden —— 运维看到 403 会去查鉴权，方向被带偏。
+        if not target.suffix:
+            return _resp(404, b'Not Found', 'text/plain; charset=utf-8')
         # mime 白名单先行：白名单外后缀直接 403，不做无效 IO
         ctype = self._guess_static_mime(target)
         if ctype is None:

@@ -64,6 +64,18 @@ jobs:
           # 默认阈值来自 scripts/hard_metrics.py 的 MAX_SILENT_EXCEPT
           python scripts/check_silent_except.py
 
+      # 启动预算门禁（X-6）：`clawd --version` / `import src.cli.entrypoint` / 已加载模块数
+      # 都是有上限的资源。「每次敲 clawd 多等几百毫秒」这类退化不会被任何功能测试发现，
+      # 只有预算门禁能发现。
+      # CLAWD_STARTUP_BUDGET_FACTOR=1.8：默认预算是本机 Windows 实测值，共享 runner
+      # CPU 更慢/磁盘更抖 → 用宽松系数避免假红（假红会让人把门禁静音）。
+      # 模块数是结构量，脚本里刻意**不**乘该系数。
+      - name: Startup budget gate
+        env:
+          CLAWD_STARTUP_BUDGET_FACTOR: "1.8"
+        run: |
+          python scripts/startup_budget.py --json | tee startup-budget.json
+
       - name: Type check with MyPy
         run: |
           mypy src/ --ignore-missing-imports --no-error-summary || true
@@ -154,6 +166,28 @@ jobs:
         run: |
           docker build -t clawd-code:ci-test .
 
-      - name: Test Docker image
+      # 原来的写法是 `docker run --rm clawd-code:ci-test --version || true`：
+      # 末尾的 `|| true` 让"镜像根本跑不起来"也算 success。v0.90.0 实测证实这不是假设 ——
+      # 镜像能构建、但容器启动即 `ModuleNotFoundError: No module named 'src'`，CI 依然全绿。
+      - name: Test Docker image (real import + liveness probe)
         run: |
-          docker run --rm clawd-code:ci-test --version || true
+          docker run --rm clawd-code:ci-test --version
+          docker run -d --name clawd-smoke -p 18765:8765 clawd-code:ci-test
+          code=000
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/healthz || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::容器探活失败（/healthz 返回 $code）"
+            docker logs clawd-smoke || true
+            docker rm -f clawd-smoke || true
+            exit 1
+          fi
+          echo "--- /healthz ---"; curl -s http://127.0.0.1:18765/healthz
+          echo "--- /readyz ---";  curl -s http://127.0.0.1:18765/readyz || true
+          echo "--- docker healthcheck 状态 ---"
+          sleep 20
+          docker inspect --format '{{.State.Health.Status}}' clawd-smoke
+          docker rm -f clawd-smoke

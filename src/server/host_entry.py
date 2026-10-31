@@ -14,12 +14,22 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import secrets
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 PORT_FILE_NAME = ".clawd_host_port"
+
+
+def resolve_bind_host() -> str:
+    """Host 服务的绑定地址：`AGENT_SERVER_HOST` 优先，默认 `127.0.0.1`。
+
+    抽成函数是为了可测：容器化时这里一旦退回硬编码 loopback，
+    端口映射与健康检查会"看起来配了、实际不通"（真实事故，见 docs/MAINTENANCE.md §9）。
+    """
+    return (os.environ.get("AGENT_SERVER_HOST") or "").strip() or "127.0.0.1"
 
 
 def write_port_file(workdir: Path, port: int, host: str, token: str) -> Path:
@@ -81,10 +91,18 @@ async def run_host(
     web_dir = workdir / "desktop" / "web"
     static_dir = str(web_dir) if web_dir.is_dir() else None
 
+    # 绑定地址：`AGENT_SERVER_HOST` 环境变量（容器里必须设 0.0.0.0，否则端口出不了容器），
+    # 默认仍是 127.0.0.1 —— 桌面端只需要本机可连，不该默认对外暴露。
+    #
+    # 这里曾经**硬编码** `host="127.0.0.1"`，于是 `ClawdWebSocketServer.__init__` 里那套
+    # "环境变量优先"的逻辑对 `clawd serve` 完全无效：容器里设了 AGENT_SERVER_HOST=0.0.0.0，
+    # 端口映射依然不通（2026-10-31 实测：`/proc/net/tcp` 显示只监听 0100007F，即 127.0.0.1）。
+    bind_host = resolve_bind_host()
+
     # create_server(port=None) 时走 ClawdWebSocketServer 的配置/env 逻辑；
     # 显式 port 则覆盖。token 通过同参传入，保证与端口文件一致。
     server = create_server(
-        host="127.0.0.1",
+        host=bind_host,
         port=port,
         token=token,
         static_dir=static_dir,
@@ -93,11 +111,16 @@ async def run_host(
     )
 
     host, actual_port = await server.start()
-    pf = write_port_file(workdir, actual_port, host, token)
-    print(f"[clawd-host] ws://{host}:{actual_port}")
+    # 端口文件与打印的 URL 必须给**客户端能连的地址**：绑 0.0.0.0/:: 时把 0.0.0.0
+    # 写进端口文件，Electron 壳/浏览器去连 `http://0.0.0.0:port` 在 Windows 上必失败
+    # （0.0.0.0 是监听地址，不是可路由目标）。对外暴露由 AGENT_SERVER_HOST 控制，
+    # 客户端侧仍走 loopback。
+    client_host = "127.0.0.1" if host in ("0.0.0.0", "::", "", "[::]") else host
+    pf = write_port_file(workdir, actual_port, client_host, token)
+    print(f"[clawd-host] ws://{client_host}:{actual_port}（监听 {host}）")
     print(f"[clawd-host] token: {token}")
     if static_dir:
-        print(f"[clawd-host] web ui: http://{host}:{actual_port}/?token={token[:8]}...")
+        print(f"[clawd-host] web ui: http://{client_host}:{actual_port}/?token={token[:8]}...")
     print(f"[clawd-host] 端口文件: {pf}")
 
     try:

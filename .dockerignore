@@ -52,3 +52,21 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# ---- 2026-10-31（v0.90.0）补充：镜像构建上下文瘦身 ----
+# 实测：本地 `docker build` 跑 19 分钟仍未出镜像，`COPY . .` 把 .git / node_modules /
+# 本地索引一起塞进上下文和镜像层。这些内容对运行 Python Host 毫无用处。
+.git/
+.gitignore
+.codegraph/
+graft/
+node_modules/
+desktop/node_modules/
+desktop/dist/
+desktop/build/
+desktop/screenshots/
+hermes-agent-tmp/
+test-run/
+x/
+coverage*.json
+*.whl
