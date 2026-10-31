@@ -25,6 +25,30 @@ app = typer.Typer(
 
 console = Console()
 
+
+def _emit(
+    *,
+    ok: bool,
+    data: dict,
+    human: str = "",
+    as_json: bool = False,
+    exit_code: int | None = None,
+) -> int:
+    """命令收尾统一出口：`--json` 出契约、否则出人读正文，**两边退出码一致**
+
+    直接复用 `command_result.emit`，不在每个命令里重复写 try/except 与打印分支。
+    人读分支走 `console.print` 而不是 `print`：项目里人读正文普遍带 rich 标记
+    （`[cyan]…[/cyan]`），用 `print` 会把标记原样吐给用户。
+    """
+    from .command_result import CommandResult, emit
+
+    result = CommandResult(ok=ok, data=data, human=human, exit_code=exit_code)
+    if as_json:
+        return emit(result, as_json=True)
+    console.print(result.render())
+    return result.code
+
+
 def version_callback(value: bool):
     if value:
         console.print(f"Clawd Code [bold cyan]v{__version__}[/bold cyan]")
@@ -445,16 +469,23 @@ def onboard(
 @app.command(name="doctor")
 def doctor(
     json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+    deep: bool = typer.Option(
+        False, "--deep", help="深度体检（追加数据库完整性/体积/可回收空间，慢）"
+    ),
 ):
     """
     运行环境诊断 (检查 API、依赖和配置)
 
     `--json` 输出 `{ok, code, ready, checks, count, failed}`；两种模式下**退出码一致**
     （无 fail 项 → 0，有 fail 项 → 1），这样 CI 能直接用。
+
+    `--deep` 追加存储体检（`core.storage_health`）：SQLite `integrity_check`、
+    表行数、体积 top10、可回收空间与 `VACUUM` 建议。默认不跑——它要逐个库真查，
+    但"面板空白 / 越用越慢"这类问题只有它能回答。
     """
     from ..cli.repl_commands import _handle_doctor, collect_doctor_report
 
-    report = collect_doctor_report()
+    report = collect_doctor_report(deep=deep)
     if json_out:
         from .command_result import CommandResult, emit
 
@@ -462,8 +493,122 @@ def doctor(
             CommandResult(ok=bool(report["ready"]), data=report),
             as_json=True,
         ))
-    _handle_doctor()
+    _handle_doctor(deep=deep)
     raise typer.Exit(code=0 if report["ready"] else 1)
+
+
+@app.command(name="errors")
+def errors_cmd(
+    code: str | None = typer.Argument(None, help="错误码（如 E1001）；省略则列出全部已登记错误码"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
+):
+    """
+    错误码中文说明与可执行的下一步
+
+    文案的**唯一来源**是 `src/core/errors_catalog.py`（`docs/troubleshooting-errors.md`
+    只做索引，不重复内容，避免两处漂移）。未登记的错误码不会报错，会给出兜底说明
+    与"如何反馈"的下一步。
+    """
+    from ..core.errors_catalog import catalog_entries, lookup, render
+
+    if code:
+        entry = lookup(code)
+        if entry is None:
+            raise typer.Exit(code=_emit(
+                ok=False,
+                data={
+                    "query": code,
+                    "found": False,
+                    "entry": None,
+                    "hint": "运行 `clawd errors` 查看全部已登记错误码",
+                },
+                human=(
+                    f"[yellow]未登记的错误码:[/yellow] {code}\n"
+                    "  运行 `clawd errors` 查看全部已登记错误码；"
+                    "若这是程序刚抛出的新码，请把它反馈到 issue。"
+                ),
+                as_json=json_out,
+            ))
+        raise typer.Exit(code=_emit(
+            ok=True,
+            data={"query": code, "found": True, "entry": entry},
+            human=render(code),
+            as_json=json_out,
+        ))
+
+    entries = catalog_entries()
+    lines = ["[bold cyan]错误码总览[/bold cyan]（共 %d 条）\n" % len(entries)]
+    for item in entries:
+        lines.append(
+            f"  [cyan]{item['code']}[/cyan]  {item['zh_title']}"
+            f"  [dim]({item['severity']})[/dim]"
+        )
+    lines.append("\n  用 `clawd errors <码>` 看问题、下一步与文档链接。")
+    raise typer.Exit(code=_emit(
+        ok=True,
+        data={"count": len(entries), "entries": entries},
+        human="\n".join(lines),
+        as_json=json_out,
+    ))
+
+
+@app.command(name="migrate-state")
+def migrate_state_cmd(
+    src: str = typer.Option(..., "--from", help="源状态目录（例如仓库内的 .clawd）"),
+    dst: str = typer.Option(..., "--to", help="目标状态目录"),
+    apply: bool = typer.Option(False, "--apply", help="真的执行迁移（默认只演练，不动一个字节）"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="目标已存在同名文件时覆盖（默认跳过）"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出（契约 {ok, code, ...}）"),
+):
+    """
+    把状态目录迁移到新位置（默认演练；`--apply` 才真的动文件）
+
+    为什么默认不落盘：状态目录里有会话、用量、provider 配置，**误操作不可逆**。
+    所以先 `plan`/演练给出「待迁移 / 内容相同 / 冲突」三类清单，人确认后再 `--apply`。
+    幂等：重复执行不会重复搬（内容相同的一律跳过）。
+    """
+    from pathlib import Path as _Path
+
+    from ..core.state_migration import StateMigrationError, migrate_state
+
+    try:
+        report = migrate_state(
+            _Path(src).expanduser(),
+            _Path(dst).expanduser(),
+            dry_run=not apply,
+            overwrite=overwrite,
+        )
+    except StateMigrationError as exc:
+        raise typer.Exit(code=_emit(
+            ok=False,
+            data={"error": str(exc), "src": src, "dst": dst},
+            human=f"[red]迁移参数非法:[/red] {exc}",
+            as_json=json_out,
+            exit_code=2,
+        ))
+
+    mode = "演练（未改动任何文件）" if not apply else "已执行"
+    human = (
+        f"[bold cyan]状态迁移 · {mode}[/bold cyan]\n"
+        f"  源: {report['src_root']}\n"
+        f"  目标: {report['dst_root']}\n"
+        f"  待迁移 {report['pending_count']} · 内容相同 {report['identical_count']} · "
+        f"冲突 {report['conflict_count']} · 共 {report['total_bytes']} 字节\n"
+    )
+    if report["conflict_count"]:
+        human += (
+            "  [yellow]冲突（目标已有同名但内容不同，已跳过；需人工决定是否 --overwrite）:[/yellow]\n"
+            + "\n".join(f"    - {c}" for c in report["conflicts"][:10])
+            + "\n"
+        )
+    if not apply:
+        human += "  确认无误后加 `--apply` 真正迁移。\n"
+    raise typer.Exit(code=_emit(
+        ok=bool(report.get("ok", True)),
+        data=report,
+        human=human,
+        as_json=json_out,
+    ))
 
 @app.command(name="reason")
 def reason(
@@ -531,6 +676,159 @@ def serve(
     code = cmd_serve(argv)
     if code != 0:
         raise typer.Exit(code)
+
+# ---- 轨迹录制 / 回放（X-3）：零 LLM 调用的 agent 行为回归 ----
+trajectory_app = typer.Typer(
+    name="trajectory", help="轨迹录制与回放（固定 observation，零成本回归工具调用序列）"
+)
+app.add_typer(trajectory_app, name="trajectory")
+
+
+@trajectory_app.command("record")
+def trajectory_record(
+    session: str = typer.Option(..., "--session", "-s", help="会话 ID（数据目录 sessions/<id>.json）"),
+    out: str | None = typer.Option(None, "--out", "-o", help="输出轨迹 JSON 路径（默认打印到 stdout）"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+):
+    """
+    把一次真实会话录成轨迹（plan/action/observation/verify）
+
+    只读取会话落盘文件，不调用任何模型、不发网络请求。
+    """
+    import json as _json
+
+    from ..core.data_dir import data_path
+    from ..eval.trajectory import record_from_session, save_trajectory
+
+    sessions_dir = data_path('sessions')
+    path = sessions_dir / f'{session}.json'
+    if not path.is_file():
+        raise typer.Exit(code=_emit(
+            ok=False,
+            data={'session': session, 'searched': str(sessions_dir), 'error': 'not_found'},
+            human=f"[red]找不到会话文件:[/red] {path}\n  用 `clawd session list` 看有哪些会话。",
+            as_json=json_out,
+            exit_code=2,
+        ))
+    try:
+        raw = _json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, _json.JSONDecodeError) as exc:
+        raise typer.Exit(code=_emit(
+            ok=False,
+            data={'session': session, 'error': f'{type(exc).__name__}: {exc}'},
+            human=f"[red]会话文件不可读:[/red] {type(exc).__name__}: {exc}",
+            as_json=json_out,
+            exit_code=2,
+        ))
+
+    traj = record_from_session(raw)
+    payload = traj.to_dict() if hasattr(traj, 'to_dict') else None
+    if out:
+        save_trajectory(traj, out)
+    if payload is None:
+        payload = {'id': getattr(traj, 'id', ''), 'steps': len(getattr(traj, 'steps', []))}
+    raise typer.Exit(code=_emit(
+        ok=True,
+        data={'session': session, 'out': out, 'trajectory': payload},
+        human=(
+            f"[green]已录制轨迹[/green] {getattr(traj, 'id', session)}："
+            f"{len(getattr(traj, 'steps', []))} 步"
+            + (f"\n  写入: {out}" if out else '')
+        ),
+        as_json=json_out,
+    ))
+
+
+@trajectory_app.command("replay")
+def trajectory_replay(
+    file: str = typer.Argument(..., help="轨迹 JSON 路径"),
+    expect: str | None = typer.Option(
+        None, "--expect", help="期望的工具名序列，逗号分隔（如 'FileReadTool,FileEditTool'）"
+    ),
+    order: bool = typer.Option(True, "--order/--no-order", help="是否按顺序比较工具序列"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+):
+    """
+    回放轨迹并断言（工具序列 / action-observation 配对 / 失败后原地重试 / verify 存在）
+
+    退出码：0 全部判定通过 · 1 有规则失败 · 2 文件不可用 · 3 一条都没判定（无法给结论）
+    """
+    from ..eval.trajectory import TrajectoryFormatError, load_trajectory, replay
+
+    try:
+        traj = load_trajectory(file)
+    except (TrajectoryFormatError, OSError) as exc:
+        raise typer.Exit(code=_emit(
+            ok=False,
+            data={'file': file, 'error': f'{type(exc).__name__}: {exc}'},
+            human=f"[red]轨迹文件不可用:[/red] {exc}",
+            as_json=json_out,
+            exit_code=2,
+        ))
+
+    expected = [t.strip() for t in expect.split(',') if t.strip()] if expect else None
+    result = replay(traj, expect_tools=expected, expect_order=order)
+    data = {'file': file, 'trajectory_id': getattr(traj, 'id', ''), **result.to_dict()}
+
+    if result.checked == 0:
+        code = 3
+    elif result.ok:
+        code = 0
+    else:
+        code = 1
+
+    lines = [f"[bold cyan]轨迹回放[/bold cyan] {getattr(traj, 'id', file)}"]
+    lines.append(f"  判定 {result.checked} 条规则 · 失败 {len(result.failures)} · "
+                 f"无法判定 {len(result.undetermined)}")
+    for f in result.failures:
+        lines.append(f"  [red]FAIL[/red] {f['rule']}: {f['detail'] if isinstance(f, dict) else f}")
+    for u in result.undetermined:
+        lines.append(f"  [yellow]SKIP[/yellow] {u['rule']}: {u['detail'] if isinstance(u, dict) else u}")
+    if code == 3:
+        lines.append("  [yellow]一条都没判定 —— 不给结论（用 --expect 指定期望工具序列）[/yellow]")
+
+    raise typer.Exit(code=_emit(
+        ok=code == 0,
+        data=data,
+        human="\n".join(lines),
+        as_json=json_out,
+        exit_code=code,
+    ))
+
+
+@trajectory_app.command("show")
+def trajectory_show(
+    file: str = typer.Argument(..., help="轨迹 JSON 路径"),
+    json_out: bool = typer.Option(False, "--json", help="机器可读输出"),
+):
+    """查看轨迹内容（goal / 步骤序列 / 元数据）"""
+    from ..eval.trajectory import TrajectoryFormatError, load_trajectory
+
+    try:
+        traj = load_trajectory(file)
+    except (TrajectoryFormatError, OSError) as exc:
+        raise typer.Exit(code=_emit(
+            ok=False, data={'file': file, 'error': str(exc)},
+            human=f"[red]轨迹文件不可用:[/red] {exc}", as_json=json_out, exit_code=2,
+        ))
+
+    steps = [
+        {'kind': s.kind, 'name': s.name, 'ok': s.ok} for s in getattr(traj, 'steps', [])
+    ]
+    lines = [f"[bold cyan]轨迹[/bold cyan] {getattr(traj, 'id', '')}",
+             f"  目标: {getattr(traj, 'goal', '') or '(未记录)'}",
+             f"  {len(steps)} 步"]
+    for i, s in enumerate(steps, 1):
+        mark = {True: '[green]OK[/green]', False: '[red]FAIL[/red]', None: '--'}[s['ok']]
+        lines.append(f"  {i:>2}. {s['kind']:<11} {s['name'] or '':<24} {mark}")
+    raise typer.Exit(code=_emit(
+        ok=True,
+        data={'file': file, 'id': getattr(traj, 'id', ''),
+              'goal': getattr(traj, 'goal', ''), 'steps': steps},
+        human="\n".join(lines),
+        as_json=json_out,
+    ))
+
 
 @app.command(name="explore")
 def explore(

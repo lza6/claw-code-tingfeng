@@ -53,7 +53,9 @@ def healthy_doctor(monkeypatch):
         "failed": 0,
         "checks": [{"section": "env", "level": "pass", "text": "stub"}],
     }
-    monkeypatch.setattr(repl_commands, "collect_doctor_report", lambda: dict(report))
+    monkeypatch.setattr(
+        repl_commands, "collect_doctor_report", lambda deep=False: dict(report)
+    )
     return report
 
 
@@ -366,13 +368,26 @@ class TestServerCommand:
 class TestSimpleDelegations:
     def test_doctor_calls_handler(self, monkeypatch, healthy_doctor):
         calls: list[int] = []
+        # 签名在 v0.90.0 增加了 `deep`（doctor --deep 走同一渲染器），
+        # 这里替身必须接受该关键字，否则测的是"替身签名"而不是分发逻辑。
         monkeypatch.setattr(
-            "src.cli.repl_commands._handle_doctor", lambda: calls.append(1)
+            "src.cli.repl_commands._handle_doctor", lambda deep=False: calls.append(1)
         )
 
         invoke_ok("doctor")
 
         assert calls == [1]
+
+    def test_doctor_deep_passes_flag_to_handler(self, monkeypatch, healthy_doctor):
+        """`--deep` 必须真的传到渲染器（否则深检结果拿不到、也没人看得见）"""
+        seen: list[bool] = []
+        monkeypatch.setattr(
+            "src.cli.repl_commands._handle_doctor", lambda deep=False: seen.append(deep)
+        )
+
+        invoke_ok("doctor", "--deep")
+
+        assert seen == [True]
 
     def test_reason_passes_only_non_default_options(self, monkeypatch):
         captured: list[list[str]] = []

@@ -122,8 +122,14 @@ class TestParallelExecution:
         elapsed = time.perf_counter() - started
 
         assert len(report.roles) == len(DEFAULT_ROLES)
-        assert provider.max_concurrent >= 2, "必须是并发调度，不能顺序执行"
-        assert elapsed < 0.08 * len(DEFAULT_ROLES), "串行会超时，说明没有并发"
+        # 并发**结构性证据**：4 个角色的调用在时间上真的重叠（全部进去之后才有任何一个返回）。
+        # 这比"墙钟耗时 < N 秒"更可靠：墙钟在 coverage 插桩 / 机器有别的负载时会假红
+        # （2026-10-31 实测：同一个测试单跑 1.2s 通过，并行跑全量+覆盖率时 6.2s 超界）。
+        assert provider.max_concurrent == len(DEFAULT_ROLES), (
+            f"必须是并发调度：4 个角色应同时在飞，实测最大并发 {provider.max_concurrent}"
+        )
+        # 保留一条宽松的墙钟上界（防御"并发但串行等待"的实现），阈值按 4 倍余量给
+        assert elapsed < max(2.0, 0.08 * len(DEFAULT_ROLES) * 5), f"疑似退化成串行：{elapsed:.2f}s"
         assert report.verdict == VERDICT_APPROVE
 
     def test_all_roles_reported(self, sample_file):

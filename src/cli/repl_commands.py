@@ -95,13 +95,17 @@ def _handle_version() -> None:
     _print(f'  Python: {sys.version.split()[0]}')
 
 
-def collect_doctor_report() -> dict[str, Any]:
+def collect_doctor_report(deep: bool = False) -> dict[str, Any]:
     """收集环境诊断（结构化）—— `clawd doctor --json` 与终端渲染共用同一份数据
 
     以前 `_handle_doctor()` 是"边查边打印"，机器读不到；现在先收集再渲染，
     单一来源，避免 JSON 与人读两份逻辑漂移。
 
     **密钥只报"已设置"，不回显任何片段**：JSON 比人读更容易被采集/上报。
+
+    ``deep=True``（`clawd doctor --deep`）追加一节**存储体检**：SQLite 完整性、
+    表行数、体积 top N、可回收空间与建议动作。它是**慢检查**（要逐个库 COUNT 与
+    integrity_check），所以默认不跑 —— 但"面板空白/越来越慢"这类问题只能靠它定位。
     """
     checks: list[dict[str, Any]] = []
 
@@ -212,24 +216,69 @@ def collect_doctor_report() -> dict[str, Any]:
         add('capabilities', 'warn', f'能力状态检查失败: {e}')
 
     failed = sum(1 for c in checks if c['level'] == 'fail')
-    return {
+    report: dict[str, Any] = {
         'ready': failed == 0,
         'checks': checks,
         'count': len(checks),
         'failed': failed,
     }
 
+    if deep:
+        report['storage'] = _collect_storage_checks(add)
+        # 深度体检里 fail 也算失败（磁盘坏库 = 跑不了活）
+        failed = sum(1 for c in checks if c['level'] == 'fail')
+        report['failed'] = failed
+        report['ready'] = failed == 0
+
+    return report
+
+
+def _collect_storage_checks(add: Any) -> dict[str, Any]:
+    """深度体检：存储扫描 → 转成 doctor 的 check 条目（单一数据源 `core.storage_health`）
+
+    这里不做任何判定逻辑的二次实现：`scan_storage()` 给什么就报什么，
+    只负责把 severity 映射成 doctor 的 pass/warn/fail 三态。
+    """
+    try:
+        from ..core.storage_health import scan_storage
+    except Exception as e:  # noqa: BLE001 — 诊断本身不能因为模块不可导入而中断
+        add('storage', 'warn', f'存储体检不可用: {type(e).__name__}: {e}')
+        return {'available': False, 'error': f'{type(e).__name__}: {e}'}
+
+    try:
+        scan = scan_storage()
+    except Exception as e:  # noqa: BLE001
+        add('storage', 'warn', f'存储扫描失败: {type(e).__name__}: {e}')
+        return {'available': False, 'error': f'{type(e).__name__}: {e}'}
+
+    add(
+        'storage',
+        'pass',
+        f'{scan["db_count"]} 个数据库 / {scan["total_table_rows"]} 行 / '
+        f'{scan["total_bytes"] / 1048576:.1f} MB（扫描 {scan["elapsed_ms"]:.0f}ms）',
+    )
+    for issue in scan.get('issues', []):
+        level = {'fail': 'fail', 'warn': 'warn'}.get(str(issue.get('severity')), 'warn')
+        add('storage', level, f'{issue.get("path", "?")}: {issue.get("zh_message", "")}')
+    for rec in scan.get('recommendations', []):
+        add('storage', 'warn', f'建议: {rec}')
+    if scan.get('size_top'):
+        top = scan['size_top'][0]
+        add('storage', 'pass', f'最大库: {Path(str(top["path"])).name} {top["size_bytes"] / 1048576:.1f} MB')
+    return {'available': True, **scan}
+
 
 _SECTION_TITLES = {
     'env': '环境诊断',
     'consistency': '框架一致性',
     'capabilities': '能力状态（默认是否启用）',
+    'storage': '存储体检（数据库完整性 / 体积 / 可回收空间）',
 }
 
 
-def _handle_doctor() -> None:
+def _handle_doctor(deep: bool = False) -> None:
     """运行环境诊断（终端渲染；`--json` 走 `collect_doctor_report()`，同一份数据）"""
-    report = collect_doctor_report()
+    report = collect_doctor_report(deep=deep)
     marks = {'pass': status_pass(), 'warn': status_warn(), 'fail': status_fail()}
     current = None
     for check in report['checks']:
