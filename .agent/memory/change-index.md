@@ -1,5 +1,25 @@
 # 变更索引（change-index）
 
+## 2026-10-31 v0.89.1 CI Linux 矩阵清零（8 产品缺陷 + 5 测试缺陷）
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/tools_runtime/file_read_tool.py | 非主线程/win32 退化为直接读（`signal.alarm` 在 `asyncio.to_thread` 子线程必抛） |
+| 修改 | src/core/utils/platform_command.py | `os.altsep` 在 Linux 为 None → 显式判空（`None in command` TypeError） |
+| 修改 | src/core/git/worktree/manager.py | 构造函数不再 mkdir（只读路径探活不再抛 PermissionError），延迟到 create() |
+| 修改 | src/core/security/path_guard.py | 循环链接改用 lstat() + 路径指纹；损坏链接判 broken；边界检查（escape）前置 |
+| 修改 | src/config/generator.py | MCP 参数路径统一转 POSIX 斜杠（Windows `\p` 保留转义导致 config.toml 非法） |
+| 修改 | src/core/config/injector.py | `CLAWD_CONFIG_DIR` 纳入 features.json 搜索链 |
+| 修改 | src/backends/codex.py | 裸命令名不在解析期抛错；`available()` 如实 False；`run()` 给明确错误 |
+| 修改 | src/core/git_integration.py | import gitpython 前设 `GIT_PYTHON_REFRESH=quiet` |
+| 修改 | pyproject.toml | dev extras 补 `pathspec`（CI 只装 `.[dev]`） |
+| 修改 | .github/workflows/ci.yml | Security Scan 的 `safety`→`pip-audit`（safety 3.x 无鉴权必失败）；bandit `--exit-zero` |
+| 新增 | tests/core/utils/test_platform_command.py | `TestLinuxAltsepRegression`（3 条）：Windows 上模拟 Linux altsep=None |
+| 修改 | tests/{config,in]… 见下 | 5 处测试自身缺陷修复（git 身份 / rich 断行 / Z: 相对路径 / JSON 行提取 / importorskip） |
+| 修改 | scripts/hard_metrics.py + scripts/baseline-silent.json | 静默吞异常门禁 155→154（只降不升） |
+| 新增 | scripts/e2e_desktop_install.ps1 | 装机 E2E 入库（v0.89.0 起） |
+| 新增 | evidence/v0.89.1-ci-linux-matrix.json | 13 条根因 + 真实命令输出 |
+
+
 ## 2026-10-31 v0.89.0 查询类命令 --json 全覆盖 + R6 + P3 五项
 | 类型 | 路径 | 说明 |
 |------|------|------|
