@@ -177,6 +177,36 @@
       "cmd": "venv/Scripts/python.exe scripts/baseline.py --out .clawd/baseline.json",
       "exit_code": 0,
       "summary": "版本三处一致 0.89.1 · ruff hard ok · 静默 154 · 收集 5464/0 · IMPORT 0 · 可达 503"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ -q -m 'not slow'（最终 HEAD 5444 用例）",
+      "exit_code": 0,
+      "summary": "**5444 passed / 7 skipped / 7 xfailed / 0 failed**（315.06s）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pytest tests/ -q -m 'not slow' --cov=src",
+      "exit_code": 0,
+      "summary": "覆盖率 **66.29%**（38741/58439）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pre_commit run --all-files",
+      "exit_code": 0,
+      "summary": "14 个 hook 全 Passed"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/verify_audit_p1.py",
+      "exit_code": 0,
+      "summary": "28/28"
+    },
+    {
+      "cmd": "gh run list（GitHub Actions）",
+      "exit_code": 0,
+      "summary": "**Docker Image: success**（v0.89.1 tag 触发的 ghcr 镜像已构建）· **Quality Checks: success** · Validate Plugin: success"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe -m pip_audit -r requirements.txt",
+      "exit_code": 0,
+      "summary": "报告型：filelock 13 条 OSV（已发布全部版本均命中，修复版 4.2.1 未发布）→ 记入 docs/MAINTENANCE.md §6.5"
     }
   ],
   "limitations": [
