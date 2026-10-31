@@ -46,8 +46,23 @@ async def test_world_model_initialize_parallel(tmp_path):
         await wm.initialize()
 
         assert wm._is_initialized is True
-        # 并行构建经 to_thread 执行
-        mock_to_thread.assert_called_once()
+        # 并行构建经 to_thread 执行。
+        # 不能断言"全局恰好调用一次"：`patch("src.brain.world_model.asyncio.to_thread")`
+        # 改的是**全局 asyncio 模块**的属性，同进程里其他 WorldModel 实例遗留的后台索引
+        # 任务也会记账（2026-10-31 CI 实测：Python 3.10 上被打成 "Called 21 times"，
+        # 而 3.11/3.12 同批测试全绿 —— 是跨用例污染，不是实现退化）。
+        # 改为精确断言"本用例的 dependency_graph.build(parallel=True) 走了 to_thread"：
+        build_calls = [
+            c for c in mock_to_thread.await_args_list
+            if c.args and c.args[0] is mock_code_graph.build
+        ]
+        assert len(build_calls) == 1, (
+            f"期望 dependency_graph.build 恰好经 to_thread 一次，实际 {len(build_calls)}"
+            f"（to_thread 全局调用总数 {mock_to_thread.await_count}，含其他用例的污染）"
+        )
+        assert build_calls[0].kwargs.get("parallel") is True, (
+            f"必须以 parallel=True 调 build，实际 kwargs={build_calls[0].kwargs}"
+        )
         # 增量索引：每个变更文件各调一次 add_file_async（不是全量 build_index_async）
         assert mock_indexer.add_file_async.await_count == 2, (
             f"期望 2 个文件触发增量索引，实际 {mock_indexer.add_file_async.await_count}"
