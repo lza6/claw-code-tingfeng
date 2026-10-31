@@ -222,6 +222,11 @@
       "cmd": "pytest tests/test_security tests/tools_runtime tests/agent tests/core -q（path_guard 依赖面）",
       "exit_code": 0,
       "summary": "**2209 passed / 1 xfailed**"
+    },
+    {
+      "cmd": "docker run python:3.11-slim + git → pytest tests/test_security tests/tools_runtime tests/core/utils",
+      "exit_code": 0,
+      "summary": "**480 passed / 0 failed**（path_guard 两个自查修复在真 Linux 上验证通过）"
     }
   ],
   "limitations": [
