@@ -1,0 +1,208 @@
+{
+  "task_id": "v0.90.0-round",
+  "status": "DONE_WITH_DISCLOSED_LIMITS",
+  "timestamp": "2026-10-31T19:10:00+08:00",
+  "scope": "剩余高阶提案 X-3/X-6/X-8/X-9/X-10/X-11/X-12 落地 + 四个只有真部署才暴露的缺陷修复",
+  "commands_executed": [
+    {
+      "cmd": "py -3.10 -m pytest tests/ -q -m \"not slow\" --cov=src",
+      "exit_code": 0,
+      "raw_output_tail": "5734 passed, 9 skipped, 9 deselected, 7 xfailed in 456.41s (0:07:36)"
+    },
+    {
+      "cmd": "py -3.10 -m pytest tests/ --collect-only -q",
+      "exit_code": 0,
+      "raw_output_tail": "5759 tests collected in 5.31s（0 errors）"
+    },
+    {
+      "cmd": "py -3.10 -m ruff check src/ tests/ scripts/ --select F821,F811,E9",
+      "exit_code": 0,
+      "raw_output_tail": "All checks passed!"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/import_sweep.py --strict-exit",
+      "exit_code": 0,
+      "raw_output_tail": "IMPORT-FAIL (缺陷): 0 / DEP-MISSING (期望): 0 / 没有项目内的导入缺陷"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/reachability.py --min-reachable 443",
+      "exit_code": 0,
+      "raw_output_tail": "生产可达 507（门槛 443）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_silent_except.py",
+      "exit_code": 0,
+      "raw_output_tail": "154 / 基线 154（未增加）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/core_surface.py",
+      "exit_code": 0,
+      "raw_output_tail": "[PASS] 没有新增的向上层 import（存量已登记）；159 文件 / 35879 行"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/verify_audit_p1.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 28 项，通过 28，失败 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/scan_fake_success.py",
+      "exit_code": 0,
+      "raw_output_tail": "假成功扫描：命中 0 处"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_mcp_startup.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 4 个 server，通过 4，失败 0"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/check_doc_drift.py",
+      "exit_code": 0,
+      "raw_output_tail": "收集 5746=5746 · 静默 154=154 · 可达 507=507 → 全部一致"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/startup_budget.py",
+      "exit_code": 0,
+      "raw_output_tail": "version_time 0.669s/1.100s OK · entrypoint_import 0.694s/0.850s OK · modules 761/1030 OK · doctor 4.119s/5.550s OK"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/e2e_smoke.py",
+      "exit_code": 0,
+      "raw_output_tail": "合计 5 项：通过 5，失败 0（真实端点 v0.90.0）"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/stress_host.py --n 200",
+      "exit_code": 0,
+      "raw_output_tail": "客户端 200/200 成功 · 1000 次 ping · QPS 1250 · P50 13.3ms / P95 17.8ms / P99 18.6ms · 错误率 0.0% · STRESS: PASS"
+    },
+    {
+      "cmd": "docker build -t clawd-code:v0.90.0-final .",
+      "exit_code": 0,
+      "raw_output_tail": "BUILD5 EXIT=0 · naming to docker.io/library/clawd-code:v0.90.0-final done"
+    },
+    {
+      "cmd": "docker run -d --name clawd-fin -p 18803:8765 clawd-code:v0.90.0-final && curl /healthz /readyz /api/nope",
+      "exit_code": 0,
+      "raw_output_tail": "/healthz 200 {\"status\":\"ok\",\"version\":\"0.90.0\",\"uptime_s\":24.182} · /readyz 200 {\"status\":\"ready\",\"checks\":[{\"name\":\"data_dir_writable\",\"ok\":true},{\"name\":\"llm_configured\",\"ok\":true,\"detail\":\"provider/model 已配置\"}]} · /api/nope 404 · docker inspect health=healthy"
+    },
+    {
+      "cmd": "蓝绿热更新演练（A 18799 → B 18800 → 停 A）+ 卷持久化校验",
+      "exit_code": 0,
+      "raw_output_tail": "A /healthz=200 → B /readyz=200 → 停 A 后 A=000 且 B=200；_marker.txt 跨容器读回 marker-090"
+    },
+    {
+      "cmd": "venv/Scripts/python.exe scripts/prepare_host_bundle.py && pwsh -NoProfile -File scripts/build_desktop_signed.ps1 -SelfSigned",
+      "exit_code": 0,
+      "raw_output_tail": "[5/5] 自检全过（补齐 exceptiongroup/fastuuid/attr）→ 304MB；Setup/Portable 0.90.0 已签名（自签名 Status=UnknownError 属预期）；latest.yml version=0.90.0"
+    },
+    {
+      "cmd": "pwsh -NoProfile -File scripts/e2e_desktop_install.ps1",
+      "exit_code": 0,
+      "raw_output_tail": "装机 E2E 结论：失败 0（装→Host→API/auth→UI E2E→重启持久化→卸载 exit 0→注册表残留 0）"
+    },
+    {
+      "cmd": "node desktop/ui_feedback_e2e.mjs / node desktop/ui_console_e2e.mjs",
+      "exit_code": 0,
+      "raw_output_tail": "feedback 合计 31 项，通过 31，失败 0 · console 合计 32 项，通过 32，失败 0"
+    },
+    {
+      "cmd": "py -3.10 -m build --outdir .clawd/_distbuild && py -3.10 scripts/verify_wheel_contents.py --dist .clawd/_distbuild",
+      "exit_code": 0,
+      "raw_output_tail": "PASS wheel=clawd_code-0.89.1-py3-none-any.whl prompts/agents=33 version=0.89.1（版本号断言在 0.90.0 重建后复验）"
+    }
+  ],
+  "files_changed": {
+    "new_modules": [
+      "src/core/errors_catalog.py",
+      "src/core/storage_health.py",
+      "src/core/state_migration.py",
+      "src/eval/trajectory.py",
+      "scripts/startup_budget.py",
+      "scripts/changelog_notes.py",
+      "scripts/verify_wheel_contents.py"
+    ],
+    "modified": [
+      "src/core/data_dir.py (CLAWD_HOME / state.json 版本)",
+      "src/server/websocket_server.py (/healthz /readyz、未知 API 404、无后缀 404、探针免静态目录)",
+      "src/server/host_entry.py (resolve_bind_host：AGENT_SERVER_HOST 真正生效)",
+      "src/cli/entrypoint.py (_emit + errors/migrate-state/trajectory + doctor --deep)",
+      "src/cli/repl_commands.py (collect_doctor_report(deep=))",
+      "docker-compose.yml / Dockerfile / .dockerignore",
+      ".github/workflows/ci.yml / release.yml",
+      "desktop/web/app.js / index.html",
+      "README.md / CHANGELOG.md / CLAUDE.md / docs/MAINTENANCE.md / workflow_status.md / test_ledger.md"
+    ],
+    "new_tests": 12
+  },
+  "tests": {
+    "unit_and_integration": {
+      "status": "passed",
+      "evidence": "5734 passed, 9 skipped, 9 deselected, 7 xfailed in 456.41s (0:07:36)"
+    },
+    "contracts": {
+      "status": "passed",
+      "evidence": "39 passed"
+    },
+    "real_e2e": {
+      "status": "passed",
+      "evidence": "scripts/e2e_smoke.py 5/5 exit 0"
+    },
+    "installer_e2e": {
+      "status": "passed",
+      "evidence": "scripts/e2e_desktop_install.ps1 失败 0"
+    },
+    "browser_e2e": {
+      "status": "passed",
+      "evidence": "ui_feedback_e2e 31/31 · ui_console_e2e 32/32"
+    },
+    "container_e2e": {
+      "status": "passed",
+      "evidence": "宿主机 /healthz 200 + /readyz 200 + Health.Status=healthy"
+    },
+    "pressure": {
+      "status": "passed",
+      "evidence": "200 并发 / 1000 请求 / QPS 1250 / P95 17.8ms / 0%"
+    }
+  },
+  "coverage_summary": {
+    "percent_covered": "66.76",
+    "fail_under": 60,
+    "source": ".clawd/_cov_final.json"
+  },
+  "seams_touched": [
+    "HTTP 探针（/healthz /readyz）与静态托管分发",
+    "CLI 命令分发层（新增 4 个命令 + doctor --deep）",
+    "数据目录解析（CLAWD_DATA_DIR / CLAWD_HOME）",
+    "Host 绑定地址（AGENT_SERVER_HOST）",
+    "docker-compose / Dockerfile 运行契约",
+    "GitHub Actions tag → 发布链路"
+  ],
+  "mock_scenarios_covered": [
+    "storage_health：损坏库 / 空目录 / 超时",
+    "trajectory：非法 JSON / 缺字段 / 空轨迹（拒绝给结论）",
+    "startup_budget：子进程失败 / 探针输出不可解析 / 超预算",
+    "verify_wheel_contents：缺 prompts / 缺模块 / 版本不符 / 非 zip",
+    "ui_feedback_e2e：路由延迟 800ms（造 loading 窗口）/ 强制 500（造 inline 错误 + 重试）"
+  ],
+  "browser_validation": {
+    "tool": "playwright (desktop/node_modules)",
+    "real_host": "venv/Scripts/python.exe -m src serve --port 18795",
+    "results": [
+      "ui_feedback_e2e 31/31",
+      "ui_console_e2e 32/32"
+    ],
+    "screenshots": [
+      "desktop/screenshots/41-feedback-busy.png",
+      "desktop/screenshots/42-feedback-inline-error.png",
+      "desktop/screenshots/46-feedback-unhandled.png"
+    ]
+  },
+  "limitations": [
+    "未向真实生产环境部署（无部署目标与凭证）；容器验证是本机 Docker 的完整演练",
+    "正式 CA 代码签名缺失（自签名 Status=UnknownError 属预期）",
+    "requirements.txt 与 pyproject.toml 仍有系统性漂移（本轮只修了导致镜像漏装的表象）",
+    "启动预算默认值来自本机 Windows 实测；CI 用 1.8 宽松系数，只能抓量级退化",
+    "未跑含 slow 标记的全量测试（约 13 分钟），按项目惯例以 not slow + 定向覆盖",
+    "X-11 只覆盖高价值异步操作，部分控件仍为两态",
+    "未回显 provider/model 到 /readyz 的改动晚于首轮容器验证，已用最终镜像 v0.90.0-final 复验（见 docker run 记录）"
+  ]
+}

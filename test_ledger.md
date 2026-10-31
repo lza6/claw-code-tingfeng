@@ -430,3 +430,52 @@ src.workflow.pipeline_stages.team_exec    -> 同上
 |:---|:---|
 | `pytest tests/ -q`（**含 slow**） | 约 13 分钟以上；本轮改动不触及 slow 层语义，按项目惯例交付前只跑 `not slow` + 定向 |
 | 正式 CA 代码签名验证 | 外部阻塞（需证书），已与用户确认保持自签名 |
+
+## 2026-10-31 v0.90.0 —— 剩余高阶提案批次（全部实跑）
+
+### 全量回归（本轮唯一一次交付前完整运行）
+
+| 项 | 值 |
+|:---|:---|
+| 命令 | `py -3.10 -m pytest tests/ -q -m "not slow" --cov=src` |
+| 结果 | **5734 passed / 9 skipped / 7 xfailed / 9 deselected / 0 failed**（456.41s / 7 分 36 秒） |
+| 收集 | **5759 tests / 0 errors** |
+| 覆盖率 | **66.76%**（`fail_under = 60`，未下调） |
+
+### 新增/改写的测试（12 个文件 / 290 条）
+
+| 文件 | 用例 | 钉住什么 |
+|:---|:---|:---|
+| `tests/core/test_errors_catalog.py` | 75 | 全部 53 个 `ErrorCode` 都有中文条目（双独立断言防函数自证）+ 未登记码兜底 |
+| `tests/core/test_storage_health.py` | 23 | 正常库/损坏库/空目录/超时不崩；损坏必进 issues |
+| `tests/core/test_state_root.py` | — | `CLAWD_HOME` 生效、`CLAWD_DATA_DIR` 优先、`state.json` 幂等、高版本抛错 |
+| `tests/core/test_state_migration.py` | — | 演练不动文件 / 冲突不覆盖 / 第二次 `moved=0` / 校验失败如实报 |
+| `tests/eval/test_trajectory.py` | — | 录制-回放等价、非法文件抛中文错、**空判定拒绝通过** |
+| `tests/scripts/test_startup_budget.py` | 19 | 预算内 0 / 超预算 1 / 测量失败 2 / `--json` 纯净 / 环境系数只放大时间项 |
+| `tests/scripts/test_changelog_notes.py` | 10 | 版本不存在 exit 2、章节为空 exit 3、取不到不写空文件 |
+| `tests/scripts/test_verify_wheel_contents.py` | 10 | 缺 prompts/缺模块/版本不符 → 1；无产物 → 2 |
+| `tests/scripts/test_workflows.py` | 14 | 所有工作流 YAML 合法 + ci.yml 四条门禁仍在（**本轮实测抓到 release.yml 被 heredoc 破坏**） |
+| `tests/scripts/test_docker_config.py` | 9 | 先 COPY 源码再装、不许 `--no-deps`、容器绑 0.0.0.0、CI docker 冒烟不许 `\|\| true` |
+| `tests/server/test_health_endpoints.py` | 18 | 真实 HTTP：`/healthz` 200 无 token 不泄密、`/readyz` 503 当数据目录不可写、未知 `/api/*` 404、`/health` 404、静态托管与目录穿越无回归、`AGENT_SERVER_HOST` 真正生效 |
+| `tests/cli/test_ops_commands.py` | 19 | `errors`/`doctor --deep`/`migrate-state`/`trajectory` 走 CLI 分发层（契约 + 退出码） |
+
+### 真实 E2E / 装机 / 容器（本轮实跑）
+
+| 项 | 结果 |
+|:---|:---|
+| `scripts/e2e_smoke.py` | **5/5 exit 0**（真实端点，v0.90.0 重跑） |
+| `scripts/e2e_desktop_install.ps1`（0.90.0 安装包） | **0 失败**：装→Host→API/auth→UI E2E→重启持久化→卸载 exit 0→注册表 0 |
+| `desktop/ui_feedback_e2e.mjs` | **31/31**（真实浏览器：loading/disabled 窗口、inline 错误 + 重试、全局未捕获兜底） |
+| `desktop/ui_console_e2e.mjs` | **32/32**（无回归） |
+| `docker build -t clawd-code:v0.90.0 .` | success（1.45GB） |
+| 容器 → 宿主机探活 | `/healthz` 200（version 0.90.0）· `/readyz` 200（ready）· `/api/nope` 404 · `/` 200 · `Health.Status=healthy` |
+| 蓝绿热更新演练 | A 在服务 → 起 B（`/readyz` 200）→ 停 A → B 仍 200 |
+| 容器替换后状态持久化 | 卷内 `_marker.txt` 跨容器读回 `marker-090` ✓ |
+
+### 未执行（如实）
+
+| 项 | 原因 |
+|:---|:---|
+| `pytest tests/ -q`（含 slow，约 13 分钟） | 本轮未触碰 slow 层语义；交付前按惯例跑 `not slow` + 定向 |
+| 真实生产环境部署 / 滚动更新 | 无部署目标与凭证（BLOCKED，未伪造） |
+| 正式 CA 签名 | 外部阻塞（需证书），自签名仅验证管线 |

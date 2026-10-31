@@ -17,6 +17,7 @@
 py scripts/reachability.py                                   # 生产可达数
 venv/Scripts/python.exe scripts/import_sweep.py              # 导入期缺陷数
 py -3.10 -m ruff check src/ --select F821,F811               # 静态缺陷数
+venv/Scripts/python.exe scripts/startup_budget.py            # 启动预算（X-6，v0.90.0 起）
 ```
 
 ### 0.1 解释器矩阵（本机 `python` 命令不存在）
@@ -104,6 +105,11 @@ venv/Scripts/python.exe -m src <cmd> --json 2>/dev/null | venv/Scripts/python.ex
 ```
 
 契约测试在 `tests/cli/test_command_result.py`（地基）与 `tests/cli/test_json_contract_queries.py`（查询类全覆盖）。
+
+> **v0.90.0 起**：`src/cli/entrypoint.py` 里直接定义的单命令（如 `errors` /
+> `migrate-state` / `trajectory *`）用一个模块级辅助 `_emit(ok=..., data=..., human=...)`
+> 收尾，它内部就是 `CommandResult` + `emit`；人读分支走 `console.print`（否则 rich 标记
+> `[cyan]…[/cyan]` 会原样吐给用户）。新加命令照抄这个模式，别再手写打印分支。
 
 ---
 
@@ -321,33 +327,63 @@ E2E 红了先问"是不是断言本身写错了"，再动产品代码。
 
 ---
 
-## 9. 部署与热更新（2026-10-18 实测边界）
+## 9. 部署与热更新（2026-10-31 v0.90.0 实测重写）
 
-### 本地安装部署（已验证）
+> 上一版（2026-10-18）写的是"本机没有 Docker，容器部署未验证"。现在 Docker 可用，
+> 这一段全部换成**本机真跑过的结论**，并记录"只有真部署才会暴露"的缺陷。
+
+### 9.1 本地安装部署（已验证）
 
 ```bash
 python -m pip install -e . --no-deps --no-build-isolation   # 成功构建 clawd-code
-clawd --version            # Clawd Code v0.57.3
-clawd agent keywords       # 11 个关键词
-clawd catalog reload       # 技能数 39（活跃 23）/ Agent 数 30（活跃 18）
+clawd --version                                              # Clawd Code v0.90.0
+python -m src doctor --deep                                  # 环境 + 存储体检
 ```
 
 > `clawd.exe` 默认装在 `%LOCALAPPDATA%\Programs\Python\Python310\Scripts\`，
 > 该目录可能不在 PATH —— 用完整路径或 `python -m src` 等价调用。
+>
+> **陷阱（本轮再次踩到）**：仓库根目录残留 `clawd_code.egg-info/` 会**遮蔽** editable 安装的
+> dist-info，于是 `importlib.metadata.version("clawd-code")` 返回旧版本、
+> `tests/core/test_version_consistency.py` 变红。修法：`rm -rf clawd_code.egg-info` 后重装。
+> 判断方法：`python -c "import importlib.metadata as md;print(md.distribution('clawd-code')._path)"`
+> —— 打出来的是 `clawd_code.egg-info` 就说明被遮蔽了。
 
-### 容器部署（**未验证，环境缺失**）
+### 9.2 容器部署（已验证：镜像构建 + 容器启动 + 探针）
 
-`Dockerfile` 与 `docker-compose.yml` 存在，但本机**没有安装 Docker**
-（`where docker` 无结果）。因此：
+```bash
+docker build -t clawd-code:v0.90.0 .
+docker run -d --name clawd -p 8765:8765 clawd-code:v0.90.0
+curl -s http://127.0.0.1:8765/healthz     # {"status":"ok","version":"0.90.0",...}
+curl -s http://127.0.0.1:8765/readyz      # 就绪：数据目录可写 + LLM 已配置
+docker inspect --format '{{.State.Health.Status}}' clawd
+```
 
-- 镜像构建、容器启动、健康检查、热更新**均未实测**；
-- 不能声称"容器可部署"；
-- 恢复验证的最小条件：安装 Docker Desktop 后执行
-  `docker compose build && docker compose up -d`，
-  再验证 `:8765` 端口与 `clawd doctor`。
+`docker compose up -d` 等价（compose 已把 `CLAWD_DATA_DIR=/app/.clawd` 指到挂载卷，
+升级/重启不丢 provider 配置与会话）。
 
-### Python CLI 的"热更新"
+**只有真部署才暴露的三个缺陷**（全部已修，且有测试守着）：
 
-本项目是 CLI / 库，没有常驻服务进程。变更生效方式是重新安装
-（`pip install -e .` 后新进程即加载新代码），不存在需要 reload 的运行时。
-所谓"线上热更新"命令本仓库尚无可验证的落地路径，需要真实部署目标与凭证。
+| 缺陷 | 现象 | 根因 |
+|---|---|---|
+| 镜像里没有包 | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录里执行 → 装出一个空的 `clawd_code` dist-info |
+| 依赖漏装 | 修上一条后变成 `ModuleNotFoundError: No module named 'typer'` | `requirements.txt` 与 `pyproject.toml` 漂移（typer 只在 pyproject）；装自身时加了 `--no-deps` |
+| 端口出不了容器 | 端口映射后宿主机连不上 | 服务默认绑 `127.0.0.1`；镜像/compose 未设 `AGENT_SERVER_HOST=0.0.0.0` |
+
+**健康检查必须是真探针**：镜像与 compose 原先分别是"import 一个模块就 exit 0"和
+`python -c "sys.exit(0)"` —— 容器里什么都没跑也是 healthy。现在统一打 `/healthz`。
+CI 的 docker job 也去掉了 `--version || true`（末尾 `|| true` 会把"镜像跑不起来"判成 success）。
+
+### 9.3 CLI/库形态的"热更新"
+
+本项目部署形态是"CLI + 本地 Host 服务"：
+- **CLI/库**：变更生效 = 重新安装（`pip install -e .` 后新进程加载新代码），不存在运行时 reload。
+- **Host 服务**：`clawd serve` 是常驻进程，升级方式 = 起新进程 → `/readyz` 通过 → 切流量 → 停旧进程
+  （蓝绿）。数据在 `CLAWD_DATA_DIR` 里，与进程生命周期解耦，所以切换不丢状态。
+- **容器**：`docker compose up -d` 拉新镜像重建容器；先把旧容器留着，新容器 `/healthz` 通过再删旧容器。
+- **桌面端**：Electron 壳 + 内嵌 Host，升级走安装包（NSIS）；`electron-updater` 用 `latest.yml`。
+
+> **本轮未做**：向真实生产环境（无部署目标与凭证）推送镜像/滚动更新。
+> 上表的"容器部署"是本机 Docker 的完整演练，**不等于**已完成线上部署 —— 见
+> `workflow_status.md` 的"未闭环"一节。
+

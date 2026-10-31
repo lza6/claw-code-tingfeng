@@ -148,6 +148,25 @@ clawd doctor --json            # 环境体检
 > `collaborate`/`workflow *`/`session fork|title|resume`）**故意不提供** `--json`：
 > 它们是交互式或长驻进程，没有"一次性结果"可序列化。
 
+**自检 / 排障 / 迁移（v0.90.0 新增）**：
+```bash
+clawd errors                         # 全部错误码的中文标题 + 级别
+clawd errors E1001                   # 单码：问题 / 下一步命令 / 文档链接
+clawd errors E1001 --json            # {ok, code, entry:{code,zh_title,zh_message,next_step,doc_url,severity}}
+clawd doctor --deep                  # 深检：SQLite integrity_check + 表行数 + 体积 top10 + VACUUM 建议
+clawd migrate-state --from .clawd --to D:/clawd-state            # 演练：待迁移/内容相同/冲突三类清单
+clawd migrate-state --from .clawd --to D:/clawd-state --apply    # 真迁（不覆盖已有文件；可重复执行）
+clawd trajectory record -s <会话ID> -o traj.json                 # 真实会话 → 轨迹（零 LLM 调用）
+clawd trajectory replay traj.json --expect FileReadTool,FileEditTool   # 回放断言工具序列
+```
+
+> 错误文案的**唯一来源**是 `src/core/errors_catalog.py`（`docs/troubleshooting-errors.md` 只做索引）。
+> `trajectory replay` 退出码：0 通过 · 1 工具序列退化 · 2 文件不可用 · 3 一条都没判定（**不给结论**）。
+>
+> 探针端点：`GET /healthz`（存活，免 token，不回显路径/密钥）、`GET /readyz`（就绪：数据目录可写 +
+> LLM 已配置，不就绪返回 503）。`docker-compose.yml` 与 `Dockerfile` 的 healthcheck 已改为真打 `/healthz`
+> ——此前是 `python -c "sys.exit(0)"`（容器里什么都没跑也返回 0，等于没有健康检查）。
+
 ## 🧩 多引擎整合（v0.64.0 新增）
 
 **不合并源码**（Rust/Go/TS 三套运行时合并必崩），而是**统一驱动 + MCP 领域工具反向供给**：
@@ -457,25 +476,26 @@ export CLAWD_VERIFY_COMMAND="python -m pytest tests/ -q"
 「属性名漂移」类缺陷。v0.51.0 修复的 11 个阻塞问题中，有 5 个只有在把
 真实请求完整打通时才会逐层暴露。
 
-### 质量基线（2026-10-29 实测；每轮只更新**本轮真的跑过**的项）
+### 质量基线（2026-10-31 v0.90.0 实测；每轮只更新**本轮真的跑过**的项）
 
 | 指标 | 当前 | 说明 |
 |:---|:---|:---|
-| 测试用例 | **5440 passed / 7 skipped / 8 xfailed / 0 failed**（2026-10-31 v0.89.0 实测，375.04s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 快速层（不含 slow） | **5440 passed / 0 failed / 6 分 15 秒**（同一命令，v0.89.0 实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
-| 用例收集 | **5467 / 0 errors**（2026-10-31 v0.89.1 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
+| 测试用例 | **5734 passed / 9 skipped / 7 xfailed / 0 failed**（2026-10-31 v0.90.0 实测，456.41s） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 快速层（不含 slow） | **5734 passed / 0 failed / 7 分 36 秒**（同一命令，v0.90.0 实测） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 用例收集 | **5759 / 0 errors**（2026-10-31 v0.90.0 实测） | `py -3.10 -m pytest tests/ --collect-only -q` |
 | 契约测试 | **39 passed**（本轮实测） | `py -3.10 -m pytest tests/contracts -q` |
-| 覆盖率 | **66.29%**（2026-10-31 v0.89.1 实测，38741/58439 行） | `py -3.10 -m pytest tests/ -q --cov=src` |
+| 覆盖率 | **66.76%**（2026-10-31 v0.90.0 实测，`fail_under=60` 已生效） | `py -3.10 -m pytest tests/ -q --cov=src` |
 | 覆盖率门禁 | `fail_under = 60`（**已生效**，2026-10-29 由 47 收紧） | 见 `pyproject.toml` 注释 |
 | Ruff `F821` / `F811` | **0 / 0** | `py -3.10 -m ruff check src/ tests/ --select F821,F811,E9` |
 | 导入期缺陷 | **IMPORT-FAIL 0 / IMPORT-EXIT 0**（624 模块，624 OK，DEP-MISSING 0；2026-10-29 实测） | `scripts/import_sweep.py --strict-exit` |
-| 生产可达模块 | **503**（2026-10-31 v0.89.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
+| 生产可达模块 | **507**（2026-10-31 v0.90.0 实测；门槛 443） | `scripts/reachability.py --min-reachable 443` |
 | 死模块 | **64 个完全不可达**（不可达合计 147 个 / 31,318 行；已删 47 文件 10,685 行，另有裁定保留待接线） | `scripts/reachability.py --min-reachable 443 --list` |
 | Ruff 全量违规 | 会随批次波动（2026-10-29 实测 **374**） | 跑 `py -3.10 -m ruff check src/ --statistics` 看当前值；硬指标只看 F821/F811/E9 |
 | 第三方依赖缺失 | **0**（2026-10-29 补齐 celery/opentelemetry/pathspec 等） | `scripts/import_sweep.py` 的 DEP-MISSING |
 | 静默吞异常 | **154**（AST 口径，门禁 ≤154），基线文件 `scripts/baseline-silent.json` | `scripts/check_silent_except.py --fail-over 154` |
-| 真实 E2E | `e2e_smoke` **5/5** · `e2e_production` **8/8** | v0.89.0 实跑（退出码 0；真实端点按 policy.md 最小配额） |
-| 并发压测 | 200 并发 **5/5**，128 req/s，无死锁/错配 | `scripts/stress_test.py --n 200`（纯本地状态机） |
+| 启动预算（v0.90.0 新增） | `--version` **0.669s**/1.10 · import entrypoint **0.694s**/0.85 · **761** 模块/1030 · `doctor` **4.119s**/5.55 | `scripts/startup_budget.py`（CI 用 `CLAWD_STARTUP_BUDGET_FACTOR=1.8` 防共享 runner 假红） |
+| 真实 E2E | `e2e_smoke` **5/5** · 桌面 `ui_feedback_e2e` **31/31** · `ui_console_e2e` **32/32** | v0.90.0 实跑（退出码 0；真实端点按 policy.md 最小配额） |
+| 并发压测 | 200 并发 / 1000 请求 **QPS 1250 · P95 17.8ms · P99 18.6ms · 错误率 0%** | `venv/Scripts/python.exe scripts/stress_host.py --n 200`（真 WS Host） |
 
 > 本表数字随批次更新；每次改动前请按 `docs/MAINTENANCE.md` §0 重新取数。
 

@@ -1,6 +1,75 @@
 # Workflow Status — 超级智能体增强（逆向/反推/工具集成）+ 桌面端
 
-> 状态: **v0.89.0 CLI --json 全覆盖 + R6 + P3 清账**（2026-10-31）：查询类命令 --json 16 个（契约 {ok,code,...}，stdout 纯净）· R6 视觉降级改轮内重试不占迭代 · P3 五项全落（工具签名接线/只读清单单一来源/死参数 cwd/截断告知/缓存写价）· 全量非 slow 5440 passed/0 failed · 收集 5464 · 静默 155 · 可达 503 · 覆盖率 66.27% · 真实 E2E e2e_smoke 5/5 + e2e_production 8/8 · 装机 E2E 入库 scripts/e2e_desktop_install.ps1
+> 状态: **v0.90.0 剩余高阶提案落地 + 三处「假健康检查」修复 + 容器部署真验证**（2026-10-31）：X-3 轨迹回放 / X-6 启动预算 / X-8 中文错误字典（53 码）/ X-9 状态迁移 / X-10 doctor --deep / X-11 桌面四态 / X-12 发布流水线 全部落地；健康检查三处恒真、镜像无源码、依赖漏装、服务绑 loopback 四个「只有真部署才暴露」的缺陷修复。全量非 slow **5734 passed / 0 failed** · 收集 **5759 / 0 errors** · 覆盖率 **66.76%** · 静默 154 · 可达 507 · 启动预算 4/4 在界内 · 真实 E2E e2e_smoke 5/5 · 装机 E2E 0 失败 · 容器 /healthz /readyz 200 + 蓝绿热更新演练通过
+
+## 2026-10-31 v0.90.0 —— 剩余高阶提案全落地 + 四个「只有真部署才暴露」的缺陷
+
+> 承接 v0.89.1（CI Linux 矩阵清零）。本轮做《下一步改进指南》§7 里**还没完成**的高阶提案，
+> 并在真实构建/部署过程中抓到 4 个"配了但没用"的基础设施缺陷 —— 它们的共同点是**没有信号**。
+
+### 一、先修的真缺陷（P1 级，全部有实跑证据）
+
+| # | 缺陷 | 证据 | 根因 | 修法 |
+|---|------|------|------|------|
+| D-1 | **健康检查恒真（3 处）** | 容器里进程没起来也报 `healthy` | `docker-compose.yml` 用 `python -c "sys.exit(0)"`；`Dockerfile` 是"import 一个模块就 exit 0"；CI 的 docker 冒烟 `docker run ... --version \|\| true` 末尾 `\|\| true` | 新增 `/healthz` 真探针；两处 healthcheck 改真打 HTTP；CI 去掉 `\|\| true` 并加真探活 |
+| D-2 | **根本没有存活端点** | 探 `/health` 得 **403**（看起来像鉴权问题） | 该路径不存在 → 掉进静态托管 → 被 mime 白名单（无后缀 → `ctype=None`）判成 403 | 新增 `/healthz`（免 token、不含路径/密钥）与 `/readyz`（数据目录可写 + LLM 已配置，否则 503）；无后缀路径与未知 `/api/*` 一律 **404 JSON** |
+| D-3 | **镜像里没有代码** | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录执行 → 装出空 dist-info | 先 `COPY src`/`COPY prompts` 再装自身 |
+| D-4 | **依赖漏装 + 端口出不了容器** | 修好 D-3 后变成 `No module named 'typer'`；容器 `healthy` 但宿主机连不上 | ①`--no-deps` 跳过 pyproject 里的依赖（`typer` 不在 requirements.txt）；②`run_host()` **硬编码** `host="127.0.0.1"`，`AGENT_SERVER_HOST` 对 `clawd serve` 完全无效 | ①安装自身不再加 `--no-deps`；②新增 `resolve_bind_host()`（env 优先、默认仍 loopback） |
+
+### 二、新增能力（X 系列全部收口）
+
+- **X-8 中文错误字典**：`src/core/errors_catalog.py` 覆盖**全部 53 个 `ErrorCode`**
+  （`zh_title/zh_message/next_step/doc_url/severity`），入口 `clawd errors [码] [--json]`；
+  未登记码给兜底说明不报错。`docs/troubleshooting-errors.md` 只做索引（锚点与 `doc_url` 对齐已核对）。
+- **X-10 存储体检**：`src/core/storage_health.py`（只读 `file:...?mode=ro`，单库损坏不中断）→
+  `clawd doctor --deep` 输出完整性/行数/体积 top10/可回收空间与 `VACUUM` 建议。
+  实跑本仓：5 库 / 9825 行 / 3.7MB / 0 issues。
+- **X-9 状态根**：`data_dir` 支持 `CLAWD_HOME` 别名（`CLAWD_DATA_DIR` 优先，`describe()` 标出生效变量）、
+  `state.json` 布局版本（读到更高版本**抛错**）、`clawd migrate-state --from --to [--apply]`
+  （默认演练、不覆盖同名、重复执行幂等——实测第二次 `moved=0`）。
+- **X-3 轨迹回放**：`src/eval/trajectory.py` + `clawd trajectory record|replay|show`；
+  在**真实会话**（`sess-20261030_214512`）上录制成功；`replay` 一条都没判定时 **exit 3 拒绝给结论**。
+- **X-6 启动预算**：`scripts/startup_budget.py` 四项上界（实测 0.669s / 0.694s / 761 模块 / 4.119s），
+  接进 CI（`CLAWD_STARTUP_BUDGET_FACTOR=1.8` 只放大时间项，模块数不放大）。
+- **X-11 桌面四态**：`withBusy()/inlineError()` + 全局 `unhandledrejection`/`error` 兜底（5s 去重）；
+  覆盖 provider 保存、添加项目、`pickFolder`、用量/context 面板失败。
+  真浏览器 `desktop/ui_feedback_e2e.mjs` **31/31**；既有 `ui_console_e2e.mjs` **32/32**（无回归）。
+- **X-12 发布流水线**：`.github/workflows/release.yml`（tag → 版本三处一致 → CHANGELOG 抽说明 →
+  构建 → 打包契约断言 → 干净 venv 冒烟 → 幂等发布）+ `scripts/changelog_notes.py`
+  （取不到说明 exit 2，不发空壳）+ `scripts/verify_wheel_contents.py`（prompts 必须随包）。
+
+### 三、部署与热更新（本机真跑，不是"理论可行"）
+
+- 镜像构建：`docker build -t clawd-code:v0.90.0 .` → success（1.45GB）
+- 容器启动 + 宿主机访问：`/healthz` **200**（`{"status":"ok","version":"0.90.0"}`）、
+  `/readyz` **200**（`data_dir_writable ok` + `llm_configured openai/gpt-4`）、
+  未知 API **404 JSON**、`/` **200**（Web UI）；`docker inspect` → `healthy`
+- **蓝绿热更新演练**：A(18799) 在服务 → 起 B(18800) → B `/readyz` 200 → 停 A（000）→ B 仍 200
+- **状态持久化**：`_marker.txt` 写入卷 → `docker rm` 旧容器 → 新容器同卷读回 `marker-090` ✓
+- 桌面安装包 0.90.0（自签名）构建 + **装机 E2E 0 失败**（装→Host→API/auth→UI E2E→重启持久化→卸载→注册表 0）
+- **未做**：向真实生产环境推镜像/滚动更新（无部署目标与凭证）→ 见"未闭环"
+
+### 四、本轮验证（全部实跑）
+
+| 项 | 结果 | 命令 |
+|---|---|---|
+| 全量非 slow | **5734 passed / 9 skipped / 7 xfailed / 0 failed**（456.41s / 7 分 36 秒） | `py -3.10 -m pytest tests/ -q -m "not slow"` |
+| 收集 | **5759 / 0 errors** | `pytest tests/ --collect-only -q` |
+| 覆盖率 | **66.76%**（`fail_under=60` 生效） | `pytest tests/ -q --cov=src` |
+| 真实 E2E | `e2e_smoke` **5/5** exit 0（v0.90.0 重跑） | `venv/Scripts/python.exe scripts/e2e_smoke.py` |
+| 装机 E2E | **0 失败** | `pwsh -NoProfile -File scripts/e2e_desktop_install.ps1` |
+| 桌面 UI | feedback **31/31** · console **32/32** | `node desktop/ui_feedback_e2e.mjs` / `ui_console_e2e.mjs` |
+| 压测 | 200 并发 1000 请求 **QPS 1250 / P95 17.8ms / P99 18.6ms / 0%** | `scripts/stress_host.py --n 200` |
+| 门禁 | F821/F811/E9 0 · IMPORT-FAIL 0 · 可达 507 · 静默 154 · core_surface PASS · 假成功 0 · MCP 4/4 · 审计台账 28/28 · doc_drift 全一致 | 见 CLAUDE.md 门禁清单 |
+
+### 五、未闭环（如实）
+
+- **正式代码签名**：仍需 CA 证书（当前自签名 `Status=UnknownError` 属预期）→ BLOCKED
+- **线上部署**：无生产部署目标/凭证 → 本机 Docker 全链路演练已通过，但**不等于**线上已更新
+- **requirements.txt 与 pyproject 漂移**：本轮只修了"镜像漏装"的表象（改为以 pyproject 为准安装），
+  两份清单的**系统性对齐**仍需单独批次（`typer` 这类只在一边声明的依赖可能还有）
+- **X-11 覆盖范围**：只覆盖高价值异步操作；侧栏搜索/角色切换等仍为两态（不影响可用性）
+
 
 ## 2026-10-31 v0.89.1 —— CI Linux 矩阵清零（35 failed + 4 errors → 0）
 

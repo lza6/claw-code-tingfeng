@@ -17,7 +17,8 @@
 > ```bash
 > venv/Scripts/python.exe scripts/e2e_smoke.py                  # 真实端点 E2E，退出码 0 才算通过
 > py -3.10 -m pytest tests/contracts/ -q                         # 公共 API 契约
-> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 5467 / 4.3s，v0.89.1）
+> py -3.10 -m pytest tests/ --collect-only -q                    # 期望 0 errors（实测 5746 / 5.3s，v0.90.0）
+> venv/Scripts/python.exe scripts/startup_budget.py               # 启动预算：version/import/模块数/doctor 四项上界
 > venv/Scripts/python.exe scripts/import_sweep.py --strict-exit  # IMPORT-FAIL 0 且 IMPORT-EXIT 0
 > py -3.10 -m ruff check src/ tests/ --select F821,F811,E9        # 期望 All checks passed
 > venv/Scripts/python.exe scripts/reachability.py --min-reachable 443  # 删码后可达数不得下降

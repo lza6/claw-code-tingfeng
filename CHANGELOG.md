@@ -7,6 +7,66 @@
 
 ---
 
+## [v0.90.0] (2026-10-31) — 剩余高阶提案落地：探针/错误字典/存储体检/状态迁移/轨迹回放/启动预算/发布流水线/交互四态
+
+承接 v0.89.1，本轮把《下一步改进指南》§7 里**还没落地**的高阶提案做完，并且先修掉三个
+"看起来有、实际上是假的"运维基础设施缺陷 —— 它们的共同点是：**没有信号**，所以从来没被发现。
+
+### 先说修掉的真缺陷（都是"假闭环"）
+
+| 缺陷 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| **健康检查恒真**（3 处） | 容器里什么都没跑，`docker ps` 仍显示 `healthy` | `docker-compose.yml` 与 `Dockerfile` 的 healthcheck 分别是 `python -c "sys.exit(0)"` 与"import 一个模块就 exit 0" | 新增 `/healthz` 存活端点，两处 healthcheck 改真打 HTTP |
+| **没有存活端点** | 运维探 `/health` 得到 **403 Forbidden**，看起来像鉴权问题 | 该路径不存在，请求掉进静态托管，被 mime 白名单（无后缀 → `ctype=None`）判成 403 | 新增 `/healthz`（免 token，不含路径/密钥）与 `/readyz`（数据目录可写 + LLM 已配置，不就绪 503）；无后缀路径与未知 `/api/*` 一律 **404 JSON** |
+| **服务容器不服务** | 声明 `8765:8765` 端口与健康检查，但端口没人监听 | 镜像默认 `CMD ["chat"]` 是交互式命令 | 默认改 `serve`；compose 显式 `command: serve --port 8765` |
+| **镜像里没有代码** | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录执行 → 装出一个空的 dist-info | 先 `COPY src` / `COPY prompts` 再装自身 |
+| **依赖漏装 + 端口出不了容器** | 修好上一条后变成 `No module named 'typer'`；容器 `healthy` 但宿主机连不上 | ①装自身时加了 `--no-deps`（`typer` 只在 pyproject，不在 requirements.txt）；②`run_host()` **硬编码** `host="127.0.0.1"`，`AGENT_SERVER_HOST` 对 `clawd serve` 完全无效 | ①去掉 `--no-deps`（以 pyproject 为准）；②新增 `resolve_bind_host()`（env 优先、默认仍 loopback），端口文件写客户端可连地址 |
+| **深度诊断缺失** | "面板空白 / 越用越慢"只能靠猜 | 没有存储体检，`doctor` 只看环境 | `clawd doctor --deep`：SQLite `integrity_check` + 表行数 + 体积 top10 + 可回收空间与 `VACUUM` 建议 |
+
+### 新增能力（X-3 / X-6 / X-8 / X-9 / X-10 / X-11 / X-12）
+
+- **X-8 中文错误字典**：`src/core/errors_catalog.py` 覆盖**全部 53 个 `ErrorCode`**
+  （`zh_title / zh_message / next_step / doc_url / severity`），入口 `clawd errors [码] [--json]`；
+  未登记的码不报错、给兜底说明。文案单一来源，`docs/troubleshooting-errors.md` 只做索引。
+  测试同时用两条独立断言守"枚举成员 ⊆ 词条"（防函数自身有 bug 时假绿）。
+- **X-10 存储健康自检**：`src/core/storage_health.py`（只读连接 `file:...?mode=ro`，
+  单库损坏不中断整体、不静默），接进 `doctor --deep`。
+- **X-9 状态根单一入口 + 迁移**：`data_dir` 支持 `CLAWD_HOME` 别名（`CLAWD_DATA_DIR` 优先，
+  `describe()` 如实标出生效变量）、`state.json` 布局版本（读到更高版本**抛错**而非静默读写）、
+  `clawd migrate-state --from --to [--apply]`（默认演练；不覆盖同名文件；可重复执行）。
+- **X-3 轨迹录制 + 回放**：`src/eval/trajectory.py` + `clawd trajectory record|replay|show`。
+  回放固定 observation，断言工具序列/action-observation 配对/失败后原地重试/verify 覆盖；
+  **一条都没判定时 exit 3 拒绝给结论**（不许空集合假绿）。
+- **X-6 启动预算门禁**：`scripts/startup_budget.py` 断言 `-m src --version`、
+  `import src.cli.entrypoint`、已加载模块数、`doctor --json` 四项上界；接进 CI
+  （`CLAWD_STARTUP_BUDGET_FACTOR=1.8` 只放大时间项，模块数不放大）。本机实测
+  0.669s / 0.694s / 761 模块 / 4.119s。
+- **X-11 桌面端交互四态**：`withBusy()` / `inlineError()` / 全局 `unhandledrejection` + `error`
+  兜底 toast（5 秒去重），覆盖 provider 保存、添加项目、`pickFolder`、用量/context 面板加载失败。
+  真浏览器 E2E **31/31**（`desktop/ui_feedback_e2e.mjs`）。
+- **X-12 发布流水线**：`.github/workflows/release.yml`（tag → 三处版本一致性 → CHANGELOG 抽说明
+  → 构建 → **装进干净 venv 冒烟** → 幂等发布）+ `scripts/changelog_notes.py`
+  （取不到说明就 exit 2，不发空壳 release）。
+
+### 测试
+
+- 新增测试文件 12 个 / **290** 条用例（收集 5469 → **5759**，0 errors）。
+- 新增 `tests/scripts/test_workflows.py`：工作流 YAML 语法 + 关键门禁存在的结构锁
+  （**本轮实测就抓到 `release.yml` 被 heredoc 破坏成非法 YAML** —— 这类错误不跑结构检查
+  就要等推送后才发现；历史上 `.pre-commit-config.yaml` 也是这么常红的）。
+- 新增 `tests/scripts/test_docker_config.py`：把"先 COPY 再装""不许 `--no-deps`""容器绑 0.0.0.0"
+  "CI docker 冒烟不许 `|| true`"四条钉死。
+- 新增 `tests/server/test_health_endpoints.py`（真实 HTTP）：探针不泄密、未知 API 404、
+  静态托管与目录穿越无回归、`AGENT_SERVER_HOST` 真正生效。
+
+### 已知边界（不粉饰）
+
+- **正式代码签名仍需 CA 证书**（现为自签名，`Status=UnknownError` 属预期）。
+- 启动预算的默认值来自本机 Windows 实测，CI 用宽松系数 —— 它抓得住"量级退化"，
+  抓不住 CI 上 10% 级别的抖动。
+
+---
+
 ## [v0.89.1] (2026-10-31) — CI Linux 矩阵清零：35 failed + 4 errors → 0
 
 CI 的 `ci.yml` 测试矩阵跑在 **Linux** 上，本机（Windows）测不出来的一批跨平台缺陷
