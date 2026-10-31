@@ -369,6 +369,9 @@ docker inspect --format '{{.State.Health.Status}}' clawd
 | 镜像里没有包 | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录里执行 → 装出一个空的 `clawd_code` dist-info |
 | 依赖漏装 | 修上一条后变成 `ModuleNotFoundError: No module named 'typer'` | `requirements.txt` 与 `pyproject.toml` 漂移（typer 只在 pyproject）；装自身时加了 `--no-deps` |
 | 端口出不了容器 | 端口映射后宿主机连不上 | 服务默认绑 `127.0.0.1`；镜像/compose 未设 `AGENT_SERVER_HOST=0.0.0.0` |
+| 容器内 Host 直接崩 | `/healthz` 000，`docker logs` 见 `PermissionError: /app/.clawd_host_port` | `/app` 属 root 而进程 UID 1000 → 端口文件写不进去，异常冒到顶层把 `serve` 带走 |
+
+修法：Dockerfile `chown -R 1000:1000 /app`；且 `run_host` 把端口文件写入失败降级为告警（服务照跑，只是自动发现不可用）。
 
 **健康检查必须是真探针**：镜像与 compose 原先分别是"import 一个模块就 exit 0"和
 `python -c "sys.exit(0)"` —— 容器里什么都没跑也是 healthy。现在统一打 `/healthz`。

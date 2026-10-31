@@ -21,6 +21,7 @@
 | **服务容器不服务** | 声明 `8765:8765` 端口与健康检查，但端口没人监听 | 镜像默认 `CMD ["chat"]` 是交互式命令 | 默认改 `serve`；compose 显式 `command: serve --port 8765` |
 | **镜像里没有代码** | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录执行 → 装出一个空的 dist-info | 先 `COPY src` / `COPY prompts` 再装自身 |
 | **依赖漏装 + 端口出不了容器** | 修好上一条后变成 `No module named 'typer'`；容器 `healthy` 但宿主机连不上 | ①装自身时加了 `--no-deps`（`typer` 只在 pyproject，不在 requirements.txt）；②`run_host()` **硬编码** `host="127.0.0.1"`，`AGENT_SERVER_HOST` 对 `clawd serve` 完全无效 | ①去掉 `--no-deps`（以 pyproject 为准）；②新增 `resolve_bind_host()`（env 优先、默认仍 loopback），端口文件写客户端可连地址 |
+| **端口文件把 Host 带走** | 容器里 `/healthz` 000、进程已退出 | `/app` 属 root 而进程 UID 1000 → `write_port_file(/app/.clawd_host_port)` 抛 `PermissionError`，直接冒到顶层把 `clawd serve` 崩掉 | Dockerfile 改 `chown -R 1000:1000 /app`；端口文件写入失败降级为告警（服务照跑） |
 | **深度诊断缺失** | "面板空白 / 越用越慢"只能靠猜 | 没有存储体检，`doctor` 只看环境 | `clawd doctor --deep`：SQLite `integrity_check` + 表行数 + 体积 top10 + 可回收空间与 `VACUUM` 建议 |
 
 ### 新增能力（X-3 / X-6 / X-8 / X-9 / X-10 / X-11 / X-12）
@@ -58,6 +59,12 @@
   "CI docker 冒烟不许 `|| true`"四条钉死。
 - 新增 `tests/server/test_health_endpoints.py`（真实 HTTP）：探针不泄密、未知 API 404、
   静态托管与目录穿越无回归、`AGENT_SERVER_HOST` 真正生效。
+
+### 只有真部署才暴露（本轮共 5 个）
+
+上面表格里的 5 条全部是「本机单元测试全绿、容器一跑就炸」那一类：假健康检查 3 处 →
+镜像里没有代码 → 依赖漏装 → 服务绑 loopback → `/app` 属主不对导致端口文件 PermissionError。
+它们被抓住的唯一原因是：真的 `docker build` + 真的从宿主机 `curl` + CI 的 docker job 去掉了 `|| true`。
 
 ### 已知边界（不粉饰）
 

@@ -15,6 +15,7 @@
 | D-2 | **根本没有存活端点** | 探 `/health` 得 **403**（看起来像鉴权问题） | 该路径不存在 → 掉进静态托管 → 被 mime 白名单（无后缀 → `ctype=None`）判成 403 | 新增 `/healthz`（免 token、不含路径/密钥）与 `/readyz`（数据目录可写 + LLM 已配置，否则 503）；无后缀路径与未知 `/api/*` 一律 **404 JSON** |
 | D-3 | **镜像里没有代码** | 容器启动即 `ModuleNotFoundError: No module named 'src'` | 构建阶段 `pip install .` 在**还没有源码**的目录执行 → 装出空 dist-info | 先 `COPY src`/`COPY prompts` 再装自身 |
 | D-4 | **依赖漏装 + 端口出不了容器** | 修好 D-3 后变成 `No module named 'typer'`；容器 `healthy` 但宿主机连不上 | ①`--no-deps` 跳过 pyproject 里的依赖（`typer` 不在 requirements.txt）；②`run_host()` **硬编码** `host="127.0.0.1"`，`AGENT_SERVER_HOST` 对 `clawd serve` 完全无效 | ①安装自身不再加 `--no-deps`；②新增 `resolve_bind_host()`（env 优先、默认仍 loopback） |
+| D-5 | **端口文件把 Host 带走** | 容器内 `/healthz` 000，进程已退出 | `/app` 属 root 而进程 UID 1000 → `write_port_file(/app/.clawd_host_port)` PermissionError 冒到顶层 → `clawd serve` 崩 | Dockerfile `chown -R 1000:1000 /app`；写端口文件失败降级为告警 |
 
 ### 二、新增能力（X 系列全部收口）
 

@@ -108,6 +108,11 @@
       "cmd": "py -3.10 -m build --outdir .clawd/_distbuild && py -3.10 scripts/verify_wheel_contents.py --dist .clawd/_distbuild",
       "exit_code": 0,
       "raw_output_tail": "PASS wheel=clawd_code-0.89.1-py3-none-any.whl prompts/agents=33 version=0.89.1（版本号断言在 0.90.0 重建后复验）"
+    },
+    {
+      "cmd": "docker build -t clawd-code:v0.90.0-ci . && docker run -d -p 18804:8765（chown /app + 端口文件降级后复验）",
+      "exit_code": 0,
+      "raw_output_tail": "server listening on 0.0.0.0:8765 · 端口文件 /app/.clawd_host_port（写入成功）· /healthz 200 · /readyz 200 · /api/nope 404 · docker inspect health=healthy"
     }
   ],
   "files_changed": {
@@ -129,7 +134,8 @@
       "docker-compose.yml / Dockerfile / .dockerignore",
       ".github/workflows/ci.yml / release.yml",
       "desktop/web/app.js / index.html",
-      "README.md / CHANGELOG.md / CLAUDE.md / docs/MAINTENANCE.md / workflow_status.md / test_ledger.md"
+      "README.md / CHANGELOG.md / CLAUDE.md / docs/MAINTENANCE.md / workflow_status.md / test_ledger.md",
+      "Dockerfile（chown -R 1000:1000 /app）+ src/server/host_entry.py（端口文件写入失败降级）"
     ],
     "new_tests": 12
   },
@@ -203,6 +209,7 @@
     "启动预算默认值来自本机 Windows 实测；CI 用 1.8 宽松系数，只能抓量级退化",
     "未跑含 slow 标记的全量测试（约 13 分钟），按项目惯例以 not slow + 定向覆盖",
     "X-11 只覆盖高价值异步操作，部分控件仍为两态",
-    "未回显 provider/model 到 /readyz 的改动晚于首轮容器验证，已用最终镜像 v0.90.0-final 复验（见 docker run 记录）"
+    "未回显 provider/model 到 /readyz 的改动晚于首轮容器验证，已用最终镜像 v0.90.0-final 复验（见 docker run 记录）",
+    "容器内 /app 属主缺陷（第 5 个部署缺陷）由 CI 的 Docker Build Test 抓出并已修；本机 Docker Desktop 不复现该权限问题，因此本机验证无法替代 Linux runner 验证"
   ]
 }
