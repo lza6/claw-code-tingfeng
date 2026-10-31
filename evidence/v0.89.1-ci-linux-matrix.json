@@ -207,10 +207,26 @@
       "cmd": "venv/Scripts/python.exe -m pip_audit -r requirements.txt",
       "exit_code": 0,
       "summary": "报告型：filelock 13 条 OSV（已发布全部版本均命中，修复版 4.2.1 未发布）→ 记入 docs/MAINTENANCE.md §6.5"
+    },
+    {
+      "cmd": "gh run view 41148646608（GitHub Actions 真机，commit 8ace867）",
+      "exit_code": 0,
+      "summary": "**Test (Python 3.10) success · Test (Python 3.11) success · Test (Python 3.12) success**（同一 commit；修复前该 job 为 35 failed + 4 errors）· Lint & Type Check success · Docker Build Test 见 run 详情；Security Scan 的 failure 只出现在引入 pip-audit 修复前的 commit，后续 run（a71f5c2 / 5e97e35 / ce1403a）Security Scan 均 success"
     }
   ],
   "limitations": [
     "正式 CA 代码签名仍需外部证书（已与用户确认：保持自签名，记录为外部阻塞）",
     "Linux 矩阵验证用 python:3.11-slim + git 复刻，与 CI 的 ubuntu-latest 略有差异（git 版本/系统库），但失败用例集完全覆盖"
-  ]
+  ],
+  "ci_matrix_result": {
+    "run_id": 41148646608,
+    "commit": "8ace867",
+    "jobs": {
+      "Lint & Type Check": "success",
+      "Test (Python 3.10)": "success",
+      "Test (Python 3.11)": "success",
+      "Test (Python 3.12)": "success"
+    },
+    "before_fix": "35 failed + 4 errors（同一 job）"
+  }
 }
