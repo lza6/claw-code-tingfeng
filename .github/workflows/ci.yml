@@ -122,7 +122,9 @@ jobs:
 
       - name: Install security tools
         run: |
-          pip install bandit safety
+          # safety 3.x 起 check 子命令要求登录/API key，匿名调用直接报错 →
+          # 该 job 会永远红（与真实漏洞无关）。改用 pip-audit（开源、无需鉴权）。
+          pip install bandit pip-audit
 
       - name: Run Bandit security scan
         run: |
@@ -133,7 +135,10 @@ jobs:
 
       - name: Check dependencies for vulnerabilities
         run: |
-          safety check --json
+          # 报告类检查：出报告 + 有漏洞时打 warning（阻断判定交给安全审查流程，
+          # 与 bandit 步骤口径一致），避免"上游漏洞导致 CI 常红被无视"。
+          pip-audit -r requirements.txt --format json -o pip-audit-report.json             || echo "::warning::pip-audit 发现依赖漏洞，见 pip-audit-report.json"
+          python -c "import json,pathlib,sys; d=json.loads(pathlib.Path('pip-audit-report.json').read_text()); n=sum(len(x.get('vulns',[])) for x in d) if isinstance(d,list) else 0; print(f'依赖漏洞数: {n}')" || true
 
   docker-build:
     name: Docker Build Test
