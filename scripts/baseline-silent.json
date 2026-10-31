@@ -1,7 +1,7 @@
 {
-  "total": 155,
+  "total": 154,
   "note": "静默吞异常趋势基线：只允许下降，不允许上升（policy.md §1）",
-  "generated_at": "2026-10-30T23:46:22",
+  "generated_at": "2026-10-31T08:08:22",
   "by_file": {
     "src/__init__.py": 1,
     "src/agent/_lifecycle.py": 2,
@@ -43,7 +43,6 @@
     "src/core/persistence/run_state.py": 1,
     "src/core/runtime/host.py": 3,
     "src/core/runtime/lease.py": 2,
-    "src/core/security/path_guard.py": 1,
     "src/core/serialization.py": 1,
     "src/core/state/authority.py": 1,
     "src/core/state/command_event.py": 1,

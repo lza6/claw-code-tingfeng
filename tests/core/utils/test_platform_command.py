@@ -248,7 +248,10 @@ class TestLinuxAltsepRegression:
         assert resolve_command_path_for_platform(str(exe)) == str(exe)
 
     def test_empty_command_returns_none(self):
-        from src.core.utils.platform_command import is_command_available, resolve_command_path_for_platform
+        from src.core.utils.platform_command import (
+            is_command_available,
+            resolve_command_path_for_platform,
+        )
 
         assert resolve_command_path_for_platform("") is None
         assert is_command_available("") is False
