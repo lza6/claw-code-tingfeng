@@ -42,7 +42,7 @@ gitpython>=3.1.0
 
 # ==================== 分布式追踪（参考 Onyx）====================
 opentelemetry-api>=1.22.0
-opentelemetry-sdk>=1.22.0
+opentelemetry-sdk>=1.44.0
 opentelemetry-exporter-otlp>=1.22.0
 opentelemetry-instrumentation-logging>=0.50b0
 
